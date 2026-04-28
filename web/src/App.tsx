@@ -4389,7 +4389,7 @@ function SettingsDialog() {
             ))}
           </nav>
           <div className="flex min-h-0 flex-col">
-            <div className="grid min-h-0 flex-1 gap-3 overflow-y-auto pr-1">
+            <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pr-1">
           {settingsTab === "general" && (
             <>
           <section className="grid gap-2 rounded-md border border-border p-3">
