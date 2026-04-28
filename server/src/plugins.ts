@@ -160,10 +160,18 @@ function codexConfigPath(): string {
 
 function unquoteTomlKey(value: string): string {
   const trimmed = value.trim();
-  if ((trimmed.startsWith('"') && trimmed.endsWith('"')) || (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
+  if (trimmed.startsWith("'") && trimmed.endsWith("'")) {
+    return trimmed.slice(1, -1);
+  }
+  if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
     return trimmed.slice(1, -1).replace(/\\"/g, '"').replace(/\\\\/g, "\\");
   }
   return trimmed;
+}
+
+function normalizeCodexPath(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  return value.startsWith("\\\\?\\") ? value.slice(4) : value;
 }
 
 function tomlString(value: string): string {
@@ -195,7 +203,7 @@ function parseCodexConfig(raw: string): {
       const current = marketplaces.get(section.name) || { name: section.name };
       const key = stringField[1];
       const value = unquoteTomlKey(stringField[2]);
-      marketplaces.set(section.name, key === "source" ? { ...current, source: value } : current);
+      marketplaces.set(section.name, key === "source" ? { ...current, source: normalizeCodexPath(value) } : current);
     }
   }
 
@@ -224,59 +232,86 @@ async function walkCodexPluginJson(root: string): Promise<string[]> {
   return results;
 }
 
-function codexPluginId(pluginPath: string, parsed: Record<string, unknown>): string | undefined {
+function codexPluginId(pluginPath: string, parsed: Record<string, unknown>, marketplaceName?: string): string | undefined {
   const name = typeof parsed.name === "string" && parsed.name.trim() ? parsed.name.trim() : undefined;
   if (!name) return undefined;
+  if (marketplaceName) return `${name}@${marketplaceName}`;
   const cacheRoot = path.join(codexHome(), "plugins", "cache");
   const relative = path.relative(cacheRoot, pluginPath);
   const marketplace = relative && !relative.startsWith("..") && !path.isAbsolute(relative) ? relative.split(path.sep)[0] : undefined;
   return marketplace ? `${name}@${marketplace}` : name;
 }
 
+async function readCodexPlugin(pluginFile: string, enabledPlugins: Set<string>, marketplaceName?: string): Promise<{
+  installed: ClaudePlugin;
+  available: ClaudeAvailablePlugin;
+} | undefined> {
+  const raw = await readFile(pluginFile, "utf8").catch(() => "");
+  let parsed: Record<string, unknown> = {};
+  try {
+    parsed = raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
+  } catch {
+    parsed = {};
+  }
+  const id = codexPluginId(pluginFile, parsed, marketplaceName);
+  if (!id) return undefined;
+  const pluginInterface = parsed.interface as Record<string, unknown> | undefined;
+  const description =
+    typeof parsed.description === "string"
+      ? parsed.description
+      : typeof pluginInterface?.shortDescription === "string"
+        ? String(pluginInterface.shortDescription)
+        : undefined;
+  const marketplace = marketplaceName || (id.includes("@") ? id.split("@").at(-1) : undefined);
+  return {
+    installed: {
+      name: id,
+      version: typeof parsed.version === "string" ? parsed.version : undefined,
+      scope: marketplace,
+      enabled: enabledPlugins.has(id)
+    },
+    available: {
+      pluginId: id,
+      name: typeof pluginInterface?.displayName === "string" ? String(pluginInterface.displayName) : id,
+      description,
+      marketplaceName: marketplace,
+      version: typeof parsed.version === "string" ? parsed.version : undefined,
+      installed: false
+    }
+  };
+}
+
 async function codexPluginCatalog(): Promise<ClaudePluginCatalog> {
   const config = await readFile(codexConfigPath(), "utf8").catch(() => "");
   const parsedConfig = parseCodexConfig(config);
-  const pluginFiles = await walkCodexPluginJson(path.join(codexHome(), "plugins", "cache"));
-  const installed: ClaudePlugin[] = [];
-  const available: ClaudeAvailablePlugin[] = [];
+  const installedById = new Map<string, ClaudePlugin>();
+  const availableById = new Map<string, ClaudeAvailablePlugin>();
 
-  for (const pluginFile of pluginFiles) {
-    const raw = await readFile(pluginFile, "utf8").catch(() => "");
-    let parsed: Record<string, unknown> = {};
-    try {
-      parsed = raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
-    } catch {
-      parsed = {};
+  for (const pluginFile of await walkCodexPluginJson(path.join(codexHome(), "plugins", "cache"))) {
+    const plugin = await readCodexPlugin(pluginFile, parsedConfig.enabledPlugins);
+    if (!plugin) continue;
+    installedById.set(plugin.installed.name, plugin.installed);
+    availableById.set(plugin.available.pluginId, { ...plugin.available, installed: true });
+  }
+
+  for (const marketplace of parsedConfig.marketplaces.values()) {
+    const source = normalizeCodexPath(marketplace.source);
+    if (!source) continue;
+    const roots = [path.join(source, "plugins"), source];
+    for (const root of roots) {
+      for (const pluginFile of await walkCodexPluginJson(root)) {
+        const plugin = await readCodexPlugin(pluginFile, parsedConfig.enabledPlugins, marketplace.name);
+        if (!plugin) continue;
+        const installed = installedById.has(plugin.available.pluginId);
+        availableById.set(plugin.available.pluginId, { ...plugin.available, installed });
+      }
     }
-    const id = codexPluginId(pluginFile, parsed);
-    if (!id) continue;
-    const description =
-      typeof parsed.description === "string"
-        ? parsed.description
-        : typeof (parsed.interface as Record<string, unknown> | undefined)?.shortDescription === "string"
-          ? String((parsed.interface as Record<string, unknown>).shortDescription)
-          : undefined;
-    const marketplaceName = id.includes("@") ? id.split("@").at(-1) : undefined;
-    installed.push({
-      name: id,
-      version: typeof parsed.version === "string" ? parsed.version : undefined,
-      scope: marketplaceName,
-      enabled: parsedConfig.enabledPlugins.has(id)
-    });
-    available.push({
-      pluginId: id,
-      name: typeof (parsed.interface as Record<string, unknown> | undefined)?.displayName === "string" ? String((parsed.interface as Record<string, unknown>).displayName) : id,
-      description,
-      marketplaceName,
-      version: typeof parsed.version === "string" ? parsed.version : undefined,
-      installed: true
-    });
   }
 
   const marketplaces = [...parsedConfig.marketplaces.values()];
   return {
-    installed: installed.sort((left, right) => left.name.localeCompare(right.name)),
-    available: available.sort((left, right) => left.name.localeCompare(right.name)),
+    installed: [...installedById.values()].sort((left, right) => left.name.localeCompare(right.name)),
+    available: [...availableById.values()].sort((left, right) => left.name.localeCompare(right.name)),
     marketplaces
   };
 }
