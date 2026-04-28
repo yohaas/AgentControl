@@ -196,6 +196,16 @@ function latestUserMessage(transcript: TranscriptEvent[]) {
   return undefined;
 }
 
+function shouldShowPinnedUserMessage(root: HTMLDivElement, pinnedMessageId?: string) {
+  if (!pinnedMessageId || root.scrollTop <= 24) return false;
+  const original = root.querySelector<HTMLElement>('[data-latest-user-message="true"]');
+  if (!original) return true;
+  const rootRect = root.getBoundingClientRect();
+  const originalRect = original.getBoundingClientRect();
+  if (originalRect.bottom > rootRect.top && originalRect.top < rootRect.bottom) return false;
+  return originalRect.bottom <= rootRect.top;
+}
+
 function AgentActivityIndicator({ agent, compact = false }: { agent: RunningAgent; compact?: boolean }) {
   return (
     <div className="flex">
@@ -1971,10 +1981,11 @@ function AgentTile({
     if (!root) return;
     const nearBottom = root.scrollHeight - root.scrollTop - root.clientHeight < 180;
     if (nearBottom) root.scrollTop = root.scrollHeight;
-  }, [transcript, agent.id]);
+    setShowPinnedMessage(shouldShowPinnedUserMessage(root, pinnedMessage?.id));
+  }, [transcript, agent.id, pinnedMessage?.id]);
 
   function handleTranscriptScroll(event: ReactUIEvent<HTMLDivElement>) {
-    const nextVisible = event.currentTarget.scrollTop > 24;
+    const nextVisible = shouldShowPinnedUserMessage(event.currentTarget, pinnedMessage?.id);
     setShowPinnedMessage((current) => (current === nextVisible ? current : nextVisible));
   }
 
@@ -2195,7 +2206,12 @@ function AgentTile({
             ) : (
               <div className="grid gap-2">
                 {transcript.map((event) => (
-                  <TranscriptPreview key={event.id} event={event} agent={agent} />
+                  <TranscriptPreview
+                    key={event.id}
+                    event={event}
+                    agent={agent}
+                    latestUserMessageId={pinnedMessage?.id}
+                  />
                 ))}
                 {showActivityIndicator && <AgentActivityIndicator agent={agent} compact />}
               </div>
@@ -2267,7 +2283,15 @@ function AgentTile({
   );
 }
 
-function TranscriptPreview({ event, agent }: { event: TranscriptEvent; agent: RunningAgent }) {
+function TranscriptPreview({
+  event,
+  agent,
+  latestUserMessageId
+}: {
+  event: TranscriptEvent;
+  agent: RunningAgent;
+  latestUserMessageId?: string;
+}) {
   if (event.kind === "model_switch") {
     return <p className="text-center text-xs text-muted-foreground">switched to {event.to}</p>;
   }
@@ -2280,7 +2304,10 @@ function TranscriptPreview({ event, agent }: { event: TranscriptEvent; agent: Ru
 
   const isUser = event.kind === "user";
   return (
-    <div className={cn("flex", isUser && "justify-end")}>
+    <div
+      className={cn("flex", isUser && "justify-end")}
+      data-latest-user-message={event.id === latestUserMessageId ? "true" : undefined}
+    >
       <div
         className={cn(
           "max-w-[86%] whitespace-pre-wrap break-words rounded-md border border-border px-3 py-2 text-sm leading-5",
@@ -2445,7 +2472,7 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
   const transcriptRootId = `transcript-root-${agent.id}`;
   const selection = useTextSelection(`#${transcriptRootId}`);
   const [attachments, setAttachments] = useState<MessageAttachment[]>([]);
-  const [showPinnedMessage, setShowPinnedMessage] = useState(scrollTop > 24);
+  const [showPinnedMessage, setShowPinnedMessage] = useState(false);
   const [activeSlashIndex, setActiveSlashIndex] = useState(0);
   const isBusy = isAgentBusy(agent);
   const canType = agentHasProcess(agent);
@@ -2458,14 +2485,16 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
     const root = rootRef.current;
     if (!root) return;
     root.scrollTop = scrollTop;
-  }, [agent.id]);
+    setShowPinnedMessage(shouldShowPinnedUserMessage(root, pinnedMessage?.id));
+  }, [agent.id, pinnedMessage?.id, scrollTop]);
 
   useEffect(() => {
     const root = rootRef.current;
     if (!root) return;
     const nearBottom = root.scrollHeight - root.scrollTop - root.clientHeight < 140;
     if (nearBottom) root.scrollTop = root.scrollHeight;
-  }, [transcript, agent.id]);
+    setShowPinnedMessage(shouldShowPinnedUserMessage(root, pinnedMessage?.id));
+  }, [transcript, agent.id, pinnedMessage?.id]);
 
   useEffect(() => {
     if (isBusy || !canType || queue.length === 0) return;
@@ -2542,7 +2571,7 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
   function handleTranscriptScroll(event: ReactUIEvent<HTMLDivElement>) {
     const top = event.currentTarget.scrollTop;
     setScrollPosition(agent.id, top);
-    const nextVisible = top > 24;
+    const nextVisible = shouldShowPinnedUserMessage(event.currentTarget, pinnedMessage?.id);
     setShowPinnedMessage((current) => (current === nextVisible ? current : nextVisible));
   }
 
@@ -2596,7 +2625,13 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
               ) : (
                 <>
                   {transcript.map((event) => (
-                    <TranscriptItem key={event.id} event={event} agent={agent} query={searchQuery} />
+                    <TranscriptItem
+                      key={event.id}
+                      event={event}
+                      agent={agent}
+                      query={searchQuery}
+                      latestUserMessageId={pinnedMessage?.id}
+                    />
                   ))}
                   {showActivityIndicator && <AgentActivityIndicator agent={agent} />}
                 </>
@@ -2772,7 +2807,17 @@ function SendToMenu({
   );
 }
 
-function TranscriptItem({ event, agent, query }: { event: TranscriptEvent; agent: RunningAgent; query: string }) {
+function TranscriptItem({
+  event,
+  agent,
+  query,
+  latestUserMessageId
+}: {
+  event: TranscriptEvent;
+  agent: RunningAgent;
+  query: string;
+  latestUserMessageId?: string;
+}) {
   if (event.kind === "model_switch") {
     return (
       <div className="flex items-center gap-3 py-2 text-xs text-muted-foreground">
@@ -2791,7 +2836,10 @@ function TranscriptItem({ event, agent, query }: { event: TranscriptEvent; agent
 
   const isUser = event.kind === "user";
   return (
-    <div className={cn("flex", isUser && "justify-end")}>
+    <div
+      className={cn("flex", isUser && "justify-end")}
+      data-latest-user-message={event.id === latestUserMessageId ? "true" : undefined}
+    >
       <div
         className={cn(
           "min-w-0 max-w-[78%] whitespace-pre-wrap break-words [overflow-wrap:anywhere] rounded-lg border border-border px-3 py-2 text-sm leading-6",
