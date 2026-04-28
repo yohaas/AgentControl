@@ -185,10 +185,33 @@ export class AgentRuntimeManager {
   private spawnCommand(state: AgentProcessState, command: string, args: string[]): SpawnCommand {
     const project = this.projectForState(state);
     if (project && isWslProject(project)) {
+      const lowerCommand = command.toLowerCase();
+      const linuxCommand =
+        state.agent.provider === "codex"
+          ? "codex"
+          : lowerCommand.endsWith("claude.cmd") || lowerCommand.endsWith("claude.exe") || lowerCommand === "claude.cmd"
+            ? "claude"
+            : lowerCommand.endsWith("codex.cmd") || lowerCommand.endsWith("codex.exe") || lowerCommand === "codex.cmd"
+              ? "codex"
+              : path.basename(command).replace(/\.(cmd|exe|ps1)$/i, "");
       return {
         command: "wsl.exe",
-        args: wslCommandArgs(project, command, args),
+        args: wslCommandArgs(project, linuxCommand, args),
         cwd: process.cwd()
+      };
+    }
+    if (process.platform === "win32" && /\.(cmd|bat)$/i.test(command)) {
+      return {
+        command: "cmd.exe",
+        args: ["/d", "/s", "/c", command, ...args],
+        cwd: state.agent.projectPath
+      };
+    }
+    if (process.platform === "win32" && /\.ps1$/i.test(command)) {
+      return {
+        command: "powershell.exe",
+        args: ["-NoLogo", "-ExecutionPolicy", "Bypass", "-File", command, ...args],
+        cwd: state.agent.projectPath
       };
     }
     return {

@@ -2736,7 +2736,7 @@ function AddProjectDialog({
                   if (event.key === "Enter") void addProject();
                 }}
               />
-              <Button type="button" variant="outline" onClick={() => setBrowserOpen(true)} disabled={runtime === "wsl"}>
+              <Button type="button" variant="outline" onClick={() => setBrowserOpen(true)}>
                 <FolderOpen className="h-4 w-4" />
                 Browse
               </Button>
@@ -2750,10 +2750,17 @@ function AddProjectDialog({
       </DialogContent>
       <FolderBrowserDialog
         open={browserOpen}
-        initialPath={path}
+        initialPath={runtime === "wsl" ? wslPath || "/home" : path}
+        runtime={runtime}
+        wslDistro={wslDistro.trim() || "Ubuntu"}
         onOpenChange={setBrowserOpen}
         onSelect={(selectedPath) => {
-          setPath(selectedPath);
+          if (runtime === "wsl") {
+            setWslPath(selectedPath);
+            setPath("");
+          } else {
+            setPath(selectedPath);
+          }
           setBrowserOpen(false);
         }}
       />
@@ -2764,11 +2771,15 @@ function AddProjectDialog({
 function FolderBrowserDialog({
   open,
   initialPath,
+  runtime = "local",
+  wslDistro,
   onOpenChange,
   onSelect
 }: {
   open: boolean;
   initialPath: string;
+  runtime?: "local" | "wsl";
+  wslDistro?: string;
   onOpenChange: (open: boolean) => void;
   onSelect: (path: string) => void;
 }) {
@@ -2779,7 +2790,7 @@ function FolderBrowserDialog({
   async function load(path?: string) {
     setLoading(true);
     try {
-      setListing(await api.directories(path));
+      setListing(await api.directories(path, runtime === "wsl" ? { runtime, distro: wslDistro || "Ubuntu" } : undefined));
     } catch (error) {
       addError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -2790,7 +2801,7 @@ function FolderBrowserDialog({
   useEffect(() => {
     if (!open) return;
     void load(initialPath.trim() || undefined);
-  }, [open, initialPath]);
+  }, [open, initialPath, runtime, wslDistro]);
 
   function DirectoryButton({ entry, root = false }: { entry: DirectoryEntry; root?: boolean }) {
     return (

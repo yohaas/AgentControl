@@ -1182,6 +1182,46 @@ app.delete("/api/projects/:id/git/worktrees", async (request, response) => {
 });
 
 app.get("/api/filesystem/directories", async (request, response) => {
+  const runtime = request.query.runtime === "wsl" ? "wsl" : "local";
+  if (runtime === "wsl") {
+    const distro = typeof request.query.distro === "string" && request.query.distro.trim() ? request.query.distro.trim() : "Ubuntu";
+    const requestedPath = typeof request.query.path === "string" && request.query.path.trim() ? request.query.path.trim() : "/home";
+    const linuxPath = normalizeWslPath(requestedPath);
+    const directoryPath = wslUncPath(distro, linuxPath);
+    try {
+      const info = await stat(directoryPath);
+      if (!info.isDirectory()) {
+        response.status(400).json({ error: "Selected WSL path is not a directory." });
+        return;
+      }
+
+      const entries = await readdir(directoryPath, { withFileTypes: true });
+      const directories = entries
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => ({
+          name: entry.name,
+          path: path.posix.join(linuxPath, entry.name)
+        }))
+        .sort((left, right) => left.name.localeCompare(right.name, undefined, { sensitivity: "base" }));
+      const parentPath = path.posix.dirname(linuxPath);
+
+      response.json({
+        path: linuxPath,
+        parentPath: parentPath !== linuxPath ? parentPath : undefined,
+        homePath: "/home",
+        roots: [
+          { name: "/", path: "/" },
+          { name: "home", path: "/home" },
+          { name: "mnt", path: "/mnt" }
+        ],
+        entries: directories
+      });
+    } catch (error) {
+      response.status(500).json({ error: error instanceof Error ? error.message : String(error) });
+    }
+    return;
+  }
+
   const roots = await allowedDirectoryRoots();
   const requestedPath = typeof request.query.path === "string" && request.query.path.trim() ? request.query.path.trim() : roots[0]?.path || projectsRoot;
   const directoryPath = path.resolve(expandHome(requestedPath));

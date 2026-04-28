@@ -120,8 +120,14 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ path })
     }),
-  directories: (path?: string) =>
-    json<DirectoryListing>(`/api/filesystem/directories${path ? `?path=${encodeURIComponent(path)}` : ""}`),
+  directories: (path?: string, options?: { runtime?: "local" | "wsl"; distro?: string }) => {
+    const params = new URLSearchParams();
+    if (path) params.set("path", path);
+    if (options?.runtime) params.set("runtime", options.runtime);
+    if (options?.distro) params.set("distro", options.distro);
+    const query = params.toString();
+    return json<DirectoryListing>(`/api/filesystem/directories${query ? `?${query}` : ""}`);
+  },
   openFile: (path: string) =>
     json<{ ok: boolean }>("/api/filesystem/open", {
       method: "POST",
