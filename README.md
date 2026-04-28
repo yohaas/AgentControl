@@ -122,11 +122,16 @@ When supervised mode is active, the connection-dot menu can restart or shut down
 ## Production Build
 
 ```bash
-npm run build
 npm start
 ```
 
-In production, the Express server serves the built Vite app from `web/dist`.
+`npm start` builds the workspace first, then starts the Express server. In production, there is no separate Vite web process: the Express server serves the built React app from `web/dist` at http://localhost:4317.
+
+If you already built the app and only want to start the server, use:
+
+```bash
+npm run start:server
+```
 
 ## Projects
 

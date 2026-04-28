@@ -1603,7 +1603,9 @@ wss.on("connection", (ws) => {
 });
 
 server.listen(PORT, HOST, () => {
-  console.log(`Agent dashboard server listening on http://${HOST}:${PORT}`);
+  const displayHost = HOST === "0.0.0.0" || HOST === "::" ? "localhost" : HOST;
+  console.log(`AgentControl web app available at http://${displayHost}:${PORT}`);
+  console.log(`AgentControl API/WebSocket server listening on http://${HOST}:${PORT}`);
   console.log("AgentControl API/WebSocket authentication is enabled.");
   console.log(`Configured projects=${config.projectPaths?.length || 0}`);
 });
