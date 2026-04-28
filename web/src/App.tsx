@@ -2089,7 +2089,7 @@ function TerminalPane({
   );
 }
 
-function TerminalPanel() {
+function TerminalPanel({ popout = false }: { popout?: boolean } = {}) {
   const projects = useAppStore((state) => state.projects);
   const selectedProjectId = useAppStore((state) => state.selectedProjectId);
   const sessionsById = useAppStore((state) => state.terminalSessions);
@@ -2097,6 +2097,7 @@ function TerminalPanel() {
   const activeTerminalId = useAppStore((state) => state.activeTerminalId);
   const setActiveTerminal = useAppStore((state) => state.setActiveTerminal);
   const setTerminalOpen = useAppStore((state) => state.setTerminalOpen);
+  const addError = useAppStore((state) => state.addError);
   const [detached, setDetached] = useState(false);
   const [height, setHeight] = useState(320);
   const [detachedBounds, setDetachedBounds] = useState({ left: 96, top: 72, width: 960, height: 520 });
@@ -2222,10 +2223,26 @@ function TerminalPanel() {
   }
 
   function toggleDetached() {
+    if (popout) return;
     if (!detached) {
       setDetachedBounds((bounds) => clampDetachedBounds(bounds));
     }
     setDetached((value) => !value);
+  }
+
+  function openPopout() {
+    const params = new URLSearchParams();
+    if (selectedProjectId) params.set("projectId", selectedProjectId);
+    const opened = window.open(
+      `/terminal-popout${params.toString() ? `?${params.toString()}` : ""}`,
+      `agent-control-terminal-${selectedProjectId || "global"}`,
+      "popup,width=1120,height=720,left=120,top=80,resizable=yes,scrollbars=no"
+    );
+    if (!opened) {
+      addError("Pop-out terminal was blocked by the browser.");
+      return;
+    }
+    opened.focus();
   }
 
   function startTerminal() {
@@ -2258,14 +2275,14 @@ function TerminalPanel() {
     <section
       className={cn(
         "flex shrink-0 flex-col border-border bg-card",
-        detached ? "fixed z-40 rounded-md border shadow-2xl" : "relative border-t"
+        popout ? "h-screen border-0" : detached ? "fixed z-40 rounded-md border shadow-2xl" : "relative border-t"
       )}
-      style={detached ? detachedBounds : { height }}
+      style={popout ? undefined : detached ? detachedBounds : { height }}
     >
-      {!detached && (
+      {!popout && !detached && (
         <div className="absolute -top-1 left-0 right-0 h-2 cursor-ns-resize hover:bg-primary/25" onPointerDown={startResize} title="Drag to resize terminal" />
       )}
-      {detached && (
+      {!popout && detached && (
         <>
           <div className="absolute -left-1 top-2 z-20 h-[calc(100%-1rem)] w-2 cursor-ew-resize" onPointerDown={(event) => startDetachedResize(event, "left")} />
           <div className="absolute -right-1 top-2 z-20 h-[calc(100%-1rem)] w-2 cursor-ew-resize" onPointerDown={(event) => startDetachedResize(event, "right")} />
@@ -2329,11 +2346,19 @@ function TerminalPanel() {
           <GripVertical className="h-4 w-4" />
           Split
         </Button>
-        <Button variant="outline" size="sm" onClick={toggleDetached}>
-          {detached ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-          {detached ? "Dock" : "Detach"}
-        </Button>
-        <Button variant="ghost" size="icon" onClick={() => setTerminalOpen(false)} title="Close terminal">
+        {!popout && (
+          <>
+            <Button variant="outline" size="sm" onClick={toggleDetached}>
+              {detached ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+              {detached ? "Dock" : "Detach"}
+            </Button>
+            <Button variant="outline" size="sm" onClick={openPopout} title="Open terminal in a separate window">
+              <ExternalLink className="h-4 w-4" />
+              Pop Out
+            </Button>
+          </>
+        )}
+        <Button variant="ghost" size="icon" onClick={() => (popout ? window.close() : setTerminalOpen(false))} title={popout ? "Close window" : "Close terminal"}>
           <X className="h-4 w-4" />
         </Button>
       </div>
@@ -2443,6 +2468,37 @@ export function App() {
       {terminalOpen && <TerminalPanel />}
       <LaunchDialog />
       <SendDialog />
+      <ErrorStack />
+    </div>
+  );
+}
+
+export function TerminalPopoutApp() {
+  const setProjects = useAppStore((state) => state.setProjects);
+  const setCapabilities = useAppStore((state) => state.setCapabilities);
+  const setSettings = useAppStore((state) => state.setSettings);
+  const setSelectedProject = useAppStore((state) => state.setSelectedProject);
+  const addError = useAppStore((state) => state.addError);
+
+  useEffect(() => {
+    const requestedProjectId = new URLSearchParams(window.location.search).get("projectId") || undefined;
+    void Promise.all([api.projects(), api.capabilities(), api.settings()])
+      .then(([projects, capabilities, settings]) => {
+        setProjects(projects);
+        setCapabilities(capabilities);
+        setSettings(settings);
+        if (requestedProjectId && projects.some((project) => project.id === requestedProjectId)) {
+          setSelectedProject(requestedProjectId);
+        }
+      })
+      .catch((error: unknown) => addError(error instanceof Error ? error.message : String(error)));
+    connectWebSocket();
+    return () => disconnectWebSocket();
+  }, [addError, setCapabilities, setProjects, setSelectedProject, setSettings]);
+
+  return (
+    <div className="h-screen overflow-hidden bg-background text-foreground">
+      <TerminalPanel popout />
       <ErrorStack />
     </div>
   );
