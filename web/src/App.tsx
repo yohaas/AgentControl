@@ -1671,6 +1671,15 @@ function Header() {
     }
   }
 
+  async function openSelectedProjectFolder() {
+    if (!selectedProject) return;
+    try {
+      await api.openFile(selectedProject.path);
+    } catch (error) {
+      addError(error instanceof Error ? error.message : String(error));
+    }
+  }
+
   return (
     <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border px-4">
       <div className="flex min-w-0 items-center gap-2">
@@ -1741,6 +1750,16 @@ function Header() {
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+        <Button
+          variant="outline"
+          size="icon"
+          disabled={!selectedProject}
+          onClick={() => void openSelectedProjectFolder()}
+          title="Open project folder"
+          aria-label="Open project folder"
+        >
+          <FolderOpen className="h-4 w-4" />
+        </Button>
         <div className="flex items-center">
           <Button
             variant="outline"

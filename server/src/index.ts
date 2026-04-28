@@ -981,8 +981,8 @@ app.post("/api/filesystem/open", async (request, response) => {
 
   try {
     const info = await stat(filePath);
-    if (!info.isFile()) {
-      response.status(400).json({ error: "Path must be a file." });
+    if (!info.isFile() && !info.isDirectory()) {
+      response.status(400).json({ error: "Path must be a file or directory." });
       return;
     }
     await openWithDefaultApp(filePath);
