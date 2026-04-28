@@ -422,7 +422,7 @@ function ProviderIcon({
     <span
       className={cn(
         "inline-grid h-4 w-4 shrink-0 place-items-center rounded-sm border",
-        resolvedProvider === "openai" && "border-emerald-400/40 bg-emerald-500/10 text-emerald-500",
+        resolvedProvider === "openai" && "border-neutral-400/40 bg-neutral-500/10 text-neutral-950 dark:text-white",
         resolvedProvider === "codex" && "border-sky-400/40 bg-sky-500/10 text-sky-500",
         resolvedProvider === "claude" && "border-orange-400/40 bg-orange-500/10 text-orange-500",
         className
