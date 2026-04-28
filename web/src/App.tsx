@@ -967,7 +967,7 @@ function slashCommandSuggestions(draft: string, models: string[], sessionCommand
       return command.label.slice(1).toLowerCase().startsWith(query);
     })
     .sort((left, right) => compareSlashCommands(left.label, right.label))
-    .slice(0, 10);
+    .slice(0, 60);
 }
 
 function SlashCommandAutocomplete({
@@ -985,7 +985,7 @@ function SlashCommandAutocomplete({
 }) {
   if (suggestions.length === 0) return null;
   return (
-    <div className="overflow-hidden rounded-md border border-border bg-popover text-popover-foreground shadow-lg">
+    <div className="max-h-[min(60vh,520px)] overflow-y-auto overflow-x-hidden rounded-md border border-border bg-popover text-popover-foreground shadow-lg">
       {suggestions.map((suggestion, index) => (
         <button
           key={suggestion.value}

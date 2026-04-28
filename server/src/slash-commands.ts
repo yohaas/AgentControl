@@ -93,6 +93,17 @@ function pluginBaseName(pluginName: string): string {
   return pluginName.split("@")[0] || pluginName;
 }
 
+function pluginSelfAliases(pluginName: string, commands: SlashCommandInfo[]): SlashCommandInfo[] {
+  const base = pluginBaseName(pluginName);
+  const prefix = `/${base}:`;
+  return commands
+    .filter((command) => command.command.startsWith(prefix) && command.command.slice(prefix.length) === base)
+    .map((command) => ({
+      ...command,
+      command: `/${base}`
+    }));
+}
+
 async function readMarkdownCommand(
   filePath: string,
   commandName: string,
@@ -204,7 +215,8 @@ async function scanPluginCommands(enabledPlugins: ClaudePlugin[], selectedPlugin
           ...(await scanSkillsDir(path.join(root, "skills"), "plugin", pluginBaseName(plugin.name)))
         ])
       );
-      return scanned.flat();
+      const commands = scanned.flat();
+      return [...commands, ...pluginSelfAliases(plugin.name, commands)];
     })
   );
   return commandSets.flat();
