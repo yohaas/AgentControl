@@ -7684,12 +7684,13 @@ function TerminalPane({
       return true;
     });
     const handleMouseUp = () => copySelection();
-    const handleClick = () => {
+    const handleContextMenu = (event: MouseEvent) => {
+      event.preventDefault();
       if (terminal.hasSelection()) return;
       pasteClipboard();
     };
     host.addEventListener("mouseup", handleMouseUp);
-    host.addEventListener("click", handleClick);
+    host.addEventListener("contextmenu", handleContextMenu);
     const frame = window.requestAnimationFrame(() => {
       resize();
       terminal.focus();
@@ -7699,7 +7700,7 @@ function TerminalPane({
       window.cancelAnimationFrame(frame);
       dataDisposable.dispose();
       host.removeEventListener("mouseup", handleMouseUp);
-      host.removeEventListener("click", handleClick);
+      host.removeEventListener("contextmenu", handleContextMenu);
       resizeObserver.disconnect();
       terminal.dispose();
       terminalRef.current = null;
