@@ -3973,6 +3973,32 @@ function SettingsDialog() {
               </span>
             </span>
           </label>
+          <section className="grid gap-2 rounded-md border border-border p-3">
+            <div>
+              <h3 className="text-sm font-medium">Configuration</h3>
+              <p className="text-xs text-muted-foreground">Export or import this app's settings.</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" onClick={exportConfig}>
+                <Clipboard className="h-4 w-4" />
+                Export Config
+              </Button>
+              <Button variant="outline" onClick={() => importInputRef.current?.click()}>
+                <FolderOpen className="h-4 w-4" />
+                Import Config
+              </Button>
+            </div>
+            <input
+              ref={importInputRef}
+              type="file"
+              accept="application/json,.json"
+              className="hidden"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) void importConfig(file);
+              }}
+            />
+          </section>
           </>
           )}
           {settingsTab === "claude" && (
@@ -4103,32 +4129,6 @@ function SettingsDialog() {
               </section>
             </>
           )}
-          <section className="grid gap-2 rounded-md border border-border p-3">
-            <div>
-              <h3 className="text-sm font-medium">Configuration</h3>
-              <p className="text-xs text-muted-foreground">Export or import this app's settings.</p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button variant="outline" onClick={exportConfig}>
-                <Clipboard className="h-4 w-4" />
-                Export Config
-              </Button>
-              <Button variant="outline" onClick={() => importInputRef.current?.click()}>
-                <FolderOpen className="h-4 w-4" />
-                Import Config
-              </Button>
-            </div>
-            <input
-              ref={importInputRef}
-              type="file"
-              accept="application/json,.json"
-              className="hidden"
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                if (file) void importConfig(file);
-              }}
-            />
-          </section>
           <div className="flex flex-wrap gap-2">
             <Button onClick={save}>
               <Check className="h-4 w-4" />
