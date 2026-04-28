@@ -2732,9 +2732,9 @@ function AgentTile({
     const root = rootRef.current;
     if (!root) return;
     const nearBottom = root.scrollHeight - root.scrollTop - root.clientHeight < 180;
-    if (nearBottom) root.scrollTop = root.scrollHeight;
+    if (isBusy || nearBottom) root.scrollTop = root.scrollHeight;
     setShowPinnedMessage(shouldShowPinnedUserMessage(root, pinnedMessage?.id));
-  }, [transcript, agent.id, pinnedMessage?.id]);
+  }, [transcript, agent.id, isBusy, pinnedMessage?.id]);
 
   function handleTranscriptScroll(event: ReactUIEvent<HTMLDivElement>) {
     const nextVisible = shouldShowPinnedUserMessage(event.currentTarget, pinnedMessage?.id);
@@ -3375,9 +3375,12 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
     const root = rootRef.current;
     if (!root) return;
     const nearBottom = root.scrollHeight - root.scrollTop - root.clientHeight < 140;
-    if (nearBottom) root.scrollTop = root.scrollHeight;
+    if (isBusy || nearBottom) {
+      root.scrollTop = root.scrollHeight;
+      setScrollPosition(agent.id, root.scrollTop);
+    }
     setShowPinnedMessage(shouldShowPinnedUserMessage(root, pinnedMessage?.id));
-  }, [transcript, agent.id, pinnedMessage?.id]);
+  }, [transcript, agent.id, isBusy, pinnedMessage?.id, setScrollPosition]);
 
   useEffect(() => {
     if (isBusy || !canType || queue.length === 0) return;
