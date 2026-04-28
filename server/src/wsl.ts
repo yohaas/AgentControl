@@ -37,7 +37,7 @@ export function wslDistro(project: Pick<Project, "path" | "wslDistro">): string 
 }
 
 export function wslCommandArgs(project: Pick<Project, "path" | "wslDistro" | "wslPath">, command: string, args: string[] = []): string[] {
-  return ["-d", wslDistro(project), "--cd", wslProjectPath(project), "--exec", command, ...args];
+  return ["-d", wslDistro(project), "--cd", wslProjectPath(project), "--exec", "sh", "-lc", 'exec "$0" "$@"', command, ...args];
 }
 
 export function windowsPathToWslPath(input: string): string {

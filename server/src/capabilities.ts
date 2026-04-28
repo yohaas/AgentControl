@@ -7,8 +7,26 @@ import type { AuthMethod, Capabilities, ProviderCapability } from "@agent-contro
 
 const execFileAsync = promisify(execFile);
 
+function resolveWindowsExecutable(commandPath: string): string {
+  const hasPathPart = path.isAbsolute(commandPath) || commandPath.includes("\\") || commandPath.includes("/");
+  if (hasPathPart) return commandPath;
+
+  const pathEntries = (process.env.PATH || "").split(path.delimiter).filter(Boolean);
+  const extensions = commandPath.includes(".")
+    ? [""]
+    : (process.env.PATHEXT || ".COM;.EXE;.BAT;.CMD;.PS1").split(";").filter(Boolean);
+  for (const entry of pathEntries) {
+    for (const extension of extensions) {
+      const candidate = path.join(entry, `${commandPath}${extension}`);
+      if (existsSync(candidate)) return candidate;
+    }
+  }
+  return commandPath;
+}
+
 function resolveWindowsCmdShim(shimPath: string): string | undefined {
   try {
+    shimPath = resolveWindowsExecutable(shimPath);
     const shim = readFileSync(shimPath, "utf8");
     const match = shim.match(/"([^"]+claude\.exe)"/i);
     if (!match) return undefined;
@@ -21,6 +39,7 @@ function resolveWindowsCmdShim(shimPath: string): string | undefined {
 }
 
 function resolveWindowsClaudeCommand(commandPath: string): string {
+  commandPath = resolveWindowsExecutable(commandPath);
   if (commandPath.toLowerCase().endsWith(".cmd")) {
     return resolveWindowsCmdShim(commandPath) || commandPath;
   }
