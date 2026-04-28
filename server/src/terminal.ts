@@ -95,12 +95,13 @@ export class TerminalManager {
     };
   }
 
-  start(projectId?: string, cols = DEFAULT_COLS, rows = DEFAULT_ROWS): TerminalSession {
+  start(projectId?: string, cols = DEFAULT_COLS, rows = DEFAULT_ROWS, initialCommand?: string, title?: string): TerminalSession {
     const project = projectId ? this.projects().find((candidate) => candidate.id === projectId) : undefined;
     const shell = defaultShell(historyPathForProject(project?.id || projectId));
     const timestamp = now();
     const session: TerminalSession = {
       id: nanoid(10),
+      title,
       projectId: project?.id,
       projectName: project?.name,
       cwd: project?.path || process.cwd(),
@@ -146,6 +147,9 @@ export class TerminalManager {
     });
 
     this.broadcast({ type: "terminal.started", session, output: state.output });
+    if (initialCommand?.trim()) {
+      pty.write(`${initialCommand.trim()}${process.platform === "win32" ? "\r" : "\n"}`);
+    }
     return session;
   }
 

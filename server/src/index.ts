@@ -334,7 +334,7 @@ wss.on("connection", (ws) => {
           runtime.resume(command.id);
           break;
         case "terminalStart":
-          terminals.start(command.projectId);
+          terminals.start(command.projectId, undefined, undefined, command.command, command.title);
           break;
         case "terminalInput":
           terminals.input(command.id, command.input);

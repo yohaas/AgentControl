@@ -352,6 +352,10 @@ function terminalsForProject(sessionsById: Record<string, TerminalSession>, proj
   return Object.values(sessionsById).filter((session) => !projectId || session.projectId === projectId);
 }
 
+function isNpmDevTerminal(session: TerminalSession) {
+  return session.title === "npm run dev";
+}
+
 function orderedAgentsForTiles(agents: RunningAgent[], tileOrder: string[]) {
   const byId = new Map(agents.map((agent) => [agent.id, agent]));
   return [
@@ -382,6 +386,10 @@ function Header() {
     () => terminalsForProject(terminalSessions, selectedProjectId).length,
     [terminalSessions, selectedProjectId]
   );
+  const projectDevTerminals = useMemo(
+    () => terminalsForProject(terminalSessions, selectedProjectId).filter(isNpmDevTerminal),
+    [terminalSessions, selectedProjectId]
+  );
 
   async function refresh() {
     try {
@@ -410,6 +418,21 @@ function Header() {
       sendCommand({ type: "terminalStart", projectId: selectedProjectId });
     }
     setTerminalOpen(!terminalOpen);
+  }
+
+  function runProjectDev() {
+    if (!selectedProjectId) return;
+    setTerminalOpen(true);
+    sendCommand({ type: "terminalStart", projectId: selectedProjectId, command: "npm run dev", title: "npm run dev" });
+  }
+
+  function stopProjectDev() {
+    projectDevTerminals.forEach((session) => sendCommand({ type: "terminalClose", id: session.id }));
+  }
+
+  function restartProjectDev() {
+    stopProjectDev();
+    window.setTimeout(runProjectDev, 150);
   }
 
   async function closeSelectedProject() {
@@ -473,6 +496,21 @@ function Header() {
         <Button variant={terminalOpen ? "default" : "outline"} size="icon" onClick={toggleTerminal} title="Terminal">
           <SquareTerminal className="h-4 w-4" />
         </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" disabled={!selectedProjectId}>
+              <SquareTerminal className="h-4 w-4" />
+              Dev
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={runProjectDev}>Run npm run dev</DropdownMenuItem>
+            <DropdownMenuItem onClick={restartProjectDev}>Restart npm run dev</DropdownMenuItem>
+            <DropdownMenuItem disabled={projectDevTerminals.length === 0} onClick={stopProjectDev}>
+              Stop npm run dev
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
         <PluginsDialog />
         <SettingsDialog />
         <Badge className={wsConnected ? "border-teal-400/40 text-teal-200" : "border-red-400/40 text-red-200"}>

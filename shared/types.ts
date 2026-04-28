@@ -339,6 +339,8 @@ export type WsClientCommand =
   | {
       type: "terminalStart";
       projectId?: string;
+      command?: string;
+      title?: string;
     }
   | {
       type: "terminalInput";
