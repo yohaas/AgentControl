@@ -67,6 +67,14 @@ You can also use package managers such as Homebrew or WinGet when appropriate. A
 claude --version
 ```
 
+On Windows, verify from the same shell you will use to start Agent Control:
+
+```powershell
+where.exe claude
+where.exe claude.cmd
+claude --version
+```
+
 If `claude` is not on `PATH`, set:
 
 ```powershell
@@ -91,6 +99,66 @@ You can also run `claude` interactively and use `/login` if prompted.
 Claude Code supports several auth methods, including Claude.ai subscription login, Claude Console/API credentials, and enterprise cloud providers. Standard Agent Control agents can use whatever Claude Code can use in your terminal environment. See Anthropic's auth reference for current details: https://code.claude.com/docs/en/authentication
 
 Remote Control is temporarily unavailable in Agent Control. Claude Code can start `claude remote-control`, but the current CLI does not expose stable enough transcript and input controls for a reliable dashboard chat experience. Use claude.ai/code or the Claude mobile app directly for Remote Control sessions until Claude exposes more CLI control.
+
+## Install Codex CLI
+
+Install OpenAI Codex CLI with npm:
+
+```bash
+npm install -g @openai/codex@latest
+```
+
+Then verify it from the same shell you will use to start Agent Control:
+
+```bash
+codex --version
+codex login
+```
+
+On Windows, also check where the command resolves:
+
+```powershell
+where.exe codex
+where.exe codex.cmd
+codex --version
+```
+
+If `codex` is not on `PATH`, set:
+
+```powershell
+$env:CODEX_CLI="C:\path\to\codex.exe"
+```
+
+```bash
+export CODEX_CLI="/path/to/codex"
+```
+
+Codex CLI can also be installed from the OpenAI Codex GitHub releases if you prefer a platform binary: https://github.com/openai/codex
+
+## Windows And WSL Provider CLIs
+
+Windows and WSL use separate command environments. If you add a WSL project, install and authenticate the provider CLI inside that WSL distro too. A Windows `claude.exe` or `codex.exe` does not automatically make `claude` or `codex` available inside WSL.
+
+Verify WSL commands from PowerShell:
+
+```powershell
+wsl.exe -l -v
+wsl.exe -d Ubuntu --exec sh -lc 'command -v claude; claude --version'
+wsl.exe -d Ubuntu --exec sh -lc 'command -v codex; codex --version'
+```
+
+Replace `Ubuntu` with the distro shown in Agent Control. If a command is missing, open that distro and install it there:
+
+```bash
+npm install -g @openai/codex@latest
+codex login
+```
+
+For Claude Code in WSL, use Anthropic's Linux install command from the Claude Code quickstart, then run:
+
+```bash
+claude auth login
+```
 
 ## Install Agent Control
 
