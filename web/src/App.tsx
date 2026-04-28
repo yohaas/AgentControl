@@ -1160,7 +1160,7 @@ function fullLastActivity(value?: string) {
 
 function agentHasProcess(agent: RunningAgent) {
   if (agent.provider === "openai" || agent.provider === "codex") return agent.status !== "killed" && agent.status !== "error";
-  return Boolean(agent.pid) && agent.status !== "killed" && agent.status !== "error" && agent.status !== "paused" && !agent.restorable;
+  return (Boolean(agent.pid) || agent.status === "paused" || agent.restorable) && agent.status !== "killed" && agent.status !== "error";
 }
 
 function providerLabel(provider?: AgentProvider) {

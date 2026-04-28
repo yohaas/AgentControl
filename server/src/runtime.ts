@@ -284,9 +284,7 @@ export class AgentRuntimeManager {
   resume(id: string): void {
     const state = this.requiredState(id);
     if (!state.agent.sessionId) throw new Error("Agent has no resumable session.");
-    state.agent.restorable = false;
-    this.setStatus(state, "starting");
-    this.spawnStandard(state, state.agent.sessionId, state.agent.currentModel);
+    this.reconnectStandard(state, "Resuming Claude session...");
   }
 
   userMessage(id: string, text: string, sourceAgent?: TranscriptEvent["sourceAgent"], attachments: MessageAttachment[] = []): void {
@@ -298,7 +296,7 @@ export class AgentRuntimeManager {
       });
       return;
     }
-    if (!state.child || state.child.killed) throw new Error("Agent process is not running.");
+    const child = this.ensureStandardProcess(state, "Reconnecting Claude before sending...");
 
     const trimmed = text.trim();
     const imageAttachments = attachments.filter((attachment) => attachment.mimeType.startsWith("image/"));
@@ -374,7 +372,7 @@ export class AgentRuntimeManager {
         content
       }
     };
-    state.child.stdin.write(`${JSON.stringify(payload)}\n`);
+    child.stdin.write(`${JSON.stringify(payload)}\n`);
   }
 
   kill(id: string): void {
@@ -406,7 +404,7 @@ export class AgentRuntimeManager {
       this.setStatus(state, "idle");
       return;
     }
-    if (!state.child || state.child.killed) throw new Error("Agent process is not running.");
+    const child = this.ensureStandardProcess(state, "Reconnecting Claude before switching models...");
 
     this.setStatus(state, "switching-model", `Switching to ${model}...`);
     if (process.env.FORCE_FALLBACK_MODEL_SWITCH === "1") {
@@ -415,7 +413,7 @@ export class AgentRuntimeManager {
     }
 
     try {
-      state.child.stdin.write(`${JSON.stringify({ type: "control", subtype: "set_model", model })}\n`);
+      child.stdin.write(`${JSON.stringify({ type: "control", subtype: "set_model", model })}\n`);
       this.updateModel(state, model);
       this.setStatus(state, "idle");
     } catch {
@@ -562,14 +560,14 @@ export class AgentRuntimeManager {
 
   permission(id: string, toolUseId: string, decision: "approve" | "deny"): void {
     const state = this.requiredState(id);
-    if (!state.child || state.child.killed) throw new Error("Agent process is not running.");
+    const child = this.ensureStandardProcess(state, "Reconnecting Claude before applying permission...");
     const pending = state.pendingPermissions?.get(toolUseId);
     if (pending) {
       clearTimeout(pending.timeout);
       state.pendingPermissions?.delete(toolUseId);
       pending.resolve(decision);
     } else {
-      state.child.stdin.write(`${JSON.stringify({ type: "control", subtype: "tool_permission", tool_use_id: toolUseId, decision })}\n`);
+      child.stdin.write(`${JSON.stringify({ type: "control", subtype: "tool_permission", tool_use_id: toolUseId, decision })}\n`);
     }
     this.resolveToolPermission(state, toolUseId);
     state.activeTurn = true;
@@ -901,6 +899,25 @@ export class AgentRuntimeManager {
     const state = this.states.get(id);
     if (!state) throw new Error("Agent not found.");
     return state;
+  }
+
+  private ensureStandardProcess(state: AgentProcessState, statusMessage: string): ChildProcessWithoutNullStreams {
+    if (state.agent.remoteControl) throw new Error("Remote Control agents do not use a dashboard chat process.");
+    if (state.agent.provider && state.agent.provider !== "claude") throw new Error("Agent does not use a persistent Claude process.");
+    if (state.child && !state.child.killed) return state.child;
+    this.reconnectStandard(state, statusMessage);
+    if (!state.child || state.child.killed) throw new Error("Agent process is not running.");
+    return state.child;
+  }
+
+  private reconnectStandard(state: AgentProcessState, statusMessage: string): void {
+    state.child = undefined;
+    state.agent.pid = undefined;
+    state.agent.restorable = false;
+    state.interrupting = false;
+    state.exiting = false;
+    this.setStatus(state, "starting", statusMessage);
+    this.spawnStandard(state, state.agent.sessionId, state.agent.currentModel);
   }
 
   private spawnStandard(state: AgentProcessState, resumeSessionId?: string, modelOverride?: string): void {
