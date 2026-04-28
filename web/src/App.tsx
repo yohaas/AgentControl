@@ -1202,6 +1202,39 @@ function Header() {
       <div className="flex min-w-0 items-center gap-2">
         <Bot className="h-5 w-5 text-primary" />
         <h1 className="truncate text-base font-semibold">Agent Control</h1>
+        <DropdownMenu open={connectionMenuOpen} onOpenChange={setConnectionMenuOpen}>
+          <DropdownMenuTrigger asChild>
+            <button
+              className={cn(
+                "grid h-5 w-5 shrink-0 place-items-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                wsConnected ? "text-emerald-400" : "text-red-400"
+              )}
+              title={
+                wsConnected
+                  ? "AgentControl is connected. Click for restart and shutdown options."
+                  : "AgentControl is disconnected. The dashboard is not receiving live updates."
+              }
+              aria-label={wsConnected ? "AgentControl connected" : "AgentControl disconnected"}
+            >
+              <span className="h-2.5 w-2.5 rounded-full bg-current shadow-[0_0_0_3px_rgba(255,255,255,0.06)]" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-56">
+            <DropdownMenuItem onClick={() => void restartAgentControl()} disabled={supervised === false}>
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Restart AgentControl
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => void shutdownAgentControl()}>
+              <X className="mr-2 h-4 w-4" />
+              Shutdown AgentControl
+            </DropdownMenuItem>
+            {supervised === false && (
+              <div className="px-2 py-1.5 text-xs text-muted-foreground">
+                Restart is available after launching with npm run dev:supervised.
+              </div>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
       <div className="ml-auto flex items-center gap-2">
         <DropdownMenu>
@@ -1283,39 +1316,6 @@ function Header() {
         </Button>
         <PluginsDialog />
         <SettingsDialog />
-        <DropdownMenu open={connectionMenuOpen} onOpenChange={setConnectionMenuOpen}>
-          <DropdownMenuTrigger asChild>
-            <button
-              className={cn(
-                "grid h-8 w-8 place-items-center rounded-md border border-border hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                wsConnected ? "text-emerald-400" : "text-red-400"
-              )}
-              title={
-                wsConnected
-                  ? "AgentControl is connected. Click for restart and shutdown options."
-                  : "AgentControl is disconnected. The dashboard is not receiving live updates."
-              }
-              aria-label={wsConnected ? "AgentControl connected" : "AgentControl disconnected"}
-            >
-              <span className="h-3 w-3 rounded-full bg-current shadow-[0_0_0_3px_rgba(255,255,255,0.06)]" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56">
-            <DropdownMenuItem onClick={() => void restartAgentControl()} disabled={supervised === false}>
-              <RefreshCw className="mr-2 h-4 w-4" />
-              Restart AgentControl
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => void shutdownAgentControl()}>
-              <X className="mr-2 h-4 w-4" />
-              Shutdown AgentControl
-            </DropdownMenuItem>
-            {supervised === false && (
-              <div className="px-2 py-1.5 text-xs text-muted-foreground">
-                Restart is available after launching with npm run dev:supervised.
-              </div>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
       </div>
     </header>
   );
