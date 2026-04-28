@@ -3430,7 +3430,7 @@ function TerminalPanel({
     setActiveTerminal(id);
     setVisiblePaneIds((current) => {
       if (current.includes(id)) return current;
-      return [...current.slice(-3), id];
+      return [id];
     });
   }
 
