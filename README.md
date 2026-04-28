@@ -177,6 +177,8 @@ This starts:
 - Server/API/WebSocket: http://localhost:4317
 - Vite web app: http://localhost:4318
 
+For the best everyday experience, install Agent Control as a browser app from your browser's address bar or app menu after opening the local URL. This gives it its own window, keeps terminals and popouts feeling app-like, and avoids losing the dashboard among regular browser tabs.
+
 The Vite app proxies API and WebSocket traffic to the server. The server binds to `127.0.0.1` by default and protects API/WebSocket control traffic with a per-process local token. The top-bar connection dot is green when connected and red when disconnected. Use `HOST`, `PORT`, `AGENTCONTROL_AUTH_TOKEN`, and `AGENTCONTROL_ALLOWED_ORIGINS` only when you intentionally need a different local setup.
 
 For UI-controlled restart/shutdown, run supervised mode instead:
