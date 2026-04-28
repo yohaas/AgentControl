@@ -135,9 +135,9 @@ const THINKING_PHRASES = [
   "Connecting dots"
 ];
 
-const GENERIC_AGENT_DEF: AgentDef = {
-  name: "Generic",
-  description: "General-purpose Claude agent",
+const GENERAL_AGENT_DEF: AgentDef = {
+  name: "general",
+  description: "General-purpose engineering assistant",
   color: "#ffffff",
   provider: "claude",
   tools: [],
@@ -1290,18 +1290,17 @@ function agentsForProject(agentsById: Record<string, RunningAgent>, projectId?: 
   return Object.values(agentsById).filter((agent) => !projectId || agent.projectId === projectId);
 }
 
-function agentDefsWithGeneric(project?: { agents: AgentDef[]; builtInAgents?: AgentDef[] }) {
+function agentDefsWithBuiltIns(project?: { agents: AgentDef[]; builtInAgents?: AgentDef[] }) {
   const agents = [...(project?.agents || []), ...(project?.builtInAgents || [])];
-  return agents.some((agent) => agent.name.toLowerCase() === "generic") ? agents : [...agents, GENERIC_AGENT_DEF];
+  return agents.length > 0 ? agents : [GENERAL_AGENT_DEF];
 }
 
-function groupedAgentDefsWithGeneric(project?: { agents: AgentDef[]; builtInAgents?: AgentDef[] }) {
+function groupedAgentDefsWithBuiltIns(project?: { agents: AgentDef[]; builtInAgents?: AgentDef[] }) {
   const projectAgents = project?.agents || [];
-  const builtInAgents = project?.builtInAgents?.length ? project.builtInAgents : [];
-  const hasGeneric = [...projectAgents, ...builtInAgents].some((agent) => agent.name.toLowerCase() === "generic");
+  const builtInAgents = project?.builtInAgents?.length ? project.builtInAgents : [GENERAL_AGENT_DEF];
   return {
     projectAgents,
-    builtInAgents: hasGeneric ? builtInAgents : [...builtInAgents, GENERIC_AGENT_DEF]
+    builtInAgents
   };
 }
 
@@ -2814,7 +2813,7 @@ function Sidebar() {
 
   const project = projects.find((candidate) => candidate.id === selectedProjectId);
   const projectAgentDefs = project?.agents || [];
-  const builtInAgentDefs = project?.builtInAgents?.length ? project.builtInAgents : [GENERIC_AGENT_DEF];
+  const builtInAgentDefs = project?.builtInAgents?.length ? project.builtInAgents : [GENERAL_AGENT_DEF];
   const availableAgentDefs = agentTab === "project" ? projectAgentDefs : builtInAgentDefs;
   const running = useMemo(
     () => {
@@ -3605,7 +3604,7 @@ function LaunchDialog() {
 
   const projectId = selectedProjectId || "";
   const project = projects.find((candidate) => candidate.id === projectId);
-  const agentOptionGroups = useMemo(() => groupedAgentDefsWithGeneric(project), [project]);
+  const agentOptionGroups = useMemo(() => groupedAgentDefsWithBuiltIns(project), [project]);
   const agentOptions = useMemo(
     () => [...agentOptionGroups.projectAgents, ...agentOptionGroups.builtInAgents],
     [agentOptionGroups.builtInAgents, agentOptionGroups.projectAgents]
@@ -3656,7 +3655,7 @@ function LaunchDialog() {
   useEffect(() => {
     if (!modal.open) return;
     const nextProject = projects.find((candidate) => candidate.id === projectId);
-    const nextAgentOptions = agentDefsWithGeneric(nextProject);
+    const nextAgentOptions = agentDefsWithBuiltIns(nextProject);
     const nextDefName = modal.defName || nextAgentOptions[0]?.name || "";
     const nextDef = nextAgentOptions.find((candidate) => candidate.name === nextDefName);
     const nextProvider = nextDef?.provider || "claude";
@@ -3769,7 +3768,7 @@ function LaunchDialog() {
   async function saveAgentPlugins(): Promise<boolean> {
     if (!projectId || !defName) return false;
     if (!def?.sourcePath) {
-      addError("Generic agents do not have an agent file to save plugins to.");
+      addError("This agent does not have an agent file to save plugins to.");
       return false;
     }
     try {
@@ -4088,7 +4087,7 @@ function LaunchDialog() {
               )}
             </div>
             {!def?.sourcePath && (
-              <p className="text-xs text-muted-foreground">Generic agents need an agent file before plugin selections can be saved.</p>
+              <p className="text-xs text-muted-foreground">This agent needs an agent file before plugin selections can be saved.</p>
             )}
           </section>}
           <label className="flex items-start gap-2 rounded-md border border-border p-3 text-sm" title={rcDisabled ? capabilities?.remoteControlReason : undefined}>
@@ -4126,7 +4125,7 @@ function LaunchDialog() {
       <Dialog open={agentFileOpen} onOpenChange={setAgentFileOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{def?.name || "Generic"} agent</DialogTitle>
+            <DialogTitle>{def?.name || "general"} agent</DialogTitle>
           </DialogHeader>
           <div className="grid gap-3">
             {def?.sourcePath ? (
@@ -4141,7 +4140,7 @@ function LaunchDialog() {
                 <ExternalLink className="h-3.5 w-3.5 shrink-0" />
               </button>
             ) : (
-              <div className="text-xs text-muted-foreground">Generic agent definition</div>
+              <div className="text-xs text-muted-foreground">Built-in agent definition</div>
             )}
             <p className="text-xs text-muted-foreground">To change this, edit the agents file.</p>
             <Textarea
@@ -6440,7 +6439,7 @@ function ChatBlockPopoutButton({
     getCachedSelection: getCachedPopoutSelection
   } = useTextSelection(`#${selectionRootId}`);
   const project = projects.find((candidate) => candidate.id === source.projectId);
-  const newAgentDefs = useMemo(() => agentDefsWithGeneric(project), [project]);
+  const newAgentDefs = useMemo(() => agentDefsWithBuiltIns(project), [project]);
   const targetAgents = useMemo(
     () => Object.values(agentsById).filter((agent) => agent.projectId === source.projectId && agent.id !== source.id),
     [agentsById, source.id, source.projectId]

@@ -28,10 +28,10 @@ export const DEFAULT_AGENT_DIRS: AgentDirectoryConfig = {
   builtIn: DEFAULT_BUILT_IN_AGENT_DIR
 };
 
-function genericAgentDef(): AgentDef {
+function generalAgentDef(): AgentDef {
   return {
-    name: "Generic",
-    description: "General-purpose Claude agent",
+    name: "general",
+    description: "General-purpose engineering assistant",
     color: "#ffffff",
     provider: "claude",
     tools: [],
@@ -187,7 +187,7 @@ async function readAgentDefs(projectPath: string, agentDirs = DEFAULT_AGENT_DIRS
 
 async function readBuiltInAgentDefs(projectPath: string, agentDirs = DEFAULT_AGENT_DIRS): Promise<AgentDef[]> {
   const agents = await readAgentDir(resolveBuiltInAgentDir(agentDirs.builtIn), ".", undefined, true);
-  return agents.length > 0 ? agents : [genericAgentDef()];
+  return agents.length > 0 ? agents : [generalAgentDef()];
 }
 
 export async function upsertBuiltInAgent(projectPath: string, agent: AgentDef, originalName?: string, agentDirs = DEFAULT_AGENT_DIRS): Promise<void> {
