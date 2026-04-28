@@ -25,6 +25,7 @@ import {
   ExternalLink,
   FolderOpen,
   FolderPlus,
+  GitCompare,
   GripVertical,
   HardDrive,
   Hand,
@@ -44,7 +45,6 @@ import {
   RefreshCw,
   Search,
   Settings,
-  Share2,
   SlidersHorizontal,
   SquareTerminal,
   Trash2,
@@ -1510,7 +1510,7 @@ const COMPOSER_MODE_OPTIONS = [
     label: "Bypass permissions",
     compactLabel: "Bypass",
     description: "Claude will not ask for approval before running potentially dangerous commands.",
-    icon: Share2
+    icon: GitCompare
   }
 ] satisfies {
   mode: AgentPermissionMode;
