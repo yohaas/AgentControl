@@ -50,7 +50,13 @@ export function disconnectWebSocket() {
   const currentSocket = socket;
   socket = undefined;
   useAppStore.getState().setWsConnected(false);
-  currentSocket?.close();
+  if (!currentSocket) return;
+  if (currentSocket.readyState === WebSocket.CONNECTING) {
+    currentSocket.addEventListener("open", () => currentSocket.close(), { once: true });
+    currentSocket.addEventListener("error", () => undefined, { once: true });
+    return;
+  }
+  currentSocket.close();
 }
 
 export function sendCommand(command: WsClientCommand) {

@@ -69,6 +69,7 @@ import { useAppStore } from "./store/app-store";
 
 const DEFAULT_MODEL = "claude-sonnet-4-6";
 const EMPTY_TRANSCRIPT: TranscriptEvent[] = [];
+const EMPTY_QUEUE: { id: string; text: string; attachments: MessageAttachment[] }[] = [];
 
 function AgentDot({ color, className }: { color: string; className?: string }) {
   return <span className={cn("h-3 w-3 shrink-0 rounded-full", className)} style={{ background: color }} />;
@@ -431,7 +432,7 @@ function Header() {
         <h1 className="truncate text-base font-semibold">Agent Control</h1>
       </div>
       <div className="ml-auto flex items-center gap-2">
-        <Select value={selectedProjectId} onValueChange={setSelectedProject}>
+        <Select value={selectedProjectId ?? ""} onValueChange={setSelectedProject}>
           <SelectTrigger className="w-60">
             <SelectValue placeholder="Select project" />
           </SelectTrigger>
@@ -1300,7 +1301,7 @@ function AgentTile({
   const transcript = useAppStore((state) => state.transcripts[agent.id] || EMPTY_TRANSCRIPT);
   const draft = useAppStore((state) => state.drafts[agent.id] || "");
   const setDraft = useAppStore((state) => state.setDraft);
-  const queue = useAppStore((state) => state.messageQueues[agent.id] || []);
+  const queue = useAppStore((state) => state.messageQueues[agent.id] || EMPTY_QUEUE);
   const enqueueMessage = useAppStore((state) => state.enqueueMessage);
   const removeQueuedMessage = useAppStore((state) => state.removeQueuedMessage);
   const popNextQueuedMessage = useAppStore((state) => state.popNextQueuedMessage);
@@ -1681,7 +1682,7 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
   const transcript = useAppStore((state) => state.transcripts[agent.id] || EMPTY_TRANSCRIPT);
   const draft = useAppStore((state) => state.drafts[agent.id] || "");
   const setDraft = useAppStore((state) => state.setDraft);
-  const queue = useAppStore((state) => state.messageQueues[agent.id] || []);
+  const queue = useAppStore((state) => state.messageQueues[agent.id] || EMPTY_QUEUE);
   const enqueueMessage = useAppStore((state) => state.enqueueMessage);
   const removeQueuedMessage = useAppStore((state) => state.removeQueuedMessage);
   const popNextQueuedMessage = useAppStore((state) => state.popNextQueuedMessage);
