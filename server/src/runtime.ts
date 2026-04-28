@@ -26,6 +26,7 @@ import type {
   WsServerEvent
 } from "@agent-control/shared";
 import { createStateWriter, readPersistedState, type PersistedState } from "./persistence.js";
+import { DEFAULT_MODEL_PROFILES } from "./config.js";
 import { resolveClaudeCommand, resolveCodexInvocation } from "./capabilities.js";
 import { listPlugins, supportsPluginProvider } from "./plugins.js";
 import { mergeSlashCommands, normalizeSlashCommandInfo, scanSlashCommands } from "./slash-commands.js";
@@ -119,6 +120,10 @@ function providerForModel(model: string): AgentProvider {
   return "claude";
 }
 
+function isSyntheticModel(model: string | undefined): boolean {
+  return model?.trim().toLowerCase() === "<synthetic>";
+}
+
 function tomlBasicString(value: string): string {
   return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
 }
@@ -172,14 +177,22 @@ export class AgentRuntimeManager {
     const persisted = await readPersistedState();
     for (const agent of persisted.agents) {
       const persistedStatus = agent.status as AgentStatus | "restorable";
+      const def = this.findAgentDef(agent);
+      const provider = agent.provider || def?.provider || providerForModel(agent.currentModel);
+      const currentModel = isSyntheticModel(agent.currentModel)
+        ? this.defaultModelForDefinition(def, provider)
+        : agent.currentModel;
       const restored: RunningAgent = {
         ...agent,
+        provider,
+        currentModel,
         status: agent.sessionId ? "paused" : persistedStatus === "restorable" ? "paused" : persistedStatus,
         restorable: Boolean(agent.sessionId),
         updatedAt: now()
       };
       this.states.set(restored.id, {
         agent: restored,
+        def,
         transcript: persisted.transcripts[restored.id] || [],
         rawLines: [],
         stdoutBuffer: "",
@@ -223,6 +236,7 @@ export class AgentRuntimeManager {
     const displayName = this.uniqueDisplayName(request.displayName?.trim() || def.name);
     const timestamp = now();
     const permissionMode = this.initialPermissionMode(request);
+    const currentModel = isSyntheticModel(request.model) ? this.defaultModelForDefinition(def, provider) : request.model;
     const installedPlugins = supportsPluginProvider(provider) ? await listPlugins(provider).catch(() => []) : [];
     const slashCommands = await scanSlashCommands(project.path, installedPlugins, def.plugins || [], provider).catch(() => []);
     const agent: RunningAgent = {
@@ -235,7 +249,7 @@ export class AgentRuntimeManager {
       displayName,
       color: def.color,
       status: "starting",
-      currentModel: request.model,
+      currentModel,
       modelLastUpdated: timestamp,
       launchedAt: timestamp,
       updatedAt: timestamp,
@@ -1460,7 +1474,7 @@ export class AgentRuntimeManager {
     const subtype = String(payload.subtype || "");
 
     if ((type === "system" && subtype === "init") || type === "system.init") {
-      const model = this.trimmedStringField(payload.model) || this.trimmedStringField(payload.current_model);
+      const model = this.modelOrDefault(state, this.trimmedStringField(payload.model) || this.trimmedStringField(payload.current_model));
       const sessionId = this.trimmedStringField(payload.session_id) || this.trimmedStringField(payload.sessionId);
       if (sessionId) state.agent.sessionId = sessionId;
       if (model) this.updateModel(state, model);
@@ -1494,7 +1508,7 @@ export class AgentRuntimeManager {
     }
 
     const message = (payload.message || payload) as Record<string, unknown>;
-    const messageModel = this.trimmedStringField(message.model) || this.trimmedStringField(payload.model);
+    const messageModel = this.modelOrDefault(state, this.trimmedStringField(message.model) || this.trimmedStringField(payload.model));
     if (messageModel && messageModel !== state.agent.currentModel) {
       this.updateModel(state, messageModel);
     }
@@ -1811,6 +1825,7 @@ export class AgentRuntimeManager {
   }
 
   private updateModel(state: AgentProcessState, model: string): void {
+    model = this.modelOrDefault(state, model) || model;
     const previousModel = state.agent.currentModel;
     if (previousModel === model) return;
     state.agent.currentModel = model;
@@ -1830,6 +1845,28 @@ export class AgentRuntimeManager {
       updatedAt: state.agent.updatedAt
     });
     this.persist();
+  }
+
+  private findAgentDef(agent: RunningAgent): AgentDef | undefined {
+    const project = this.getProjects().find((candidate) => candidate.id === agent.projectId) || this.getProjects().find((candidate) => candidate.path === agent.projectPath);
+    return project?.agents.find((candidate) => candidate.name === agent.defName) || project?.builtInAgents?.find((candidate) => candidate.name === agent.defName);
+  }
+
+  private defaultModelForDefinition(def: AgentDef | undefined, provider: AgentProvider): string {
+    const agentDefault = def?.defaultModel?.trim();
+    if (agentDefault) return agentDefault;
+    return (
+      DEFAULT_MODEL_PROFILES.find((profile) => profile.provider === provider && profile.default)?.id ||
+      DEFAULT_MODEL_PROFILES.find((profile) => profile.provider === provider)?.id ||
+      DEFAULT_MODEL_PROFILES.find((profile) => profile.provider === "claude" && profile.default)?.id ||
+      "claude-sonnet-4-6"
+    );
+  }
+
+  private modelOrDefault(state: AgentProcessState, model: string | undefined): string | undefined {
+    if (!isSyntheticModel(model)) return model;
+    const provider = state.agent.provider || state.def?.provider || providerForModel(state.agent.currentModel);
+    return this.defaultModelForDefinition(state.def || this.findAgentDef(state.agent), provider);
   }
 
   private updateSessionInfo(state: AgentProcessState, payload: Record<string, unknown>): void {
