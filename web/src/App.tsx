@@ -5895,6 +5895,9 @@ function AgentTile({
                         </div>
                       )}
                       <p className="text-sm text-muted-foreground">{remoteControlLabel(agent)}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Live conversation stays in Claude. AgentControl shows connection state and CLI diagnostics.
+                      </p>
                       {agent.rcUrl && <p className="max-w-full break-all text-xs text-muted-foreground">{agent.rcUrl}</p>}
                       <Button
                         variant="outline"
@@ -5904,6 +5907,11 @@ function AgentTile({
                         <ExternalLink className="h-4 w-4" />
                         Open
                       </Button>
+                      <pre className="max-h-24 w-full overflow-y-auto whitespace-pre-wrap break-words rounded-md border border-border bg-muted/30 p-2 text-left text-[11px] text-muted-foreground">
+                        {(agent.rcDiagnostics || []).length > 0
+                          ? (agent.rcDiagnostics || []).slice(-6).join("\n")
+                          : "Waiting for Remote Control diagnostics..."}
+                      </pre>
                     </div>
                   </div>
                 ) : transcript.length === 0 ? (
@@ -6195,6 +6203,10 @@ function RemoteControlPanel({ agent }: { agent: RunningAgent }) {
           <p className="text-muted-foreground">
             This agent runs in Remote Control mode. Live transcript and interaction happen in claude.ai/code or the Claude
             mobile app.
+          </p>
+          <p className="text-sm text-muted-foreground">
+            AgentControl can show connection state, URL/QR, PID, and Claude CLI diagnostics. Claude does not expose the live
+            remote conversation back through this local process.
           </p>
           <div className="flex justify-center gap-2">
             <Button disabled={!agent.rcUrl} onClick={() => agent.rcUrl && window.open(agent.rcUrl, "_blank", "noopener")}>

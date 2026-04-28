@@ -394,10 +394,15 @@ export class AgentRuntimeManager {
     state.apiAbort = undefined;
     if (state.agent.remoteControl) {
       if (state.child && !state.child.killed) {
+        this.updateRemoteControlState(state, "closed", "Closing Remote Control session...");
         this.stopProcessTree(state);
+        setTimeout(() => {
+          if (this.states.get(state.agent.id) === state) this.removeExitedAgent(state);
+        }, 5000);
+      } else {
+        this.updateRemoteControlState(state, "closed", "Remote Control closed.");
+        this.removeExitedAgent(state);
       }
-      this.updateRemoteControlState(state, "closed", "Remote Control closed.");
-      this.removeExitedAgent(state);
       return;
     }
     if (state.child && !state.child.killed) {
@@ -1054,6 +1059,7 @@ export class AgentRuntimeManager {
   clearAll(projectId?: string): void {
     for (const state of this.states.values()) {
       if (projectId && state.agent.projectId !== projectId) continue;
+      state.exiting = true;
       this.stopProcessTree(state);
       this.states.delete(state.agent.id);
     }
@@ -1217,7 +1223,9 @@ export class AgentRuntimeManager {
     const args = [
       "remote-control",
       "--name",
-      state.agent.displayName
+      state.agent.displayName,
+      "--spawn",
+      "session"
     ];
     if (this.permissionMode(state) === "bypassPermissions") args.push("--permission-mode", "bypassPermissions");
 

@@ -278,13 +278,14 @@ Agent definitions can persist selected plugin IDs in their frontmatter. On launc
 
 ## Remote Control
 
-Remote Control starts Claude Code in `claude remote-control --name <agent name>` mode. The dashboard shows:
+Remote Control starts Claude Code in `claude remote-control --name <agent name> --spawn session` mode so each Agent Control tile maps to one remote session. The dashboard shows:
 
 - Link and QR code.
 - State: starting, waiting for browser/mobile, connected, closed, or error.
 - stdout/stderr diagnostics.
 
 Remote Control sessions are controlled from claude.ai/code or the Claude app. They do not accept dashboard chat messages. Closing a Remote Control chat also stops the Remote Control process and removes the tile.
+Claude does not currently expose the live remote conversation back through the local CLI process; Agent Control can show connection state and diagnostics, while the transcript stays in Claude's web/mobile UI.
 
 ## Terminals
 
