@@ -8007,13 +8007,13 @@ function ErrorStack() {
       {errors.map((error, index) => (
         <div
           key={`${error}-${index}`}
-          className="inline-flex w-fit max-w-[min(34rem,calc(100vw-2rem))] min-w-0 items-start gap-2 overflow-x-hidden rounded-md border border-red-400/40 bg-red-500/15 px-3 py-2 text-sm text-red-100 shadow-lg backdrop-blur"
+          className="inline-flex w-fit max-w-[min(34rem,calc(100vw-2rem))] min-w-0 items-start gap-2 overflow-x-hidden rounded-md border border-red-500/50 bg-red-500/10 px-3 py-2 text-sm text-red-800 shadow-lg backdrop-blur dark:border-red-400/40 dark:bg-red-500/15 dark:text-red-100"
         >
           <span className="max-h-36 min-w-0 max-w-[min(28rem,calc(100vw-5rem))] overflow-y-auto overflow-x-hidden whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
             {error}
           </span>
           <button
-            className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-red-100/80 hover:bg-red-500/20 hover:text-red-100"
+            className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-red-800/80 hover:bg-red-500/15 hover:text-red-900 dark:text-red-100/80 dark:hover:bg-red-500/20 dark:hover:text-red-100"
             onClick={() => dismissError(index)}
             title="Dismiss error"
           >
