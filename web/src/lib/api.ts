@@ -41,6 +41,12 @@ export const api = {
     }),
   directories: (path?: string) =>
     json<DirectoryListing>(`/api/filesystem/directories${path ? `?path=${encodeURIComponent(path)}` : ""}`),
+  openFile: (path: string) =>
+    json<{ ok: boolean }>("/api/filesystem/open", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path })
+    }),
   refresh: () => json<Project[]>("/api/refresh", { method: "POST" }),
   capabilities: () => json<Capabilities>("/api/capabilities"),
   adminStatus: () => json<{ supervised: boolean; pid: number }>("/api/admin/status"),

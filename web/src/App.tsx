@@ -2247,11 +2247,6 @@ function currentThinking(agent: RunningAgent): boolean {
   return agent.thinking !== false;
 }
 
-function localFileHref(filePath?: string): string | undefined {
-  if (!filePath) return undefined;
-  return `file:///${filePath.replace(/\\/g, "/")}`;
-}
-
 function ComposerModeMenu({
   agent,
   compact = false,
@@ -2499,6 +2494,15 @@ function LaunchDialog() {
     }
   }
 
+  async function openAgentFile(filePath?: string) {
+    if (!filePath) return;
+    try {
+      await api.openFile(filePath);
+    } catch (error) {
+      addError(error instanceof Error ? error.message : String(error));
+    }
+  }
+
   const rcDisabled = !capabilities?.supportsRemoteControl;
 
   return (
@@ -2638,15 +2642,16 @@ function LaunchDialog() {
           </DialogHeader>
           <div className="grid gap-3">
             {def?.sourcePath ? (
-              <a
+              <button
+                type="button"
                 className="inline-flex min-w-0 items-center gap-1 text-xs text-primary hover:underline"
-                href={localFileHref(def.sourcePath)}
                 title={def.sourcePath}
+                onClick={() => void openAgentFile(def.sourcePath)}
               >
                 <FileText className="h-3.5 w-3.5 shrink-0" />
                 <span className="truncate">{def.sourcePath}</span>
                 <ExternalLink className="h-3.5 w-3.5 shrink-0" />
-              </a>
+              </button>
             ) : (
               <div className="text-xs text-muted-foreground">Generic agent definition</div>
             )}

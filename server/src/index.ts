@@ -85,6 +85,13 @@ function pathInside(parent: string, child: string): boolean {
   return Boolean(relative) && !relative.startsWith("..") && !path.isAbsolute(relative);
 }
 
+function pathInsideOrEqual(parent: string, child: string): boolean {
+  const normalizedParent = normalizedProjectPath(parent);
+  const normalizedChild = normalizedProjectPath(child);
+  const relative = path.relative(normalizedParent, normalizedChild);
+  return !relative || (!relative.startsWith("..") && !path.isAbsolute(relative));
+}
+
 function mimeTypeForPath(filePath: string): string {
   const ext = path.extname(filePath).toLowerCase();
   if ([".png"].includes(ext)) return "image/png";
@@ -209,6 +216,21 @@ function gitCommand(cwd: string, args: string[], timeout = 15000): Promise<strin
         return;
       }
       resolve(stdout);
+    });
+  });
+}
+
+function openWithDefaultApp(filePath: string): Promise<void> {
+  const command = process.platform === "win32" ? "cmd.exe" : process.platform === "darwin" ? "open" : "xdg-open";
+  const args = process.platform === "win32" ? ["/c", "start", "", filePath] : [filePath];
+
+  return new Promise((resolve, reject) => {
+    execFile(command, args, { windowsHide: true }, (error) => {
+      if (error) {
+        reject(new Error(error.message || "Unable to open file."));
+        return;
+      }
+      resolve();
     });
   });
 }
@@ -436,6 +458,33 @@ app.get("/api/filesystem/directories", async (request, response) => {
       roots: await filesystemRoots(),
       entries: directories
     });
+  } catch (error) {
+    response.status(500).json({ error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+app.post("/api/filesystem/open", async (request, response) => {
+  const requestedPath = typeof request.body?.path === "string" ? request.body.path.trim() : "";
+  if (!requestedPath) {
+    response.status(400).json({ error: "File path is required." });
+    return;
+  }
+
+  const filePath = path.resolve(requestedPath);
+  const insideProject = projects.some((project) => pathInsideOrEqual(project.path, filePath));
+  if (!insideProject) {
+    response.status(400).json({ error: "File must be inside an open project." });
+    return;
+  }
+
+  try {
+    const info = await stat(filePath);
+    if (!info.isFile()) {
+      response.status(400).json({ error: "Path must be a file." });
+      return;
+    }
+    await openWithDefaultApp(filePath);
+    response.json({ ok: true });
   } catch (error) {
     response.status(500).json({ error: error instanceof Error ? error.message : String(error) });
   }
