@@ -1,5 +1,5 @@
 import http from "node:http";
-import { execFile, spawn } from "node:child_process";
+import { execFile } from "node:child_process";
 import { access, cp, mkdir, readdir, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -697,18 +697,24 @@ async function removeProjectWorktree(project: Project, request: GitWorktreeRemov
   return { projects, worktrees: await projectWorktrees(project) };
 }
 
-function openWithDefaultApp(filePath: string, isDirectory: boolean): Promise<void> {
+function openWithDefaultApp(filePath: string): Promise<void> {
   if (process.platform === "win32") {
-    const args = isDirectory ? [filePath] : [`/select,${filePath}`];
     return new Promise((resolve, reject) => {
-      const child = spawn("explorer.exe", args, {
-        detached: true,
-        stdio: "ignore",
+      execFile("powershell.exe", [
+        "-NoProfile",
+        "-NonInteractive",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-Command",
+        "Invoke-Item -LiteralPath $args[0]",
+        filePath
+      ], {
         windowsHide: true
-      });
-      child.once("error", (error) => reject(new Error(error.message || "Unable to open path in Explorer.")));
-      child.once("spawn", () => {
-        child.unref();
+      }, (error, _stdout, stderr) => {
+        if (error) {
+          reject(new Error(stderr.trim() || error.message || "Unable to open path."));
+          return;
+        }
         resolve();
       });
     });
@@ -724,6 +730,11 @@ function openWithDefaultApp(filePath: string, isDirectory: boolean): Promise<voi
       resolve();
     });
   });
+}
+
+function isOpenablePath(filePath: string): boolean {
+  if (projects.some((project) => pathInsideOrEqual(project.path, filePath))) return true;
+  return pathInsideOrEqual(agentDirs.builtIn, filePath);
 }
 
 async function projectGitStatus(project: Project): Promise<GitStatus> {
@@ -1122,9 +1133,8 @@ app.post("/api/filesystem/open", async (request, response) => {
   }
 
   const filePath = path.resolve(requestedPath);
-  const insideProject = projects.some((project) => pathInsideOrEqual(project.path, filePath));
-  if (!insideProject) {
-    response.status(400).json({ error: "File must be inside an open project." });
+  if (!isOpenablePath(filePath)) {
+    response.status(400).json({ error: "Path must be inside an open project or the built-in agent directory." });
     return;
   }
 
@@ -1134,7 +1144,7 @@ app.post("/api/filesystem/open", async (request, response) => {
       response.status(400).json({ error: "Path must be a file or directory." });
       return;
     }
-    await openWithDefaultApp(filePath, info.isDirectory());
+    await openWithDefaultApp(filePath);
     response.json({ ok: true });
   } catch (error) {
     response.status(500).json({ error: error instanceof Error ? error.message : String(error) });
