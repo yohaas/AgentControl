@@ -7155,9 +7155,7 @@ function ChatBlockPopoutButton({
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="w-[min(94vw,900px)]">
-          <DialogHeader>
-            <DialogTitle>Text block</DialogTitle>
-          </DialogHeader>
+          <DialogTitle className="sr-only">Text block</DialogTitle>
           <div className="flex flex-wrap gap-2">
             <Button
               variant={rawView ? "default" : "outline"}
