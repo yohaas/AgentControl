@@ -4230,7 +4230,8 @@ function SettingsDialog() {
               </button>
             ))}
           </nav>
-          <div className="grid max-h-[72vh] min-h-0 gap-3 overflow-y-auto pr-1">
+          <div className="flex max-h-[72vh] min-h-0 flex-col">
+            <div className="grid min-h-0 flex-1 gap-3 overflow-y-auto pr-1">
             <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-background/50 p-3">
               <p className="text-xs text-muted-foreground">
                 Fetch the latest published OpenAI and Codex model IDs from the public OpenAI docs.
@@ -4526,8 +4527,12 @@ function SettingsDialog() {
               </section>
             </>
           )}
-          <div className="flex flex-wrap gap-2">
-            <Button onClick={save}>
+            </div>
+          <div className="mt-3 flex shrink-0 justify-end gap-2 border-t border-border pt-3">
+            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="button" onClick={save}>
               <Check className="h-4 w-4" />
               Save
             </Button>
