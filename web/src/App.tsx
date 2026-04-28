@@ -258,15 +258,13 @@ function LastActivityText({
 }
 
 function StatusPill({ status }: { status: RunningAgent["status"] }) {
-  const busy = status === "running" || status === "starting" || status === "switching-model";
-  const thinkingPhrase = useThinkingPhrase(busy);
   const label =
     status === "running"
-      ? thinkingPhrase
+      ? "Active"
       : status === "starting"
-        ? thinkingPhrase
+        ? "Starting"
         : status === "switching-model"
-          ? thinkingPhrase
+          ? "Switching"
           : status === "awaiting-permission"
             ? "Needs approval"
             : status === "remote-controlled"
@@ -275,7 +273,13 @@ function StatusPill({ status }: { status: RunningAgent["status"] }) {
                 ? "Exited"
                 : status === "interrupted"
                   ? "Interrupted"
-                  : status;
+                  : status === "idle"
+                    ? "Idle"
+                    : status === "paused"
+                      ? "Paused"
+                      : status === "error"
+                        ? "Error"
+                        : status;
   const className =
     status === "running"
       ? "border-blue-400/40 bg-blue-500/15 text-blue-200 animate-pulse"
