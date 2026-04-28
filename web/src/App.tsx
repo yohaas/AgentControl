@@ -2495,7 +2495,7 @@ function AgentTile({
                   setDraft(agent.id, event.target.value);
                 }}
                 onPaste={handlePaste}
-                placeholder={isBusy ? "Queue a message..." : "ctrl esc to focus or unfocus Claude"}
+                placeholder={isBusy ? "Queue a message..." : "chat with Claude"}
                 onKeyDown={handleComposerKeyDown}
               />
             </div>
@@ -2986,7 +2986,7 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
                 setDraft(agent.id, event.target.value);
               }}
               onPaste={handlePaste}
-              placeholder={isBusy ? "Queue a message..." : "ctrl esc to focus or unfocus Claude"}
+              placeholder={isBusy ? "Queue a message..." : "chat with Claude"}
               onKeyDown={handleComposerKeyDown}
             />
           </div>
