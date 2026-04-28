@@ -5,13 +5,110 @@ import matter from "gray-matter";
 import type { AgentDef, AgentProvider, Project } from "@agent-control/shared";
 import { APP_ROOT, DEFAULT_BUILT_IN_AGENT_DIR } from "./config.js";
 
-function colorForName(name: string): string {
+const agentColorPalette = [
+  "#2563eb",
+  "#dc2626",
+  "#16a34a",
+  "#d97706",
+  "#7c3aed",
+  "#0891b2",
+  "#db2777",
+  "#65a30d",
+  "#ea580c",
+  "#4f46e5",
+  "#0d9488",
+  "#be123c",
+  "#9333ea",
+  "#0284c7",
+  "#ca8a04",
+  "#059669"
+];
+const minAgentColorHueDistance = 32;
+
+function hashName(name: string): number {
   let hash = 5381;
   for (let index = 0; index < name.length; index += 1) {
     hash = (hash * 33) ^ name.charCodeAt(index);
   }
-  const hue = Math.abs(hash) % 360;
-  return `hsl(${hue} 65% 55%)`;
+  return Math.abs(hash);
+}
+
+function colorForName(name: string): string {
+  return agentColorPalette[hashName(name) % agentColorPalette.length];
+}
+
+function hueDistance(left: number, right: number): number {
+  const distance = Math.abs(left - right) % 360;
+  return Math.min(distance, 360 - distance);
+}
+
+function rgbToHue(red: number, green: number, blue: number): number | undefined {
+  const r = red / 255;
+  const g = green / 255;
+  const b = blue / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const delta = max - min;
+  if (delta === 0) return undefined;
+  if (max === r) return 60 * (((g - b) / delta) % 6);
+  if (max === g) return 60 * ((b - r) / delta + 2);
+  return 60 * ((r - g) / delta + 4);
+}
+
+function hueForColor(color: string): number | undefined {
+  const trimmed = color.trim().toLowerCase();
+  const hslMatch = trimmed.match(/^hsla?\(\s*([\d.]+)/);
+  if (hslMatch) return Number(hslMatch[1]) % 360;
+  const hexMatch = trimmed.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/);
+  if (!hexMatch) return undefined;
+  const hex = hexMatch[1].length === 3 ? hexMatch[1].split("").map((part) => part + part).join("") : hexMatch[1];
+  const hue = rgbToHue(parseInt(hex.slice(0, 2), 16), parseInt(hex.slice(2, 4), 16), parseInt(hex.slice(4, 6), 16));
+  return hue === undefined ? undefined : (hue + 360) % 360;
+}
+
+function explicitAgentColor(agent: AgentDef): string | undefined {
+  if (!agent.sourceContent) return stringValue(agent.color);
+  const parsed = matter(agent.sourceContent);
+  return stringValue((parsed.data as Record<string, unknown>).color);
+}
+
+function generatedColorCandidates(name: string, index: number): string[] {
+  const offset = hashName(name) % agentColorPalette.length;
+  const palette = agentColorPalette.map((_, paletteIndex) => agentColorPalette[(offset + paletteIndex) % agentColorPalette.length]);
+  const generated = Array.from({ length: 16 }, (_, generatedIndex) => {
+    const hue = (hashName(name) + Math.round((index + generatedIndex + 1) * 137.508)) % 360;
+    return `hsl(${hue} 65% 55%)`;
+  });
+  return [...palette, ...generated];
+}
+
+function chooseDistinctAgentColor(name: string, usedColors: Set<string>, usedHues: number[], index: number): string {
+  let bestColor = colorForName(name);
+  let bestScore = -Infinity;
+  for (const candidate of generatedColorCandidates(name, index)) {
+    const normalized = candidate.toLowerCase();
+    const hue = hueForColor(candidate);
+    const closestHue = hue === undefined || usedHues.length === 0 ? 180 : Math.min(...usedHues.map((usedHue) => hueDistance(hue, usedHue)));
+    const score = (usedColors.has(normalized) ? -1000 : 0) + closestHue;
+    if (!usedColors.has(normalized) && closestHue >= minAgentColorHueDistance) return candidate;
+    if (score > bestScore) {
+      bestColor = candidate;
+      bestScore = score;
+    }
+  }
+  return bestColor;
+}
+
+function normalizeAgentColors(agents: AgentDef[]): AgentDef[] {
+  const usedColors = new Set<string>();
+  const usedHues: number[] = [];
+  return agents.map((agent, index) => {
+    const color = explicitAgentColor(agent) || chooseDistinctAgentColor(agent.name, usedColors, usedHues, index);
+    usedColors.add(color.trim().toLowerCase());
+    const hue = hueForColor(color);
+    if (hue !== undefined) usedHues.push(hue);
+    return { ...agent, color };
+  });
 }
 
 export interface AgentDirectoryConfig {
@@ -96,7 +193,7 @@ async function parseAgentFile(filePath: string, fallbackProvider?: AgentProvider
   return {
     name,
     description: stringValue(data.description),
-    color: stringValue(data.color) || colorForName(name),
+    color: stringValue(data.color) || "",
     provider: providerValue(data.provider) || fallbackProvider,
     defaultModel: modelValue(data),
     tools: toolsValue(data.tools),
@@ -182,12 +279,12 @@ async function readAgentDefs(projectPath: string, agentDirs = DEFAULT_AGENT_DIRS
   ]);
   const byName = new Map<string, AgentDef>();
   for (const agent of groups.flat()) byName.set(`${agent.provider || "claude"}:${agent.name}`, agent);
-  return [...byName.values()].sort((left, right) => left.name.localeCompare(right.name));
+  return normalizeAgentColors([...byName.values()].sort((left, right) => left.name.localeCompare(right.name)));
 }
 
 async function readBuiltInAgentDefs(projectPath: string, agentDirs = DEFAULT_AGENT_DIRS): Promise<AgentDef[]> {
   const agents = await readAgentDir(resolveBuiltInAgentDir(agentDirs.builtIn), ".", undefined, true);
-  return agents.length > 0 ? agents : [generalAgentDef()];
+  return agents.length > 0 ? normalizeAgentColors(agents) : [generalAgentDef()];
 }
 
 export async function upsertBuiltInAgent(projectPath: string, agent: AgentDef, originalName?: string, agentDirs = DEFAULT_AGENT_DIRS): Promise<void> {
