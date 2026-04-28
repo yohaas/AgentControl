@@ -1431,10 +1431,17 @@ const CURRENT_CODEX_MODEL_PROFILES = [
   { id: "gpt-5-codex", provider: "codex", supportedEfforts: ["low", "medium", "high", "xhigh"] }
 ] satisfies ModelProfile[];
 
+const CURRENT_CLAUDE_MODEL_PROFILES = [
+  { id: "claude-opus-4-7", provider: "claude", supportsThinking: true, supportedEfforts: ["low", "medium", "high", "xhigh", "max"] },
+  { id: "claude-opus-4-6", provider: "claude", supportsThinking: true, supportedEfforts: ["low", "medium", "high", "xhigh", "max"] },
+  { id: "claude-sonnet-4-6", provider: "claude", default: true, supportsThinking: true, supportedEfforts: ["low", "medium", "high", "xhigh", "max"] },
+  { id: "claude-haiku-4-5", provider: "claude", supportsThinking: true, supportedEfforts: ["low", "medium", "high", "xhigh", "max"] }
+] satisfies ModelProfile[];
+
 function currentModelProfilesForProvider(provider: AgentProvider) {
   if (provider === "openai") return CURRENT_OPENAI_MODEL_PROFILES;
   if (provider === "codex") return CURRENT_CODEX_MODEL_PROFILES;
-  return [];
+  return CURRENT_CLAUDE_MODEL_PROFILES;
 }
 
 function currentModelText(provider: AgentProvider) {
@@ -1479,28 +1486,34 @@ function ProviderModelsField({
   value,
   onChange,
   placeholder,
-  onUseCurrentModels
+  onGetCurrentModels,
+  gettingCurrentModels,
+  updateNote
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   placeholder: string;
-  onUseCurrentModels?: () => void;
+  onGetCurrentModels?: () => void;
+  gettingCurrentModels?: boolean;
+  updateNote?: string;
 }) {
   return (
     <label className="grid gap-1.5 text-sm">
-      <span className="flex items-start justify-between gap-3">
-        <span>
-          <span className="block">{label}</span>
-          <span className="block text-xs text-muted-foreground">One model id per line. The first model is the provider default.</span>
-        </span>
-        {onUseCurrentModels && (
-          <Button type="button" variant="outline" size="sm" onClick={onUseCurrentModels}>
-            Use Current List
+      <span>
+        <span className="block">{label}</span>
+        <span className="block text-xs text-muted-foreground">One model id per line. The first model is the provider default.</span>
+      </span>
+      <span className="flex items-start gap-2">
+        <Textarea className="min-h-32 flex-1" value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} />
+        {onGetCurrentModels && (
+          <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={onGetCurrentModels} disabled={gettingCurrentModels}>
+            <RefreshCw className={cn("h-4 w-4", gettingCurrentModels && "animate-spin")} />
+            {gettingCurrentModels ? "Getting..." : "Get Current Models"}
           </Button>
         )}
       </span>
-      <Textarea value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} />
+      {updateNote && <span className="text-xs text-muted-foreground">{updateNote}</span>}
     </label>
   );
 }
@@ -4018,8 +4031,9 @@ function SettingsDialog() {
   const [openaiApiKey, setOpenaiApiKey] = useState("");
   const [clearAnthropicApiKey, setClearAnthropicApiKey] = useState(false);
   const [clearOpenaiApiKey, setClearOpenaiApiKey] = useState(false);
-  const [updatingModels, setUpdatingModels] = useState(false);
+  const [updatingModelsProvider, setUpdatingModelsProvider] = useState<AgentProvider | undefined>();
   const [modelUpdateNote, setModelUpdateNote] = useState("");
+  const [modelUpdateNoteProvider, setModelUpdateNoteProvider] = useState<AgentProvider | undefined>();
   const [autoApprove, setAutoApprove] = useState(settings.autoApprove);
   const [defaultAgentMode, setDefaultAgentMode] = useState<AgentPermissionMode>(settings.defaultAgentMode);
   const [themeMode, setThemeMode] = useState<ThemeMode>(settings.themeMode);
@@ -4046,6 +4060,7 @@ function SettingsDialog() {
     setClearAnthropicApiKey(false);
     setClearOpenaiApiKey(false);
     setModelUpdateNote("");
+    setModelUpdateNoteProvider(undefined);
     setAutoApprove(settings.autoApprove);
     setDefaultAgentMode(settings.defaultAgentMode);
     setThemeMode(settings.themeMode);
@@ -4092,18 +4107,28 @@ function SettingsDialog() {
     }
   }
 
-  async function updatePublishedModels() {
-    setUpdatingModels(true);
+  async function getCurrentModels(provider: AgentProvider) {
+    setUpdatingModelsProvider(provider);
     setModelUpdateNote("");
+    setModelUpdateNoteProvider(undefined);
     try {
+      if (provider === "claude") {
+        setClaudeModelsText(currentModelText("claude"));
+        setModelUpdateNote("Updated Claude models from AgentControl's current defaults. Save settings to keep this list.");
+        setModelUpdateNoteProvider(provider);
+        return;
+      }
       const latest = await api.latestModels();
-      if (latest.providers.codex.length > 0) setCodexModelsText(latest.providers.codex.map((profile) => profile.id).join("\n"));
-      if (latest.providers.openai.length > 0) setOpenaiModelsText(latest.providers.openai.map((profile) => profile.id).join("\n"));
-      setModelUpdateNote(`Updated from OpenAI docs at ${new Date(latest.fetchedAt).toLocaleString()}. Save settings to keep these lists.`);
+      const profiles = latest.providers[provider];
+      const nextText = profiles.length > 0 ? profiles.map((profile) => profile.id).join("\n") : currentModelText(provider);
+      if (provider === "codex") setCodexModelsText(nextText);
+      else setOpenaiModelsText(nextText);
+      setModelUpdateNote(`Updated ${providerLabel(provider)} models from OpenAI docs at ${new Date(latest.fetchedAt).toLocaleString()}. Save settings to keep this list.`);
+      setModelUpdateNoteProvider(provider);
     } catch (error) {
       addError(error instanceof Error ? error.message : String(error));
     } finally {
-      setUpdatingModels(false);
+      setUpdatingModelsProvider(undefined);
     }
   }
 
@@ -4232,16 +4257,6 @@ function SettingsDialog() {
           </nav>
           <div className="flex max-h-[72vh] min-h-0 flex-col">
             <div className="grid min-h-0 flex-1 gap-3 overflow-y-auto pr-1">
-            <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-background/50 p-3">
-              <p className="text-xs text-muted-foreground">
-                Fetch the latest published OpenAI and Codex model IDs from the public OpenAI docs.
-              </p>
-              <Button type="button" variant="outline" size="sm" onClick={() => void updatePublishedModels()} disabled={updatingModels}>
-                <RefreshCw className={cn("h-4 w-4", updatingModels && "animate-spin")} />
-                {updatingModels ? "Updating..." : "Update Models"}
-              </Button>
-              {modelUpdateNote && <p className="basis-full text-xs text-muted-foreground">{modelUpdateNote}</p>}
-            </div>
           {settingsTab === "general" && (
             <>
           <section className="grid gap-2 rounded-md border border-border p-3">
@@ -4412,6 +4427,9 @@ function SettingsDialog() {
                 value={claudeModelsText}
                 onChange={setClaudeModelsText}
                 placeholder="One Claude model id per line"
+                onGetCurrentModels={() => void getCurrentModels("claude")}
+                gettingCurrentModels={updatingModelsProvider === "claude"}
+                updateNote={modelUpdateNoteProvider === "claude" ? modelUpdateNote : undefined}
               />
               <label className="grid gap-1.5 text-sm">
                 Claude agents directory
@@ -4481,7 +4499,9 @@ function SettingsDialog() {
                 value={codexModelsText}
                 onChange={setCodexModelsText}
                 placeholder="One Codex model id per line"
-                onUseCurrentModels={() => setCodexModelsText(currentModelText("codex"))}
+                onGetCurrentModels={() => void getCurrentModels("codex")}
+                gettingCurrentModels={updatingModelsProvider === "codex"}
+                updateNote={modelUpdateNoteProvider === "codex" ? modelUpdateNote : undefined}
               />
               <label className="grid gap-1.5 text-sm">
                 Codex agents directory
@@ -4502,7 +4522,9 @@ function SettingsDialog() {
                 value={openaiModelsText}
                 onChange={setOpenaiModelsText}
                 placeholder="One OpenAI model id per line"
-                onUseCurrentModels={() => setOpenaiModelsText(currentModelText("openai"))}
+                onGetCurrentModels={() => void getCurrentModels("openai")}
+                gettingCurrentModels={updatingModelsProvider === "openai"}
+                updateNote={modelUpdateNoteProvider === "openai" ? modelUpdateNote : undefined}
               />
               <label className="grid gap-1.5 text-sm">
                 OpenAI agents directory
