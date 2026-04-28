@@ -3237,6 +3237,7 @@ function TerminalPanel({
   const [width, setWidth] = useState(420);
   const [detachedBounds, setDetachedBounds] = useState({ left: 96, top: 72, width: 960, height: 520 });
   const [visiblePaneIds, setVisiblePaneIds] = useState<string[]>([]);
+  const pendingSplitRef = useRef(false);
   const floating = !popout && terminalDock === "float";
   const sideDock = !popout && (terminalDock === "left" || terminalDock === "right");
   const poppedOutKey = useMemo(() => [...poppedOutTerminalIds].sort().join("|"), [poppedOutTerminalIds]);
@@ -3259,7 +3260,13 @@ function TerminalPanel({
     setVisiblePaneIds((current) => {
       const filtered = current.filter((id) => sessionIds.has(id));
       const nextActive = activeTerminalId && sessionIds.has(activeTerminalId) ? activeTerminalId : sessions[sessions.length - 1]?.id;
-      if (nextActive && !filtered.includes(nextActive)) return [...filtered.slice(-3), nextActive];
+      if (nextActive && !filtered.includes(nextActive)) {
+        if (pendingSplitRef.current) {
+          pendingSplitRef.current = false;
+          return [...filtered.slice(-3), nextActive];
+        }
+        return [nextActive];
+      }
       return filtered;
     });
   }, [activeTerminalId, sessions]);
@@ -3387,12 +3394,13 @@ function TerminalPanel({
     window.close();
   }
 
-  function startTerminal() {
+  function startTerminal(split = false) {
+    pendingSplitRef.current = split;
     sendCommand({ type: "terminalStart", projectId: selectedProjectId });
   }
 
   function splitTerminal() {
-    startTerminal();
+    startTerminal(true);
   }
 
   function renameTerminal(id: string, currentTitle: string) {
@@ -3510,7 +3518,7 @@ function TerminalPanel({
             </div>
           ))}
         </div>
-        <Button variant="outline" size="sm" onClick={startTerminal} disabled={!projects.length && !selectedProjectId}>
+        <Button variant="outline" size="sm" onClick={() => startTerminal()} disabled={!projects.length && !selectedProjectId}>
           <Plus className="h-4 w-4" />
           New
         </Button>
