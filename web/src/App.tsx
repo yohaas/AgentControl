@@ -31,6 +31,7 @@ import {
   FileText,
   FolderOpen,
   FolderPlus,
+  FolderTree,
   GitBranch,
   GripVertical,
   HardDrive,
@@ -1825,7 +1826,7 @@ function WorktreesDialog({ projectId }: { projectId?: string }) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <Button variant="outline" size="icon" disabled={!projectId} onClick={() => setOpen(true)} title="Git worktrees">
-        <Columns2 className="h-4 w-4" />
+        <FolderTree className="h-4 w-4" />
       </Button>
       <DialogContent>
         <DialogHeader>
