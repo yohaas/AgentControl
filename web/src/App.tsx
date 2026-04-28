@@ -1577,6 +1577,11 @@ function projectSelectorRows(projects: Project[]) {
   return rows;
 }
 
+function ProjectRuntimeBadge({ project }: { project?: Pick<Project, "runtime"> }) {
+  if (project?.runtime !== "wsl") return null;
+  return <Badge className="shrink-0 px-1.5 py-0 text-[10px] uppercase">WSL</Badge>;
+}
+
 function pathSeparatorFor(projectPath: string) {
   return isLikelyWindowsPath(projectPath) ? "\\" : "/";
 }
@@ -2034,7 +2039,10 @@ function Header() {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" className="w-60 justify-between">
-              <span className="truncate">{selectedProject?.name || "Select project"}</span>
+              <span className="flex min-w-0 items-center gap-2">
+                <span className="truncate">{selectedProject?.name || "Select project"}</span>
+                <ProjectRuntimeBadge project={selectedProject} />
+              </span>
               <ChevronDown className="h-4 w-4 shrink-0" />
             </Button>
           </DropdownMenuTrigger>
@@ -2048,7 +2056,10 @@ function Header() {
                 <span className="flex min-w-0 items-center gap-2">
                   {depth > 0 && <FolderTree className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
                   <span className="min-w-0">
-                    <span className="block truncate">{project.name}</span>
+                    <span className="flex min-w-0 items-center gap-2">
+                      <span className="truncate">{project.name}</span>
+                      <ProjectRuntimeBadge project={project} />
+                    </span>
                     {parent && <span className="block truncate text-xs text-muted-foreground">{projectRelativePath(project, parent)}</span>}
                   </span>
                 </span>
