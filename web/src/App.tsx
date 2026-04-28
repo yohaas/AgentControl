@@ -2375,9 +2375,9 @@ function AgentTile({
             <ModelMenu agent={agent} compact />
           </div>
         </div>
-        <span className="flex shrink-0 flex-col items-end gap-1">
-          <StatusPill status={agent.status} />
+        <span className="flex shrink-0 items-center gap-2">
           <LastActivityText agent={agent} compact timeOnly />
+          <StatusPill status={agent.status} />
         </span>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -2701,9 +2701,9 @@ function AgentPanelHeader({ agent }: { agent: RunningAgent }) {
           Resume
         </Button>
       )}
-      <span className="flex shrink-0 flex-col items-end gap-1">
-        <StatusPill status={agent.status} />
+      <span className="flex shrink-0 items-center gap-2">
         <LastActivityText agent={agent} compact timeOnly />
+        <StatusPill status={agent.status} />
       </span>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
