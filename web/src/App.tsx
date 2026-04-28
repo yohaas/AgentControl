@@ -5562,17 +5562,19 @@ function AgentTile({
                 Drop here
               </div>
             )}
-            <div className="grid gap-2 px-2 pt-2">
-              <AttachmentChips
-                attachments={attachments}
-                onRemove={(id) => setAttachments((current) => current.filter((attachment) => attachment.id !== id))}
-              />
+            <div className="absolute bottom-full left-0 right-0 z-[220] mb-2 px-2">
               <SlashCommandAutocomplete
                 suggestions={slashSuggestions}
                 activeIndex={activeSlashIndex}
                 compact
                 onSelect={slashMenuOpen ? runSlashCommand : selectTypedSlashCommand}
                 onActiveIndexChange={setActiveSlashIndex}
+              />
+            </div>
+            <div className="grid gap-2 px-2 pt-2">
+              <AttachmentChips
+                attachments={attachments}
+                onRemove={(id) => setAttachments((current) => current.filter((attachment) => attachment.id !== id))}
               />
             </div>
             <div className="relative">
@@ -6250,16 +6252,18 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
               Drop here
             </div>
           )}
-          <div className="grid gap-2 px-2 pt-2">
-            <AttachmentChips
-              attachments={attachments}
-              onRemove={(id) => setAttachments((current) => current.filter((attachment) => attachment.id !== id))}
-            />
+          <div className="absolute bottom-full left-0 right-0 z-[220] mb-2 px-2">
             <SlashCommandAutocomplete
               suggestions={slashSuggestions}
               activeIndex={activeSlashIndex}
               onSelect={slashMenuOpen ? runSlashCommand : selectTypedSlashCommand}
               onActiveIndexChange={setActiveSlashIndex}
+            />
+          </div>
+          <div className="grid gap-2 px-2 pt-2">
+            <AttachmentChips
+              attachments={attachments}
+              onRemove={(id) => setAttachments((current) => current.filter((attachment) => attachment.id !== id))}
             />
           </div>
           <div className="relative">
