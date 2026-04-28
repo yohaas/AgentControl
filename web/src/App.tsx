@@ -1347,10 +1347,10 @@ function findAgentOption(
 }
 
 function defaultLaunchAgentOption(groups: { projectAgents: AgentDef[]; builtInAgents: AgentDef[] }) {
-  const projectGeneral = groups.projectAgents.find((agent) => agent.name.toLowerCase() === "general");
-  if (projectGeneral) return { source: "project" as const, def: projectGeneral };
   const builtInGeneral = groups.builtInAgents.find((agent) => agent.name.toLowerCase() === "general");
   if (builtInGeneral) return { source: "builtIn" as const, def: builtInGeneral };
+  const projectGeneral = groups.projectAgents.find((agent) => agent.name.toLowerCase() === "general");
+  if (projectGeneral) return { source: "project" as const, def: projectGeneral };
   if (groups.projectAgents[0]) return { source: "project" as const, def: groups.projectAgents[0] };
   return { source: "builtIn" as const, def: groups.builtInAgents[0] };
 }

@@ -6,7 +6,7 @@ The app is built for local development workflows. It starts an Express/WebSocket
 
 ## What It Does
 
-- Launch Claude, Codex, or OpenAI API agents from project `.claude/agents/*.md` files or a generic fallback agent when no agent files exist.
+- Launch Claude, Codex, or OpenAI API agents from project `.claude/agents/*.md` files or the built-in `general` agent when no project agent files exist.
 - Run multiple agents as resizable tiles, with maximize, drag/drop ordering, configurable tile height, and configurable tile columns.
 - Switch between projects. Each project keeps its own open agents and terminal sessions.
 - Stream Claude responses from `--output-format stream-json`, including live assistant text, tool activity, tool results, and raw stream export.
@@ -139,7 +139,7 @@ Project behavior:
 
 - The selected project controls which agents and terminals are visible.
 - Closing a project closes that project's agents and terminals.
-- If a project has no `.claude/agents` folder, Agent Control shows a `Generic` agent type.
+- If a project has no `.claude/agents` folder, Agent Control shows the built-in `general` agent type.
 - Project paths are persisted in `~/.agent-dashboard/config.json`.
 
 ## Agent Definitions
