@@ -4194,6 +4194,12 @@ function SettingsDialog() {
       ? `${selectedProject.path}\\${currentAgentDir(agentDirBrowser)}`
       : currentAgentDir(agentDirBrowser)
     : "";
+  const settingsTabs = [
+    ["general", "General"],
+    ["claude", "Claude"],
+    ["codex", "Codex"],
+    ["openai", "OpenAI"]
+  ] as const;
 
   return (
     <>
@@ -4201,41 +4207,37 @@ function SettingsDialog() {
         <Button variant="outline" size="icon" onClick={() => setOpen(true)} title="Settings">
           <Settings className="h-4 w-4" />
         </Button>
-        <DialogContent>
+        <DialogContent className="w-[min(96vw,1080px)] max-w-none">
         <DialogHeader>
           <DialogTitle>Settings</DialogTitle>
         </DialogHeader>
-        <div className="grid grid-cols-4 gap-1 rounded-md bg-muted p-1 text-sm">
-          {([
-            ["general", "General"],
-            ["claude", "Claude"],
-            ["codex", "Codex"],
-            ["openai", "OpenAI"]
-          ] as const).map(([tab, label]) => (
-            <button
-              key={tab}
-              type="button"
-              className={cn(
-                "rounded px-3 py-1.5 text-muted-foreground hover:text-foreground",
-                settingsTab === tab && "bg-background text-foreground shadow-sm"
-              )}
-              onClick={() => setSettingsTab(tab)}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-background/50 p-3">
-          <p className="text-xs text-muted-foreground">
-            Fetch the latest published OpenAI and Codex model IDs from the public OpenAI docs.
-          </p>
-          <Button type="button" variant="outline" size="sm" onClick={() => void updatePublishedModels()} disabled={updatingModels}>
-            <RefreshCw className={cn("h-4 w-4", updatingModels && "animate-spin")} />
-            {updatingModels ? "Updating..." : "Update Models"}
-          </Button>
-          {modelUpdateNote && <p className="basis-full text-xs text-muted-foreground">{modelUpdateNote}</p>}
-        </div>
-        <div className="grid gap-3">
+        <div className="grid min-h-0 grid-cols-[180px_minmax(0,1fr)] gap-4">
+          <nav className="flex flex-col gap-1 rounded-md border border-border bg-muted/30 p-2 text-sm">
+            {settingsTabs.map(([tab, label]) => (
+              <button
+                key={tab}
+                type="button"
+                className={cn(
+                  "rounded px-3 py-2 text-left text-muted-foreground hover:bg-accent hover:text-foreground",
+                  settingsTab === tab && "bg-background text-foreground shadow-sm"
+                )}
+                onClick={() => setSettingsTab(tab)}
+              >
+                {label}
+              </button>
+            ))}
+          </nav>
+          <div className="grid max-h-[72vh] min-h-0 gap-3 overflow-y-auto pr-1">
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-background/50 p-3">
+              <p className="text-xs text-muted-foreground">
+                Fetch the latest published OpenAI and Codex model IDs from the public OpenAI docs.
+              </p>
+              <Button type="button" variant="outline" size="sm" onClick={() => void updatePublishedModels()} disabled={updatingModels}>
+                <RefreshCw className={cn("h-4 w-4", updatingModels && "animate-spin")} />
+                {updatingModels ? "Updating..." : "Update Models"}
+              </Button>
+              {modelUpdateNote && <p className="basis-full text-xs text-muted-foreground">{modelUpdateNote}</p>}
+            </div>
           {settingsTab === "general" && (
             <>
           <section className="grid gap-2 rounded-md border border-border p-3">
@@ -4526,6 +4528,7 @@ function SettingsDialog() {
               <Check className="h-4 w-4" />
               Save
             </Button>
+          </div>
           </div>
         </div>
         </DialogContent>
