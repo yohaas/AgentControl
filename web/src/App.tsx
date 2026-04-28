@@ -2247,6 +2247,11 @@ function currentThinking(agent: RunningAgent): boolean {
   return agent.thinking !== false;
 }
 
+function localFileHref(filePath?: string): string | undefined {
+  if (!filePath) return undefined;
+  return `file:///${filePath.replace(/\\/g, "/")}`;
+}
+
 function ComposerModeMenu({
   agent,
   compact = false,
@@ -2629,12 +2634,23 @@ function LaunchDialog() {
       <Dialog open={agentFileOpen} onOpenChange={setAgentFileOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{def?.name || "Agent"} file</DialogTitle>
+            <DialogTitle>{def?.name || "Generic"} agent</DialogTitle>
           </DialogHeader>
-          <div className="grid gap-2">
-            <div className="truncate text-xs text-muted-foreground" title={def?.sourcePath}>
-              {def?.sourcePath || "Generic agent definition"}
-            </div>
+          <div className="grid gap-3">
+            {def?.sourcePath ? (
+              <a
+                className="inline-flex min-w-0 items-center gap-1 text-xs text-primary hover:underline"
+                href={localFileHref(def.sourcePath)}
+                title={def.sourcePath}
+              >
+                <FileText className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate">{def.sourcePath}</span>
+                <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+              </a>
+            ) : (
+              <div className="text-xs text-muted-foreground">Generic agent definition</div>
+            )}
+            <p className="text-xs text-muted-foreground">To change this, edit the agents file.</p>
             <Textarea
               readOnly
               value={def?.sourceContent || def?.systemPrompt || ""}
