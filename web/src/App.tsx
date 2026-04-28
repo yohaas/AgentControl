@@ -1608,22 +1608,27 @@ function ComposerModeMenu({ agent, compact = false }: { agent: RunningAgent; com
           <span className="flex-1">
             Effort <span className="text-foreground">({activeEffortLabel})</span>
           </span>
-          <span className="inline-flex rounded-full bg-muted p-0.5">
+          <span className="inline-flex h-5 items-center gap-2 rounded-full bg-muted px-2">
             {EFFORT_OPTIONS.map((option) => (
               <button
                 key={option.effort}
                 type="button"
-                className={cn(
-                  "h-5 rounded-full px-2 text-[10px] font-medium text-muted-foreground hover:text-foreground",
-                  activeEffort === option.effort && "bg-foreground text-background hover:text-background"
-                )}
+                className="grid h-4 w-4 place-items-center rounded-full"
+                title={`Effort: ${option.label}`}
+                aria-label={`Set effort to ${option.label}`}
+                aria-pressed={activeEffort === option.effort}
                 onClick={(event) => {
                   event.preventDefault();
                   event.stopPropagation();
                   setEffort(option.effort);
                 }}
               >
-                {option.label}
+                <span
+                  className={cn(
+                    "rounded-full bg-muted-foreground/45 transition-all",
+                    activeEffort === option.effort ? "h-3.5 w-3.5 bg-foreground/80" : "h-1 w-1"
+                  )}
+                />
               </button>
             ))}
           </span>
