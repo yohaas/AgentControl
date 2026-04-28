@@ -15,6 +15,7 @@ import {
   ArrowDownAZ,
   ArrowUp,
   Bot,
+  Brain,
   Check,
   ChevronDown,
   ChevronUp,
@@ -45,13 +46,13 @@ import {
   RefreshCw,
   Search,
   Settings,
-  SlidersHorizontal,
   SquareTerminal,
   Trash2,
   X
 } from "lucide-react";
 import type {
   AgentDef,
+  AgentEffort,
   AgentPermissionMode,
   ClaudePluginCatalog,
   DirectoryEntry,
@@ -1520,18 +1521,36 @@ const COMPOSER_MODE_OPTIONS = [
   icon: typeof Hand;
 }[];
 
+const EFFORT_OPTIONS = [
+  { effort: "low", label: "Low" },
+  { effort: "medium", label: "Medium" },
+  { effort: "high", label: "High" },
+  { effort: "max", label: "Max" }
+] satisfies { effort: AgentEffort; label: string }[];
+
 function currentPermissionMode(agent: RunningAgent): AgentPermissionMode {
   return agent.permissionMode || (agent.planMode ? "plan" : "default");
 }
 
+function currentEffort(agent: RunningAgent): AgentEffort {
+  return agent.effort || "medium";
+}
+
 function ComposerModeMenu({ agent, compact = false }: { agent: RunningAgent; compact?: boolean }) {
   const activeMode = currentPermissionMode(agent);
+  const activeEffort = currentEffort(agent);
+  const activeEffortLabel = EFFORT_OPTIONS.find((option) => option.effort === activeEffort)?.label || "Medium";
   const activeOption = COMPOSER_MODE_OPTIONS.find((option) => option.mode === activeMode) || COMPOSER_MODE_OPTIONS[0];
   const ActiveIcon = activeOption.icon;
 
   function setPermissionMode(permissionMode: AgentPermissionMode) {
     if (activeMode === permissionMode) return;
     sendCommand({ type: "setPermissionMode", id: agent.id, permissionMode });
+  }
+
+  function setEffort(effort: AgentEffort) {
+    if (activeEffort === effort) return;
+    sendCommand({ type: "setEffort", id: agent.id, effort });
   }
 
   return (
@@ -1585,14 +1604,28 @@ function ComposerModeMenu({ agent, compact = false }: { agent: RunningAgent; com
           })}
         </div>
         <div className="mt-2 flex items-center gap-3 border-t border-border px-2 pt-2 text-xs text-muted-foreground">
-          <SlidersHorizontal className="h-4 w-4" />
+          <Brain className="h-4 w-4" />
           <span className="flex-1">
-            Effort <span className="text-foreground">(Medium)</span>
+            Effort <span className="text-foreground">({activeEffortLabel})</span>
           </span>
-          <span className="inline-flex h-5 w-20 items-center justify-between rounded-full bg-muted px-2">
-            <span className="h-1 w-1 rounded-full bg-muted-foreground/45" />
-            <span className="h-3.5 w-3.5 rounded-full bg-foreground/80" />
-            <span className="h-1 w-1 rounded-full bg-muted-foreground/45" />
+          <span className="inline-flex rounded-full bg-muted p-0.5">
+            {EFFORT_OPTIONS.map((option) => (
+              <button
+                key={option.effort}
+                type="button"
+                className={cn(
+                  "h-5 rounded-full px-2 text-[10px] font-medium text-muted-foreground hover:text-foreground",
+                  activeEffort === option.effort && "bg-foreground text-background hover:text-background"
+                )}
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setEffort(option.effort);
+                }}
+              >
+                {option.label}
+              </button>
+            ))}
           </span>
         </div>
       </DropdownMenuContent>

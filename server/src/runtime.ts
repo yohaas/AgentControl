@@ -4,6 +4,7 @@ import { nanoid } from "nanoid";
 import QRCode from "qrcode";
 import type {
   AgentDef,
+  AgentEffort,
   AgentSnapshot,
   AgentStatus,
   AgentPermissionMode,
@@ -147,6 +148,7 @@ export class AgentRuntimeManager {
       updatedAt: timestamp,
       remoteControl: Boolean(request.remoteControl),
       permissionMode,
+      effort: request.effort || "medium",
       planMode: permissionMode === "plan"
     };
 
@@ -315,6 +317,35 @@ export class AgentRuntimeManager {
     this.persist();
   }
 
+  setEffort(id: string, effort: AgentEffort): void {
+    const state = this.requiredState(id);
+    if (state.agent.remoteControl) throw new Error("Remote Control agents cannot change effort from the dashboard.");
+
+    state.agent.effort = effort;
+    state.agent.updatedAt = now();
+    if (state.child && !state.child.killed) {
+      state.child.stdin.write(
+        `${JSON.stringify({
+          type: "control",
+          subtype: "set_effort",
+          effort
+        })}\n`
+      );
+    }
+    this.pushTranscript(state, {
+      ...eventBase(state.agent.id, state.agent.currentModel),
+      kind: "system",
+      text: `Effort changed to ${effort}.`
+    });
+    this.broadcast({
+      type: "agent.effort_changed",
+      id: state.agent.id,
+      effort,
+      updatedAt: state.agent.updatedAt
+    });
+    this.persist();
+  }
+
   sendTo(command: SendToCommand): void {
     if (command.target.kind !== "existing") return;
 
@@ -444,7 +475,7 @@ export class AgentRuntimeManager {
           model
         ];
 
-    args.push("--permission-mode", this.permissionMode(state));
+    args.push("--permission-mode", this.permissionMode(state), "--effort", state.agent.effort || "medium");
 
     const child = spawn(resolveClaudeCommand(), args, {
       cwd: state.agent.projectPath,

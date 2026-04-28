@@ -397,6 +397,9 @@ wss.on("connection", (ws) => {
         case "setPermissionMode":
           runtime.setPermissionMode(command.id, command.permissionMode);
           break;
+        case "setEffort":
+          runtime.setEffort(command.id, command.effort);
+          break;
         case "enablePlugin":
           void enablePlugin(command.plugin).catch((error: unknown) => {
             send(ws, { type: "agent.error", message: error instanceof Error ? error.message : String(error) });

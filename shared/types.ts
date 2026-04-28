@@ -14,6 +14,7 @@ export type AuthMethod = "claude.ai" | "api-key" | "unknown";
 
 export type AutoApproveMode = "off" | "session" | "always";
 export type AgentPermissionMode = "default" | "acceptEdits" | "plan" | "bypassPermissions";
+export type AgentEffort = "low" | "medium" | "high" | "max";
 
 export interface AgentDef {
   name: string;
@@ -62,6 +63,7 @@ export interface RunningAgent {
   pid?: number;
   remoteControl: boolean;
   permissionMode?: AgentPermissionMode;
+  effort?: AgentEffort;
   planMode?: boolean;
   rcUrl?: string;
   qr?: string;
@@ -134,6 +136,7 @@ export interface LaunchRequest {
   initialPrompt?: string;
   remoteControl?: boolean;
   permissionMode?: AgentPermissionMode;
+  effort?: AgentEffort;
   planMode?: boolean;
   autoApprove?: AutoApproveMode;
 }
@@ -261,6 +264,12 @@ export type WsServerEvent =
       updatedAt: string;
     }
   | {
+      type: "agent.effort_changed";
+      id: string;
+      effort: AgentEffort;
+      updatedAt: string;
+    }
+  | {
       type: "agent.transcript";
       id: string;
       event: TranscriptEvent;
@@ -363,6 +372,11 @@ export type WsClientCommand =
       type: "setPermissionMode";
       id: string;
       permissionMode: AgentPermissionMode;
+    }
+  | {
+      type: "setEffort";
+      id: string;
+      effort: AgentEffort;
     }
   | {
       type: "enablePlugin";

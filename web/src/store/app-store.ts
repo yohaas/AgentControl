@@ -305,6 +305,16 @@ export const useAppStore = create<AppState>((set, get) => ({
           )
         }));
         break;
+      case "agent.effort_changed":
+        set((state) => ({
+          agents: withAgent(state.agents, event.id, (agent) =>
+            mergeAgent(agent, {
+              effort: event.effort,
+              updatedAt: event.updatedAt
+            })
+          )
+        }));
+        break;
       case "agent.transcript":
         set((state) => ({
           transcripts: {
