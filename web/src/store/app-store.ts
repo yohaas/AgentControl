@@ -335,6 +335,19 @@ export const useAppStore = create<AppState>((set, get) => ({
           )
         }));
         break;
+      case "agent.session_info_changed":
+        set((state) => ({
+          agents: withAgent(state.agents, event.id, (agent) =>
+            mergeAgent(agent, {
+              sessionTools: event.tools,
+              mcpServers: event.mcpServers,
+              slashCommands: event.slashCommands,
+              activePlugins: event.activePlugins,
+              updatedAt: event.updatedAt
+            })
+          )
+        }));
+        break;
       case "agent.transcript":
         set((state) => ({
           transcripts: {

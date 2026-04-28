@@ -8,6 +8,7 @@ import QRCode from "qrcode";
 import type {
   AgentDef,
   AgentEffort,
+  ClaudeMcpServer,
   AgentSnapshot,
   AgentStatus,
   AgentPermissionMode,
@@ -866,6 +867,7 @@ export class AgentRuntimeManager {
       const sessionId = this.trimmedStringField(payload.session_id) || this.trimmedStringField(payload.sessionId);
       if (sessionId) state.agent.sessionId = sessionId;
       if (model) this.updateModel(state, model);
+      this.updateSessionInfo(state, payload);
       if (!state.activeTurn) this.setStatus(state, "idle");
       return;
     }
@@ -1177,6 +1179,61 @@ export class AgentRuntimeManager {
       updatedAt: state.agent.updatedAt
     });
     this.persist();
+  }
+
+  private updateSessionInfo(state: AgentProcessState, payload: Record<string, unknown>): void {
+    const tools = this.stringArrayField(payload.tools);
+    const slashCommands = this.stringArrayField(payload.slash_commands) || this.stringArrayField(payload.slashCommands);
+    const mcpServers = this.mcpServersField(payload.mcp_servers ?? payload.mcpServers);
+    if (!tools && !slashCommands && !mcpServers) return;
+
+    state.agent.sessionTools = tools || state.agent.sessionTools || [];
+    state.agent.slashCommands = slashCommands || state.agent.slashCommands || [];
+    state.agent.mcpServers = mcpServers || state.agent.mcpServers || [];
+    state.agent.activePlugins = this.activePluginNames(state.agent.mcpServers);
+    state.agent.updatedAt = now();
+    this.broadcast({
+      type: "agent.session_info_changed",
+      id: state.agent.id,
+      tools: state.agent.sessionTools,
+      mcpServers: state.agent.mcpServers,
+      slashCommands: state.agent.slashCommands,
+      activePlugins: state.agent.activePlugins,
+      updatedAt: state.agent.updatedAt
+    });
+    this.persist();
+  }
+
+  private stringArrayField(value: unknown): string[] | undefined {
+    if (!Array.isArray(value)) return undefined;
+    return value.filter((item): item is string => typeof item === "string" && item.trim().length > 0).map((item) => item.trim());
+  }
+
+  private mcpServersField(value: unknown): ClaudeMcpServer[] | undefined {
+    if (!Array.isArray(value)) return undefined;
+    return value
+      .map((item) => {
+        if (typeof item === "string" && item.trim()) return { name: item.trim() };
+        if (!item || typeof item !== "object") return undefined;
+        const record = item as Record<string, unknown>;
+        const name = this.trimmedStringField(record.name);
+        if (!name) return undefined;
+        return {
+          name,
+          status: this.trimmedStringField(record.status)
+        };
+      })
+      .filter((item): item is ClaudeMcpServer => Boolean(item));
+  }
+
+  private activePluginNames(mcpServers: ClaudeMcpServer[]): string[] {
+    return [
+      ...new Set(
+        mcpServers
+          .map((server) => server.name.match(/^plugin:([^:]+)(?::|$)/)?.[1])
+          .filter((name): name is string => Boolean(name))
+      )
+    ];
   }
 
   private removeExitedAgent(state: AgentProcessState): void {

@@ -90,6 +90,10 @@ export interface RunningAgent {
   rcUrl?: string;
   qr?: string;
   restorable?: boolean;
+  sessionTools?: string[];
+  mcpServers?: ClaudeMcpServer[];
+  slashCommands?: string[];
+  activePlugins?: string[];
 }
 
 export interface SourceAgentRef {
@@ -195,6 +199,11 @@ export interface ClaudePlugin {
   enabled: boolean;
 }
 
+export interface ClaudeMcpServer {
+  name: string;
+  status?: string;
+}
+
 export interface ClaudeAvailablePlugin {
   pluginId: string;
   name: string;
@@ -291,6 +300,15 @@ export type WsServerEvent =
       type: "agent.effort_changed";
       id: string;
       effort: AgentEffort;
+      updatedAt: string;
+    }
+  | {
+      type: "agent.session_info_changed";
+      id: string;
+      tools: string[];
+      mcpServers: ClaudeMcpServer[];
+      slashCommands: string[];
+      activePlugins: string[];
       updatedAt: string;
     }
   | {

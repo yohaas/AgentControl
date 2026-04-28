@@ -131,6 +131,12 @@ interface SlashCommandSuggestion {
   description: string;
 }
 
+type ToolUseEvent = Extract<TranscriptEvent, { kind: "tool_use" }>;
+type ToolResultEvent = Extract<TranscriptEvent, { kind: "tool_result" }>;
+type ToolTranscriptItem =
+  | { kind: "single"; event: TranscriptEvent }
+  | { kind: "tool_pair"; event: ToolUseEvent; result?: ToolResultEvent };
+
 const BASE_SLASH_COMMANDS: SlashCommandSuggestion[] = [
   { value: "/clear", label: "/clear", description: "Clear this chat history" },
   { value: "/exit", label: "/exit", description: "Close this agent" },
@@ -313,6 +319,59 @@ function StatusPill({ status }: { status: RunningAgent["status"] }) {
   return <Badge className={cn("capitalize", className)}>{label}</Badge>;
 }
 
+function SessionInfoPopover({ agent, compact = false }: { agent: RunningAgent; compact?: boolean }) {
+  const tools = agent.sessionTools || [];
+  const mcpServers = agent.mcpServers || [];
+  const slashCommands = agent.slashCommands || [];
+  const plugins = agent.activePlugins || [];
+  const hasInfo = tools.length > 0 || mcpServers.length > 0 || slashCommands.length > 0 || plugins.length > 0;
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button variant="ghost" size="icon" className={cn(compact ? "h-7 w-7" : "h-8 w-8")} title="Session tools and MCP">
+          <Puzzle className="h-4 w-4" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-80">
+        <div className="grid gap-3 text-sm">
+          <div>
+            <h3 className="font-medium">Session Capabilities</h3>
+            <p className="text-xs text-muted-foreground">{hasInfo ? "Reported by Claude for this launched session." : "No session capability metadata yet."}</p>
+          </div>
+          {plugins.length > 0 && <SessionInfoList label="Plugins" items={plugins} />}
+          {mcpServers.length > 0 && (
+            <SessionInfoList
+              label="MCP servers"
+              items={mcpServers.map((server) => `${server.name}${server.status ? ` (${server.status})` : ""}`)}
+            />
+          )}
+          {tools.length > 0 && <SessionInfoList label="Tools" items={tools} max={18} />}
+          {slashCommands.length > 0 && <SessionInfoList label="Slash commands" items={slashCommands.map((command) => `/${command.replace(/^\//, "")}`)} max={18} />}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function SessionInfoList({ label, items, max = 12 }: { label: string; items: string[]; max?: number }) {
+  const visible = items.slice(0, max);
+  const hidden = Math.max(0, items.length - visible.length);
+  return (
+    <section className="grid gap-1.5">
+      <div className="text-xs font-medium uppercase tracking-normal text-muted-foreground">{label}</div>
+      <div className="flex flex-wrap gap-1.5">
+        {visible.map((item) => (
+          <Badge key={item} className="max-w-full truncate">
+            {item}
+          </Badge>
+        ))}
+        {hidden > 0 && <Badge>+{hidden}</Badge>}
+      </div>
+    </section>
+  );
+}
+
 function wrapForwardedText(source: RunningAgent, selectedText: string, framing?: string) {
   const quoted = selectedText
     .split(/\r?\n/)
@@ -341,6 +400,26 @@ function transcriptToPlainText(agent: RunningAgent, transcripts: TranscriptEvent
     })
     .join("\n\n")
     .trim();
+}
+
+function pairedTranscriptItems(transcript: TranscriptEvent[]): ToolTranscriptItem[] {
+  const usedResults = new Set<string>();
+  return transcript
+    .map((event, index): ToolTranscriptItem | undefined => {
+      if (event.kind === "tool_use") {
+        const result = transcript
+          .slice(index + 1)
+          .find(
+            (candidate): candidate is ToolResultEvent =>
+              candidate.kind === "tool_result" && candidate.toolUseId === event.toolUseId && !usedResults.has(candidate.id)
+          );
+        if (result) usedResults.add(result.id);
+        return { kind: "tool_pair", event, result };
+      }
+      if (event.kind === "tool_result" && usedResults.has(event.id)) return undefined;
+      return { kind: "single", event };
+    })
+    .filter((item): item is ToolTranscriptItem => Boolean(item));
 }
 
 function toolValueText(value: unknown): string {
@@ -429,6 +508,13 @@ function toolDetail(event: Extract<TranscriptEvent, { kind: "tool_use" | "tool_r
     return [stdout ? `stdout\n${stdout}` : "", stderr ? `stderr\n${stderr}` : ""].filter(Boolean).join("\n\n");
   }
   return toolValueText(event.output);
+}
+
+function toolPairDetail(toolUse: ToolUseEvent | ToolResultEvent, result: ToolResultEvent) {
+  return [
+    toolUse.kind === "tool_use" ? `Tool: ${toolUse.name}\n\n${toolDetail(toolUse)}` : toolDetail(toolUse),
+    `Result${result.isError ? " (error)" : ""}\n\n${toolDetail(result)}`
+  ].join("\n\n---\n\n");
 }
 
 function readFileAsDataUrl(file: File) {
@@ -2694,6 +2780,7 @@ function AgentTile({
   onHeightChange: (height: number) => void;
 }) {
   const transcript = useAppStore((state) => state.transcripts[agent.id] || EMPTY_TRANSCRIPT);
+  const transcriptItems = useMemo(() => pairedTranscriptItems(transcript), [transcript]);
   const draft = useAppStore((state) => state.drafts[agent.id] || "");
   const setDraft = useAppStore((state) => state.setDraft);
   const queue = useAppStore((state) => state.messageQueues[agent.id] || EMPTY_QUEUE);
@@ -2966,6 +3053,7 @@ function AgentTile({
           <LastActivityText agent={agent} compact timeOnly />
           <StatusPill status={agent.status} />
         </span>
+        <SessionInfoPopover agent={agent} compact />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" title="Agent actions">
@@ -3027,10 +3115,10 @@ function AgentTile({
               )
             ) : (
               <div className="grid gap-2">
-                {transcript.map((event) => (
+                {transcriptItems.map((item) => (
                   <TranscriptPreview
-                    key={event.id}
-                    event={event}
+                    key={item.kind === "tool_pair" ? item.event.id : item.event.id}
+                    item={item}
                     agent={agent}
                     latestUserMessageId={pinnedMessage?.id}
                   />
@@ -3159,14 +3247,18 @@ function AgentTile({
 }
 
 function TranscriptPreview({
-  event,
+  item,
   agent,
   latestUserMessageId
 }: {
-  event: TranscriptEvent;
+  item: ToolTranscriptItem;
   agent: RunningAgent;
   latestUserMessageId?: string;
 }) {
+  if (item.kind === "tool_pair") {
+    return <ToolCard event={item.event} result={item.result} agent={agent} compact />;
+  }
+  const event = item.event;
   if (event.kind === "model_switch") {
     return <p className="text-center text-xs text-muted-foreground">switched to {event.to}</p>;
   }
@@ -3302,6 +3394,7 @@ function AgentPanelHeader({ agent }: { agent: RunningAgent }) {
         <LastActivityText agent={agent} compact timeOnly />
         <StatusPill status={agent.status} />
       </span>
+      <SessionInfoPopover agent={agent} />
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="outline" size="icon">
@@ -3331,6 +3424,7 @@ function AgentPanelHeader({ agent }: { agent: RunningAgent }) {
 
 function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
   const transcript = useAppStore((state) => state.transcripts[agent.id] || EMPTY_TRANSCRIPT);
+  const transcriptItems = useMemo(() => pairedTranscriptItems(transcript), [transcript]);
   const draft = useAppStore((state) => state.drafts[agent.id] || "");
   const setDraft = useAppStore((state) => state.setDraft);
   const queue = useAppStore((state) => state.messageQueues[agent.id] || EMPTY_QUEUE);
@@ -3547,10 +3641,10 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
                 )
               ) : (
                 <>
-                  {transcript.map((event) => (
+                  {transcriptItems.map((item) => (
                     <TranscriptItem
-                      key={event.id}
-                      event={event}
+                      key={item.kind === "tool_pair" ? item.event.id : item.event.id}
+                      item={item}
                       agent={agent}
                       query={searchQuery}
                       latestUserMessageId={pinnedMessage?.id}
@@ -3781,16 +3875,20 @@ function SendToMenu({
 }
 
 function TranscriptItem({
-  event,
+  item,
   agent,
   query,
   latestUserMessageId
 }: {
-  event: TranscriptEvent;
+  item: ToolTranscriptItem;
   agent: RunningAgent;
   query: string;
   latestUserMessageId?: string;
 }) {
+  if (item.kind === "tool_pair") {
+    return <ToolCard event={item.event} result={item.result} agent={agent} />;
+  }
+  const event = item.event;
   if (event.kind === "model_switch") {
     return (
       <div className="flex items-center gap-3 py-2 text-xs text-muted-foreground">
@@ -3922,25 +4020,28 @@ function HighlightedText({ text, query }: { text: string; query: string }) {
 
 function ToolCard({
   event,
+  result,
   agent,
   compact = false
 }: {
   event: Extract<TranscriptEvent, { kind: "tool_use" | "tool_result" }>;
+  result?: ToolResultEvent;
   agent: RunningAgent;
   compact?: boolean;
 }) {
   const addError = useAppStore((state) => state.addError);
   const isUse = event.kind === "tool_use";
   const [open, setOpen] = useState((isUse && event.awaitingPermission) || (!isUse && event.isError));
-  const summary = toolSummary(event);
-  const detail = toolDetail(event);
+  const summary = result ? toolSummary(result) || toolSummary(event) : toolSummary(event);
+  const detail = result ? toolPairDetail(event, result) : toolDetail(event);
   const pathText = isUse ? toolPath(event.input) : "";
   const commandText = isUse ? fieldText(event.input, ["command"]) : "";
   const awaitingPermission = isUse && event.awaitingPermission;
+  const resultIsError = Boolean(result?.isError || (!isUse && event.isError));
 
   useEffect(() => {
-    if (awaitingPermission) setOpen(true);
-  }, [awaitingPermission]);
+    if (awaitingPermission || resultIsError) setOpen(true);
+  }, [awaitingPermission, resultIsError]);
 
   function copyText(text: string) {
     if (!text) return;
@@ -3953,7 +4054,7 @@ function ToolCard({
     <div
       className={cn(
         "min-w-0 max-w-full rounded-md border bg-card",
-        awaitingPermission ? "border-amber-300/70 bg-amber-500/10 shadow-[0_0_0_1px_rgba(251,191,36,0.18)]" : event.kind === "tool_result" && event.isError ? "border-red-400/50" : "border-border",
+        awaitingPermission ? "border-amber-300/70 bg-amber-500/10 shadow-[0_0_0_1px_rgba(251,191,36,0.18)]" : resultIsError ? "border-red-400/50" : "border-border",
         compact ? "text-xs" : "text-sm"
       )}
     >
@@ -3962,7 +4063,8 @@ function ToolCard({
           <span className="block truncate">
             {isUse ? `Tool: ${event.name}` : `Tool result: ${event.toolUseId}`}
             {awaitingPermission && <Badge className="ml-2 border-amber-300/60 bg-amber-500/15 text-amber-100">permission required</Badge>}
-            {!isUse && event.isError && <Badge className="ml-2 border-red-400/40 text-red-200">error</Badge>}
+            {result && <Badge className="ml-2 border-border text-muted-foreground">result paired</Badge>}
+            {resultIsError && <Badge className="ml-2 border-red-400/40 text-red-200">error</Badge>}
           </span>
           {summary && <span className="mt-1 block truncate text-xs text-muted-foreground">{summary}</span>}
         </span>
@@ -4007,7 +4109,7 @@ function ToolCard({
             )}
             <Button size="sm" variant="outline" onClick={() => copyText(detail)}>
               <Clipboard className="h-3.5 w-3.5" />
-              Output
+              {result ? "Tool + Result" : "Output"}
             </Button>
           </div>
           <pre className="max-h-80 overflow-y-auto overflow-x-hidden whitespace-pre-wrap break-words [overflow-wrap:anywhere] border-t border-border p-3 text-xs text-muted-foreground">{detail}</pre>
