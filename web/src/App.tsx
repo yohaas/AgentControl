@@ -5533,8 +5533,8 @@ function AgentTile({
                 ref={inputRef}
                 className={cn(
                   "min-h-9 resize-none border-0 bg-transparent py-2 text-sm leading-5 focus-visible:ring-0",
-                  composerExpanded && "pr-6",
-                  hasMultilineDraft && "pr-12",
+                  composerExpanded && "pr-10",
+                  hasMultilineDraft && "pr-16",
                   composerExpanded ? "h-24 max-h-40 overflow-y-auto" : "h-9 overflow-hidden"
                 )}
                 value={draft}
@@ -5553,7 +5553,7 @@ function AgentTile({
               {hasMultilineDraft && (
                 <button
                   type="button"
-                  className="absolute right-2 top-2 grid h-6 w-6 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+                  className="absolute right-6 top-2 grid h-6 w-6 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
                   title={composerExpanded ? "Collapse message" : `Expand ${draftLines}-line message`}
                   onClick={() => {
                     setComposerCollapsed(!composerCollapsed);
@@ -6189,8 +6189,8 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
               ref={inputRef}
               className={cn(
                 "min-h-[76px] resize-none border-0 bg-transparent py-2 leading-5 focus-visible:ring-0",
-                composerExpanded && "pr-6",
-                hasMultilineDraft && "pr-12",
+                composerExpanded && "pr-10",
+                hasMultilineDraft && "pr-16",
                 composerExpanded ? "h-28 max-h-48 overflow-y-auto" : "h-[76px] overflow-hidden"
               )}
               rows={3}
@@ -6208,7 +6208,7 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
             {hasMultilineDraft && (
               <button
                 type="button"
-                className="absolute right-2 top-2 grid h-6 w-6 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+                className="absolute right-6 top-2 grid h-6 w-6 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
                 title={composerExpanded ? "Collapse message" : `Expand ${draftLines}-line message`}
                 onClick={() => {
                   setComposerCollapsed(!composerCollapsed);
