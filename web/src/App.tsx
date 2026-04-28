@@ -5405,6 +5405,8 @@ function AgentTile({
   const setSelectedAgent = useAppStore((state) => state.setSelectedAgent);
   const setFocusedAgent = useAppStore((state) => state.setFocusedAgent);
   const setTileWidth = useAppStore((state) => state.setTileWidth);
+  const tileMinimized = useAppStore((state) => Boolean(state.minimizedTiles[agent.id]));
+  const setTileMinimized = useAppStore((state) => state.setTileMinimized);
   const focusedAgentId = useAppStore((state) => state.focusedAgentId);
   const settings = useAppStore((state) => state.settings);
   const [attachments, setAttachments] = useState<MessageAttachment[]>([]);
@@ -5747,7 +5749,7 @@ function AgentTile({
         "relative flex min-h-0 min-w-80 max-w-full flex-col rounded-md border border-border bg-card/70",
         focusedAgentId === agent.id && "ring-2 ring-primary/60"
       )}
-      style={{ height, flex: `0 0 ${width ? `${width}px` : defaultWidth}` }}
+      style={{ height: tileMinimized ? undefined : height, flex: `0 0 ${width ? `${width}px` : defaultWidth}` }}
       onDragOver={(event) => event.preventDefault()}
       onPointerDown={(event) => {
         activateTile(false);
@@ -5801,80 +5803,97 @@ function AgentTile({
             <DropdownMenuItem onClick={() => sendCommand({ type: "kill", id: agent.id })}>Close Chat</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={(event) => {
+            event.stopPropagation();
+            setTileMinimized(agent.id, !tileMinimized);
+          }}
+          title={tileMinimized ? "Restore tile" : "Minimize tile"}
+        >
+          {tileMinimized ? <ChevronDown className="h-4 w-4" /> : <Minimize2 className="h-4 w-4" />}
+        </Button>
         <Button variant="ghost" size="icon" onClick={() => setSelectedAgent(agent.id)} title="Maximize">
           <Maximize2 className="h-4 w-4" />
         </Button>
       </div>
-      <ContextMenu>
-        <ContextMenuTrigger asChild>
-          <div
-            id={transcriptRootId}
-            ref={rootRef}
-            className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-3"
-            onScroll={handleTranscriptScroll}
-            onMouseUp={() => selection.captureSelection()}
-            onKeyUp={() => selection.captureSelection()}
-            onContextMenuCapture={prepareContextMenu}
-          >
-            {pinLastSentMessage && pinnedMessage && showPinnedMessage && <PinnedUserMessage event={pinnedMessage} compact />}
-            {agent.statusMessage && (
-              <p className="mb-3 rounded-md border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
-                {agent.statusMessage}
-              </p>
-            )}
-            {agent.remoteControl ? (
-              <div className="grid h-full place-items-center text-center">
-                <div className="grid max-w-sm justify-items-center gap-3">
-                  {agent.qr ? (
-                    <img className="h-36 w-36 rounded-md bg-white p-2" src={agent.qr} alt="Remote Control QR code" />
-                  ) : (
-                    <div className="grid h-36 w-36 place-items-center rounded-md border border-dashed border-border text-xs text-muted-foreground">
-                      Waiting for QR
+      {!tileMinimized && (
+        <>
+          <ContextMenu>
+            <ContextMenuTrigger asChild>
+              <div
+                id={transcriptRootId}
+                ref={rootRef}
+                className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-3"
+                onScroll={handleTranscriptScroll}
+                onMouseUp={() => selection.captureSelection()}
+                onKeyUp={() => selection.captureSelection()}
+                onContextMenuCapture={prepareContextMenu}
+              >
+                {pinLastSentMessage && pinnedMessage && showPinnedMessage && <PinnedUserMessage event={pinnedMessage} compact />}
+                {agent.statusMessage && (
+                  <p className="mb-3 rounded-md border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+                    {agent.statusMessage}
+                  </p>
+                )}
+                {agent.remoteControl ? (
+                  <div className="grid h-full place-items-center text-center">
+                    <div className="grid max-w-sm justify-items-center gap-3">
+                      {agent.qr ? (
+                        <img className="h-36 w-36 rounded-md bg-white p-2" src={agent.qr} alt="Remote Control QR code" />
+                      ) : (
+                        <div className="grid h-36 w-36 place-items-center rounded-md border border-dashed border-border text-xs text-muted-foreground">
+                          Waiting for QR
+                        </div>
+                      )}
+                      <p className="text-sm text-muted-foreground">{remoteControlLabel(agent)}</p>
+                      {agent.rcUrl && <p className="max-w-full break-all text-xs text-muted-foreground">{agent.rcUrl}</p>}
+                      <Button
+                        variant="outline"
+                        disabled={!agent.rcUrl}
+                        onClick={() => agent.rcUrl && window.open(agent.rcUrl, "_blank", "noopener")}
+                      >
+                        <ExternalLink className="h-4 w-4" />
+                        Open
+                      </Button>
                     </div>
-                  )}
-                  <p className="text-sm text-muted-foreground">{remoteControlLabel(agent)}</p>
-                  {agent.rcUrl && <p className="max-w-full break-all text-xs text-muted-foreground">{agent.rcUrl}</p>}
-                  <Button variant="outline" disabled={!agent.rcUrl} onClick={() => agent.rcUrl && window.open(agent.rcUrl, "_blank", "noopener")}>
-                    <ExternalLink className="h-4 w-4" />
-                    Open
-                  </Button>
-                </div>
+                  </div>
+                ) : transcript.length === 0 ? (
+                  showActivityIndicator ? (
+                    <AgentActivityIndicator agent={agent} compact />
+                  ) : (
+                    <p className="rounded-md border border-dashed border-border px-3 py-10 text-center text-sm text-muted-foreground">
+                      No transcript yet.
+                    </p>
+                  )
+                ) : (
+                  <div className="grid gap-2">
+                    {transcriptItems.map((item) => (
+                      <TranscriptPreview
+                        key={item.kind === "tool_pair" ? item.event.id : item.event.id}
+                        item={item}
+                        agent={agent}
+                        latestUserMessageId={pinnedMessage?.id}
+                      />
+                    ))}
+                    {showActivityIndicator && <AgentActivityIndicator agent={agent} compact />}
+                  </div>
+                )}
               </div>
-            ) : transcript.length === 0 ? (
-              showActivityIndicator ? (
-                <AgentActivityIndicator agent={agent} compact />
-              ) : (
-                <p className="rounded-md border border-dashed border-border px-3 py-10 text-center text-sm text-muted-foreground">
-                  No transcript yet.
-                </p>
-              )
-            ) : (
-              <div className="grid gap-2">
-                {transcriptItems.map((item) => (
-                  <TranscriptPreview
-                    key={item.kind === "tool_pair" ? item.event.id : item.event.id}
-                    item={item}
-                    agent={agent}
-                    latestUserMessageId={pinnedMessage?.id}
-                  />
-                ))}
-                {showActivityIndicator && <AgentActivityIndicator agent={agent} compact />}
-              </div>
-            )}
-          </div>
-        </ContextMenuTrigger>
-        <SendToMenu
-          source={agent}
-          selectedText={selection.selectedText}
-          transcripts={transcript}
-          rootSelector={`#${transcriptRootId}`}
-          contextTarget={contextCopyTarget}
-          captureSelectedText={selection.captureSelection}
-          getCachedSelectedText={selection.getCachedSelection}
-        />
-      </ContextMenu>
-      {!agent.remoteControl && (
-        <div className="shrink-0 border-t border-border p-3">
+            </ContextMenuTrigger>
+            <SendToMenu
+              source={agent}
+              selectedText={selection.selectedText}
+              transcripts={transcript}
+              rootSelector={`#${transcriptRootId}`}
+              contextTarget={contextCopyTarget}
+              captureSelectedText={selection.captureSelection}
+              getCachedSelectedText={selection.getCachedSelection}
+            />
+          </ContextMenu>
+          {!agent.remoteControl && (
+            <div className="shrink-0 border-t border-border p-3">
           <AddContextDialog
             agent={agent}
             open={contextOpen}
@@ -5992,18 +6011,20 @@ function AgentTile({
               </div>
             </div>
           </div>
-        </div>
+            </div>
+          )}
+          <div
+            className="absolute bottom-0 right-0 top-0 w-2 cursor-ew-resize rounded-r-md hover:bg-primary/20"
+            onPointerDown={startResize}
+            title="Drag to resize chat width"
+          />
+          <div
+            className="absolute bottom-0 left-0 right-0 h-2 cursor-ns-resize rounded-b-md hover:bg-primary/20"
+            onPointerDown={startHeightResize}
+            title="Drag to resize tile height"
+          />
+        </>
       )}
-      <div
-        className="absolute bottom-0 right-0 top-0 w-2 cursor-ew-resize rounded-r-md hover:bg-primary/20"
-        onPointerDown={startResize}
-        title="Drag to resize chat width"
-      />
-      <div
-        className="absolute bottom-0 left-0 right-0 h-2 cursor-ns-resize rounded-b-md hover:bg-primary/20"
-        onPointerDown={startHeightResize}
-        title="Drag to resize tile height"
-      />
     </section>
   );
 }

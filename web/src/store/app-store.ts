@@ -87,6 +87,7 @@ interface AppState {
   flashModels: Record<string, boolean>;
   tileOrder: string[];
   tileWidths: Record<string, number>;
+  minimizedTiles: Record<string, boolean>;
   currentTileHeight?: number;
   sidebarCollapsed: boolean;
   terminalOpen: boolean;
@@ -117,6 +118,7 @@ interface AppState {
   setScrollPosition: (id: string, top: number) => void;
   setTileOrder: (ids: string[]) => void;
   setTileWidth: (id: string, width: number) => void;
+  setTileMinimized: (id: string, minimized: boolean) => void;
   setCurrentTileHeight: (height?: number) => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
   setTerminalOpen: (open: boolean) => void;
@@ -246,6 +248,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   flashModels: {},
   tileOrder: [],
   tileWidths: {},
+  minimizedTiles: {},
   currentTileHeight: undefined,
   sidebarCollapsed: false,
   terminalOpen: false,
@@ -316,7 +319,10 @@ export const useAppStore = create<AppState>((set, get) => ({
         ...state.tileOrder.filter((id) => snapshot.agents.some((agent) => agent.id === id)),
         ...snapshot.agents.filter((agent) => !state.tileOrder.includes(agent.id)).map((agent) => agent.id)
       ],
-      tileWidths: Object.fromEntries(Object.entries(state.tileWidths).filter(([id]) => snapshot.agents.some((agent) => agent.id === id)))
+      tileWidths: Object.fromEntries(Object.entries(state.tileWidths).filter(([id]) => snapshot.agents.some((agent) => agent.id === id))),
+      minimizedTiles: Object.fromEntries(
+        Object.entries(state.minimizedTiles).filter(([id]) => snapshot.agents.some((agent) => agent.id === id))
+      )
     })),
   handleServerEvent: (event) => {
     switch (event.type) {
@@ -329,7 +335,8 @@ export const useAppStore = create<AppState>((set, get) => ({
           transcripts: { ...state.transcripts, [event.agent.id]: state.transcripts[event.agent.id] || [] },
           selectedAgentId: state.selectedAgentId ? event.agent.id : undefined,
           focusedAgentId: event.agent.id,
-          tileOrder: [...state.tileOrder.filter((id) => id !== event.agent.id), event.agent.id]
+          tileOrder: [...state.tileOrder.filter((id) => id !== event.agent.id), event.agent.id],
+          minimizedTiles: Object.fromEntries(Object.entries(state.minimizedTiles).filter(([id]) => id !== event.agent.id))
         }));
         break;
       case "agent.status_changed":
@@ -595,6 +602,13 @@ export const useAppStore = create<AppState>((set, get) => ({
   setScrollPosition: (id, top) => set((state) => ({ scrollPositions: { ...state.scrollPositions, [id]: top } })),
   setTileOrder: (ids) => set({ tileOrder: ids }),
   setTileWidth: (id, width) => set((state) => ({ tileWidths: { ...state.tileWidths, [id]: width } })),
+  setTileMinimized: (id, minimized) =>
+    set((state) => {
+      const minimizedTiles = { ...state.minimizedTiles };
+      if (minimized) minimizedTiles[id] = true;
+      else delete minimizedTiles[id];
+      return { minimizedTiles };
+    }),
   setCurrentTileHeight: (height) => set({ currentTileHeight: height }),
   setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
   setTerminalOpen: (open) => set({ terminalOpen: open }),
