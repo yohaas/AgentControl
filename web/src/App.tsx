@@ -1333,6 +1333,14 @@ function GitStatusMenu({ projectId }: { projectId?: string }) {
     void refresh();
   }, [open, projectId]);
 
+  useEffect(() => {
+    if (!projectId) {
+      setStatus(undefined);
+      return;
+    }
+    void refresh();
+  }, [projectId]);
+
   async function refresh() {
     if (!projectId) return;
     setLoading(true);
@@ -1365,8 +1373,13 @@ function GitStatusMenu({ projectId }: { projectId?: string }) {
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
-        <Button variant={hasWork ? "default" : "outline"} size="icon" disabled={!projectId} title="Git status">
+        <Button variant={hasWork ? "default" : "outline"} size="icon" disabled={!projectId} title="Git status" className="relative">
           <GitBranch className="h-4 w-4" />
+          {aheadCount > 0 && (
+            <span className="absolute -right-1.5 -top-1.5 grid min-h-4 min-w-4 place-items-center rounded-full border border-background bg-red-500 px-1 text-[10px] font-semibold leading-none text-white">
+              {aheadCount > 99 ? "99+" : aheadCount}
+            </span>
+          )}
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-80">
