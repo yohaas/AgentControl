@@ -1957,7 +1957,7 @@ function Sidebar() {
                 variant="ghost"
                 size="icon"
                 className="absolute right-0 top-0 h-4 w-4 rounded-full bg-background/90 p-0 text-muted-foreground shadow-sm hover:text-foreground"
-                title={`Close ${agent.displayName}`}
+                title={`Close Chat ${agent.displayName}`}
                 onClick={() => sendCommand({ type: "kill", id: agent.id })}
               >
                 <X className="h-3 w-3" />
@@ -2059,7 +2059,7 @@ function Sidebar() {
                   variant="ghost"
                   size="icon"
                   className="h-7 w-7 shrink-0 text-muted-foreground hover:text-foreground"
-                  title={`Close ${agent.displayName}`}
+                  title={`Close Chat ${agent.displayName}`}
                   onClick={() => sendCommand({ type: "kill", id: agent.id })}
                 >
                   <X className="h-3.5 w-3.5" />
@@ -3276,7 +3276,7 @@ function AgentTile({
             <DropdownMenuItem onClick={() => exportAgentJson(agent, transcript)}>Export JSON</DropdownMenuItem>
             <DropdownMenuItem onClick={() => void exportAgentRawStream(agent, addError)}>Export Raw Stream</DropdownMenuItem>
             <DropdownMenuItem onClick={() => sendCommand({ type: "clear", id: agent.id })}>Clear Chat</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => sendCommand({ type: "kill", id: agent.id })}>Close</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => sendCommand({ type: "kill", id: agent.id })}>Close Chat</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
         <Button variant="ghost" size="icon" onClick={() => setSelectedAgent(agent.id)} title="Maximize">
@@ -3633,7 +3633,7 @@ function AgentPanelHeader({ agent }: { agent: RunningAgent }) {
           <DropdownMenuItem onClick={() => exportAgentJson(agent, transcripts)}>Export JSON</DropdownMenuItem>
           <DropdownMenuItem onClick={() => void exportAgentRawStream(agent, addError)}>Export Raw Stream</DropdownMenuItem>
           <DropdownMenuItem onClick={() => sendCommand({ type: "clear", id: agent.id })}>Clear Chat</DropdownMenuItem>
-          <DropdownMenuItem onClick={() => sendCommand({ type: "kill", id: agent.id })}>Close</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => sendCommand({ type: "kill", id: agent.id })}>Close Chat</DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
       {isBusy && (
