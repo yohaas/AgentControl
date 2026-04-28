@@ -1,34 +1,37 @@
 # Agent Control
 
-Agent Control is a local multi-agent dashboard for Claude Code, Codex CLI, and OpenAI API-backed ChatGPT sessions. It lets you add projects, discover `.claude/agents` definitions, launch multiple agent sessions, monitor streaming responses and tools, route context between agents, manage plugins, and keep project terminals beside the chats.
+Agent Control is a local multi-agent dashboard for Claude Code, Codex CLI, and OpenAI API-backed ChatGPT sessions. It lets you add projects, discover project and built-in agent definitions, launch multiple agent sessions, monitor streaming responses and tools, route context between agents, manage plugins, and keep project terminals beside the chats.
 
 The app is built for local development workflows. It starts an Express/WebSocket server, a Vite/React UI, and provider processes/API streams in the selected project folders.
 
 ## What It Does
 
-- Launch Claude, Codex, or OpenAI API agents from project `.claude/agents/*.md` files or the built-in `general` agent when no project agent files exist.
-- Run multiple agents as resizable tiles, with maximize, drag/drop ordering, configurable tile height, and configurable tile columns.
+- Launch Claude, Codex, or OpenAI API agents from project agent files or shipped built-in agents such as `general`, `frontend`, `backend`, `security`, and `qa`.
+- Run multiple agents as resizable tiles, with minimize-to-header, maximize, drag/drop ordering, configurable tile height, and configurable tile columns.
 - Switch between projects. Each project keeps its own open agents and terminal sessions.
+- Open the current project folder from the top bar in Explorer/Finder/xdg-open.
+- See provider icons, model, status, and last activity in the left nav and chat headers.
 - Stream Claude responses from `--output-format stream-json`, including live assistant text, tool activity, tool results, and raw stream export.
 - Stream OpenAI Responses API sessions and run Codex CLI sessions through the provider selector.
 - Show prominent permission prompts for gated Claude tools, then send Approve/Deny back to the running Claude process.
 - Control mode per agent: Ask before edits, Edit automatically, Plan mode, or Bypass permissions.
 - Control effort per agent: low, medium, high, xhigh, or max.
 - Toggle Claude thinking for a session.
-- Use slash command autocomplete from AgentControl commands, Claude built-ins, project commands, user commands, plugin commands, and session-reported commands. Commands that require the Claude TUI are shown disabled.
+- Use provider-aware slash command autocomplete from AgentControl commands, Claude built-ins, project commands, user commands, plugin commands, and session-reported commands. Commands that require the Claude TUI are shown disabled.
 - Add context from local files, drag/drop files into chat, paste images, and send selected transcript/tool text to another agent.
 - Launch Remote Control agents and show their link/QR code plus stdout/stderr diagnostics.
 - Run project terminals with tabs, command history, rename, split panes, resize, pop out, dock left/right/bottom/float, and kill-on-close behavior.
 - Show Git status for the selected project, including changed files, unpushed commit count, and a Push action.
-- Browse, install, enable, and persist Claude plugins per agent definition.
+- Browse, install, enable, and persist Claude/Codex plugins per agent definition when the provider exposes a local plugin catalog.
 - Export/import dashboard config and export chats as Markdown, JSON, or raw Claude stream JSONL.
+- Use light, dark, or automatic color mode.
 - Start, restart, or shut down the Agent Control dev stack from the UI when running in supervised mode.
 
 ## Technology
 
 This is a TypeScript workspace with three packages:
 
-- `server`: Express 4, `ws`, `node-pty`, `qrcode`, `gray-matter`, and Claude Code CLI process management.
+- `server`: Express 4, `ws`, `node-pty`, `qrcode`, `gray-matter`, provider process management, and API streaming.
 - `web`: React 19, Vite 6, Zustand, Radix UI primitives, Tailwind CSS, Lucide icons, and xterm.js.
 - `shared`: shared TypeScript protocol and data types.
 
@@ -36,8 +39,8 @@ Runtime requirements:
 
 - Node.js 20 or newer.
 - npm.
-- Claude Code CLI available on `PATH`, or configured with `CLAUDE_CODE_CLI`.
-- Codex CLI available on `PATH`, or configured with `CODEX_CLI`, if you want Codex sessions.
+- Claude Code CLI available on `PATH`, configured in Settings, or configured with `CLAUDE_CODE_CLI`.
+- Codex CLI available on `PATH`, configured in Settings, or configured with `CODEX_CLI`, if you want Codex sessions.
 - `OPENAI_API_KEY`, if you want OpenAI API sessions.
 - `ANTHROPIC_API_KEY`, if you want Claude Code API-key auth instead of interactive Claude auth.
 - Git, if you want Git status/push integration.
@@ -112,7 +115,7 @@ This starts:
 - Server/API/WebSocket: http://localhost:4317
 - Vite web app: http://localhost:4318
 
-The Vite app proxies API and WebSocket traffic to the server. The server binds to `127.0.0.1` by default and protects API/WebSocket control traffic with a per-process local token. Use `HOST`, `PORT`, `AGENTCONTROL_AUTH_TOKEN`, and `AGENTCONTROL_ALLOWED_ORIGINS` only when you intentionally need a different local setup.
+The Vite app proxies API and WebSocket traffic to the server. The server binds to `127.0.0.1` by default and protects API/WebSocket control traffic with a per-process local token. The top-bar connection dot is green when connected and red when disconnected. Use `HOST`, `PORT`, `AGENTCONTROL_AUTH_TOKEN`, and `AGENTCONTROL_ALLOWED_ORIGINS` only when you intentionally need a different local setup.
 
 For UI-controlled restart/shutdown, run supervised mode instead:
 
@@ -120,7 +123,7 @@ For UI-controlled restart/shutdown, run supervised mode instead:
 npm run dev:supervised
 ```
 
-When supervised mode is active, the connected-status menu in the app can restart or shut down Agent Control.
+When supervised mode is active, the connection-dot menu can restart or shut down Agent Control.
 
 ## Production Build
 
@@ -133,18 +136,23 @@ In production, the Express server serves the built Vite app from `web/dist`.
 
 ## Projects
 
-Add a project from the project menu in the top bar. The folder selector can browse local directories, or you can paste a path manually.
+Add a project from the project menu in the top bar. The folder selector can browse local directories, or you can paste a path manually. The folder icon next to the project controls opens the selected project in the system file manager.
 
 Project behavior:
 
 - The selected project controls which agents and terminals are visible.
 - Closing a project closes that project's agents and terminals.
-- If a project has no `.claude/agents` folder, Agent Control shows the built-in `general` agent type.
+- If a project has no project agent files, Agent Control shows a message and defaults the Available Agents panel to Built-In agents.
+- Worktree projects are indented under their parent project in the selector.
 - Project paths are persisted in `~/.agent-dashboard/config.json`.
 
 ## Agent Definitions
 
-Each Markdown file in a project's `.claude/agents/` folder becomes an available agent tile.
+Project agent files are discovered from the provider-specific agent directory for the selected project. By default those are `.claude/agents`, `.codex/agents`, and `.agent-control/openai-agents`. Worktree projects inherit project agents from the root project folder, so local agent definitions remain visible when switching into a worktree.
+
+Built-in agent files ship with the repo in `.agent-control/built-in-agents`. They are app-level defaults, not project files. You can add, edit, remove, recolor, or point to a different built-in agent directory from Settings.
+
+Each Markdown agent file becomes an available agent tile.
 
 Example:
 
@@ -173,11 +181,11 @@ Supported frontmatter:
 - `tools`: metadata for the agent definition.
 - `plugins`: plugin IDs selected by default for that agent.
 
-The Markdown body is used as the agent system prompt. The launch modal includes a "view agent file" link so you can inspect the full prompt; edit the agents file to change it.
+The Markdown body is used as the agent system prompt. The launch modal includes a "view agent file" link so you can inspect the full prompt and open the actual file in your default editor/file handler; edit the agents file to change it.
 
 ## Launching Agents
 
-Use the `+` button next to Running or click an Available Agent tile.
+Use the `+` button next to Running or click an Available Agent tile. The Available Agents panel has Project and Built-In tabs; Project agents appear first when present, and duplicate agent names are disambiguated by source.
 
 Launch options include:
 
@@ -186,22 +194,24 @@ Launch options include:
 - Model.
 - Initial prompt.
 - Selected plugins.
-- Remote Control toggle.
+- Remote Control toggle for Claude CLI sessions only.
 
 New agents are selected after launch and focus moves to the chat box. "Launch All" starts every available definition with its default model, default plugins, and app default mode.
 
 ## Modes, Permissions, Thinking, And Effort
 
-The composer includes Claude-style mode controls:
+The composer includes provider-aware mode controls. Claude CLI/API sessions expose Claude-style modes:
 
 - Ask before edits: Claude asks before making edits.
 - Edit automatically: Claude can edit selected text or files with fewer prompts.
 - Plan mode: Claude explores and proposes a plan before editing.
 - Bypass permissions: Claude will not ask before potentially dangerous commands.
 
-The app also exposes:
+The app also exposes provider-specific equivalents where available:
 
-- Thinking toggle.
+- Thinking toggle for Claude.
+- Codex-oriented speed/intelligence style choices when supported by the selected Codex runtime.
+- OpenAI deep-research oriented options when using deep-research models.
 - Effort selector: low, medium, high, xhigh, max.
 
 Changing mode, thinking, or effort updates the running session immediately when Claude supports it. If a change requires a session restart, Agent Control applies it after the active turn.
@@ -221,10 +231,12 @@ This is used for gated write/edit/tool calls in modes that require approval.
 
 - Enter sends the message.
 - The send button becomes Stop while Claude is active.
+- Queued messages can be expanded, edited, deleted, and reordered before they are sent.
 - Long questions, responses, and tool output can collapse/expand.
 - Streaming output auto-scrolls.
 - Last sent message can pin while scrolling; this is enabled by default in Settings.
-- Right-click selected text to copy or send it to another agent. If nothing is selected, the whole message/tool card is used.
+- Right-click selected text to copy or send it to another agent. If nothing is selected, the current message/tool card under the pointer is used; outside a block, the whole chat is used.
+- Long chat blocks include a popout button. The popout supports Markdown view, raw-text view, copy, and send-to-agent, including selected text.
 - Clear Chat clears only the transcript. Close Chat exits the agent and removes the tile.
 - Exit All closes all agents for the current project after confirmation.
 
@@ -254,15 +266,15 @@ Commands known to require the Claude TUI, such as login/config-style commands, a
 
 ## Plugins And MCP
 
-The Plugins modal can:
+Provider plugin support is shown in the relevant Settings tab and in the launch flow. The plugin UI can:
 
 - Show installed, enabled, and available plugins.
 - Browse plugin marketplaces.
-- Add a marketplace by GitHub repo, URL, or local path.
+- Add a marketplace by GitHub repo, URL, or local path where supported.
 - Install plugins.
 - Enable plugins.
 
-Agent definitions can persist selected plugin IDs in their frontmatter. On launch, Agent Control attempts to ensure selected plugins are enabled before starting Claude. Running sessions can also show active plugins, MCP servers, and available tools when Claude reports them.
+Agent definitions can persist selected plugin IDs in their frontmatter. On launch, Agent Control attempts to ensure selected plugins are enabled before starting the session. Claude and Codex plugin catalogs are shown when the local CLI exposes them; OpenAI API sessions do not expose a local plugin catalog. Running sessions can also show active plugins, MCP servers, and available tools when the provider reports them.
 
 ## Remote Control
 
@@ -308,24 +320,34 @@ Git operations run in the selected project's folder.
 The Worktrees button next to the Git menu opens a tabbed worktree view for the selected repository:
 
 - List all worktrees for the repo and switch to any worktree already open as a project.
+- Open and switch to unopened worktrees that are descendants of the current project folder.
 - Create a new worktree from a branch/base ref; created worktrees are added to Agent Control as projects automatically.
+- Use the default sibling worktree folder pattern `<project>-worktrees/<branch>`, with the resolved path shown before creation.
+- Optionally copy local agent files into the worktree when those project agent files are untracked.
 - Merge another worktree's branch into the current project when the current project is clean.
-- Remove non-current worktrees; related agents and terminals are closed if that worktree was open as a project.
+- Remove or close non-current worktree tabs; related agents and terminals are closed if that worktree was open as a project.
 
 ## Settings And Stored Data
 
+Settings use a left navigation and wider right-side content area. Save stays visible, is disabled until something changes, and Cancel discards unsaved edits.
+
 Settings include:
 
-- Models list.
+- General configuration, including project folders, built-in agent directory, config export/import, app paths, and theme.
+- Provider-specific tabs for Claude, Codex, and OpenAI.
+- Provider model lists with "Get Current Models" for the active provider.
+- Claude runtime selection: Claude CLI or Anthropic API.
+- Claude, Codex, Git, and agent directory paths.
+- Built-in agent management.
 - Default mode for new agents.
 - Auto-approve tool use behavior.
 - Tile height and columns.
 - Sidebar width.
 - Show last message pinned.
-- Export/import config.
 
 Stored local files:
 
+- `.agent-control/built-in-agents`: built-in agents shipped with the repo.
 - `~/.agent-dashboard/config.json`: app settings and project paths.
 - `~/.agent-dashboard/secrets.json`: optional locally saved Anthropic/OpenAI API keys. This file is not included in settings export.
 - `~/.agent-dashboard/state.json`: persisted agents and recent transcripts.
@@ -380,6 +402,11 @@ No streaming text:
 
 Plugin appears missing after install:
 
-- Refresh the Plugins modal.
+- Refresh the plugin picker or the provider's Settings tab.
 - Confirm the exact plugin ID, including marketplace suffix, matches the ID in the agent file.
 - Run `claude plugin list --available --json` in a terminal if Claude's plugin catalog looks stale.
+
+Open project folder does nothing:
+
+- Restart Agent Control after updating, because the folder opener lives in the backend server.
+- On Windows, Agent Control opens folders through `explorer.exe`; if Explorer is blocked by policy or another process is intercepting folders, test with `explorer.exe <project path>` from PowerShell.
