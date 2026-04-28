@@ -1230,10 +1230,15 @@ function handleNativeSlashCommand(agent: RunningAgent, text: string) {
   return false;
 }
 
-function slashCommandSuggestions(draft: string, models: string[], sessionCommands: Array<SlashCommandInfo | string> = []): SlashCommandSuggestion[] {
+function slashCommandSuggestions(
+  draft: string,
+  models: string[],
+  sessionCommands: Array<SlashCommandInfo | string> = [],
+  forceOpen = false
+): SlashCommandSuggestion[] {
   const trimmed = draft.trimStart();
-  if (!trimmed.startsWith("/") || trimmed.includes("\n")) return [];
-  const query = trimmed.slice(1).toLowerCase();
+  if (!forceOpen && (!trimmed.startsWith("/") || trimmed.includes("\n"))) return [];
+  const query = forceOpen ? "" : trimmed.slice(1).toLowerCase();
   if (query.startsWith("model ")) {
     const modelQuery = query.slice("model ".length).trim();
     return models
@@ -1247,6 +1252,12 @@ function slashCommandSuggestions(draft: string, models: string[], sessionCommand
       }));
   }
 
+  const modelCommands: SlashCommandSuggestion[] = models.slice(0, 20).map((model) => ({
+    value: `/model ${model}`,
+    label: `/model ${model}`,
+    description: "Switch this agent to this model",
+    source: "builtin"
+  }));
   const commands = [
     ...BASE_SLASH_COMMANDS,
     ...sessionCommands.map((command) => {
@@ -1262,7 +1273,7 @@ function slashCommandSuggestions(draft: string, models: string[], sessionCommand
         disabledReason: normalized.interactive ? "Requires Claude TUI" : undefined
       };
     }),
-    { value: "/model ", label: "/model", description: "Switch this agent to another model", argumentHint: "[model]", source: "builtin" as const }
+    ...(forceOpen ? modelCommands : [{ value: "/model ", label: "/model", description: "Switch this agent to another model", argumentHint: "[model]", source: "builtin" as const }])
   ];
   const seen = new Set<string>();
   return commands
@@ -1291,7 +1302,7 @@ function SlashCommandAutocomplete({
 }) {
   if (suggestions.length === 0) return null;
   return (
-    <div className="max-h-[min(60vh,520px)] overflow-y-auto overflow-x-hidden rounded-md border border-border bg-popover text-popover-foreground shadow-lg">
+    <div className="relative z-[100] max-h-[min(44vh,360px)] overflow-y-auto overflow-x-hidden overscroll-contain rounded-md border border-border bg-popover text-popover-foreground shadow-lg">
       {suggestions.map((suggestion, index) => (
         <button
           key={suggestion.value}
@@ -5074,8 +5085,8 @@ function AgentTile({
   const [contextCopyTarget, setContextCopyTarget] = useState<ContextCopyTarget | undefined>();
   const [composerDropActive, setComposerDropActive] = useState(false);
   const [composerCollapsed, setComposerCollapsed] = useState(false);
+  const [slashMenuOpen, setSlashMenuOpen] = useState(false);
   const [slashMenuSuppressed, setSlashMenuSuppressed] = useState(false);
-  const [slashInsertedByButton, setSlashInsertedByButton] = useState(false);
   const composerDragDepthRef = useRef(0);
   const isBusy = isAgentBusy(agent);
   const canType = !agent.remoteControl && agentHasProcess(agent);
@@ -5086,7 +5097,11 @@ function AgentTile({
     () => slashCommandSuggestions(draft, modelIdsForProvider(settings, agent.provider || "claude"), agent.slashCommands),
     [agent.provider, agent.slashCommands, draft, settings]
   );
-  const slashSuggestions = slashMenuSuppressed ? [] : rawSlashSuggestions;
+  const pickerSlashSuggestions = useMemo(
+    () => slashCommandSuggestions("", modelIdsForProvider(settings, agent.provider || "claude"), agent.slashCommands, true),
+    [agent.provider, agent.slashCommands, settings]
+  );
+  const slashSuggestions = slashMenuOpen ? pickerSlashSuggestions : slashMenuSuppressed ? [] : rawSlashSuggestions;
   const selectedLines = selectedLineCount(selection.selectedText);
   const draftLines = draftLineCount(draft);
   const hasMultilineDraft = draftLines > 1;
@@ -5179,29 +5194,42 @@ function AgentTile({
     window.requestAnimationFrame(() => inputRef.current?.focus());
   }
 
-  function selectSlashCommand(value: string) {
+  function selectTypedSlashCommand(value: string) {
     setDraft(agent.id, value);
+    setSlashMenuOpen(false);
     setSlashMenuSuppressed(false);
-    setSlashInsertedByButton(false);
+    window.requestAnimationFrame(() => inputRef.current?.focus());
+  }
+
+  function runSlashCommand(value: string) {
+    const commandText = value.trim();
+    setSlashMenuOpen(false);
+    setSlashMenuSuppressed(false);
+    setActiveSlashIndex(0);
+    if (!commandText) {
+      window.requestAnimationFrame(() => inputRef.current?.focus());
+      return;
+    }
+    if (handleNativeSlashCommand(agent, commandText)) {
+      window.requestAnimationFrame(() => inputRef.current?.focus());
+      return;
+    }
+    if (!canType || agent.remoteControl) {
+      window.requestAnimationFrame(() => inputRef.current?.focus());
+      return;
+    }
+    if (isBusy) {
+      enqueueMessage(agent.id, { text: commandText, attachments: [] });
+    } else {
+      sendCommand({ type: "userMessage", id: agent.id, text: commandText, attachments: [] });
+    }
     window.requestAnimationFrame(() => inputRef.current?.focus());
   }
 
   function toggleSlashMenu() {
-    if (rawSlashSuggestions.length > 0 && !slashMenuSuppressed) {
-      setSlashMenuSuppressed(true);
-      if (slashInsertedByButton || draft.trim() === "/") {
-        setDraft(agent.id, draft.replace(/^\s*\//, ""));
-        setSlashInsertedByButton(false);
-      }
-    } else {
-      setSlashMenuSuppressed(false);
-      if (draft.trimStart().startsWith("/")) {
-        setSlashInsertedByButton(false);
-      } else {
-        setDraft(agent.id, `/${draft}`);
-        setSlashInsertedByButton(true);
-      }
-    }
+    setSlashMenuOpen((open) => !open);
+    setSlashMenuSuppressed(false);
+    setActiveSlashIndex(0);
     window.requestAnimationFrame(() => inputRef.current?.focus());
   }
 
@@ -5225,20 +5253,34 @@ function AgentTile({
       if (event.key === "Tab") {
         event.preventDefault();
         const selected = enabledSlashSuggestion(slashSuggestions[activeSlashIndex]) || slashSuggestions.find((suggestion) => !suggestion.disabled);
-        if (selected) selectSlashCommand(selected.value);
+        if (selected) {
+          if (slashMenuOpen) runSlashCommand(selected.value);
+          else selectTypedSlashCommand(selected.value);
+        }
         return;
       }
       if (event.key === "Enter" && !event.shiftKey) {
         const selected = enabledSlashSuggestion(slashSuggestions[activeSlashIndex]);
+        if (selected && slashMenuOpen) {
+          event.preventDefault();
+          runSlashCommand(selected.value);
+          return;
+        }
         if (selected && draft.trim() !== selected.value.trim()) {
           event.preventDefault();
-          selectSlashCommand(selected.value);
+          selectTypedSlashCommand(selected.value);
           return;
         }
         if (slashSuggestions[activeSlashIndex]?.disabled) {
           event.preventDefault();
           return;
         }
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setSlashMenuOpen(false);
+        setSlashMenuSuppressed(true);
+        return;
       }
     }
     if (event.key === "Enter" && !event.shiftKey) {
@@ -5529,7 +5571,7 @@ function AgentTile({
                 suggestions={slashSuggestions}
                 activeIndex={activeSlashIndex}
                 compact
-                onSelect={selectSlashCommand}
+                onSelect={slashMenuOpen ? runSlashCommand : selectTypedSlashCommand}
                 onActiveIndexChange={setActiveSlashIndex}
               />
             </div>
@@ -5547,8 +5589,8 @@ function AgentTile({
                 onFocus={() => activateTile(true)}
                 onChange={(event) => {
                   activateTile(true);
+                  setSlashMenuOpen(false);
                   setSlashMenuSuppressed(false);
-                  setSlashInsertedByButton(false);
                   setDraft(agent.id, event.target.value);
                 }}
                 onPaste={handlePaste}
@@ -5854,8 +5896,8 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
   const [composerDropActive, setComposerDropActive] = useState(false);
   const [composerCollapsed, setComposerCollapsed] = useState(false);
   const [activeSlashIndex, setActiveSlashIndex] = useState(0);
+  const [slashMenuOpen, setSlashMenuOpen] = useState(false);
   const [slashMenuSuppressed, setSlashMenuSuppressed] = useState(false);
-  const [slashInsertedByButton, setSlashInsertedByButton] = useState(false);
   const composerDragDepthRef = useRef(0);
   const isBusy = isAgentBusy(agent);
   const canType = agentHasProcess(agent);
@@ -5866,7 +5908,11 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
     () => slashCommandSuggestions(draft, modelIdsForProvider(settings, agent.provider || "claude"), agent.slashCommands),
     [agent.provider, agent.slashCommands, draft, settings]
   );
-  const slashSuggestions = slashMenuSuppressed ? [] : rawSlashSuggestions;
+  const pickerSlashSuggestions = useMemo(
+    () => slashCommandSuggestions("", modelIdsForProvider(settings, agent.provider || "claude"), agent.slashCommands, true),
+    [agent.provider, agent.slashCommands, settings]
+  );
+  const slashSuggestions = slashMenuOpen ? pickerSlashSuggestions : slashMenuSuppressed ? [] : rawSlashSuggestions;
   const selectedLines = selectedLineCount(selection.selectedText);
   const draftLines = draftLineCount(draft);
   const hasMultilineDraft = draftLines > 1;
@@ -5931,29 +5977,42 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
     window.requestAnimationFrame(() => inputRef.current?.focus());
   }
 
-  function selectSlashCommand(value: string) {
+  function selectTypedSlashCommand(value: string) {
     setDraft(agent.id, value);
+    setSlashMenuOpen(false);
     setSlashMenuSuppressed(false);
-    setSlashInsertedByButton(false);
+    window.requestAnimationFrame(() => inputRef.current?.focus());
+  }
+
+  function runSlashCommand(value: string) {
+    const commandText = value.trim();
+    setSlashMenuOpen(false);
+    setSlashMenuSuppressed(false);
+    setActiveSlashIndex(0);
+    if (!commandText) {
+      window.requestAnimationFrame(() => inputRef.current?.focus());
+      return;
+    }
+    if (handleNativeSlashCommand(agent, commandText)) {
+      window.requestAnimationFrame(() => inputRef.current?.focus());
+      return;
+    }
+    if (!canType) {
+      window.requestAnimationFrame(() => inputRef.current?.focus());
+      return;
+    }
+    if (isBusy) {
+      enqueueMessage(agent.id, { text: commandText, attachments: [] });
+    } else {
+      sendCommand({ type: "userMessage", id: agent.id, text: commandText, attachments: [] });
+    }
     window.requestAnimationFrame(() => inputRef.current?.focus());
   }
 
   function toggleSlashMenu() {
-    if (rawSlashSuggestions.length > 0 && !slashMenuSuppressed) {
-      setSlashMenuSuppressed(true);
-      if (slashInsertedByButton || draft.trim() === "/") {
-        setDraft(agent.id, draft.replace(/^\s*\//, ""));
-        setSlashInsertedByButton(false);
-      }
-    } else {
-      setSlashMenuSuppressed(false);
-      if (draft.trimStart().startsWith("/")) {
-        setSlashInsertedByButton(false);
-      } else {
-        setDraft(agent.id, `/${draft}`);
-        setSlashInsertedByButton(true);
-      }
-    }
+    setSlashMenuOpen((open) => !open);
+    setSlashMenuSuppressed(false);
+    setActiveSlashIndex(0);
     window.requestAnimationFrame(() => inputRef.current?.focus());
   }
 
@@ -5977,20 +6036,34 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
       if (event.key === "Tab") {
         event.preventDefault();
         const selected = enabledSlashSuggestion(slashSuggestions[activeSlashIndex]) || slashSuggestions.find((suggestion) => !suggestion.disabled);
-        if (selected) selectSlashCommand(selected.value);
+        if (selected) {
+          if (slashMenuOpen) runSlashCommand(selected.value);
+          else selectTypedSlashCommand(selected.value);
+        }
         return;
       }
       if (event.key === "Enter" && !event.shiftKey) {
         const selected = enabledSlashSuggestion(slashSuggestions[activeSlashIndex]);
+        if (selected && slashMenuOpen) {
+          event.preventDefault();
+          runSlashCommand(selected.value);
+          return;
+        }
         if (selected && draft.trim() !== selected.value.trim()) {
           event.preventDefault();
-          selectSlashCommand(selected.value);
+          selectTypedSlashCommand(selected.value);
           return;
         }
         if (slashSuggestions[activeSlashIndex]?.disabled) {
           event.preventDefault();
           return;
         }
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setSlashMenuOpen(false);
+        setSlashMenuSuppressed(true);
+        return;
       }
     }
     if (event.key === "Enter" && !event.shiftKey) {
@@ -6185,7 +6258,7 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
             <SlashCommandAutocomplete
               suggestions={slashSuggestions}
               activeIndex={activeSlashIndex}
-              onSelect={selectSlashCommand}
+              onSelect={slashMenuOpen ? runSlashCommand : selectTypedSlashCommand}
               onActiveIndexChange={setActiveSlashIndex}
             />
           </div>
@@ -6202,8 +6275,8 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
               value={draft}
               disabled={!canType}
               onChange={(event) => {
+                setSlashMenuOpen(false);
                 setSlashMenuSuppressed(false);
-                setSlashInsertedByButton(false);
                 setDraft(agent.id, event.target.value);
               }}
               onPaste={handlePaste}
