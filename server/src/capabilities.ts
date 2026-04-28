@@ -66,12 +66,13 @@ export function resolveClaudeCommand(): string {
 
 export function resolveCodexCommand(): string {
   const configured = process.env.CODEX_CLI || process.env.AGENTCONTROL_CODEX_PATH;
-  if (configured) return configured;
+  if (configured) return process.platform === "win32" ? resolveWindowsExecutable(configured) : configured;
   if (process.platform !== "win32") return "codex";
   const npmDir = process.env.APPDATA ? path.join(process.env.APPDATA, "npm") : path.join(os.homedir(), "AppData", "Roaming", "npm");
   const cmdShim = path.join(npmDir, "codex.cmd");
   if (existsSync(cmdShim)) return cmdShim;
-  return "codex.cmd";
+  const pathCommand = resolveWindowsExecutable("codex");
+  return pathCommand === "codex" ? "codex" : pathCommand;
 }
 
 export interface CommandInvocation {
