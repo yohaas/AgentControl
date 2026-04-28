@@ -6,6 +6,7 @@ import {
   useCallback,
   type ComponentType,
   type ClipboardEvent as ReactClipboardEvent,
+  type DragEvent as ReactDragEvent,
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
   type UIEvent as ReactUIEvent
@@ -550,6 +551,20 @@ async function uploadFiles(files: File[]) {
       })
     )
   );
+}
+
+function cleanDroppedPath(text: string) {
+  const trimmed = text.trim().replace(/^file:\/+/, "");
+  if (!trimmed || /\r?\n/.test(trimmed)) return "";
+  return trimmed.replace(/^["']|["']$/g, "");
+}
+
+async function attachmentsFromDrop(agent: RunningAgent, dataTransfer: DataTransfer) {
+  const files = Array.from(dataTransfer.files || []);
+  if (files.length > 0) return uploadFiles(files);
+  const pathText = cleanDroppedPath(dataTransfer.getData("text/plain") || dataTransfer.getData("text/uri-list") || "");
+  if (!pathText) return [];
+  return [await api.addProjectContext(agent.projectId, pathText)];
 }
 
 function formatFileSize(size: number) {
@@ -2969,6 +2984,17 @@ function AgentTile({
     }
   }
 
+  async function handleDrop(event: ReactDragEvent<HTMLDivElement>) {
+    if (!canType) return;
+    event.preventDefault();
+    try {
+      const dropped = await attachmentsFromDrop(agent, event.dataTransfer);
+      if (dropped.length > 0) setAttachments((current) => [...current, ...dropped]);
+    } catch (error) {
+      addError(error instanceof Error ? error.message : String(error));
+    }
+  }
+
   function startResize(event: ReactPointerEvent<HTMLDivElement>) {
     event.preventDefault();
     event.stopPropagation();
@@ -3146,7 +3172,13 @@ function AgentTile({
             onSelect={(attachment) => setAttachments((current) => [...current, attachment])}
             onDone={() => window.requestAnimationFrame(() => inputRef.current?.focus())}
           />
-          <div className="rounded-md border border-border bg-background/80 focus-within:ring-1 focus-within:ring-ring">
+          <div
+            className="rounded-md border border-border bg-background/80 focus-within:ring-1 focus-within:ring-ring"
+            onDragOver={(event) => {
+              if (canType) event.preventDefault();
+            }}
+            onDrop={(event) => void handleDrop(event)}
+          >
             <div className="grid gap-2 px-2 pt-2">
               <AttachmentChips
                 attachments={attachments}
@@ -3606,6 +3638,17 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
     }
   }
 
+  async function handleDrop(event: ReactDragEvent<HTMLDivElement>) {
+    if (!canType) return;
+    event.preventDefault();
+    try {
+      const dropped = await attachmentsFromDrop(agent, event.dataTransfer);
+      if (dropped.length > 0) setAttachments((current) => [...current, ...dropped]);
+    } catch (error) {
+      addError(error instanceof Error ? error.message : String(error));
+    }
+  }
+
   return (
     <main className="flex min-w-0 flex-1 flex-col">
       <AgentPanelHeader agent={agent} />
@@ -3673,7 +3716,13 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
           onSelect={(attachment) => setAttachments((current) => [...current, attachment])}
           onDone={() => window.requestAnimationFrame(() => inputRef.current?.focus())}
         />
-        <div className="mx-auto w-full min-w-0 max-w-4xl rounded-md border border-border bg-background/80 focus-within:ring-1 focus-within:ring-ring">
+        <div
+          className="mx-auto w-full min-w-0 max-w-4xl rounded-md border border-border bg-background/80 focus-within:ring-1 focus-within:ring-ring"
+          onDragOver={(event) => {
+            if (canType) event.preventDefault();
+          }}
+          onDrop={(event) => void handleDrop(event)}
+        >
           <div className="grid gap-2 px-2 pt-2">
             <AttachmentChips
               attachments={attachments}
