@@ -302,8 +302,9 @@ export class AgentRuntimeManager {
   clear(id: string): void {
     const state = this.states.get(id);
     if (!state) return;
-    this.stopProcessTree(state);
-    this.states.delete(id);
+    state.transcript = [];
+    state.streamingAssistantId = undefined;
+    state.rawLines = [];
     this.broadcast({ type: "agent.snapshot", snapshot: this.snapshot() });
     this.persist();
   }

@@ -727,12 +727,12 @@ function Sidebar() {
               variant="ghost"
               size="sm"
               onClick={() => {
-                if (window.confirm("Exit and clear all open agents in this project?")) {
+                if (window.confirm("Exit all open agents in this project?")) {
                   sendCommand({ type: "clearAll", projectId: selectedProjectId });
                 }
               }}
             >
-              Clear All
+              Exit All
             </Button>
           )}
         </div>
