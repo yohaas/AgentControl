@@ -356,6 +356,14 @@ export class AgentRuntimeManager {
     const state = this.requiredState(id);
     state.exiting = true;
     this.denyPendingPermissions(state);
+    if (state.agent.remoteControl) {
+      if (state.child && !state.child.killed) {
+        this.stopProcessTree(state);
+      }
+      this.updateRemoteControlState(state, "closed", "Remote Control closed.");
+      this.removeExitedAgent(state);
+      return;
+    }
     if (state.child && !state.child.killed) {
       this.stopProcessTree(state);
     } else {
