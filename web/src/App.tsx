@@ -747,7 +747,7 @@ function Header() {
   }
 
   async function shutdownAgentControl() {
-    if (!window.confirm("Shutdown AgentControl? You will need to start it again from a terminal unless supervised.")) return;
+    if (!window.confirm("Shutdown AgentControl? You will need to start it again from a terminal.")) return;
     try {
       await api.shutdownApp();
     } catch (error) {
