@@ -4116,7 +4116,6 @@ function LaunchDialog() {
   const selectedProjectId = useAppStore((state) => state.selectedProjectId);
   const modal = useAppStore((state) => state.launchModal);
   const settings = useAppStore((state) => state.settings);
-  const capabilities = useAppStore((state) => state.capabilities);
   const agents = useAppStore((state) => state.agents);
   const setProjects = useAppStore((state) => state.setProjects);
   const addError = useAppStore((state) => state.addError);
@@ -4137,7 +4136,6 @@ function LaunchDialog() {
   const [pluginPickerExpanded, setPluginPickerExpanded] = useState(false);
   const [agentFileOpen, setAgentFileOpen] = useState(false);
   const [launching, setLaunching] = useState(false);
-  const [remoteControl, setRemoteControl] = useState(false);
 
   const projectId = selectedProjectId || "";
   const project = projects.find((candidate) => candidate.id === projectId);
@@ -4227,7 +4225,6 @@ function LaunchDialog() {
     setPluginPickerExpanded(false);
     setAgentFileOpen(false);
     setLaunching(false);
-    setRemoteControl(false);
   }, [modal, modelProfiles, projectId, projects, settings.models]);
 
   useEffect(() => {
@@ -4238,7 +4235,6 @@ function LaunchDialog() {
     setPluginIds(def.plugins || []);
     setPluginCatalog({ installed: [], available: [], marketplaces: [] });
     setPluginPickerExpanded(false);
-    if (nextProvider !== "claude") setRemoteControl(false);
   }, [def, modelProfiles, settings.models]);
 
   function selectDef(nextValue: string) {
@@ -4254,7 +4250,6 @@ function LaunchDialog() {
     setPluginCatalog({ installed: [], available: [], marketplaces: [] });
     setPluginPickerExpanded(false);
     setAgentFileOpen(false);
-    if (nextProvider !== "claude") setRemoteControl(false);
   }
 
   async function loadPluginCatalog() {
@@ -4328,7 +4323,7 @@ function LaunchDialog() {
           provider,
           model,
           initialPrompt,
-          remoteControl,
+          remoteControl: false,
           permissionMode: settings.defaultAgentMode,
           autoApprove: settings.autoApprove
         }
@@ -4415,7 +4410,6 @@ function LaunchDialog() {
   }, [pluginCatalog.available, pluginCatalog.installed, pluginPickerExpanded, pluginQuery, selectedPluginRows]);
   const pluginsChanged = !arraysEqual(pluginIds, def?.plugins || []);
   const providerSupportsPlugins = provider === "claude" || provider === "codex";
-  const remoteControlAvailable = provider === "claude" && Boolean(capabilities?.supportsRemoteControl);
 
   return (
     <>
@@ -4483,7 +4477,6 @@ function LaunchDialog() {
                 const nextProvider = value as AgentProvider;
                 setProvider(nextProvider);
                 setModel(defaultModelForProvider(nextProvider));
-                if (nextProvider !== "claude") setRemoteControl(false);
                 setPluginCatalog({ installed: [], available: [], marketplaces: [] });
                 setPluginPickerExpanded(false);
               }}
@@ -4548,25 +4541,6 @@ function LaunchDialog() {
                 ? "Codex sessions run through the configured Codex CLI. Codex plugins are available when the CLI plugin cache is present."
                 : "OpenAI API sessions stream through the Responses API using OPENAI_API_KEY. Local CLI plugins and shell tools are not bridged by default."}
             </div>
-          )}
-          {provider === "claude" && (
-            <label className="flex items-start gap-3 rounded-md border border-border px-3 py-2 text-sm">
-              <input
-                type="checkbox"
-                className="mt-1"
-                checked={remoteControl}
-                disabled={!remoteControlAvailable}
-                onChange={(event) => setRemoteControl(event.target.checked)}
-              />
-              <span className="grid gap-1">
-                <span className="font-medium">Remote Control</span>
-                <span className="text-xs text-muted-foreground">
-                  {remoteControlAvailable
-                    ? "Launch Claude Code Remote Control and show the QR/link diagnostics in AgentControl."
-                    : capabilities?.remoteControlReason || "Remote Control capability has not been detected yet."}
-                </span>
-              </span>
-            </label>
           )}
           {providerSupportsPlugins && <section className="grid gap-2 text-sm">
             <div className="flex items-center justify-between gap-2">
