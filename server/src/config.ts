@@ -17,6 +17,7 @@ export interface DashboardConfig {
   autoApprove?: AutoApproveMode;
   tileHeight?: number;
   tileColumns?: number;
+  pinLastSentMessage?: boolean;
 }
 
 const configDir = path.join(os.homedir(), ".agent-dashboard");
@@ -66,4 +67,8 @@ export function resolveTileHeight(config: DashboardConfig): number {
 
 export function resolveTileColumns(config: DashboardConfig): number {
   return clampNumber(config.tileColumns, 2, 1, 6);
+}
+
+export function resolvePinLastSentMessage(config: DashboardConfig): boolean {
+  return config.pinLastSentMessage !== false;
 }

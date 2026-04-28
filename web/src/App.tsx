@@ -1553,6 +1553,7 @@ function SettingsDialog() {
   const [autoApprove, setAutoApprove] = useState(settings.autoApprove);
   const [tileHeight, setTileHeight] = useState(settings.tileHeight);
   const [tileColumns, setTileColumns] = useState(settings.tileColumns);
+  const [pinLastSentMessage, setPinLastSentMessage] = useState(settings.pinLastSentMessage);
   const [supervised, setSupervised] = useState<boolean | undefined>();
 
   useEffect(() => {
@@ -1562,6 +1563,7 @@ function SettingsDialog() {
     setAutoApprove(settings.autoApprove);
     setTileHeight(settings.tileHeight);
     setTileColumns(settings.tileColumns);
+    setPinLastSentMessage(settings.pinLastSentMessage);
     void refreshAdminStatus();
   }, [open, settings]);
 
@@ -1582,7 +1584,8 @@ function SettingsDialog() {
         models: modelsText.split(/\r?\n/).map((line) => line.trim()).filter(Boolean),
         autoApprove,
         tileHeight,
-        tileColumns
+        tileColumns,
+        pinLastSentMessage
       });
       setSettings(next);
       setProjects(await api.refresh());
@@ -1602,7 +1605,8 @@ function SettingsDialog() {
         models: modelsText.split(/\r?\n/).map((line) => line.trim()).filter(Boolean),
         autoApprove,
         tileHeight,
-        tileColumns
+        tileColumns,
+        pinLastSentMessage
       }
     };
     downloadText("agent-control-config.json", JSON.stringify(payload, null, 2), "application/json");
@@ -1621,6 +1625,7 @@ function SettingsDialog() {
       setAutoApprove(next.autoApprove);
       setTileHeight(next.tileHeight);
       setTileColumns(next.tileColumns);
+      setPinLastSentMessage(next.pinLastSentMessage);
     } catch (error) {
       addError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -1701,6 +1706,20 @@ function SettingsDialog() {
               />
             </label>
           </div>
+          <label className="flex items-start gap-2 rounded-md border border-border p-3 text-sm">
+            <input
+              type="checkbox"
+              className="mt-1"
+              checked={pinLastSentMessage}
+              onChange={(event) => setPinLastSentMessage(event.target.checked)}
+            />
+            <span>
+              <span className="block font-medium">Pin last sent message while scrolling</span>
+              <span className="block text-xs text-muted-foreground">
+                Keep your most recent message visible at the top of a scrolled chat.
+              </span>
+            </span>
+          </label>
           {autoApprove === "always" && (
             <p className="rounded-md border border-amber-400/40 bg-amber-500/10 p-3 text-sm text-amber-100">
               Always passes --dangerously-skip-permissions when launching agents.
@@ -1858,6 +1877,7 @@ function AgentTile({
   const canType = !agent.remoteControl && agentHasProcess(agent);
   const showActivityIndicator = isBusy && !hasStreamingAssistantText(transcript);
   const pinnedMessage = latestUserMessage(transcript);
+  const pinLastSentMessage = settings.pinLastSentMessage;
   const slashSuggestions = useMemo(() => slashCommandSuggestions(draft, settings.models), [draft, settings.models]);
 
   useEffect(() => {
@@ -2057,7 +2077,7 @@ function AgentTile({
             onKeyUp={() => selection.captureSelection()}
             onContextMenuCapture={() => selection.captureSelection()}
           >
-            {pinnedMessage && showPinnedMessage && <PinnedUserMessage event={pinnedMessage} compact />}
+            {pinLastSentMessage && pinnedMessage && showPinnedMessage && <PinnedUserMessage event={pinnedMessage} compact />}
             {agent.statusMessage && (
               <p className="mb-3 rounded-md border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
                 {agent.statusMessage}
@@ -2339,6 +2359,7 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
   const canType = agentHasProcess(agent);
   const showActivityIndicator = isBusy && !hasStreamingAssistantText(transcript);
   const pinnedMessage = latestUserMessage(transcript);
+  const pinLastSentMessage = settings.pinLastSentMessage;
   const slashSuggestions = useMemo(() => slashCommandSuggestions(draft, settings.models), [draft, settings.models]);
 
   useEffect(() => {
@@ -2471,7 +2492,7 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
             onContextMenuCapture={() => selection.captureSelection()}
           >
             <div className="mx-auto grid w-full min-w-0 max-w-4xl gap-3">
-              {pinnedMessage && showPinnedMessage && <PinnedUserMessage event={pinnedMessage} />}
+              {pinLastSentMessage && pinnedMessage && showPinnedMessage && <PinnedUserMessage event={pinnedMessage} />}
               {transcript.length === 0 ? (
                 showActivityIndicator ? (
                   <AgentActivityIndicator agent={agent} />

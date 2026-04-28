@@ -18,6 +18,7 @@ export interface SettingsState {
   autoApprove: AutoApproveMode;
   tileHeight: number;
   tileColumns: number;
+  pinLastSentMessage: boolean;
 }
 
 interface SendDialogState {
@@ -102,7 +103,8 @@ const defaultSettings: SettingsState = {
   models: ["claude-opus-4-7", "claude-opus-4-6", "claude-sonnet-4-6", "claude-haiku-4-5"],
   autoApprove: "off",
   tileHeight: 460,
-  tileColumns: 2
+  tileColumns: 2,
+  pinLastSentMessage: true
 };
 
 function clampNumber(value: unknown, fallback: number, min: number, max: number): number {
