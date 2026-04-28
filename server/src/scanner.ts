@@ -17,7 +17,7 @@ function genericAgentDef(): AgentDef {
   return {
     name: "Generic",
     description: "General-purpose Claude agent",
-    color: "#000000",
+    color: "#ffffff",
     tools: [],
     systemPrompt: ""
   };

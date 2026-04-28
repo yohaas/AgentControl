@@ -59,7 +59,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const GENERIC_AGENT_DEF: AgentDef = {
   name: "Generic",
   description: "General-purpose Claude agent",
-  color: "#000000",
+  color: "#ffffff",
   tools: [],
   systemPrompt: ""
 };
