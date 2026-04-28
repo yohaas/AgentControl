@@ -130,12 +130,12 @@ export const api = {
     }),
   refresh: () => json<Project[]>("/api/refresh", { method: "POST" }),
   capabilities: () => json<Capabilities>("/api/capabilities"),
-  latestModels: () =>
+  latestModels: (provider?: ModelProfile["provider"]) =>
     json<{
       fetchedAt: string;
-      sourceUrls: { openai: string; codex: string };
-      providers: { openai: ModelProfile[]; codex: ModelProfile[] };
-    }>("/api/models/latest"),
+      sourceUrls: Partial<Record<ModelProfile["provider"], string>>;
+      providers: Partial<Record<ModelProfile["provider"], ModelProfile[]>>;
+    }>(`/api/models/latest${provider ? `?provider=${encodeURIComponent(provider)}` : ""}`),
   adminStatus: () => json<{ supervised: boolean; pid: number }>("/api/admin/status"),
   restartApp: () => json<{ ok: boolean }>("/api/admin/restart", { method: "POST" }),
   shutdownApp: () => json<{ ok: boolean }>("/api/admin/shutdown", { method: "POST" }),

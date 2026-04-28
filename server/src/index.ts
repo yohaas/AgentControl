@@ -63,6 +63,8 @@ const supervised = process.env.AGENT_CONTROL_SUPERVISED === "1";
 const ignoredContextDirs = new Set([".git", "node_modules", "dist", "build", ".next", ".turbo", ".cache", "coverage"]);
 const appAuthToken = process.env.AGENTCONTROL_AUTH_TOKEN || nanoid(48);
 const authCookieName = "agent_control_token";
+const anthropicModelsApiUrl = "https://api.anthropic.com/v1/models";
+const anthropicModelsDocUrl = "https://docs.anthropic.com/en/docs/about-claude/models/overview";
 const openAiModelsDocUrl = "https://developers.openai.com/api/docs/models";
 const codexModelsDocUrl = "https://developers.openai.com/codex/models";
 
@@ -137,6 +139,70 @@ function modelProfiles(ids: string[], provider: "codex" | "openai"): ModelProfil
   }));
 }
 
+function claudeModelProfiles(ids: string[]): ModelProfile[] {
+  return ids.map((id, index) => ({
+    id,
+    provider: "claude",
+    default: index === 0,
+    supportsThinking: /\b(opus|sonnet)\b/.test(id),
+    supportedEfforts: ["low", "medium", "high", "xhigh", "max"]
+  }));
+}
+
+function claudeModelRank(id: string): [number, number, number, number] {
+  const date = Number(id.match(/-(\d{8})$/)?.[1] || 0);
+  const family = id.includes("opus") ? 3 : id.includes("sonnet") ? 2 : id.includes("haiku") ? 1 : 0;
+  const versionMatch = id.match(/claude-(?:3(?:-(\d+))?|(\w+)-(\d+)(?:-(\d+))?)/);
+  const major = Number(versionMatch?.[2] || (id.includes("claude-3") ? 3 : 0));
+  const minor = Number(versionMatch?.[4] || versionMatch?.[1] || 0);
+  return [date, major, minor, family];
+}
+
+function sortClaudeModels(ids: string[]): string[] {
+  return [...ids].sort((left, right) => {
+    const [leftDate, leftMajor, leftMinor, leftFamily] = claudeModelRank(left);
+    const [rightDate, rightMajor, rightMinor, rightFamily] = claudeModelRank(right);
+    if (leftDate !== rightDate) return rightDate - leftDate;
+    if (leftMajor !== rightMajor) return rightMajor - leftMajor;
+    if (leftMinor !== rightMinor) return rightMinor - leftMinor;
+    return rightFamily - leftFamily;
+  });
+}
+
+function parsePublishedClaudeModels(html: string): ModelProfile[] {
+  const ids = uniqueModelIds([...html.matchAll(/\bclaude-[a-z0-9-]+(?:-\d{8}|-latest)\b/gi)].map((match) => match[0]));
+  return claudeModelProfiles(sortClaudeModels(ids));
+}
+
+async function fetchAnthropicApiModels(): Promise<ModelProfile[]> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) throw new Error("ANTHROPIC_API_KEY is not set.");
+  const response = await fetch(anthropicModelsApiUrl, {
+    headers: {
+      "User-Agent": "AgentControl model updater",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01"
+    }
+  });
+  if (!response.ok) throw new Error(`${anthropicModelsApiUrl} returned ${response.status}`);
+  const body = (await response.json()) as { data?: Array<{ id?: string; created_at?: string }> };
+  const ids = uniqueModelIds((body.data || []).map((model) => model.id || "").filter(Boolean));
+  return claudeModelProfiles(ids.length ? ids : []);
+}
+
+async function fetchClaudeModels(): Promise<{ sourceUrl: string; models: ModelProfile[] }> {
+  try {
+    const models = await fetchAnthropicApiModels();
+    if (models.length > 0) return { sourceUrl: anthropicModelsApiUrl, models };
+  } catch {
+    // Fall back to the public docs when no Anthropic key is configured or the API is unavailable.
+  }
+  return {
+    sourceUrl: anthropicModelsDocUrl,
+    models: parsePublishedClaudeModels(await fetchText(anthropicModelsDocUrl))
+  };
+}
+
 function parsePublishedOpenAiModels(html: string): ModelProfile[] {
   const ids = uniqueModelIds([...html.matchAll(/\bgpt-\d+(?:\.\d+)?(?:-(?:mini|nano|pro))?\b/gi)].map((match) => match[0]));
   return modelProfiles(sortOpenAiModels(ids), "openai");
@@ -161,17 +227,47 @@ async function fetchText(url: string): Promise<string> {
 }
 
 async function fetchPublishedModels() {
-  const [openAiHtml, codexHtml] = await Promise.all([fetchText(openAiModelsDocUrl), fetchText(codexModelsDocUrl)]);
+  const [claude, openAiHtml, codexHtml] = await Promise.all([
+    fetchClaudeModels(),
+    fetchText(openAiModelsDocUrl),
+    fetchText(codexModelsDocUrl)
+  ]);
   return {
     fetchedAt: new Date().toISOString(),
     sourceUrls: {
+      claude: claude.sourceUrl,
       openai: openAiModelsDocUrl,
       codex: codexModelsDocUrl
     },
     providers: {
+      claude: claude.models,
       openai: parsePublishedOpenAiModels(openAiHtml),
       codex: parsePublishedCodexModels(codexHtml)
     }
+  };
+}
+
+async function fetchPublishedProviderModels(provider: "claude" | "codex" | "openai") {
+  const fetchedAt = new Date().toISOString();
+  if (provider === "claude") {
+    const claude = await fetchClaudeModels();
+    return {
+      fetchedAt,
+      sourceUrls: { claude: claude.sourceUrl },
+      providers: { claude: claude.models }
+    };
+  }
+  if (provider === "codex") {
+    return {
+      fetchedAt,
+      sourceUrls: { codex: codexModelsDocUrl },
+      providers: { codex: parsePublishedCodexModels(await fetchText(codexModelsDocUrl)) }
+    };
+  }
+  return {
+    fetchedAt,
+    sourceUrls: { openai: openAiModelsDocUrl },
+    providers: { openai: parsePublishedOpenAiModels(await fetchText(openAiModelsDocUrl)) }
   };
 }
 
@@ -1097,8 +1193,13 @@ app.get("/api/capabilities", (_request, response) => {
   response.json(capabilities);
 });
 
-app.get("/api/models/latest", async (_request, response) => {
+app.get("/api/models/latest", async (request, response) => {
   try {
+    const provider = typeof request.query.provider === "string" ? request.query.provider : "";
+    if (provider === "claude" || provider === "codex" || provider === "openai") {
+      response.json(await fetchPublishedProviderModels(provider));
+      return;
+    }
     response.json(await fetchPublishedModels());
   } catch (error) {
     response.status(502).json({ error: error instanceof Error ? error.message : String(error) });

@@ -1513,12 +1513,11 @@ function ProviderModelsField({
 }) {
   return (
     <label className="grid gap-1.5 text-sm">
-      <span>
-        <span className="block">{label}</span>
-        <span className="block text-xs text-muted-foreground">One model id per line. The first model is the provider default.</span>
-      </span>
-      <span className="flex items-start gap-2">
-        <Textarea className="min-h-32 flex-1" value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} />
+      <span className="flex items-start justify-between gap-3">
+        <span>
+          <span className="block">{label}</span>
+          <span className="block text-xs text-muted-foreground">One model id per line. The first model is the provider default.</span>
+        </span>
         {onGetCurrentModels && (
           <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={onGetCurrentModels} disabled={gettingCurrentModels}>
             <RefreshCw className={cn("h-4 w-4", gettingCurrentModels && "animate-spin")} />
@@ -1526,6 +1525,7 @@ function ProviderModelsField({
           </Button>
         )}
       </span>
+      <Textarea className="min-h-48 w-full resize-y" value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} />
       {updateNote && <span className="text-xs text-muted-foreground">{updateNote}</span>}
     </label>
   );
@@ -4173,18 +4173,14 @@ function SettingsDialog() {
     setModelUpdateNote("");
     setModelUpdateNoteProvider(undefined);
     try {
-      if (provider === "claude") {
-        setClaudeModelsText(currentModelText("claude"));
-        setModelUpdateNote("Updated Claude models from AgentControl's current defaults. Save settings to keep this list.");
-        setModelUpdateNoteProvider(provider);
-        return;
-      }
-      const latest = await api.latestModels();
-      const profiles = latest.providers[provider];
+      const latest = await api.latestModels(provider);
+      const profiles = latest.providers[provider] || [];
       const nextText = profiles.length > 0 ? profiles.map((profile) => profile.id).join("\n") : currentModelText(provider);
-      if (provider === "codex") setCodexModelsText(nextText);
+      if (provider === "claude") setClaudeModelsText(nextText);
+      else if (provider === "codex") setCodexModelsText(nextText);
       else setOpenaiModelsText(nextText);
-      setModelUpdateNote(`Updated ${providerLabel(provider)} models from OpenAI docs at ${new Date(latest.fetchedAt).toLocaleString()}. Save settings to keep this list.`);
+      const source = provider === "claude" ? "Anthropic" : "OpenAI docs";
+      setModelUpdateNote(`Updated ${providerLabel(provider)} models from ${source} at ${new Date(latest.fetchedAt).toLocaleString()}. Save settings to keep this list.`);
       setModelUpdateNoteProvider(provider);
     } catch (error) {
       addError(error instanceof Error ? error.message : String(error));
