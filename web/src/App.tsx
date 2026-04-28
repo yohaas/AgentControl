@@ -1448,7 +1448,11 @@ function SlashCommandAutocomplete({
           </span>
           <span className="min-w-0 flex-1 truncate text-muted-foreground">{suggestion.description}</span>
           {suggestion.source && <Badge className="shrink-0 text-[10px] uppercase">{suggestion.source}</Badge>}
-          {suggestion.disabled && <Badge className="shrink-0 border-amber-400/40 text-[10px] uppercase text-amber-200">Requires TUI</Badge>}
+          {suggestion.disabled && (
+            <Badge className="shrink-0 border-amber-500/50 bg-amber-500/10 text-[10px] uppercase text-amber-800 dark:border-amber-400/40 dark:text-amber-200">
+              Requires TUI
+            </Badge>
+          )}
         </button>
       ))}
     </div>
