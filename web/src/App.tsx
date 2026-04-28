@@ -5295,7 +5295,8 @@ function AgentTile({
                 ref={inputRef}
                 className={cn(
                   "min-h-9 resize-none border-0 bg-transparent py-2 text-sm leading-5 focus-visible:ring-0",
-                  hasMultilineDraft && "pr-10",
+                  composerExpanded && "pr-6",
+                  hasMultilineDraft && "pr-12",
                   composerExpanded ? "h-24 max-h-40 overflow-y-auto" : "h-9 overflow-hidden"
                 )}
                 value={draft}
@@ -5949,7 +5950,8 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
               ref={inputRef}
               className={cn(
                 "min-h-[76px] resize-none border-0 bg-transparent py-2 leading-5 focus-visible:ring-0",
-                hasMultilineDraft && "pr-10",
+                composerExpanded && "pr-6",
+                hasMultilineDraft && "pr-12",
                 composerExpanded ? "h-28 max-h-48 overflow-y-auto" : "h-[76px] overflow-hidden"
               )}
               rows={3}
