@@ -25,6 +25,8 @@ export interface AgentDef {
   tools: string[];
   plugins?: string[];
   systemPrompt: string;
+  sourcePath?: string;
+  sourceContent?: string;
 }
 
 export interface Project {

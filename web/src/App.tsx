@@ -2403,6 +2403,7 @@ function ComposerModeMenu({
 
 function LaunchDialog() {
   const projects = useAppStore((state) => state.projects);
+  const selectedProjectId = useAppStore((state) => state.selectedProjectId);
   const modal = useAppStore((state) => state.launchModal);
   const settings = useAppStore((state) => state.settings);
   const capabilities = useAppStore((state) => state.capabilities);
@@ -2410,14 +2411,15 @@ function LaunchDialog() {
   const setProjects = useAppStore((state) => state.setProjects);
   const addError = useAppStore((state) => state.addError);
   const closeLaunchModal = useAppStore((state) => state.closeLaunchModal);
-  const [projectId, setProjectId] = useState("");
   const [defName, setDefName] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [model, setModel] = useState(DEFAULT_MODEL);
   const [initialPrompt, setInitialPrompt] = useState("");
   const [remoteControl, setRemoteControl] = useState(false);
   const [pluginText, setPluginText] = useState("");
+  const [agentFileOpen, setAgentFileOpen] = useState(false);
 
+  const projectId = selectedProjectId || "";
   const project = projects.find((candidate) => candidate.id === projectId);
   const agentOptions = useMemo(() => agentDefsWithGeneric(project), [project]);
   const def = agentOptions.find((candidate) => candidate.name === defName);
@@ -2435,19 +2437,18 @@ function LaunchDialog() {
 
   useEffect(() => {
     if (!modal.open) return;
-    const nextProjectId = modal.projectId || useAppStore.getState().selectedProjectId || projects[0]?.id || "";
-    const nextProject = projects.find((candidate) => candidate.id === nextProjectId);
+    const nextProject = projects.find((candidate) => candidate.id === projectId);
     const nextAgentOptions = agentDefsWithGeneric(nextProject);
     const nextDefName = modal.defName || nextAgentOptions[0]?.name || "";
     const nextDef = nextAgentOptions.find((candidate) => candidate.name === nextDefName);
-    setProjectId(nextProjectId);
     setDefName(nextDefName);
     setDisplayName("");
     setModel(nextDef?.defaultModel || settings.models[0] || DEFAULT_MODEL);
     setInitialPrompt(modal.initialPrompt || "");
     setRemoteControl(false);
     setPluginText((nextDef?.plugins || []).join("\n"));
-  }, [modal, projects, settings.models]);
+    setAgentFileOpen(false);
+  }, [modal, projectId, projects, settings.models]);
 
   useEffect(() => {
     if (!def) return;
@@ -2455,20 +2456,11 @@ function LaunchDialog() {
     setPluginText((def.plugins || []).join("\n"));
   }, [def, settings.models]);
 
-  function selectProject(nextProjectId: string) {
-    const nextProject = projects.find((candidate) => candidate.id === nextProjectId);
-    const nextAgentOptions = agentDefsWithGeneric(nextProject);
-    const nextDefName = nextAgentOptions[0]?.name || "";
-    const nextDef = nextAgentOptions.find((candidate) => candidate.name === nextDefName);
-    setProjectId(nextProjectId);
-    setDefName(nextDefName);
-    setModel(nextDef?.defaultModel || settings.models[0] || DEFAULT_MODEL);
-  }
-
   function selectDef(nextDefName: string) {
     const nextDef = agentOptions.find((candidate) => candidate.name === nextDefName);
     setDefName(nextDefName);
     setModel(nextDef?.defaultModel || settings.models[0] || DEFAULT_MODEL);
+    setAgentFileOpen(false);
   }
 
   function launch() {
@@ -2505,27 +2497,17 @@ function LaunchDialog() {
   const rcDisabled = !capabilities?.supportsRemoteControl;
 
   return (
-    <Dialog open={modal.open} onOpenChange={(open) => !open && closeLaunchModal()}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Launch Agent</DialogTitle>
-        </DialogHeader>
-        <div className="grid gap-3">
-          <label className="grid gap-1.5 text-sm">
-            Project
-            <Select value={projectId} onValueChange={selectProject}>
-              <SelectTrigger>
-                <SelectValue placeholder="Project" />
-              </SelectTrigger>
-              <SelectContent>
-                {projects.map((item) => (
-                  <SelectItem key={item.id} value={item.id}>
-                    {item.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </label>
+    <>
+      <Dialog open={modal.open} onOpenChange={(open) => !open && closeLaunchModal()}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Launch Agent</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-3">
+            <div className="flex min-w-0 items-center justify-between gap-3 rounded-md border border-border px-3 py-2 text-sm">
+              <span className="text-muted-foreground">Project</span>
+              <span className="truncate font-medium">{project?.name || "No project selected"}</span>
+            </div>
           <label className="grid gap-1.5 text-sm">
             Agent type
             <Select value={defName} onValueChange={selectDef}>
@@ -2610,6 +2592,14 @@ function LaunchDialog() {
             <span className="flex items-baseline gap-2">
               <span>Agent file prompt</span>
               <span className="text-xs text-muted-foreground">Edit the agent file to change this.</span>
+              <button
+                type="button"
+                className="ml-auto text-xs text-primary hover:underline disabled:text-muted-foreground disabled:no-underline"
+                disabled={!def?.sourceContent && !def?.systemPrompt}
+                onClick={() => setAgentFileOpen(true)}
+              >
+                View agent file
+              </button>
             </span>
             <Textarea
               value={def?.systemPrompt || ""}
@@ -2647,9 +2637,28 @@ function LaunchDialog() {
             <Plus className="h-4 w-4" />
             Launch
           </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
+          </div>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={agentFileOpen} onOpenChange={setAgentFileOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{def?.name || "Agent"} file</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-2">
+            <div className="truncate text-xs text-muted-foreground" title={def?.sourcePath}>
+              {def?.sourcePath || "Generic agent definition"}
+            </div>
+            <Textarea
+              readOnly
+              value={def?.sourceContent || def?.systemPrompt || ""}
+              className="max-h-[60vh] min-h-80 resize-y overflow-y-auto font-mono text-xs leading-5"
+              placeholder="No agent file content"
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 

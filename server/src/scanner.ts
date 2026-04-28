@@ -62,7 +62,9 @@ async function parseAgentFile(filePath: string): Promise<AgentDef | null> {
     defaultModel: modelValue(data),
     tools: toolsValue(data.tools),
     plugins: toolsValue(data.plugins),
-    systemPrompt: parsed.content.trim()
+    systemPrompt: parsed.content.trim(),
+    sourcePath: filePath,
+    sourceContent: raw
   };
 }
 
