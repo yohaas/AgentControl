@@ -29,6 +29,19 @@ export interface Project {
   agents: AgentDef[];
 }
 
+export interface DirectoryEntry {
+  name: string;
+  path: string;
+}
+
+export interface DirectoryListing {
+  path: string;
+  parentPath?: string;
+  homePath: string;
+  roots: DirectoryEntry[];
+  entries: DirectoryEntry[];
+}
+
 export interface RunningAgent {
   id: string;
   projectId: string;

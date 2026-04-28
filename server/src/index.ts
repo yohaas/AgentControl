@@ -1,5 +1,5 @@
 import http from "node:http";
-import { mkdir, writeFile } from "node:fs/promises";
+import { access, mkdir, readdir, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -8,7 +8,7 @@ import express from "express";
 import { nanoid } from "nanoid";
 import { WebSocketServer, type WebSocket } from "ws";
 import type { DashboardConfig } from "./config.js";
-import type { Capabilities, MessageAttachment, Project, WsClientCommand, WsServerEvent } from "@agent-control/shared";
+import type { Capabilities, DirectoryEntry, MessageAttachment, Project, WsClientCommand, WsServerEvent } from "@agent-control/shared";
 import { detectCapabilities } from "./capabilities.js";
 import { readConfig, resolveModels, resolveProjectsRoot, resolveTileColumns, resolveTileHeight, writeConfig } from "./config.js";
 import { enablePlugin, listPlugins } from "./plugins.js";
@@ -35,6 +35,23 @@ function send(ws: WebSocket, event: WsServerEvent): void {
 
 function broadcast(event: WsServerEvent): void {
   for (const client of clients) send(client, event);
+}
+
+async function filesystemRoots(): Promise<DirectoryEntry[]> {
+  if (process.platform !== "win32") return [{ name: "/", path: "/" }];
+  const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+  const roots = await Promise.all(
+    letters.map(async (letter) => {
+      const root = `${letter}:\\`;
+      try {
+        await access(root);
+        return { name: root, path: root };
+      } catch {
+        return undefined;
+      }
+    })
+  );
+  return roots.filter((root): root is DirectoryEntry => Boolean(root));
 }
 
 const runtime = new AgentRuntimeManager(
@@ -87,6 +104,39 @@ app.post("/api/projects", async (request, response) => {
   config = await writeConfig({ ...config, projectPaths });
   projects = await scanConfiguredProjects(projectPaths);
   response.json(projects);
+});
+
+app.get("/api/filesystem/directories", async (request, response) => {
+  const requestedPath = typeof request.query.path === "string" && request.query.path.trim() ? request.query.path.trim() : os.homedir();
+  const directoryPath = path.resolve(requestedPath);
+
+  try {
+    const info = await stat(directoryPath);
+    if (!info.isDirectory()) {
+      response.status(400).json({ error: "Selected path is not a directory." });
+      return;
+    }
+
+    const entries = await readdir(directoryPath, { withFileTypes: true });
+    const directories = entries
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => ({
+        name: entry.name,
+        path: path.join(directoryPath, entry.name)
+      }))
+      .sort((left, right) => left.name.localeCompare(right.name, undefined, { sensitivity: "base" }));
+    const parentPath = path.dirname(directoryPath);
+
+    response.json({
+      path: directoryPath,
+      parentPath: parentPath !== directoryPath ? parentPath : undefined,
+      homePath: os.homedir(),
+      roots: await filesystemRoots(),
+      entries: directories
+    });
+  } catch (error) {
+    response.status(500).json({ error: error instanceof Error ? error.message : String(error) });
+  }
 });
 
 app.use("/api/attachments", express.static(attachmentsDir));

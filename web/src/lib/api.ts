@@ -1,4 +1,4 @@
-import type { Capabilities, ClaudePlugin, MessageAttachment, Project } from "@agent-control/shared";
+import type { Capabilities, ClaudePlugin, DirectoryListing, MessageAttachment, Project } from "@agent-control/shared";
 import type { SettingsState } from "../store/app-store";
 
 async function json<T>(input: RequestInfo, init?: RequestInit): Promise<T> {
@@ -15,6 +15,8 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ path })
     }),
+  directories: (path?: string) =>
+    json<DirectoryListing>(`/api/filesystem/directories${path ? `?path=${encodeURIComponent(path)}` : ""}`),
   refresh: () => json<Project[]>("/api/refresh", { method: "POST" }),
   capabilities: () => json<Capabilities>("/api/capabilities"),
   settings: () => json<SettingsState>("/api/settings"),

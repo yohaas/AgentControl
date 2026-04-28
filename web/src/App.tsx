@@ -8,8 +8,11 @@ import {
   ChevronDown,
   Clipboard,
   ExternalLink,
+  FolderOpen,
   FolderPlus,
   GripVertical,
+  HardDrive,
+  Home,
   Image as ImageIcon,
   Maximize2,
   Minimize2,
@@ -26,7 +29,16 @@ import {
   Trash2,
   X
 } from "lucide-react";
-import type { AgentDef, ClaudePlugin, MessageAttachment, RunningAgent, TerminalSession, TranscriptEvent } from "@agent-control/shared";
+import type {
+  AgentDef,
+  ClaudePlugin,
+  DirectoryEntry,
+  DirectoryListing,
+  MessageAttachment,
+  RunningAgent,
+  TerminalSession,
+  TranscriptEvent
+} from "@agent-control/shared";
 import { Badge } from "./components/ui/badge";
 import { Button } from "./components/ui/button";
 import {
@@ -353,6 +365,7 @@ function AddProjectDialog() {
   const setSelectedProject = useAppStore((state) => state.setSelectedProject);
   const addError = useAppStore((state) => state.addError);
   const [open, setOpen] = useState(false);
+  const [browserOpen, setBrowserOpen] = useState(false);
   const [path, setPath] = useState("");
 
   async function addProject() {
@@ -386,20 +399,132 @@ function AddProjectDialog() {
           </p>
           <label className="grid gap-1.5 text-sm">
             Project path
-            <Input
-              autoFocus
-              value={path}
-              onChange={(event) => setPath(event.target.value)}
-              placeholder=""
-              onKeyDown={(event) => {
-                if (event.key === "Enter") void addProject();
-              }}
-            />
+            <div className="flex gap-2">
+              <Input
+                autoFocus
+                value={path}
+                onChange={(event) => setPath(event.target.value)}
+                placeholder=""
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") void addProject();
+                }}
+              />
+              <Button type="button" variant="outline" onClick={() => setBrowserOpen(true)}>
+                <FolderOpen className="h-4 w-4" />
+                Browse
+              </Button>
+            </div>
           </label>
           <Button onClick={addProject} disabled={!path.trim()}>
             <FolderPlus className="h-4 w-4" />
             Add
           </Button>
+        </div>
+      </DialogContent>
+      <FolderBrowserDialog
+        open={browserOpen}
+        initialPath={path}
+        onOpenChange={setBrowserOpen}
+        onSelect={(selectedPath) => {
+          setPath(selectedPath);
+          setBrowserOpen(false);
+        }}
+      />
+    </Dialog>
+  );
+}
+
+function FolderBrowserDialog({
+  open,
+  initialPath,
+  onOpenChange,
+  onSelect
+}: {
+  open: boolean;
+  initialPath: string;
+  onOpenChange: (open: boolean) => void;
+  onSelect: (path: string) => void;
+}) {
+  const addError = useAppStore((state) => state.addError);
+  const [listing, setListing] = useState<DirectoryListing | undefined>();
+  const [loading, setLoading] = useState(false);
+
+  async function load(path?: string) {
+    setLoading(true);
+    try {
+      setListing(await api.directories(path));
+    } catch (error) {
+      addError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!open) return;
+    void load(initialPath.trim() || undefined);
+  }, [open, initialPath]);
+
+  function DirectoryButton({ entry, root = false }: { entry: DirectoryEntry; root?: boolean }) {
+    return (
+      <button
+        className="flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-2 text-left hover:bg-accent"
+        onClick={() => void load(entry.path)}
+        title={entry.path}
+      >
+        {root ? <HardDrive className="h-4 w-4 text-muted-foreground" /> : <FolderOpen className="h-4 w-4 text-muted-foreground" />}
+        <span className="truncate text-sm">{entry.name}</span>
+      </button>
+    );
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Select Folder</DialogTitle>
+        </DialogHeader>
+        <div className="grid gap-3">
+          <div className="rounded-md border border-border bg-background px-3 py-2 font-mono text-xs [overflow-wrap:anywhere]">
+            {listing?.path || "Loading..."}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" disabled={!listing || loading} onClick={() => listing && onSelect(listing.path)}>
+              <Check className="h-4 w-4" />
+              Select
+            </Button>
+            <Button variant="outline" size="sm" disabled={!listing?.parentPath || loading} onClick={() => void load(listing?.parentPath)}>
+              Up
+            </Button>
+            <Button variant="outline" size="sm" disabled={!listing || loading} onClick={() => void load(listing?.homePath)}>
+              <Home className="h-4 w-4" />
+              Home
+            </Button>
+          </div>
+          <div className="grid max-h-[52vh] gap-3 overflow-auto rounded-md border border-border p-2">
+            {loading ? (
+              <p className="px-2 py-8 text-center text-sm text-muted-foreground">Loading folders...</p>
+            ) : !listing ? (
+              <p className="px-2 py-8 text-center text-sm text-muted-foreground">No folder loaded.</p>
+            ) : (
+              <>
+                {listing.roots.length > 1 && (
+                  <div className="grid gap-1 border-b border-border pb-2">
+                    {listing.roots.map((root) => (
+                      <DirectoryButton key={root.path} entry={root} root />
+                    ))}
+                  </div>
+                )}
+                <div className="grid gap-1">
+                  {listing.entries.length === 0 ? (
+                    <p className="px-2 py-8 text-center text-sm text-muted-foreground">No subfolders.</p>
+                  ) : (
+                    listing.entries.map((entry) => <DirectoryButton key={entry.path} entry={entry} />)
+                  )}
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </DialogContent>
     </Dialog>
