@@ -14,7 +14,7 @@ export type AuthMethod = "claude.ai" | "api-key" | "unknown";
 
 export type AutoApproveMode = "off" | "session" | "always";
 export type AgentPermissionMode = "default" | "acceptEdits" | "plan" | "bypassPermissions";
-export type AgentEffort = "low" | "medium" | "high" | "max";
+export type AgentEffort = "low" | "medium" | "high" | "xhigh" | "max";
 
 export interface AgentDef {
   name: string;

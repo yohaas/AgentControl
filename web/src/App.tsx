@@ -4,6 +4,7 @@ import {
   useRef,
   useState,
   useCallback,
+  type ComponentType,
   type ClipboardEvent as ReactClipboardEvent,
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
@@ -26,7 +27,6 @@ import {
   ExternalLink,
   FolderOpen,
   FolderPlus,
-  GitCompare,
   GripVertical,
   HardDrive,
   Hand,
@@ -1484,6 +1484,18 @@ function ModelMenu({ agent, compact = false }: { agent: RunningAgent; compact?: 
   );
 }
 
+function NodesIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="6" cy="7" r="2.5" />
+      <circle cx="18" cy="7" r="2.5" />
+      <circle cx="6" cy="17" r="2.5" />
+      <path d="M8.5 7h7" />
+      <path d="m8.1 15.5 7.8-7" />
+    </svg>
+  );
+}
+
 const COMPOSER_MODE_OPTIONS = [
   {
     mode: "default",
@@ -1511,20 +1523,21 @@ const COMPOSER_MODE_OPTIONS = [
     label: "Bypass permissions",
     compactLabel: "Bypass",
     description: "Claude will not ask for approval before running potentially dangerous commands.",
-    icon: GitCompare
+    icon: NodesIcon
   }
 ] satisfies {
   mode: AgentPermissionMode;
   label: string;
   compactLabel: string;
   description: string;
-  icon: typeof Hand;
+  icon: ComponentType<{ className?: string }>;
 }[];
 
 const EFFORT_OPTIONS = [
   { effort: "low", label: "Low" },
   { effort: "medium", label: "Medium" },
   { effort: "high", label: "High" },
+  { effort: "xhigh", label: "XHigh" },
   { effort: "max", label: "Max" }
 ] satisfies { effort: AgentEffort; label: string }[];
 
