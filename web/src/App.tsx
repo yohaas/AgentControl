@@ -1366,17 +1366,27 @@ function Sidebar() {
         <div className="h-px w-8 bg-border" />
         <div className="flex min-h-0 flex-1 flex-col items-center gap-2 overflow-auto">
           {running.map((agent) => (
-            <button
-              key={agent.id}
-              className={cn(
-                "grid h-9 w-9 place-items-center rounded-md hover:bg-accent",
-                activeAgentId === agent.id && "bg-accent"
-              )}
-              onClick={() => focusRunningAgent(agent.id)}
-              title={`${agent.displayName}\n${fullLastActivity(agent.updatedAt || agent.launchedAt)}`}
-            >
-              <AgentDot color={agent.color} />
-            </button>
+            <div key={agent.id} className="relative h-9 w-9">
+              <button
+                className={cn(
+                  "grid h-9 w-9 place-items-center rounded-md hover:bg-accent",
+                  activeAgentId === agent.id && "bg-accent"
+                )}
+                onClick={() => focusRunningAgent(agent.id)}
+                title={`${agent.displayName}\n${fullLastActivity(agent.updatedAt || agent.launchedAt)}`}
+              >
+                <AgentDot color={agent.color} />
+              </button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="absolute -right-1 -top-1 h-4 w-4 rounded-full bg-background/90 p-0 text-muted-foreground shadow-sm hover:text-foreground"
+                title={`Close ${agent.displayName}`}
+                onClick={() => sendCommand({ type: "kill", id: agent.id })}
+              >
+                <X className="h-3 w-3" />
+              </Button>
+            </div>
           ))}
         </div>
       </aside>
