@@ -275,14 +275,16 @@ export async function scanSlashCommands(
   selectedPluginNames: string[] = [],
   provider: AgentProvider = "claude"
 ): Promise<SlashCommandInfo[]> {
-  const projectClaude = path.join(projectPath, ".claude");
-  const userClaude = path.join(expandHome("~"), ".claude");
+  if (provider === "openai") return [];
+  const providerDir = provider === "codex" ? ".codex" : ".claude";
+  const projectRoot = path.join(projectPath, providerDir);
+  const userRoot = path.join(expandHome("~"), providerDir);
   return mergeSlashCommands(
-    BUILTIN_COMMANDS,
-    await scanCommandsDir(path.join(projectClaude, "commands"), "project"),
-    await scanSkillsDir(path.join(projectClaude, "skills"), "project"),
-    await scanCommandsDir(path.join(userClaude, "commands"), "user"),
-    await scanSkillsDir(path.join(userClaude, "skills"), "user"),
+    provider === "claude" ? BUILTIN_COMMANDS : [],
+    await scanCommandsDir(path.join(projectRoot, "commands"), "project"),
+    await scanSkillsDir(path.join(projectRoot, "skills"), "project"),
+    await scanCommandsDir(path.join(userRoot, "commands"), "user"),
+    await scanSkillsDir(path.join(userRoot, "skills"), "user"),
     await scanPluginCommands(enabledPlugins, selectedPluginNames, provider)
   );
 }

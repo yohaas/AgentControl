@@ -230,6 +230,14 @@ function enabledSlashSuggestion(suggestion?: SlashCommandSuggestion): SlashComma
   return suggestion && !suggestion.disabled ? suggestion : undefined;
 }
 
+function slashCommandMatchesProvider(command: SlashCommandInfo, provider: AgentProvider) {
+  if (provider === "claude") return true;
+  if (provider === "openai") return false;
+  if (command.source === "session") return true;
+  const sourcePath = command.sourcePath?.replace(/\\/g, "/").toLowerCase();
+  return Boolean(sourcePath?.includes("/.codex/") || sourcePath?.includes("/.codex-plugin/"));
+}
+
 const TERMINAL_DOCK_OPTIONS = [
   { value: "float", label: "Float", icon: PictureInPicture2 },
   { value: "left", label: "Dock left", icon: PanelLeft },
@@ -1332,19 +1340,19 @@ function slashCommandSuggestions(
     description: "Switch this agent to this model",
     source: "builtin"
   }));
+  const providerSessionCommands = sessionCommands.map(normalizeUiSlashCommand).filter((command) => slashCommandMatchesProvider(command, provider));
   const commands = [
     ...baseSlashCommandsForProvider(provider),
-    ...sessionCommands.map((command) => {
-      const normalized = normalizeUiSlashCommand(command);
+    ...providerSessionCommands.map((normalized) => {
       return {
         value: slashCommandInsertValue(normalized),
         label: normalized.command,
-        description: normalized.description || "Pass through to Claude",
+        description: normalized.description || `Pass through to ${providerLabel(provider)}`,
         argumentHint: normalized.argumentHint,
         source: normalized.source,
         interactive: normalized.interactive,
         disabled: normalized.interactive,
-        disabledReason: normalized.interactive ? "Requires Claude TUI" : undefined
+        disabledReason: normalized.interactive ? `Requires ${providerLabel(provider)} TUI` : undefined
       };
     }),
     ...(forceOpen ? modelCommands : [{ value: "/model ", label: "/model", description: "Switch this agent to another model", argumentHint: "[model]", source: "builtin" as const }])
