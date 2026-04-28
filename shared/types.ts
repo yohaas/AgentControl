@@ -460,6 +460,10 @@ export type WsClientCommand =
       thinking: boolean;
     }
   | {
+      type: "nativeStatus";
+      id: string;
+    }
+  | {
       type: "enablePlugin";
       plugin: string;
     }

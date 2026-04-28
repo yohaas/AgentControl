@@ -40,7 +40,7 @@ const BUILTIN_COMMANDS: SlashCommandInfo[] = [
   { command: "/resume", description: "Resume a previous conversation", source: "builtin", interactive: true },
   { command: "/review", description: "Review code changes", source: "builtin" },
   { command: "/simplify", description: "Simplify code or explanations", source: "builtin" },
-  { command: "/status", description: "Show account and system status", source: "builtin" },
+  { command: "/status", description: "Show AgentControl session status", source: "agentcontrol" },
   { command: "/stop", description: "Stop the active response", source: "agentcontrol" },
   { command: "/terminal-setup", description: "Install terminal integration", source: "builtin", interactive: true },
   { command: "/upgrade", description: "Upgrade Claude Code", source: "builtin", interactive: true },

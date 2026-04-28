@@ -465,6 +465,31 @@ export class AgentRuntimeManager {
     this.persist();
   }
 
+  nativeStatus(id: string): void {
+    const state = this.requiredState(id);
+    const agent = state.agent;
+    const lines = [
+      `Status: ${this.statusLabel(agent.status)}`,
+      `Model: ${agent.currentModel}`,
+      `Mode: ${this.permissionModeLabel(this.permissionMode(state))}`,
+      `Effort: ${agent.effort || "medium"}`,
+      `Thinking: ${agent.thinking === false ? "off" : "on"}`,
+      `Project: ${agent.projectName}`,
+      `Session: ${agent.sessionId || "not started yet"}`,
+      `Process: ${agent.pid ? `pid ${agent.pid}` : "not running"}`,
+      `Tools: ${(agent.sessionTools || []).length}`,
+      `MCP servers: ${(agent.mcpServers || []).length}`,
+      `Slash commands: ${(agent.slashCommands || []).length}`,
+      `Active plugins: ${(agent.activePlugins || []).length ? (agent.activePlugins || []).join(", ") : "none"}`,
+      `Last activity: ${agent.updatedAt}`
+    ];
+    this.pushTranscript(state, {
+      ...eventBase(agent.id, agent.currentModel),
+      kind: "system",
+      text: lines.join("\n")
+    });
+  }
+
   sendTo(command: SendToCommand): void {
     if (command.target.kind !== "existing") return;
 
@@ -850,6 +875,13 @@ export class AgentRuntimeManager {
     if (permissionMode === "plan") return "Plan mode";
     if (permissionMode === "bypassPermissions") return "Bypass permissions";
     return "Ask before edits";
+  }
+
+  private statusLabel(status: AgentStatus): string {
+    if (status === "awaiting-permission") return "Awaiting permission";
+    if (status === "remote-controlled") return "Remote controlled";
+    if (status === "switching-model") return "Switching model";
+    return status.charAt(0).toUpperCase() + status.slice(1);
   }
 
   private writePermissionMcpConfig(state: AgentProcessState): string {

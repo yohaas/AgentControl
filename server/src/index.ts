@@ -768,6 +768,9 @@ wss.on("connection", (ws) => {
         case "setThinking":
           runtime.setThinking(command.id, command.thinking);
           break;
+        case "nativeStatus":
+          runtime.nativeStatus(command.id);
+          break;
         case "enablePlugin":
           void enablePlugin(command.plugin).catch((error: unknown) => {
             send(ws, { type: "agent.error", message: error instanceof Error ? error.message : String(error) });

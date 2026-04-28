@@ -149,7 +149,7 @@ const BASE_SLASH_COMMANDS: SlashCommandSuggestion[] = [
   { value: "/interrupt", label: "/interrupt", description: "Stop the active response", source: "agentcontrol" },
   { value: "/compact", label: "/compact", description: "Compact conversation context", argumentHint: "[instructions]", source: "builtin" },
   { value: "/memory", label: "/memory", description: "Edit or inspect memory files", source: "builtin", interactive: true },
-  { value: "/status", label: "/status", description: "Show account and system status", source: "builtin" },
+  { value: "/status", label: "/status", description: "Show AgentControl session status", source: "agentcontrol" },
   { value: "/resume", label: "/resume", description: "Resume a previous conversation", source: "builtin", interactive: true },
   { value: "/permissions", label: "/permissions", description: "Manage allow, ask, and deny rules", source: "builtin", interactive: true }
 ];
@@ -913,6 +913,10 @@ function handleNativeSlashCommand(agent: RunningAgent, text: string) {
   }
   if (command === "stop" || command === "interrupt") {
     sendCommand({ type: "interrupt", id: agent.id });
+    return true;
+  }
+  if (command === "status") {
+    sendCommand({ type: "nativeStatus", id: agent.id });
     return true;
   }
   if (command === "model" && arg) {
