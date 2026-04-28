@@ -1,6 +1,6 @@
 import http from "node:http";
 import { execFile } from "node:child_process";
-import { access, mkdir, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { access, cp, mkdir, readdir, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -470,7 +470,31 @@ function safeWorktreeBranchName(branch: string): string {
 
 function defaultWorktreePath(project: Project, branch: string): string {
   const safeBranch = safeWorktreeBranchName(branch).replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "worktree";
-  return path.join(project.path, ".claude", "worktrees", safeBranch);
+  return path.join(path.dirname(project.path), `${path.basename(project.path)}-worktrees`, safeBranch);
+}
+
+function configuredProjectAgentDirs(projectPath: string): Array<{ source: string; relative: string }> {
+  return [agentDirs.claude, agentDirs.codex, agentDirs.openai]
+    .map((configuredDir) => {
+      const expanded = expandHome(configuredDir);
+      const source = path.isAbsolute(expanded) ? path.resolve(expanded) : path.resolve(projectPath, expanded);
+      const relative = path.relative(path.resolve(projectPath), source);
+      if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) return undefined;
+      return { source, relative };
+    })
+    .filter((entry): entry is { source: string; relative: string } => Boolean(entry));
+}
+
+async function copyLocalAgentFiles(projectPath: string, targetPath: string): Promise<void> {
+  for (const agentDir of configuredProjectAgentDirs(projectPath)) {
+    const sourceInfo = await stat(agentDir.source).catch(() => undefined);
+    if (!sourceInfo?.isDirectory()) continue;
+    await cp(agentDir.source, path.resolve(targetPath, agentDir.relative), {
+      recursive: true,
+      force: false,
+      errorOnExist: false
+    });
+  }
 }
 
 async function refreshConfiguredProjects(): Promise<Project[]> {
@@ -537,6 +561,7 @@ async function createProjectWorktree(project: Project, request: GitWorktreeCreat
   if (request.createBranch !== false) args.push("-b", branch, targetPath, request.base?.trim() || "HEAD");
   else args.push(targetPath, branch);
   await gitCommand(project.path, args, 120000);
+  if (request.copyLocalAgentFiles) await copyLocalAgentFiles(project.path, targetPath);
   await ensureProjectPath(targetPath);
   return { projects, worktrees: await projectWorktrees(project) };
 }

@@ -100,6 +100,7 @@ export interface GitWorktreeCreateRequest {
   branch: string;
   base?: string;
   createBranch?: boolean;
+  copyLocalAgentFiles?: boolean;
 }
 
 export interface GitWorktreeMergeRequest {

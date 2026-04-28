@@ -1346,6 +1346,19 @@ function safeWorktreePathName(branchName: string) {
   return branchName.trim().replace(/^refs\/heads\//, "").replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "worktree";
 }
 
+function siblingWorktreeRoot(projectPath: string) {
+  const separator = pathSeparatorFor(projectPath);
+  const trimmed = projectPath.replace(/[\\/]+$/g, "");
+  const lastSlash = Math.max(trimmed.lastIndexOf("/"), trimmed.lastIndexOf("\\"));
+  const parent = lastSlash === 0 ? separator : lastSlash > 0 ? trimmed.slice(0, lastSlash) : "";
+  const projectName = lastSlash >= 0 ? trimmed.slice(lastSlash + 1) : trimmed;
+  return parent ? joinUiPath(parent, `${projectName}-worktrees`) : `${projectName}-worktrees`;
+}
+
+function siblingWorktreePath(projectPath: string, branchName: string) {
+  return joinUiPath(siblingWorktreeRoot(projectPath), safeWorktreePathName(branchName));
+}
+
 function isDevTerminal(session: TerminalSession) {
   return session.title?.startsWith("Dev: ") || session.title === "npm run dev";
 }
@@ -2060,11 +2073,13 @@ function WorktreesDialog({ projectId }: { projectId?: string }) {
   const [pathText, setPathText] = useState("");
   const [pathEdited, setPathEdited] = useState(false);
   const [createBranch, setCreateBranch] = useState(true);
+  const [copyLocalAgentFiles, setCopyLocalAgentFiles] = useState(false);
   const [browserOpen, setBrowserOpen] = useState(false);
   const selectedProject = projects.find((project) => project.id === projectId);
   const suggestedWorktreePath = selectedProject?.path
-    ? joinUiPath(selectedProject.path, ".claude", "worktrees", safeWorktreePathName(branch))
+    ? siblingWorktreePath(selectedProject.path, branch)
     : "";
+  const effectiveWorktreePath = pathText.trim() || suggestedWorktreePath;
 
   useEffect(() => {
     if (!open || !projectId) return;
@@ -2094,7 +2109,10 @@ function WorktreesDialog({ projectId }: { projectId?: string }) {
   }
 
   function canOpenWorktree(worktreePath: string) {
-    return Boolean(selectedProject?.path && pathIsDescendant(worktreePath, selectedProject.path));
+    return Boolean(
+      selectedProject?.path &&
+        (pathIsDescendant(worktreePath, selectedProject.path) || pathIsDescendant(worktreePath, siblingWorktreeRoot(selectedProject.path)))
+    );
   }
 
   async function openWorktreeProject(worktreePath: string) {
@@ -2119,7 +2137,8 @@ function WorktreesDialog({ projectId }: { projectId?: string }) {
         branch: branch.trim(),
         base: base.trim() || "HEAD",
         path: pathText.trim() || suggestedWorktreePath || undefined,
-        createBranch
+        createBranch,
+        copyLocalAgentFiles
       });
       setProjects(result.projects);
       setWorktrees(result.worktrees);
@@ -2131,6 +2150,7 @@ function WorktreesDialog({ projectId }: { projectId?: string }) {
       setPathEdited(false);
       setBase("HEAD");
       setCreateBranch(true);
+      setCopyLocalAgentFiles(false);
       setTab("worktrees");
     } catch (error) {
       addError(error instanceof Error ? error.message : String(error));
@@ -2212,17 +2232,39 @@ function WorktreesDialog({ projectId }: { projectId?: string }) {
                       setPathEdited(true);
                       setPathText(event.target.value);
                     }}
-                    placeholder={suggestedWorktreePath || "Choose a child folder"}
+                    placeholder={suggestedWorktreePath || "Choose a worktree folder"}
                   />
                   <Button type="button" variant="outline" onClick={() => setBrowserOpen(true)}>
                     <FolderOpen className="h-4 w-4" />
                     Browse
                   </Button>
                 </div>
+                {effectiveWorktreePath && (
+                  <span className="break-all font-mono text-xs text-muted-foreground" title={effectiveWorktreePath}>
+                    {effectiveWorktreePath}
+                  </span>
+                )}
               </label>
               <label className="flex items-center gap-2 text-sm">
                 <input type="checkbox" checked={createBranch} onChange={(event) => setCreateBranch(event.target.checked)} />
                 Create a new branch
+              </label>
+              <label
+                className="flex items-start gap-2 text-sm"
+                title="Select this if your project agent files are local and untracked by Git."
+              >
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={copyLocalAgentFiles}
+                  onChange={(event) => setCopyLocalAgentFiles(event.target.checked)}
+                />
+                <span>
+                  <span className="block">Copy local agent files into worktree</span>
+                  <span className="block text-xs text-muted-foreground">
+                    Use this if your project agent files are local and untracked by Git.
+                  </span>
+                </span>
               </label>
               <Button onClick={() => void createWorktree()} disabled={loading || !branch.trim()}>
                 <Plus className="h-4 w-4" />
@@ -2289,7 +2331,7 @@ function WorktreesDialog({ projectId }: { projectId?: string }) {
       </DialogContent>
       <FolderBrowserDialog
         open={browserOpen}
-        initialPath={pathText || selectedProject?.path || ""}
+        initialPath={effectiveWorktreePath || selectedProject?.path || ""}
         onOpenChange={setBrowserOpen}
         onSelect={(selectedPath) => {
           setPathEdited(true);
