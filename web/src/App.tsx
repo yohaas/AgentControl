@@ -142,7 +142,12 @@ const BASE_SLASH_COMMANDS: SlashCommandSuggestion[] = [
   { value: "/clear", label: "/clear", description: "Clear this chat history" },
   { value: "/exit", label: "/exit", description: "Close this agent" },
   { value: "/stop", label: "/stop", description: "Stop the active response" },
-  { value: "/interrupt", label: "/interrupt", description: "Stop the active response" }
+  { value: "/interrupt", label: "/interrupt", description: "Stop the active response" },
+  { value: "/compact", label: "/compact", description: "Pass through to Claude" },
+  { value: "/memory", label: "/memory", description: "Pass through to Claude" },
+  { value: "/status", label: "/status", description: "Pass through to Claude" },
+  { value: "/resume", label: "/resume", description: "Pass through to Claude" },
+  { value: "/permissions", label: "/permissions", description: "Pass through to Claude" }
 ];
 
 const TERMINAL_DOCK_OPTIONS = [
@@ -881,7 +886,7 @@ function handleNativeSlashCommand(agent: RunningAgent, text: string) {
   return false;
 }
 
-function slashCommandSuggestions(draft: string, models: string[]): SlashCommandSuggestion[] {
+function slashCommandSuggestions(draft: string, models: string[], sessionCommands: string[] = []): SlashCommandSuggestion[] {
   const trimmed = draft.trimStart();
   if (!trimmed.startsWith("/") || trimmed.includes("\n")) return [];
   const query = trimmed.slice(1).toLowerCase();
@@ -899,9 +904,20 @@ function slashCommandSuggestions(draft: string, models: string[]): SlashCommandS
 
   const commands = [
     ...BASE_SLASH_COMMANDS,
+    ...sessionCommands.map((command) => {
+      const normalized = `/${command.replace(/^\//, "")}`;
+      return { value: normalized, label: normalized, description: "Pass through to Claude" };
+    }),
     { value: "/model ", label: "/model", description: "Switch this agent to another model" }
   ];
-  return commands.filter((command) => command.value.slice(1).toLowerCase().startsWith(query)).slice(0, 8);
+  const seen = new Set<string>();
+  return commands
+    .filter((command) => {
+      if (seen.has(command.value)) return false;
+      seen.add(command.value);
+      return command.value.slice(1).toLowerCase().startsWith(query);
+    })
+    .slice(0, 10);
 }
 
 function SlashCommandAutocomplete({
@@ -2319,6 +2335,7 @@ function LaunchDialog() {
   const modal = useAppStore((state) => state.launchModal);
   const settings = useAppStore((state) => state.settings);
   const capabilities = useAppStore((state) => state.capabilities);
+  const agents = useAppStore((state) => state.agents);
   const closeLaunchModal = useAppStore((state) => state.closeLaunchModal);
   const [projectId, setProjectId] = useState("");
   const [defName, setDefName] = useState("");
@@ -2333,6 +2350,13 @@ function LaunchDialog() {
   const modelOptions = useMemo(
     () => Array.from(new Set([def?.defaultModel, ...settings.models].filter((item): item is string => Boolean(item)))),
     [def?.defaultModel, settings.models]
+  );
+  const restorableSessions = useMemo(
+    () =>
+      Object.values(agents)
+        .filter((agent) => agent.projectId === projectId && agent.defName === defName && agent.restorable)
+        .sort((left, right) => +new Date(right.updatedAt) - +new Date(left.updatedAt)),
+    [agents, defName, projectId]
   );
 
   useEffect(() => {
@@ -2435,6 +2459,35 @@ function LaunchDialog() {
             Display name
             <Input value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder={def?.name || "Agent"} />
           </label>
+          {restorableSessions.length > 0 && (
+            <section className="grid gap-2 rounded-md border border-border p-3">
+              <div>
+                <h3 className="text-sm font-medium">Restorable sessions</h3>
+                <p className="text-xs text-muted-foreground">Resume a paused session for this agent type.</p>
+              </div>
+              <div className="grid gap-2">
+                {restorableSessions.map((agent) => (
+                  <button
+                    key={agent.id}
+                    type="button"
+                    className="flex min-w-0 items-center justify-between gap-3 rounded-md border border-border px-3 py-2 text-left text-sm hover:bg-accent"
+                    onClick={() => {
+                      sendCommand({ type: "resume", id: agent.id });
+                      closeLaunchModal();
+                    }}
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate font-medium">{agent.displayName}</span>
+                      <span className="block truncate text-xs text-muted-foreground">
+                        {agent.currentModel} · {formatLastActivity(agent.updatedAt)}
+                      </span>
+                    </span>
+                    <Badge>Resume</Badge>
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
           <label className="grid gap-1.5 text-sm">
             Model
             <Select value={model} onValueChange={setModel}>
@@ -2834,7 +2887,10 @@ function AgentTile({
   const showActivityIndicator = isBusy && !hasStreamingAssistantText(transcript);
   const pinnedMessage = latestUserMessage(transcript);
   const pinLastSentMessage = settings.pinLastSentMessage;
-  const rawSlashSuggestions = useMemo(() => slashCommandSuggestions(draft, settings.models), [draft, settings.models]);
+  const rawSlashSuggestions = useMemo(
+    () => slashCommandSuggestions(draft, settings.models, agent.slashCommands),
+    [agent.slashCommands, draft, settings.models]
+  );
   const slashSuggestions = slashMenuSuppressed ? [] : rawSlashSuggestions;
   const selectedLines = selectedLineCount(selection.selectedText);
 
@@ -3500,7 +3556,10 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
   const showActivityIndicator = isBusy && !hasStreamingAssistantText(transcript);
   const pinnedMessage = latestUserMessage(transcript);
   const pinLastSentMessage = settings.pinLastSentMessage;
-  const rawSlashSuggestions = useMemo(() => slashCommandSuggestions(draft, settings.models), [draft, settings.models]);
+  const rawSlashSuggestions = useMemo(
+    () => slashCommandSuggestions(draft, settings.models, agent.slashCommands),
+    [agent.slashCommands, draft, settings.models]
+  );
   const slashSuggestions = slashMenuSuppressed ? [] : rawSlashSuggestions;
   const selectedLines = selectedLineCount(selection.selectedText);
 
