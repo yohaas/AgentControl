@@ -195,7 +195,7 @@ function AgentActivityIndicator({ agent, compact = false }: { agent: RunningAgen
         )}
         style={{ borderLeftColor: agent.color, borderLeftWidth: 4 }}
       >
-        <ThinkingText />
+        <ThinkingText prefix="Working" />
       </div>
     </div>
   );
@@ -2230,7 +2230,7 @@ function TranscriptPreview({ event, agent }: { event: TranscriptEvent; agent: Ru
         )}
         {event.kind === "assistant_text" && event.streaming && (
           <span className="mt-2 block">
-            <ThinkingText />
+            <ThinkingText prefix="Streaming" />
           </span>
         )}
       </div>
@@ -2734,7 +2734,7 @@ function TranscriptItem({ event, agent, query }: { event: TranscriptEvent; agent
         <CollapsibleText text={event.text} query={query} />
         {event.kind === "assistant_text" && event.streaming && (
           <span className="mt-2 block">
-            <ThinkingText />
+            <ThinkingText prefix="Streaming" />
           </span>
         )}
         {event.kind === "user" && event.attachments && event.attachments.length > 0 && (

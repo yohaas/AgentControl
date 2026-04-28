@@ -37,6 +37,7 @@ interface AgentProcessState {
   restartTimer?: NodeJS.Timeout;
   interrupting?: boolean;
   exiting?: boolean;
+  activeTurn?: boolean;
 }
 
 const RAW_LINE_LIMIT = 5000;
@@ -203,6 +204,7 @@ export class AgentRuntimeManager {
       attachments: imageAttachments
     };
     this.pushTranscript(state, event);
+    state.activeTurn = true;
     this.setStatus(state, "running");
 
     const content: Record<string, unknown>[] = [{ type: "text", text: displayText }];
@@ -299,6 +301,7 @@ export class AgentRuntimeManager {
     const state = this.requiredState(id);
     if (!state.child || state.child.killed) throw new Error("Agent process is not running.");
     state.child.stdin.write(`${JSON.stringify({ type: "control", subtype: "tool_permission", tool_use_id: toolUseId, decision })}\n`);
+    state.activeTurn = true;
     this.setStatus(state, "running");
   }
 
@@ -308,6 +311,7 @@ export class AgentRuntimeManager {
     state.transcript = [];
     state.streamingAssistantId = undefined;
     state.rawLines = [];
+    state.activeTurn = false;
     this.broadcast({ type: "agent.snapshot", snapshot: this.snapshot() });
     this.persist();
   }
@@ -316,6 +320,7 @@ export class AgentRuntimeManager {
     const state = this.requiredState(id);
     if (!state.child || state.child.killed) return;
     state.interrupting = true;
+    state.activeTurn = false;
     this.finishAssistantStream(state, false);
     this.pushTranscript(state, {
       ...eventBase(state.agent.id, state.agent.currentModel),
@@ -563,7 +568,7 @@ export class AgentRuntimeManager {
       const sessionId = this.trimmedStringField(payload.session_id) || this.trimmedStringField(payload.sessionId);
       if (sessionId) state.agent.sessionId = sessionId;
       if (model) this.updateModel(state, model);
-      this.setStatus(state, "idle");
+      if (!state.activeTurn) this.setStatus(state, "idle");
       return;
     }
 
@@ -604,8 +609,10 @@ export class AgentRuntimeManager {
 
     if (type === "result") {
       this.finishAssistantStream(state, false);
+      state.activeTurn = false;
       this.setStatus(state, "idle");
     } else if (type === "error") {
+      state.activeTurn = false;
       this.setStatus(state, "error", stringifyUnknown(payload));
     } else if (type.includes("permission") || subtype.includes("permission")) {
       this.setStatus(state, "awaiting-permission");
@@ -623,6 +630,7 @@ export class AgentRuntimeManager {
     }
 
     if (type === "tool_use") {
+      state.activeTurn = true;
       this.pushTranscript(state, {
         ...eventBase(state.agent.id, state.agent.currentModel),
         kind: "tool_use",
@@ -632,10 +640,12 @@ export class AgentRuntimeManager {
         awaitingPermission: Boolean(value.awaitingPermission || value.needs_permission)
       });
       if (value.awaitingPermission || value.needs_permission) this.setStatus(state, "awaiting-permission");
+      else this.setStatus(state, "running");
       return;
     }
 
     if (type === "tool_result") {
+      state.activeTurn = true;
       this.pushTranscript(state, {
         ...eventBase(state.agent.id, state.agent.currentModel),
         kind: "tool_result",
@@ -643,6 +653,7 @@ export class AgentRuntimeManager {
         output: value.content ?? value.output ?? "",
         isError: Boolean(value.is_error || value.isError)
       });
+      this.setStatus(state, "running");
     }
   }
 
@@ -694,6 +705,8 @@ export class AgentRuntimeManager {
         timestamp: now()
       });
       state.streamingAssistantId = streaming ? existing.id : undefined;
+      state.activeTurn = streaming || state.activeTurn;
+      this.setStatus(state, "running");
       return;
     }
 
@@ -705,6 +718,7 @@ export class AgentRuntimeManager {
         streaming
       };
       state.streamingAssistantId = streaming ? event.id : undefined;
+      state.activeTurn = streaming || state.activeTurn;
       this.pushTranscript(state, event);
       this.setStatus(state, "running");
       return;
@@ -717,6 +731,7 @@ export class AgentRuntimeManager {
       timestamp: now()
     };
     this.updateTranscript(state, updated);
+    state.activeTurn = streaming || state.activeTurn;
     this.setStatus(state, "running");
   }
 
