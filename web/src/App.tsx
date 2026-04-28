@@ -4539,62 +4539,68 @@ function SettingsDialog() {
               <Input value={gitPath} onChange={(event) => setGitPath(event.target.value)} placeholder="git" />
             </label>
           </section>
-          <label className="grid gap-1.5 text-sm">
-            Appearance
-            <Select value={themeMode} onValueChange={(value) => setThemeMode(value as ThemeMode)}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="auto">Auto</SelectItem>
-                <SelectItem value="light">Light</SelectItem>
-                <SelectItem value="dark">Dark</SelectItem>
-              </SelectContent>
-            </Select>
-          </label>
-          <div className="grid grid-cols-2 gap-3">
+          <section className="grid gap-3 rounded-md border border-border p-3">
+            <div>
+              <h3 className="text-sm font-medium">Appearance</h3>
+              <p className="text-xs text-muted-foreground">Control the app theme and chat layout.</p>
+            </div>
             <label className="grid gap-1.5 text-sm">
-              Tile height
-              <div className="flex gap-2">
+              Color mode
+              <Select value={themeMode} onValueChange={(value) => setThemeMode(value as ThemeMode)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="auto">Auto</SelectItem>
+                  <SelectItem value="light">Light</SelectItem>
+                  <SelectItem value="dark">Dark</SelectItem>
+                </SelectContent>
+              </Select>
+            </label>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="grid gap-1.5 text-sm">
+                Tile height
+                <div className="flex gap-2">
+                  <Input
+                    type="number"
+                    min={320}
+                    max={760}
+                    step={20}
+                    value={tileHeight}
+                    onChange={(event) => setTileHeight(Number(event.target.value))}
+                  />
+                  <Button type="button" variant="outline" onClick={() => setTileHeight(currentTileHeight || settings.tileHeight)}>
+                    Current
+                  </Button>
+                </div>
+              </label>
+              <label className="grid gap-1.5 text-sm">
+                Columns
                 <Input
                   type="number"
-                  min={320}
-                  max={760}
-                  step={20}
-                  value={tileHeight}
-                  onChange={(event) => setTileHeight(Number(event.target.value))}
+                  min={1}
+                  max={6}
+                  step={1}
+                  value={tileColumns}
+                  onChange={(event) => setTileColumns(Number(event.target.value))}
                 />
-                <Button type="button" variant="outline" onClick={() => setTileHeight(currentTileHeight || settings.tileHeight)}>
-                  Current
-                </Button>
-              </div>
-            </label>
-            <label className="grid gap-1.5 text-sm">
-              Columns
-              <Input
-                type="number"
-                min={1}
-                max={6}
-                step={1}
-                value={tileColumns}
-                onChange={(event) => setTileColumns(Number(event.target.value))}
+              </label>
+            </div>
+            <label className="flex items-start gap-2 rounded-md border border-border bg-background/50 p-3 text-sm">
+              <input
+                type="checkbox"
+                className="mt-1"
+                checked={pinLastSentMessage}
+                onChange={(event) => setPinLastSentMessage(event.target.checked)}
               />
-            </label>
-          </div>
-          <label className="flex items-start gap-2 rounded-md border border-border p-3 text-sm">
-            <input
-              type="checkbox"
-              className="mt-1"
-              checked={pinLastSentMessage}
-              onChange={(event) => setPinLastSentMessage(event.target.checked)}
-            />
-            <span>
-              <span className="block font-medium">Pin last sent message while scrolling</span>
-              <span className="block text-xs text-muted-foreground">
-                Keep your most recent message visible at the top of a scrolled chat.
+              <span>
+                <span className="block font-medium">Pin last sent message while scrolling</span>
+                <span className="block text-xs text-muted-foreground">
+                  Keep your most recent message visible at the top of a scrolled chat.
+                </span>
               </span>
-            </span>
-          </label>
+            </label>
+          </section>
           <section className="grid gap-2 rounded-md border border-border p-3">
             <div>
               <h3 className="text-sm font-medium">Configuration</h3>
