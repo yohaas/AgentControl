@@ -36,6 +36,7 @@ export interface DashboardConfig {
   modelProfiles?: ModelProfile[];
   gitPath?: string;
   claudePath?: string;
+  claudeRuntime?: ClaudeRuntime;
   codexPath?: string;
   claudeAgentDir?: string;
   codexAgentDir?: string;
@@ -53,6 +54,7 @@ export interface DashboardConfig {
 
 export type TerminalDockPosition = "float" | "left" | "bottom" | "right";
 export type ThemeMode = "auto" | "light" | "dark";
+export type ClaudeRuntime = "cli" | "api";
 
 const configDir = path.join(os.homedir(), ".agent-dashboard");
 const configPath = path.join(configDir, "config.json");
@@ -172,6 +174,10 @@ export function resolveDefaultAgentMode(config: DashboardConfig): AgentPermissio
     config.defaultAgentMode === "bypassPermissions"
     ? config.defaultAgentMode
     : "acceptEdits";
+}
+
+export function resolveClaudeRuntime(config: DashboardConfig): ClaudeRuntime {
+  return config.claudeRuntime === "api" ? "api" : "cli";
 }
 
 export function resolveTerminalDock(config: DashboardConfig): TerminalDockPosition {

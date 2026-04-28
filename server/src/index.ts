@@ -33,6 +33,7 @@ import {
   expandHome,
   readConfig,
   readSecrets,
+  resolveClaudeRuntime,
   resolveDefaultAgentMode,
   resolveAgentDirs,
   resolveModelProfiles,
@@ -620,7 +621,8 @@ async function ensureLaunchPluginsEnabled(request: LaunchRequest): Promise<void>
 const runtime = new AgentRuntimeManager(
   () => projects,
   broadcast,
-  () => capabilities
+  () => capabilities,
+  () => resolveClaudeRuntime(config)
 );
 await runtime.loadPersistedState();
 const terminals = new TerminalManager(() => projects, broadcast);
@@ -1106,6 +1108,7 @@ app.get("/api/settings", (_request, response) => {
     modelProfiles: resolveModelProfiles(config),
     gitPath: config.gitPath || process.env.GIT_PATH || "git",
     claudePath: config.claudePath || process.env.CLAUDE_CODE_CLI || process.env.AGENTCONTROL_CLAUDE_PATH || "",
+    claudeRuntime: resolveClaudeRuntime(config),
     codexPath: config.codexPath || process.env.CODEX_CLI || process.env.AGENTCONTROL_CODEX_PATH || "",
     claudeAgentDir: agentDirs.claude,
     codexAgentDir: agentDirs.codex,
@@ -1194,6 +1197,7 @@ app.put("/api/settings", async (request, response) => {
     modelProfiles: Array.isArray(body.modelProfiles) ? body.modelProfiles : config.modelProfiles,
     gitPath: typeof body.gitPath === "string" ? body.gitPath.trim() : config.gitPath,
     claudePath: typeof body.claudePath === "string" ? body.claudePath.trim() : config.claudePath,
+    claudeRuntime: resolveClaudeRuntime(body.claudeRuntime ? body : config),
     codexPath: typeof body.codexPath === "string" ? body.codexPath.trim() : config.codexPath,
     claudeAgentDir: typeof body.claudeAgentDir === "string" ? body.claudeAgentDir.trim() : config.claudeAgentDir,
     codexAgentDir: typeof body.codexAgentDir === "string" ? body.codexAgentDir.trim() : config.codexAgentDir,
@@ -1232,6 +1236,7 @@ app.put("/api/settings", async (request, response) => {
     modelProfiles: resolveModelProfiles(config),
     gitPath: config.gitPath || process.env.GIT_PATH || "git",
     claudePath: config.claudePath || process.env.CLAUDE_CODE_CLI || process.env.AGENTCONTROL_CLAUDE_PATH || "",
+    claudeRuntime: resolveClaudeRuntime(config),
     codexPath: config.codexPath || process.env.CODEX_CLI || process.env.AGENTCONTROL_CODEX_PATH || "",
     claudeAgentDir: agentDirs.claude,
     codexAgentDir: agentDirs.codex,

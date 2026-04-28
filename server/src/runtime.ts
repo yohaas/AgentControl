@@ -32,6 +32,7 @@ import { mergeSlashCommands, normalizeSlashCommandInfo, scanSlashCommands } from
 
 type Broadcast = (event: WsServerEvent) => void;
 type ProjectProvider = () => Project[];
+type ClaudeRuntime = "cli" | "api";
 
 interface AgentProcessState {
   agent: RunningAgent;
@@ -165,7 +166,8 @@ export class AgentRuntimeManager {
   constructor(
     private readonly getProjects: ProjectProvider,
     private readonly broadcast: Broadcast,
-    private readonly getCapabilities: () => Capabilities
+    private readonly getCapabilities: () => Capabilities,
+    private readonly getClaudeRuntime: () => ClaudeRuntime = () => "cli"
   ) {
     this.persist = createStateWriter(() => this.persistedState());
   }
@@ -274,6 +276,17 @@ export class AgentRuntimeManager {
       this.setStatus(state, "idle");
     } else if (request.remoteControl) {
       await this.spawnRemoteControl(state);
+    } else if (this.isClaudeApi(state)) {
+      this.setStatus(
+        state,
+        process.env.ANTHROPIC_API_KEY ? "idle" : "error",
+        process.env.ANTHROPIC_API_KEY ? undefined : "ANTHROPIC_API_KEY is not set."
+      );
+      if (process.env.ANTHROPIC_API_KEY && state.pendingInitialPrompt) {
+        const initial = state.pendingInitialPrompt;
+        state.pendingInitialPrompt = undefined;
+        this.userMessage(state.agent.id, initial);
+      }
     } else {
       this.spawnStandard(state);
     }
@@ -290,8 +303,10 @@ export class AgentRuntimeManager {
   userMessage(id: string, text: string, sourceAgent?: TranscriptEvent["sourceAgent"], attachments: MessageAttachment[] = []): void {
     const state = this.requiredState(id);
     if (state.agent.remoteControl) throw new Error("Remote Control agents do not accept dashboard messages.");
-    if (state.agent.provider === "openai" || state.agent.provider === "codex") {
+    if (state.agent.provider === "openai" || state.agent.provider === "codex" || this.isClaudeApi(state)) {
       void this.providerUserMessage(state, text, sourceAgent, attachments).catch((error: unknown) => {
+        state.activeTurn = false;
+        this.finishAssistantStream(state, false);
         this.setStatus(state, "error", error instanceof Error ? error.message : String(error));
       });
       return;
@@ -399,7 +414,7 @@ export class AgentRuntimeManager {
   setModel(id: string, model: string): void {
     const state = this.requiredState(id);
     if (state.agent.remoteControl) throw new Error("Remote Control agents cannot switch models from the dashboard.");
-    if (state.agent.provider === "openai" || state.agent.provider === "codex") {
+    if (state.agent.provider === "openai" || state.agent.provider === "codex" || this.isClaudeApi(state)) {
       this.updateModel(state, model);
       this.setStatus(state, "idle");
       return;
@@ -618,9 +633,15 @@ export class AgentRuntimeManager {
 
     if (state.agent.provider === "codex") {
       await this.runCodexTurn(state, payloadText);
+    } else if (this.isClaudeApi(state)) {
+      await this.runAnthropicTurn(state, payloadText, imageAttachments);
     } else {
       await this.runOpenAiTurn(state, payloadText, imageAttachments);
     }
+  }
+
+  private isClaudeApi(state: AgentProcessState): boolean {
+    return state.agent.provider === "claude" && !state.agent.remoteControl && this.getClaudeRuntime() === "api";
   }
 
   private async runCodexTurn(state: AgentProcessState, prompt: string): Promise<void> {
@@ -689,6 +710,98 @@ export class AgentRuntimeManager {
       }
     } catch {
       this.appendAssistantText(state, `${line}\n`);
+    }
+  }
+
+  private async runAnthropicTurn(state: AgentProcessState, prompt: string, images: MessageAttachment[]): Promise<void> {
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) throw new Error("ANTHROPIC_API_KEY is not set.");
+    const controller = new AbortController();
+    state.apiAbort = controller;
+    const content: Record<string, unknown>[] = [{ type: "text", text: prompt }];
+    for (const attachment of images) {
+      if (!attachment.path) continue;
+      content.push({
+        type: "image",
+        source: {
+          type: "base64",
+          media_type: attachment.mimeType,
+          data: readFileSync(attachment.path).toString("base64")
+        }
+      });
+    }
+
+    try {
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        signal: controller.signal,
+        headers: {
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          model: state.agent.currentModel,
+          system: state.def?.systemPrompt || undefined,
+          messages: [{ role: "user", content }],
+          max_tokens: 8192,
+          stream: true
+        })
+      });
+      if (!response.ok || !response.body) throw new Error(await response.text());
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const parts = buffer.split(/\n\n/);
+        buffer = parts.pop() || "";
+        for (const part of parts) this.handleAnthropicSse(state, part);
+      }
+      if (buffer.trim()) this.handleAnthropicSse(state, buffer);
+      this.finishAssistantStream(state, false);
+      state.activeTurn = false;
+      this.setStatus(state, "idle");
+    } catch (error) {
+      state.activeTurn = false;
+      this.finishAssistantStream(state, false);
+      if ((error as { name?: string }).name === "AbortError") {
+        this.setStatus(state, "interrupted");
+        return;
+      }
+      throw error;
+    } finally {
+      state.apiAbort = undefined;
+    }
+  }
+
+  private handleAnthropicSse(state: AgentProcessState, chunk: string): void {
+    for (const line of chunk.split(/\r?\n/)) {
+      if (!line.startsWith("data:")) continue;
+      const data = line.slice(5).trim();
+      if (!data || data === "[DONE]") continue;
+      this.storeRawLine(state, data);
+      let payload: Record<string, unknown>;
+      try {
+        payload = JSON.parse(data) as Record<string, unknown>;
+      } catch {
+        continue;
+      }
+      const type = String(payload.type || "");
+      if (type === "content_block_delta") {
+        const delta = payload.delta as Record<string, unknown> | undefined;
+        if (typeof delta?.text === "string") this.appendAssistantText(state, delta.text);
+      } else if (type === "content_block_start") {
+        const block = payload.content_block as Record<string, unknown> | undefined;
+        if (typeof block?.text === "string") this.appendAssistantText(state, block.text);
+      } else if (type === "message_stop") {
+        this.finishAssistantStream(state, false);
+      } else if (type === "error") {
+        this.setStatus(state, "error", stringifyUnknown(payload.error || payload));
+      }
     }
   }
 

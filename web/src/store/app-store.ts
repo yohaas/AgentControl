@@ -20,6 +20,7 @@ export interface SettingsState {
   modelProfiles?: ModelProfile[];
   gitPath?: string;
   claudePath?: string;
+  claudeRuntime?: ClaudeRuntime;
   codexPath?: string;
   claudeAgentDir?: string;
   codexAgentDir?: string;
@@ -45,6 +46,7 @@ export interface SettingsState {
 
 export type TerminalDockPosition = "float" | "left" | "bottom" | "right";
 export type ThemeMode = "auto" | "light" | "dark";
+export type ClaudeRuntime = "cli" | "api";
 
 interface SendDialogState {
   open: boolean;
@@ -156,6 +158,7 @@ const defaultSettings: SettingsState = {
   pinLastSentMessage: true,
   terminalDock: "bottom",
   themeMode: "auto",
+  claudeRuntime: "cli",
   claudeAgentDir: ".claude/agents",
   codexAgentDir: ".codex/agents",
   openaiAgentDir: ".agent-control/openai-agents",
@@ -176,6 +179,7 @@ function normalizeSettings(settings: SettingsState): SettingsState {
     ? settings.defaultAgentMode
     : defaultSettings.defaultAgentMode;
   const themeMode = ["auto", "light", "dark"].includes(settings.themeMode) ? settings.themeMode : defaultSettings.themeMode;
+  const claudeRuntime = settings.claudeRuntime === "api" ? "api" : "cli";
   return {
     ...defaultSettings,
     ...settings,
@@ -185,7 +189,8 @@ function normalizeSettings(settings: SettingsState): SettingsState {
     tileColumns: clampNumber(settings.tileColumns, defaultSettings.tileColumns, 1, 6),
     sidebarWidth: clampNumber(settings.sidebarWidth, defaultSettings.sidebarWidth, 240, 420),
     terminalDock,
-    themeMode
+    themeMode,
+    claudeRuntime
   };
 }
 

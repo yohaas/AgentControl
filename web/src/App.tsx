@@ -112,7 +112,7 @@ import { getSelectionInRoot, useTextSelection } from "./hooks/use-text-selection
 import { api } from "./lib/api";
 import { cn, downloadText, formatDuration, prettyJson } from "./lib/utils";
 import { connectWebSocket, disconnectWebSocket, sendCommand } from "./lib/ws-client";
-import { useAppStore, type QueuedMessage, type ThemeMode } from "./store/app-store";
+import { useAppStore, type ClaudeRuntime, type QueuedMessage, type ThemeMode } from "./store/app-store";
 
 const DEFAULT_MODEL = "claude-sonnet-4-6";
 const EMPTY_TRANSCRIPT: TranscriptEvent[] = [];
@@ -4020,6 +4020,7 @@ function SettingsDialog() {
   const [autoApprove, setAutoApprove] = useState(settings.autoApprove);
   const [defaultAgentMode, setDefaultAgentMode] = useState<AgentPermissionMode>(settings.defaultAgentMode);
   const [themeMode, setThemeMode] = useState<ThemeMode>(settings.themeMode);
+  const [claudeRuntime, setClaudeRuntime] = useState<ClaudeRuntime>(settings.claudeRuntime || "cli");
   const [tileHeight, setTileHeight] = useState(settings.tileHeight);
   const [tileColumns, setTileColumns] = useState(settings.tileColumns);
   const [pinLastSentMessage, setPinLastSentMessage] = useState(settings.pinLastSentMessage);
@@ -4045,6 +4046,7 @@ function SettingsDialog() {
     setAutoApprove(settings.autoApprove);
     setDefaultAgentMode(settings.defaultAgentMode);
     setThemeMode(settings.themeMode);
+    setClaudeRuntime(settings.claudeRuntime || "cli");
     setTileHeight(settings.tileHeight);
     setTileColumns(settings.tileColumns);
     setPinLastSentMessage(settings.pinLastSentMessage);
@@ -4074,6 +4076,7 @@ function SettingsDialog() {
         autoApprove,
         defaultAgentMode,
         themeMode,
+        claudeRuntime,
         tileHeight,
         tileColumns,
         pinLastSentMessage
@@ -4123,6 +4126,7 @@ function SettingsDialog() {
         autoApprove,
         defaultAgentMode,
         themeMode,
+        claudeRuntime,
         tileHeight,
         tileColumns,
         pinLastSentMessage
@@ -4153,6 +4157,7 @@ function SettingsDialog() {
       setAutoApprove(next.autoApprove);
       setDefaultAgentMode(next.defaultAgentMode);
       setThemeMode(next.themeMode);
+      setClaudeRuntime(next.claudeRuntime || "cli");
       setTileHeight(next.tileHeight);
       setTileColumns(next.tileColumns);
       setPinLastSentMessage(next.pinLastSentMessage);
@@ -4378,8 +4383,23 @@ function SettingsDialog() {
           {settingsTab === "claude" && (
             <>
               <label className="grid gap-1.5 text-sm">
+                Claude runtime
+                <Select value={claudeRuntime} onValueChange={(value) => setClaudeRuntime(value as ClaudeRuntime)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="cli">Claude CLI</SelectItem>
+                    <SelectItem value="api">Anthropic API</SelectItem>
+                  </SelectContent>
+                </Select>
+                <span className="text-xs text-muted-foreground">
+                  CLI uses the local Claude Code process. API uses ANTHROPIC_API_KEY or the saved Anthropic key for new non-Remote Control Claude chats.
+                </span>
+              </label>
+              <label className="grid gap-1.5 text-sm">
                 Claude path
-                <Input value={claudePath} onChange={(event) => setClaudePath(event.target.value)} placeholder="claude" />
+                <Input value={claudePath} onChange={(event) => setClaudePath(event.target.value)} placeholder="claude" disabled={claudeRuntime === "api"} />
               </label>
               <ProviderModelsField
                 label="Claude provider models"
