@@ -5672,10 +5672,11 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
             <Textarea
               ref={inputRef}
               className={cn(
-                "min-h-9 resize-none border-0 bg-transparent py-2 leading-5 focus-visible:ring-0",
+                "min-h-[76px] resize-none border-0 bg-transparent py-2 leading-5 focus-visible:ring-0",
                 hasMultilineDraft && "pr-10",
-                composerExpanded ? "h-28 max-h-48 overflow-y-auto" : "h-9 overflow-hidden"
+                composerExpanded ? "h-28 max-h-48 overflow-y-auto" : "h-[76px] overflow-hidden"
               )}
+              rows={3}
               value={draft}
               disabled={!canType}
               onChange={(event) => {
