@@ -3360,7 +3360,7 @@ function AgentTile({
           />
           <div
             className={cn(
-              "relative rounded-md border border-border bg-background/80 focus-within:ring-1 focus-within:ring-ring",
+              "relative rounded-md border border-border bg-background/80",
               composerDropActive && "border-primary ring-1 ring-primary/60"
             )}
             onDragEnter={handleComposerDragEnter}
@@ -3950,7 +3950,7 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
         />
         <div
           className={cn(
-            "relative mx-auto w-full min-w-0 max-w-4xl rounded-md border border-border bg-background/80 focus-within:ring-1 focus-within:ring-ring",
+            "relative mx-auto w-full min-w-0 max-w-4xl rounded-md border border-border bg-background/80",
             composerDropActive && "border-primary ring-1 ring-primary/60"
           )}
           onDragEnter={handleComposerDragEnter}
