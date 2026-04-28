@@ -376,20 +376,20 @@ function StatusPill({ status }: { status: RunningAgent["status"] }) {
                         : status;
   const className =
     status === "running"
-      ? "border-blue-400/40 bg-blue-500/15 text-blue-200 animate-pulse"
+      ? "border-blue-500/40 bg-blue-500/10 text-blue-700 dark:border-blue-400/40 dark:bg-blue-500/15 dark:text-blue-200 animate-pulse"
       : status === "idle"
-        ? "border-zinc-500/40 bg-zinc-500/10 text-zinc-300"
+        ? "border-zinc-500/40 bg-zinc-500/10 text-zinc-700 dark:text-zinc-300"
         : status === "awaiting-permission"
-          ? "border-amber-400/40 bg-amber-500/15 text-amber-200"
+          ? "border-amber-500/50 bg-amber-500/15 text-amber-800 dark:border-amber-400/40 dark:text-amber-200"
           : status === "error"
-            ? "border-red-400/40 bg-red-500/15 text-red-200"
+            ? "border-red-500/50 bg-red-500/15 text-red-700 dark:border-red-400/40 dark:text-red-200"
             : status === "killed"
-              ? "border-zinc-700 bg-zinc-800 text-zinc-500"
+              ? "border-zinc-400 bg-zinc-500/10 text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-500"
               : status === "interrupted"
-                ? "border-amber-400/40 bg-amber-500/15 text-amber-200"
+                ? "border-amber-500/50 bg-amber-500/15 text-amber-800 dark:border-amber-400/40 dark:text-amber-200"
               : status === "paused"
-                ? "border-purple-400/40 bg-purple-500/15 text-purple-200"
-                : "border-teal-400/40 bg-teal-500/15 text-teal-200";
+                ? "border-purple-500/50 bg-purple-500/15 text-purple-700 dark:border-purple-400/40 dark:text-purple-200"
+                : "border-teal-500/50 bg-teal-500/15 text-teal-700 dark:border-teal-400/40 dark:text-teal-200";
   return <Badge className={cn("capitalize", className)}>{label}</Badge>;
 }
 
