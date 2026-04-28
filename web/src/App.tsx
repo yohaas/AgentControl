@@ -1313,14 +1313,26 @@ function Sidebar() {
   const collapsed = useAppStore((state) => state.sidebarCollapsed);
   const setCollapsed = useAppStore((state) => state.setSidebarCollapsed);
   const settings = useAppStore((state) => state.settings);
+  const [runningSort, setRunningSort] = useState<"lastActivity" | "type">("lastActivity");
 
   const project = projects.find((candidate) => candidate.id === selectedProjectId);
   const running = useMemo(
-    () =>
-      agentsForProject(agentsById, selectedProjectId).sort(
-        (left, right) => +new Date(right.launchedAt) - +new Date(left.launchedAt)
-      ),
-    [agentsById, selectedProjectId]
+    () => {
+      const agents = agentsForProject(agentsById, selectedProjectId);
+      if (runningSort === "type") {
+        return agents.sort(
+          (left, right) =>
+            left.defName.localeCompare(right.defName, undefined, { sensitivity: "base" }) ||
+            left.displayName.localeCompare(right.displayName, undefined, { sensitivity: "base" })
+        );
+      }
+      return agents.sort(
+        (left, right) =>
+          timestampValue(right.updatedAt || right.launchedAt) - timestampValue(left.updatedAt || left.launchedAt) ||
+          left.displayName.localeCompare(right.displayName, undefined, { sensitivity: "base" })
+      );
+    },
+    [agentsById, runningSort, selectedProjectId]
   );
   const activeAgentId = selectedAgentId || focusedAgentId;
 
@@ -1400,6 +1412,23 @@ function Sidebar() {
             >
               <Plus className="h-3.5 w-3.5" />
             </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-6 w-6" title="Sort running agents">
+                  <ArrowDownAZ className="h-3.5 w-3.5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                <DropdownMenuItem onClick={() => setRunningSort("lastActivity")}>
+                  Sort by last activity
+                  <Check className={cn("ml-auto h-4 w-4", runningSort === "lastActivity" ? "opacity-100" : "opacity-0")} />
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setRunningSort("type")}>
+                  Sort by type
+                  <Check className={cn("ml-auto h-4 w-4", runningSort === "type" ? "opacity-100" : "opacity-0")} />
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
           {running.length > 0 && (
             <Button
