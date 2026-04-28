@@ -48,6 +48,7 @@ export type ThemeMode = "auto" | "light" | "dark";
 const configDir = path.join(os.homedir(), ".agent-dashboard");
 const configPath = path.join(configDir, "config.json");
 const secretsPath = path.join(configDir, "secrets.json");
+export const DEFAULT_BUILT_IN_AGENT_DIR = "~/.agent-control/built-in-agents";
 
 export interface DashboardSecrets {
   anthropicApiKey?: string;
@@ -123,11 +124,12 @@ export function resolveModelProfiles(config: DashboardConfig): ModelProfile[] {
 }
 
 export function resolveAgentDirs(config: DashboardConfig): Record<"claude" | "codex" | "openai" | "builtIn", string> {
+  const builtInAgentDir = config.builtInAgentDir?.trim();
   return {
     claude: config.claudeAgentDir?.trim() || ".claude/agents",
     codex: config.codexAgentDir?.trim() || ".codex/agents",
     openai: config.openaiAgentDir?.trim() || ".agent-control/openai-agents",
-    builtIn: config.builtInAgentDir?.trim() || ".agent-control/built-in-agents"
+    builtIn: builtInAgentDir && builtInAgentDir !== ".agent-control/built-in-agents" ? builtInAgentDir : DEFAULT_BUILT_IN_AGENT_DIR
   };
 }
 

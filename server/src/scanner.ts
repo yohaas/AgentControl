@@ -24,7 +24,7 @@ export const DEFAULT_AGENT_DIRS: AgentDirectoryConfig = {
   claude: ".claude/agents",
   codex: ".codex/agents",
   openai: ".agent-control/openai-agents",
-  builtIn: ".agent-control/built-in-agents"
+  builtIn: "~/.agent-control/built-in-agents"
 };
 
 function genericAgentDef(): AgentDef {
@@ -105,6 +105,12 @@ function resolveProjectSubdir(projectPath: string, subdir: string): string {
   return resolved;
 }
 
+function resolveBuiltInAgentDir(builtInDir: string): string {
+  const expanded = expandHome(builtInDir);
+  if (path.isAbsolute(expanded)) return path.resolve(expanded);
+  return path.resolve(os.homedir(), ".agent-control", expanded);
+}
+
 export async function updateAgentPlugins(projectPath: string, agentName: string, plugins: string[], agentDirs = DEFAULT_AGENT_DIRS): Promise<void> {
   const agentsPath = resolveProjectSubdir(projectPath, agentDirs.claude);
   const agentFiles = await readdir(agentsPath, { withFileTypes: true }).catch(() => []);
@@ -156,12 +162,12 @@ async function readAgentDefs(projectPath: string, agentDirs = DEFAULT_AGENT_DIRS
 }
 
 async function readBuiltInAgentDefs(projectPath: string, agentDirs = DEFAULT_AGENT_DIRS): Promise<AgentDef[]> {
-  const agents = await readAgentDir(projectPath, agentDirs.builtIn, undefined, true);
+  const agents = await readAgentDir(resolveBuiltInAgentDir(agentDirs.builtIn), ".", undefined, true);
   return agents.length > 0 ? agents : [genericAgentDef()];
 }
 
 export async function upsertBuiltInAgent(projectPath: string, agent: AgentDef, originalName?: string, agentDirs = DEFAULT_AGENT_DIRS): Promise<void> {
-  const agentsPath = resolveProjectSubdir(projectPath, agentDirs.builtIn);
+  const agentsPath = resolveBuiltInAgentDir(agentDirs.builtIn);
   await mkdir(agentsPath, { recursive: true });
   if (originalName && originalName !== agent.name) await deleteBuiltInAgent(projectPath, originalName, agentDirs).catch(() => undefined);
   const filePath = path.join(agentsPath, `${agentSlug(agent.name)}.md`);
@@ -178,7 +184,7 @@ export async function upsertBuiltInAgent(projectPath: string, agent: AgentDef, o
 }
 
 export async function deleteBuiltInAgent(projectPath: string, agentName: string, agentDirs = DEFAULT_AGENT_DIRS): Promise<void> {
-  const agentsPath = resolveProjectSubdir(projectPath, agentDirs.builtIn);
+  const agentsPath = resolveBuiltInAgentDir(agentDirs.builtIn);
   const agentFiles = await readdir(agentsPath, { withFileTypes: true }).catch(() => []);
   for (const file of agentFiles.filter((item) => item.isFile() && item.name.endsWith(".md"))) {
     const filePath = path.join(agentsPath, file.name);

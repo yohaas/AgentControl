@@ -837,7 +837,7 @@ app.delete("/api/projects/:id/git/worktrees", async (request, response) => {
 
 app.get("/api/filesystem/directories", async (request, response) => {
   const requestedPath = typeof request.query.path === "string" && request.query.path.trim() ? request.query.path.trim() : os.homedir();
-  const directoryPath = path.resolve(requestedPath);
+  const directoryPath = path.resolve(expandHome(requestedPath));
 
   try {
     const info = await stat(directoryPath);

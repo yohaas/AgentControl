@@ -115,6 +115,7 @@ const EMPTY_QUEUE: QueuedMessage[] = [];
 const TERMINAL_DOCK_MESSAGE = "agent-control:dock-terminal";
 const TERMINAL_DOCK_STORAGE_KEY = "agent-control-terminal-dock-request";
 const TERMINAL_POPOUT_STORAGE_KEY = "agent-control-popped-out-terminals";
+const DEFAULT_BUILT_IN_AGENT_DIR = "~/.agent-control/built-in-agents";
 const THINKING_PHRASES = [
   "Discombobulating",
   "Cogitating",
@@ -3753,7 +3754,7 @@ function SettingsDialog() {
   const [claudeAgentDir, setClaudeAgentDir] = useState(settings.claudeAgentDir || ".claude/agents");
   const [codexAgentDir, setCodexAgentDir] = useState(settings.codexAgentDir || ".codex/agents");
   const [openaiAgentDir, setOpenaiAgentDir] = useState(settings.openaiAgentDir || ".agent-control/openai-agents");
-  const [builtInAgentDir, setBuiltInAgentDir] = useState(settings.builtInAgentDir || ".agent-control/built-in-agents");
+  const [builtInAgentDir, setBuiltInAgentDir] = useState(settings.builtInAgentDir || DEFAULT_BUILT_IN_AGENT_DIR);
   const [agentDirBrowser, setAgentDirBrowser] = useState<undefined | "claude" | "codex" | "openai" | "builtIn">();
   const [projectFolderBrowserOpen, setProjectFolderBrowserOpen] = useState(false);
   const [anthropicApiKey, setAnthropicApiKey] = useState("");
@@ -3779,7 +3780,7 @@ function SettingsDialog() {
     setClaudeAgentDir(settings.claudeAgentDir || ".claude/agents");
     setCodexAgentDir(settings.codexAgentDir || ".codex/agents");
     setOpenaiAgentDir(settings.openaiAgentDir || ".agent-control/openai-agents");
-    setBuiltInAgentDir(settings.builtInAgentDir || ".agent-control/built-in-agents");
+    setBuiltInAgentDir(settings.builtInAgentDir || DEFAULT_BUILT_IN_AGENT_DIR);
     setAnthropicApiKey("");
     setOpenaiApiKey("");
     setClearAnthropicApiKey(false);
@@ -3876,7 +3877,7 @@ function SettingsDialog() {
       setClaudeAgentDir(next.claudeAgentDir || ".claude/agents");
       setCodexAgentDir(next.codexAgentDir || ".codex/agents");
       setOpenaiAgentDir(next.openaiAgentDir || ".agent-control/openai-agents");
-      setBuiltInAgentDir(next.builtInAgentDir || ".agent-control/built-in-agents");
+      setBuiltInAgentDir(next.builtInAgentDir || DEFAULT_BUILT_IN_AGENT_DIR);
       setAutoApprove(next.autoApprove);
       setDefaultAgentMode(next.defaultAgentMode);
       setThemeMode(next.themeMode);
@@ -4000,7 +4001,7 @@ function SettingsDialog() {
             <label className="grid gap-1.5 text-sm">
               Built-in agents directory
               <div className="flex gap-2">
-                <Input value={builtInAgentDir} onChange={(event) => setBuiltInAgentDir(event.target.value)} placeholder=".agent-control/built-in-agents" />
+                <Input value={builtInAgentDir} onChange={(event) => setBuiltInAgentDir(event.target.value)} placeholder={DEFAULT_BUILT_IN_AGENT_DIR} />
                 <Button type="button" variant="outline" onClick={() => setAgentDirBrowser("builtIn")}>
                   <FolderOpen className="h-4 w-4" />
                   Browse

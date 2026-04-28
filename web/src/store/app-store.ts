@@ -149,7 +149,7 @@ const defaultSettings: SettingsState = {
   claudeAgentDir: ".claude/agents",
   codexAgentDir: ".codex/agents",
   openaiAgentDir: ".agent-control/openai-agents",
-  builtInAgentDir: ".agent-control/built-in-agents"
+  builtInAgentDir: "~/.agent-control/built-in-agents"
 };
 
 function clampNumber(value: unknown, fallback: number, min: number, max: number): number {
