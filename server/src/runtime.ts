@@ -6,6 +6,7 @@ import type {
   AgentDef,
   AgentSnapshot,
   AgentStatus,
+  AgentPermissionMode,
   AutoApproveMode,
   Capabilities,
   LaunchRequest,
@@ -130,6 +131,7 @@ export class AgentRuntimeManager {
 
     const displayName = this.uniqueDisplayName(request.displayName?.trim() || def.name);
     const timestamp = now();
+    const permissionMode = this.initialPermissionMode(request);
     const agent: RunningAgent = {
       id: nanoid(),
       projectId: project.id,
@@ -144,7 +146,8 @@ export class AgentRuntimeManager {
       launchedAt: timestamp,
       updatedAt: timestamp,
       remoteControl: Boolean(request.remoteControl),
-      planMode: Boolean(request.planMode)
+      permissionMode,
+      planMode: permissionMode === "plan"
     };
 
     const state: AgentProcessState = {
@@ -270,30 +273,43 @@ export class AgentRuntimeManager {
   }
 
   setPlanMode(id: string, planMode: boolean): void {
-    const state = this.requiredState(id);
-    if (state.agent.remoteControl) throw new Error("Remote Control agents cannot change plan mode from the dashboard.");
+    this.setPermissionMode(id, planMode ? "plan" : "default");
+  }
 
-    state.agent.planMode = planMode;
+  setPermissionMode(id: string, permissionMode: AgentPermissionMode): void {
+    const state = this.requiredState(id);
+    if (state.agent.remoteControl) throw new Error("Remote Control agents cannot change mode from the dashboard.");
+
+    state.agent.permissionMode = permissionMode;
+    state.agent.planMode = permissionMode === "plan";
     state.agent.updatedAt = now();
     if (state.child && !state.child.killed) {
+      const mode = this.permissionMode(state);
       state.child.stdin.write(
         `${JSON.stringify({
           type: "control",
           subtype: "set_permission_mode",
-          mode: this.permissionMode(state),
-          permission_mode: this.permissionMode(state)
+          mode,
+          permission_mode: mode
         })}\n`
       );
     }
     this.pushTranscript(state, {
       ...eventBase(state.agent.id, state.agent.currentModel),
       kind: "system",
-      text: `Plan mode ${planMode ? "enabled" : "disabled"}.`
+      text: `Mode changed to ${this.permissionModeLabel(permissionMode)}.`
+    });
+    this.broadcast({
+      type: "agent.permission_mode_changed",
+      id: state.agent.id,
+      permissionMode,
+      planMode: state.agent.planMode,
+      updatedAt: state.agent.updatedAt
     });
     this.broadcast({
       type: "agent.plan_mode_changed",
       id: state.agent.id,
-      planMode,
+      planMode: state.agent.planMode,
       updatedAt: state.agent.updatedAt
     });
     this.persist();
@@ -545,10 +561,25 @@ export class AgentRuntimeManager {
     this.stopProcessTree(state);
   }
 
-  private permissionMode(state: AgentProcessState): "bypassPermissions" | "default" | "plan" {
+  private initialPermissionMode(request: LaunchRequest): AgentPermissionMode {
+    if (request.permissionMode) return request.permissionMode;
+    if (request.planMode) return "plan";
+    if (request.autoApprove === "always") return "bypassPermissions";
+    return "default";
+  }
+
+  private permissionMode(state: AgentProcessState): AgentPermissionMode {
+    if (state.agent.permissionMode) return state.agent.permissionMode;
     if (state.agent.planMode) return "plan";
     if (state.autoApprove === "always") return "bypassPermissions";
     return "default";
+  }
+
+  private permissionModeLabel(permissionMode: AgentPermissionMode): string {
+    if (permissionMode === "acceptEdits") return "Edit automatically";
+    if (permissionMode === "plan") return "Plan mode";
+    if (permissionMode === "bypassPermissions") return "Bypass permissions";
+    return "Ask before edits";
   }
 
   private stopProcessTree(state: AgentProcessState): void {

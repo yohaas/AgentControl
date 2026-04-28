@@ -19,12 +19,15 @@ import {
   ChevronDown,
   ChevronUp,
   Clipboard,
+  ClipboardList,
+  Code2,
   Columns2,
   ExternalLink,
   FolderOpen,
   FolderPlus,
   GripVertical,
   HardDrive,
+  Hand,
   Home,
   Image as ImageIcon,
   Maximize2,
@@ -41,12 +44,15 @@ import {
   RefreshCw,
   Search,
   Settings,
+  ShieldCheck,
+  SlidersHorizontal,
   SquareTerminal,
   Trash2,
   X
 } from "lucide-react";
 import type {
   AgentDef,
+  AgentPermissionMode,
   ClaudePluginCatalog,
   DirectoryEntry,
   DirectoryListing,
@@ -1452,13 +1458,55 @@ function ModelMenu({ agent, compact = false }: { agent: RunningAgent; compact?: 
   );
 }
 
-function ComposerModeMenu({ agent, compact = false }: { agent: RunningAgent; compact?: boolean }) {
-  const label = agent.planMode ? "Plan mode" : "Default mode";
-  const compactLabel = agent.planMode ? "Plan" : "Default";
+const COMPOSER_MODE_OPTIONS = [
+  {
+    mode: "default",
+    label: "Ask before edits",
+    compactLabel: "Ask",
+    description: "Claude will ask for approval before making each edit.",
+    icon: Hand
+  },
+  {
+    mode: "acceptEdits",
+    label: "Edit automatically",
+    compactLabel: "Edit",
+    description: "Claude will edit your selected text or the whole file.",
+    icon: Code2
+  },
+  {
+    mode: "plan",
+    label: "Plan mode",
+    compactLabel: "Plan",
+    description: "Claude will explore the code and present a plan before editing.",
+    icon: ClipboardList
+  },
+  {
+    mode: "bypassPermissions",
+    label: "Bypass permissions",
+    compactLabel: "Bypass",
+    description: "Claude will not ask for approval before running potentially dangerous commands.",
+    icon: ShieldCheck
+  }
+] satisfies {
+  mode: AgentPermissionMode;
+  label: string;
+  compactLabel: string;
+  description: string;
+  icon: typeof Hand;
+}[];
 
-  function setPlanMode(planMode: boolean) {
-    if (agent.planMode === planMode) return;
-    sendCommand({ type: "setPlanMode", id: agent.id, planMode });
+function currentPermissionMode(agent: RunningAgent): AgentPermissionMode {
+  return agent.permissionMode || (agent.planMode ? "plan" : "default");
+}
+
+function ComposerModeMenu({ agent, compact = false }: { agent: RunningAgent; compact?: boolean }) {
+  const activeMode = currentPermissionMode(agent);
+  const activeOption = COMPOSER_MODE_OPTIONS.find((option) => option.mode === activeMode) || COMPOSER_MODE_OPTIONS[0];
+  const ActiveIcon = activeOption.icon;
+
+  function setPermissionMode(permissionMode: AgentPermissionMode) {
+    if (activeMode === permissionMode) return;
+    sendCommand({ type: "setPermissionMode", id: agent.id, permissionMode });
   }
 
   return (
@@ -1467,22 +1515,61 @@ function ComposerModeMenu({ agent, compact = false }: { agent: RunningAgent; com
         <Button
           variant="outline"
           size="sm"
-          className={cn("h-7 justify-between gap-1 px-2", compact ? "w-20 text-[11px]" : "w-full")}
-          title={label}
+          className={cn("h-7 justify-between gap-1 px-2", compact ? "w-24 text-[11px]" : "w-full")}
+          title={activeOption.label}
+          disabled={agent.remoteControl}
         >
-          <span className="truncate">{compact ? compactLabel : label}</span>
+          <span className="flex min-w-0 items-center gap-1.5">
+            <ActiveIcon className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate">{compact ? activeOption.compactLabel : activeOption.label}</span>
+          </span>
           <ChevronDown className="h-3.5 w-3.5 shrink-0" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <DropdownMenuItem onClick={() => setPlanMode(false)}>
-          <Check className={cn("mr-2 h-4 w-4", !agent.planMode ? "opacity-100" : "opacity-0")} />
-          Default mode
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setPlanMode(true)}>
-          <Check className={cn("mr-2 h-4 w-4", agent.planMode ? "opacity-100" : "opacity-0")} />
-          Plan mode
-        </DropdownMenuItem>
+      <DropdownMenuContent align="end" className="w-80 p-2">
+        <div className="flex items-center justify-between px-2 pb-1 pt-1 text-xs text-muted-foreground">
+          <span>Modes</span>
+          <span className="inline-flex items-center gap-1">
+            <kbd className="rounded border border-border px-1 font-mono text-[10px]">Shift</kbd>
+            <span>+</span>
+            <kbd className="rounded border border-border px-1 font-mono text-[10px]">Tab</kbd>
+            <span>to switch</span>
+          </span>
+        </div>
+        <div className="grid gap-1">
+          {COMPOSER_MODE_OPTIONS.map((option) => {
+            const Icon = option.icon;
+            const selected = option.mode === activeMode;
+            return (
+              <DropdownMenuItem
+                key={option.mode}
+                onClick={() => setPermissionMode(option.mode)}
+                className={cn(
+                  "items-start gap-3 rounded-md px-2 py-2.5",
+                  selected && "bg-primary/20 text-foreground focus:bg-primary/25"
+                )}
+              >
+                <Icon className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-medium leading-none">{option.label}</span>
+                  <span className="mt-1 block text-xs leading-snug text-muted-foreground">{option.description}</span>
+                </span>
+                <Check className={cn("mt-1 h-4 w-4 shrink-0", selected ? "opacity-100" : "opacity-0")} />
+              </DropdownMenuItem>
+            );
+          })}
+        </div>
+        <div className="mt-2 flex items-center gap-3 border-t border-border px-2 pt-2 text-xs text-muted-foreground">
+          <SlidersHorizontal className="h-4 w-4" />
+          <span className="flex-1">
+            Effort <span className="text-foreground">(Medium)</span>
+          </span>
+          <span className="inline-flex h-5 w-20 items-center justify-between rounded-full bg-muted px-2">
+            <span className="h-1 w-1 rounded-full bg-muted-foreground/45" />
+            <span className="h-3.5 w-3.5 rounded-full bg-foreground/80" />
+            <span className="h-1 w-1 rounded-full bg-muted-foreground/45" />
+          </span>
+        </div>
       </DropdownMenuContent>
     </DropdownMenu>
   );

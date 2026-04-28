@@ -294,6 +294,17 @@ export const useAppStore = create<AppState>((set, get) => ({
           )
         }));
         break;
+      case "agent.permission_mode_changed":
+        set((state) => ({
+          agents: withAgent(state.agents, event.id, (agent) =>
+            mergeAgent(agent, {
+              permissionMode: event.permissionMode,
+              planMode: event.planMode,
+              updatedAt: event.updatedAt
+            })
+          )
+        }));
+        break;
       case "agent.transcript":
         set((state) => ({
           transcripts: {
