@@ -42,6 +42,12 @@
   background: hsl(var(--primary) / 0.35);
 }
 
+.user-question::selection,
+.user-question *::selection {
+  background: hsl(var(--background) / 0.72);
+  color: hsl(var(--foreground));
+}
+
 .xterm {
   height: 100%;
   padding: 8px;

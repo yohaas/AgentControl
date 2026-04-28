@@ -2312,7 +2312,7 @@ function TranscriptPreview({
       <div
         className={cn(
           "max-w-[86%] whitespace-pre-wrap break-words rounded-md border border-border px-3 py-2 text-sm leading-5",
-          isUser ? "bg-primary text-primary-foreground" : "bg-background/60"
+          isUser ? "user-question bg-primary text-primary-foreground" : "bg-background/60"
         )}
         style={!isUser ? { borderLeftColor: agent.color, borderLeftWidth: 4 } : undefined}
       >
@@ -2348,6 +2348,7 @@ function PinnedUserMessage({
       <div
         className={cn(
           "max-w-full rounded-md border border-primary/40 bg-primary/95 px-3 py-2 text-primary-foreground shadow-lg backdrop-blur",
+          "user-question",
           compact ? "text-xs leading-4" : "text-sm leading-5"
         )}
       >
@@ -2844,7 +2845,7 @@ function TranscriptItem({
       <div
         className={cn(
           "min-w-0 max-w-[78%] whitespace-pre-wrap break-words [overflow-wrap:anywhere] rounded-lg border border-border px-3 py-2 text-sm leading-6",
-          isUser ? "bg-primary text-primary-foreground" : "bg-card"
+          isUser ? "user-question bg-primary text-primary-foreground" : "bg-card"
         )}
         style={!isUser ? { borderLeftColor: agent.color, borderLeftWidth: 4 } : undefined}
       >
