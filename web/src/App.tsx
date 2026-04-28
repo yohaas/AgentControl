@@ -28,6 +28,7 @@ import {
   Clipboard,
   ClipboardList,
   Code2,
+  CodeXml,
   Columns2,
   ExternalLink,
   FileText,
@@ -6400,6 +6401,7 @@ function ChatBlockPopoutButton({
   const openLaunchModal = useAppStore((state) => state.openLaunchModal);
   const openSendDialog = useAppStore((state) => state.openSendDialog);
   const addError = useAppStore((state) => state.addError);
+  const [rawView, setRawView] = useState(false);
   const selectionRootId = useRef(`text-block-popout-${Math.random().toString(36).slice(2)}`).current;
   const {
     selectedText: popoutSelectedText,
@@ -6459,6 +6461,15 @@ function ChatBlockPopoutButton({
             <DialogTitle>Text block</DialogTitle>
           </DialogHeader>
           <div className="flex flex-wrap gap-2">
+            <Button
+              variant={rawView ? "default" : "outline"}
+              size="sm"
+              onClick={() => setRawView((value) => !value)}
+              title={rawView ? "Show rendered markdown" : "Show raw text"}
+            >
+              <CodeXml className="h-4 w-4" />
+              {rawView ? "Raw" : "Markdown"}
+            </Button>
             <Button variant="outline" size="sm" onClick={copyText}>
               <Clipboard className="h-4 w-4" />
               Copy {actionScope}
@@ -6532,7 +6543,7 @@ function ChatBlockPopoutButton({
                 onKeyUp={() => capturePopoutSelection()}
                 onContextMenuCapture={preparePopoutContextMenu}
               >
-                <ChatMarkdown text={text} query="" />
+                {rawView ? <pre className="whitespace-pre-wrap break-words font-mono text-xs leading-5">{text}</pre> : <ChatMarkdown text={text} query="" />}
               </div>
             </ContextMenuTrigger>
             <ContextMenuContent>
