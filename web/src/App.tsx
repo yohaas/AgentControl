@@ -150,6 +150,10 @@ const BASE_SLASH_COMMANDS: SlashCommandSuggestion[] = [
   { value: "/permissions", label: "/permissions", description: "Pass through to Claude" }
 ];
 
+function compareSlashCommands(left: string, right: string) {
+  return left.localeCompare(right, undefined, { sensitivity: "base" });
+}
+
 const TERMINAL_DOCK_OPTIONS = [
   { value: "float", label: "Float", icon: PictureInPicture2 },
   { value: "left", label: "Dock left", icon: PanelLeft },
@@ -336,7 +340,7 @@ function remoteControlLabel(agent: RunningAgent) {
 function SessionInfoPopover({ agent, compact = false }: { agent: RunningAgent; compact?: boolean }) {
   const tools = agent.sessionTools || [];
   const mcpServers = agent.mcpServers || [];
-  const slashCommands = agent.slashCommands || [];
+  const slashCommands = useMemo(() => [...(agent.slashCommands || [])].sort(compareSlashCommands), [agent.slashCommands]);
   const plugins = agent.activePlugins || [];
   const hasInfo = tools.length > 0 || mcpServers.length > 0 || slashCommands.length > 0 || plugins.length > 0;
 
@@ -921,6 +925,7 @@ function slashCommandSuggestions(draft: string, models: string[], sessionCommand
       seen.add(command.value);
       return command.value.slice(1).toLowerCase().startsWith(query);
     })
+    .sort((left, right) => compareSlashCommands(left.label, right.label))
     .slice(0, 10);
 }
 
