@@ -2856,11 +2856,9 @@ function Sidebar() {
   const setCollapsed = useAppStore((state) => state.setSidebarCollapsed);
   const settings = useAppStore((state) => state.settings);
   const setSettings = useAppStore((state) => state.setSettings);
-  const setProjects = useAppStore((state) => state.setProjects);
   const addError = useAppStore((state) => state.addError);
   const [runningSort, setRunningSort] = useState<"lastActivity" | "type">("lastActivity");
   const [agentTab, setAgentTab] = useState<"project" | "builtIn">("builtIn");
-  const [builtInEditor, setBuiltInEditor] = useState<{ open: boolean; agent?: AgentDef; originalName?: string }>({ open: false });
 
   const project = projects.find((candidate) => candidate.id === selectedProjectId);
   const projectAgentDefs = project?.agents || [];
@@ -2944,16 +2942,6 @@ function Sidebar() {
       });
     });
     setSelectedAgent(undefined);
-  }
-
-  async function deleteBuiltIn(agent: AgentDef) {
-    if (!project || !agent.sourcePath) return;
-    if (!window.confirm(`Remove built-in agent ${agent.name}?`)) return;
-    try {
-      setProjects(await api.deleteBuiltInAgent(project.id, agent.name));
-    } catch (error) {
-      addError(error instanceof Error ? error.message : String(error));
-    }
   }
 
   if (collapsed) {
@@ -3124,18 +3112,6 @@ function Sidebar() {
             Built-In
           </button>
         </div>
-        {agentTab === "builtIn" && (
-          <Button
-            variant="outline"
-            size="sm"
-            className="mb-2 w-full"
-            disabled={!project}
-            onClick={() => setBuiltInEditor({ open: true })}
-          >
-            <Plus className="h-4 w-4" />
-            Add Built-In Agent
-          </Button>
-        )}
         <div className="max-h-[38vh] space-y-1 overflow-y-auto overflow-x-hidden pr-1">
           {!project ? (
             <p className="rounded-md border border-dashed border-border px-3 py-5 text-center text-sm text-muted-foreground">
@@ -3154,40 +3130,9 @@ function Sidebar() {
               {availableAgentDefs.map((agent) => (
                 <button
                   key={agent.name}
-                  className="group relative grid min-h-20 content-start gap-1 rounded-md border border-border bg-background/40 px-2 py-2 text-left hover:bg-accent"
+                  className="grid min-h-20 content-start gap-1 rounded-md border border-border bg-background/40 px-2 py-2 text-left hover:bg-accent"
                   onClick={() => openLaunchModal({ projectId: project.id, defName: agent.name, agentSource: agentTab })}
                 >
-                  {agentTab === "builtIn" && (
-                    <span className="absolute right-1 top-1 hidden gap-1 group-hover:flex">
-                      <span
-                        role="button"
-                        tabIndex={0}
-                        className="grid h-5 w-5 place-items-center rounded bg-background/90 text-muted-foreground hover:text-foreground"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          setBuiltInEditor({ open: true, agent, originalName: agent.name });
-                        }}
-                        title="Edit built-in agent"
-                      >
-                        <Settings className="h-3 w-3" />
-                      </span>
-                      <span
-                        role="button"
-                        tabIndex={0}
-                        className={cn(
-                          "grid h-5 w-5 place-items-center rounded bg-background/90 text-muted-foreground hover:text-foreground",
-                          !agent.sourcePath && "cursor-not-allowed opacity-40"
-                        )}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          void deleteBuiltIn(agent);
-                        }}
-                        title={agent.sourcePath ? "Remove built-in agent" : "Default built-in agent cannot be removed"}
-                      >
-                        <X className="h-3 w-3" />
-                      </span>
-                    </span>
-                  )}
                   <span className="flex min-w-0 items-center gap-1.5">
                     <AgentDot color={agent.color} />
                     <span className="truncate text-xs font-medium">{agent.name}</span>
@@ -3206,18 +3151,6 @@ function Sidebar() {
         onPointerDown={startSidebarResize}
         title="Drag to resize sidebar"
       />
-      {project && (
-        <BuiltInAgentDialog
-          project={project}
-          state={builtInEditor}
-          onOpenChange={(open) => setBuiltInEditor((current) => ({ ...current, open }))}
-          onSaved={(nextProjects) => {
-            setProjects(nextProjects);
-            setBuiltInEditor({ open: false });
-            setAgentTab("builtIn");
-          }}
-        />
-      )}
     </aside>
   );
 }
@@ -4249,7 +4182,7 @@ function SettingsDialog() {
   const [open, setOpen] = useState(false);
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const [projectPaths, setProjectPaths] = useState(settings.projectPaths || []);
-  const [settingsTab, setSettingsTab] = useState<"general" | "claude" | "codex" | "openai">("general");
+  const [settingsTab, setSettingsTab] = useState<"general" | "builtIn" | "claude" | "codex" | "openai">("general");
   const [claudeModelsText, setClaudeModelsText] = useState(providerModelsText(settings, "claude"));
   const [codexModelsText, setCodexModelsText] = useState(providerModelsText(settings, "codex"));
   const [openaiModelsText, setOpenaiModelsText] = useState(providerModelsText(settings, "openai"));
@@ -4276,6 +4209,7 @@ function SettingsDialog() {
   const [tileHeight, setTileHeight] = useState(settings.tileHeight);
   const [tileColumns, setTileColumns] = useState(settings.tileColumns);
   const [pinLastSentMessage, setPinLastSentMessage] = useState(settings.pinLastSentMessage);
+  const [builtInEditor, setBuiltInEditor] = useState<{ open: boolean; agent?: AgentDef; originalName?: string }>({ open: false });
 
   useEffect(() => {
     if (!open) return;
@@ -4448,8 +4382,11 @@ function SettingsDialog() {
   }
 
   const selectedProject = projects.find((project) => project.id === selectedProjectId);
+  const builtInProject = selectedProject || projects[0];
+  const builtInAgentDefs = builtInProject?.builtInAgents?.length ? builtInProject.builtInAgents : [GENERAL_AGENT_DEF];
+  const builtInDirectoryDirty = builtInAgentDir !== (settings.builtInAgentDir || DEFAULT_BUILT_IN_AGENT_DIR);
   const browserInitialPath = agentDirBrowser
-    ? currentAgentDir(agentDirBrowser).startsWith(".") && selectedProject
+    ? agentDirBrowser !== "builtIn" && currentAgentDir(agentDirBrowser).startsWith(".") && selectedProject
       ? `${selectedProject.path}\\${currentAgentDir(agentDirBrowser)}`
       : currentAgentDir(agentDirBrowser)
     : "";
@@ -4505,10 +4442,21 @@ function SettingsDialog() {
   );
   const settingsTabs = [
     ["general", "General"],
+    ["builtIn", "Built-In Agents"],
     ["claude", "Claude"],
     ["codex", "Codex"],
     ["openai", "OpenAI"]
   ] as const;
+
+  async function deleteBuiltIn(agent: AgentDef) {
+    if (!builtInProject || !agent.sourcePath) return;
+    if (!window.confirm(`Remove built-in agent ${agent.name}?`)) return;
+    try {
+      setProjects(await api.deleteBuiltInAgent(builtInProject.id, agent.name));
+    } catch (error) {
+      addError(error instanceof Error ? error.message : String(error));
+    }
+  }
 
   return (
     <>
@@ -4586,16 +4534,6 @@ function SettingsDialog() {
             <label className="grid gap-1.5 text-sm">
               Git path
               <Input value={gitPath} onChange={(event) => setGitPath(event.target.value)} placeholder="git" />
-            </label>
-            <label className="grid gap-1.5 text-sm">
-              Built-in agents directory
-              <div className="flex gap-2">
-                <Input value={builtInAgentDir} onChange={(event) => setBuiltInAgentDir(event.target.value)} placeholder={DEFAULT_BUILT_IN_AGENT_DIR} />
-                <Button type="button" variant="outline" onClick={() => setAgentDirBrowser("builtIn")}>
-                  <FolderOpen className="h-4 w-4" />
-                  Browse
-                </Button>
-              </div>
             </label>
           </section>
           <label className="grid gap-1.5 text-sm">
@@ -4681,6 +4619,91 @@ function SettingsDialog() {
             />
           </section>
           </>
+          )}
+          {settingsTab === "builtIn" && (
+            <>
+              <section className="grid gap-2 rounded-md border border-border p-3">
+                <div>
+                  <h3 className="text-sm font-medium">Built-in agents directory</h3>
+                  <p className="text-xs text-muted-foreground">Global AgentControl agents available to every project.</p>
+                </div>
+                <div className="flex gap-2">
+                  <Input value={builtInAgentDir} onChange={(event) => setBuiltInAgentDir(event.target.value)} placeholder={DEFAULT_BUILT_IN_AGENT_DIR} />
+                  <Button type="button" variant="outline" onClick={() => setAgentDirBrowser("builtIn")}>
+                    <FolderOpen className="h-4 w-4" />
+                    Browse
+                  </Button>
+                </div>
+                {builtInDirectoryDirty && (
+                  <p className="rounded-md border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+                    Save settings to load and manage agents from this directory.
+                  </p>
+                )}
+              </section>
+              <section className="grid gap-3 rounded-md border border-border p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <h3 className="text-sm font-medium">Manage built-in agents</h3>
+                    <p className="text-xs text-muted-foreground">
+                      Add, edit, or remove app-level agent definitions.
+                    </p>
+                  </div>
+                  <Button type="button" size="sm" disabled={!builtInProject || builtInDirectoryDirty} onClick={() => setBuiltInEditor({ open: true })}>
+                    <Plus className="h-4 w-4" />
+                    Add Agent
+                  </Button>
+                </div>
+                {!builtInProject ? (
+                  <p className="rounded-md border border-dashed border-border px-3 py-5 text-center text-sm text-muted-foreground">
+                    Add a project before managing built-in agents.
+                  </p>
+                ) : builtInAgentDefs.length === 0 ? (
+                  <p className="rounded-md border border-dashed border-border px-3 py-5 text-center text-sm text-muted-foreground">
+                    No built-in agents found.
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2">
+                    {builtInAgentDefs.map((agent) => (
+                      <div key={agent.name} className="grid min-h-24 gap-2 rounded-md border border-border bg-background/50 p-3">
+                        <div className="flex min-w-0 items-start gap-2">
+                          <AgentDot color={agent.color} className="mt-1" />
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate text-sm font-medium">{agent.name}</div>
+                            <div className="line-clamp-2 text-xs text-muted-foreground">
+                              {agent.description || "No description"}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            title="Edit built-in agent"
+                            disabled={builtInDirectoryDirty}
+                            onClick={() => setBuiltInEditor({ open: true, agent, originalName: agent.name })}
+                          >
+                            <Settings className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                            disabled={!agent.sourcePath || builtInDirectoryDirty}
+                            title={agent.sourcePath ? "Remove built-in agent" : "Default built-in agent cannot be removed"}
+                            onClick={() => void deleteBuiltIn(agent)}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+            </>
           )}
           {settingsTab === "claude" && (
             <>
@@ -4843,6 +4866,17 @@ function SettingsDialog() {
         </div>
         </DialogContent>
       </Dialog>
+      {builtInProject && (
+        <BuiltInAgentDialog
+          project={builtInProject}
+          state={builtInEditor}
+          onOpenChange={(nextOpen) => setBuiltInEditor((current) => ({ ...current, open: nextOpen }))}
+          onSaved={(nextProjects) => {
+            setProjects(nextProjects);
+            setBuiltInEditor({ open: false });
+          }}
+        />
+      )}
       <FolderBrowserDialog
         open={Boolean(agentDirBrowser)}
         initialPath={browserInitialPath}
