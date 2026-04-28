@@ -70,19 +70,57 @@ import { useAppStore } from "./store/app-store";
 const DEFAULT_MODEL = "claude-sonnet-4-6";
 const EMPTY_TRANSCRIPT: TranscriptEvent[] = [];
 const EMPTY_QUEUE: { id: string; text: string; attachments: MessageAttachment[] }[] = [];
+const THINKING_PHRASES = [
+  "Discombobulating",
+  "Cogitating",
+  "Triangulating",
+  "Untangling",
+  "Percolating",
+  "Recalibrating",
+  "Synthesizing",
+  "Mulling",
+  "Connecting dots"
+];
+
+function useThinkingPhrase(active = true) {
+  const [index, setIndex] = useState(() => Math.floor(Date.now() / 1800) % THINKING_PHRASES.length);
+
+  useEffect(() => {
+    if (!active) return;
+    const timer = window.setInterval(() => {
+      setIndex((value) => (value + 1) % THINKING_PHRASES.length);
+    }, 1800);
+    return () => window.clearInterval(timer);
+  }, [active]);
+
+  return THINKING_PHRASES[index];
+}
+
+function ThinkingText({ prefix }: { prefix?: string }) {
+  const phrase = useThinkingPhrase();
+  return (
+    <span className="inline-flex items-center gap-1 text-xs text-primary">
+      {prefix}
+      <span>{phrase}</span>
+      <span className="inline-flex w-4 animate-pulse">...</span>
+    </span>
+  );
+}
 
 function AgentDot({ color, className }: { color: string; className?: string }) {
   return <span className={cn("h-3 w-3 shrink-0 rounded-full", className)} style={{ background: color }} />;
 }
 
 function StatusPill({ status }: { status: RunningAgent["status"] }) {
+  const busy = status === "running" || status === "starting" || status === "switching-model";
+  const thinkingPhrase = useThinkingPhrase(busy);
   const label =
     status === "running"
-      ? "Discombobulating"
+      ? thinkingPhrase
       : status === "starting"
-        ? "Summoning"
+        ? thinkingPhrase
         : status === "switching-model"
-          ? "Recalibrating"
+          ? thinkingPhrase
           : status === "awaiting-permission"
             ? "Needs approval"
             : status === "remote-controlled"
@@ -1620,7 +1658,9 @@ function TranscriptPreview({ event, agent }: { event: TranscriptEvent; agent: Ru
           </span>
         )}
         {event.kind === "assistant_text" && event.streaming && (
-          <span className="mt-2 inline-flex text-xs text-primary">streaming...</span>
+          <span className="mt-2 block">
+            <ThinkingText />
+          </span>
         )}
       </div>
     </div>
@@ -2022,7 +2062,9 @@ function TranscriptItem({ event, agent, query }: { event: TranscriptEvent; agent
         )}
         <CollapsibleText text={event.text} query={query} />
         {event.kind === "assistant_text" && event.streaming && (
-          <span className="mt-2 inline-flex text-xs text-primary">streaming...</span>
+          <span className="mt-2 block">
+            <ThinkingText />
+          </span>
         )}
         {event.kind === "user" && event.attachments && event.attachments.length > 0 && (
           <div className="mt-3 flex flex-wrap gap-2">
