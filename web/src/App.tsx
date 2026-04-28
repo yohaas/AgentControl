@@ -5219,18 +5219,19 @@ function SendToMenu({
   );
   const targetAgents = useMemo(() => agents.filter((agent) => agent.id !== source.id), [agents, source.id]);
   const fallbackText = useMemo(() => transcriptToPlainText(source, transcripts), [source, transcripts]);
-  const activeTarget = selectedText || getCachedSelectedText()
-    ? { scope: "selection" as const, text: selectedText || getCachedSelectedText() }
-    : contextTarget?.text
-      ? contextTarget
+  const liveSelectedText = getSelectionInRoot(rootSelector);
+  const activeTarget = contextTarget?.text
+    ? contextTarget
+    : liveSelectedText || selectedText || getCachedSelectedText()
+      ? { scope: "selection" as const, text: liveSelectedText || selectedText || getCachedSelectedText() }
       : { scope: "chat" as const, text: fallbackText };
   const activeText = activeTarget.text;
-  const targetLabel = activeTarget.scope === "selection" ? "selection" : activeTarget.scope === "block" ? "text block" : "chat";
+  const targetLabel = activeTarget.scope === "selection" ? "selected text" : activeTarget.scope === "block" ? "text block" : "whole chat";
 
   function currentCopyTarget() {
-    const selected = captureSelectedText() || selectedText || getCachedSelectedText() || getSelectionInRoot(rootSelector);
-    if (selected) return { scope: "selection" as const, text: selected };
     if (contextTarget?.text) return contextTarget;
+    const selected = captureSelectedText() || getSelectionInRoot(rootSelector) || selectedText || getCachedSelectedText();
+    if (selected) return { scope: "selection" as const, text: selected };
     return { scope: "chat" as const, text: fallbackText };
   }
 

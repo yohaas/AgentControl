@@ -29,7 +29,7 @@ export function useTextSelection(rootSelector: string) {
 
   const clearSelection = useCallback(() => {
     lastSelectedText.current = "";
-    setSelectedText("");
+    flushSync(() => setSelectedText(""));
   }, []);
 
   const captureSelection = useCallback(() => {
