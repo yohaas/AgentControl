@@ -1479,14 +1479,12 @@ function ProviderModelsField({
   value,
   onChange,
   placeholder,
-  currentModels,
   onUseCurrentModels
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   placeholder: string;
-  currentModels?: string[];
   onUseCurrentModels?: () => void;
 }) {
   return (
@@ -1503,15 +1501,6 @@ function ProviderModelsField({
         )}
       </span>
       <Textarea value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} />
-      {currentModels && currentModels.length > 0 && (
-        <span className="flex flex-wrap gap-1.5 rounded-md border border-border bg-muted/30 p-2">
-          {currentModels.map((model) => (
-            <span key={model} className="rounded bg-background px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
-              {model}
-            </span>
-          ))}
-        </span>
-      )}
     </label>
   );
 }
@@ -4466,7 +4455,6 @@ function SettingsDialog() {
                 value={codexModelsText}
                 onChange={setCodexModelsText}
                 placeholder="One Codex model id per line"
-                currentModels={CURRENT_CODEX_MODEL_PROFILES.map((profile) => profile.id)}
                 onUseCurrentModels={() => setCodexModelsText(currentModelText("codex"))}
               />
               <label className="grid gap-1.5 text-sm">
@@ -4488,7 +4476,6 @@ function SettingsDialog() {
                 value={openaiModelsText}
                 onChange={setOpenaiModelsText}
                 placeholder="One OpenAI model id per line"
-                currentModels={CURRENT_OPENAI_MODEL_PROFILES.map((profile) => profile.id)}
                 onUseCurrentModels={() => setOpenaiModelsText(currentModelText("openai"))}
               />
               <label className="grid gap-1.5 text-sm">
