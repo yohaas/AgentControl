@@ -1260,6 +1260,21 @@ function pathIsDescendant(child: string, parent: string) {
   return normalizedChild !== normalizedParent && normalizedChild.startsWith(`${normalizedParent}/`);
 }
 
+function pathSeparatorFor(projectPath: string) {
+  return isLikelyWindowsPath(projectPath) ? "\\" : "/";
+}
+
+function joinUiPath(basePath: string, ...parts: string[]) {
+  const separator = pathSeparatorFor(basePath);
+  const trimmedBase = basePath.replace(/[\\/]+$/g, "");
+  const trimmedParts = parts.map((part) => part.replace(/^[\\/]+|[\\/]+$/g, "")).filter(Boolean);
+  return [trimmedBase, ...trimmedParts].join(separator);
+}
+
+function safeWorktreePathName(branchName: string) {
+  return branchName.trim().replace(/^refs\/heads\//, "").replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "worktree";
+}
+
 function isDevTerminal(session: TerminalSession) {
   return session.title?.startsWith("Dev: ") || session.title === "npm run dev";
 }
@@ -1836,14 +1851,23 @@ function WorktreesDialog({ projectId }: { projectId?: string }) {
   const [branch, setBranch] = useState("");
   const [base, setBase] = useState("HEAD");
   const [pathText, setPathText] = useState("");
+  const [pathEdited, setPathEdited] = useState(false);
   const [createBranch, setCreateBranch] = useState(true);
   const [browserOpen, setBrowserOpen] = useState(false);
   const selectedProject = projects.find((project) => project.id === projectId);
+  const suggestedWorktreePath = selectedProject?.path
+    ? joinUiPath(selectedProject.path, ".claude", "worktrees", safeWorktreePathName(branch))
+    : "";
 
   useEffect(() => {
     if (!open || !projectId) return;
     void refresh();
   }, [open, projectId]);
+
+  useEffect(() => {
+    if (!open || pathEdited || !suggestedWorktreePath) return;
+    setPathText(suggestedWorktreePath);
+  }, [open, pathEdited, suggestedWorktreePath]);
 
   async function refresh() {
     if (!projectId) return;
@@ -1887,17 +1911,17 @@ function WorktreesDialog({ projectId }: { projectId?: string }) {
       const result = await api.createGitWorktree(projectId, {
         branch: branch.trim(),
         base: base.trim() || "HEAD",
-        path: pathText.trim() || undefined,
+        path: pathText.trim() || suggestedWorktreePath || undefined,
         createBranch
       });
       setProjects(result.projects);
       setWorktrees(result.worktrees);
       const created =
-        result.worktrees.worktrees.find((worktree) => pathText.trim() && pathsEqual(worktree.path, pathText.trim())) ||
+        result.worktrees.worktrees.find((worktree) => pathsEqual(worktree.path, pathText.trim() || suggestedWorktreePath)) ||
         result.worktrees.worktrees.find((worktree) => worktree.branch === branch.trim());
       if (created) selectProjectForPath(result.projects, created.path);
       setBranch("");
-      setPathText("");
+      setPathEdited(false);
       setBase("HEAD");
       setCreateBranch(true);
       setTab("worktrees");
@@ -1975,7 +1999,14 @@ function WorktreesDialog({ projectId }: { projectId?: string }) {
               <label className="grid gap-1.5 text-sm">
                 Worktree path
                 <div className="flex gap-2">
-                  <Input value={pathText} onChange={(event) => setPathText(event.target.value)} placeholder="Default: sibling folder" />
+                  <Input
+                    value={pathText}
+                    onChange={(event) => {
+                      setPathEdited(true);
+                      setPathText(event.target.value);
+                    }}
+                    placeholder={suggestedWorktreePath || "Choose a child folder"}
+                  />
                   <Button type="button" variant="outline" onClick={() => setBrowserOpen(true)}>
                     <FolderOpen className="h-4 w-4" />
                     Browse
@@ -2054,6 +2085,7 @@ function WorktreesDialog({ projectId }: { projectId?: string }) {
         initialPath={pathText || selectedProject?.path || ""}
         onOpenChange={setBrowserOpen}
         onSelect={(selectedPath) => {
+          setPathEdited(true);
           setPathText(selectedPath);
           setBrowserOpen(false);
         }}

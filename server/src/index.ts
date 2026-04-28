@@ -377,7 +377,7 @@ function safeWorktreeBranchName(branch: string): string {
 
 function defaultWorktreePath(project: Project, branch: string): string {
   const safeBranch = safeWorktreeBranchName(branch).replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "worktree";
-  return path.join(path.dirname(project.path), `${path.basename(project.path)}-${safeBranch}`);
+  return path.join(project.path, ".claude", "worktrees", safeBranch);
 }
 
 async function refreshConfiguredProjects(): Promise<Project[]> {
@@ -434,6 +434,7 @@ async function createProjectWorktree(project: Project, request: GitWorktreeCreat
   if (projects.some((candidate) => normalizedProjectPath(candidate.path) === normalizedProjectPath(targetPath))) {
     throw new Error("That worktree is already open as a project.");
   }
+  await mkdir(path.dirname(targetPath), { recursive: true });
   const parentInfo = await stat(path.dirname(targetPath)).catch(() => undefined);
   if (!parentInfo?.isDirectory()) throw new Error("Worktree parent folder does not exist.");
   const existing = await stat(targetPath).catch(() => undefined);
