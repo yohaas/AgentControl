@@ -60,7 +60,8 @@ export function resolveClaudeCommand(): string {
   const cmdShim = path.join(npmDir, "claude.cmd");
   if (existsSync(cmdShim)) return resolveWindowsClaudeCommand(cmdShim);
 
-  return "claude.cmd";
+  const pathCommand = resolveWindowsClaudeCommand("claude");
+  return pathCommand === "claude" ? "claude.cmd" : pathCommand;
 }
 
 export function resolveCodexCommand(): string {
