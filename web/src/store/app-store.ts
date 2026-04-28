@@ -19,7 +19,10 @@ export interface SettingsState {
   tileHeight: number;
   tileColumns: number;
   pinLastSentMessage: boolean;
+  terminalDock: TerminalDockPosition;
 }
+
+export type TerminalDockPosition = "float" | "left" | "bottom" | "right";
 
 interface SendDialogState {
   open: boolean;
@@ -104,7 +107,8 @@ const defaultSettings: SettingsState = {
   autoApprove: "off",
   tileHeight: 460,
   tileColumns: 2,
-  pinLastSentMessage: true
+  pinLastSentMessage: true,
+  terminalDock: "bottom"
 };
 
 function clampNumber(value: unknown, fallback: number, min: number, max: number): number {
@@ -114,11 +118,15 @@ function clampNumber(value: unknown, fallback: number, min: number, max: number)
 }
 
 function normalizeSettings(settings: SettingsState): SettingsState {
+  const terminalDock = ["float", "left", "bottom", "right"].includes(settings.terminalDock)
+    ? settings.terminalDock
+    : defaultSettings.terminalDock;
   return {
     ...defaultSettings,
     ...settings,
     tileHeight: clampNumber(settings.tileHeight, defaultSettings.tileHeight, 320, 760),
-    tileColumns: clampNumber(settings.tileColumns, defaultSettings.tileColumns, 1, 6)
+    tileColumns: clampNumber(settings.tileColumns, defaultSettings.tileColumns, 1, 6),
+    terminalDock
   };
 }
 

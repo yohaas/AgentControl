@@ -1554,6 +1554,7 @@ function SettingsDialog() {
   const [tileHeight, setTileHeight] = useState(settings.tileHeight);
   const [tileColumns, setTileColumns] = useState(settings.tileColumns);
   const [pinLastSentMessage, setPinLastSentMessage] = useState(settings.pinLastSentMessage);
+  const [terminalDock, setTerminalDock] = useState(settings.terminalDock);
   const [supervised, setSupervised] = useState<boolean | undefined>();
 
   useEffect(() => {
@@ -1564,6 +1565,7 @@ function SettingsDialog() {
     setTileHeight(settings.tileHeight);
     setTileColumns(settings.tileColumns);
     setPinLastSentMessage(settings.pinLastSentMessage);
+    setTerminalDock(settings.terminalDock);
     void refreshAdminStatus();
   }, [open, settings]);
 
@@ -1585,7 +1587,8 @@ function SettingsDialog() {
         autoApprove,
         tileHeight,
         tileColumns,
-        pinLastSentMessage
+        pinLastSentMessage,
+        terminalDock
       });
       setSettings(next);
       setProjects(await api.refresh());
@@ -1606,7 +1609,8 @@ function SettingsDialog() {
         autoApprove,
         tileHeight,
         tileColumns,
-        pinLastSentMessage
+        pinLastSentMessage,
+        terminalDock
       }
     };
     downloadText("agent-control-config.json", JSON.stringify(payload, null, 2), "application/json");
@@ -1626,6 +1630,7 @@ function SettingsDialog() {
       setTileHeight(next.tileHeight);
       setTileColumns(next.tileColumns);
       setPinLastSentMessage(next.pinLastSentMessage);
+      setTerminalDock(next.terminalDock);
     } catch (error) {
       addError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -1679,6 +1684,20 @@ function SettingsDialog() {
                 <SelectItem value="off">Off</SelectItem>
                 <SelectItem value="session">This session</SelectItem>
                 <SelectItem value="always">Always</SelectItem>
+              </SelectContent>
+            </Select>
+          </label>
+          <label className="grid gap-1.5 text-sm">
+            Terminal dock
+            <Select value={terminalDock} onValueChange={(value) => setTerminalDock(value as typeof terminalDock)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="float">Float</SelectItem>
+                <SelectItem value="left">Left</SelectItem>
+                <SelectItem value="bottom">Bottom</SelectItem>
+                <SelectItem value="right">Right</SelectItem>
               </SelectContent>
             </Select>
           </label>
@@ -3055,13 +3074,11 @@ function TerminalPane({
 function TerminalPanel({
   popout = false,
   popoutTerminalId,
-  poppedOutTerminalIds = new Set<string>(),
-  onPopoutTerminal
+  poppedOutTerminalIds = new Set<string>()
 }: {
   popout?: boolean;
   popoutTerminalId?: string;
   poppedOutTerminalIds?: Set<string>;
-  onPopoutTerminal?: (id: string, remainingIds: string[]) => void;
 } = {}) {
   const projects = useAppStore((state) => state.projects);
   const selectedProjectId = useAppStore((state) => state.selectedProjectId);
@@ -3070,11 +3087,13 @@ function TerminalPanel({
   const activeTerminalId = useAppStore((state) => state.activeTerminalId);
   const setActiveTerminal = useAppStore((state) => state.setActiveTerminal);
   const setTerminalOpen = useAppStore((state) => state.setTerminalOpen);
-  const addError = useAppStore((state) => state.addError);
-  const [detached, setDetached] = useState(false);
+  const terminalDock = useAppStore((state) => state.settings.terminalDock);
   const [height, setHeight] = useState(320);
+  const [width, setWidth] = useState(420);
   const [detachedBounds, setDetachedBounds] = useState({ left: 96, top: 72, width: 960, height: 520 });
   const [visiblePaneIds, setVisiblePaneIds] = useState<string[]>([]);
+  const floating = !popout && terminalDock === "float";
+  const sideDock = !popout && (terminalDock === "left" || terminalDock === "right");
   const poppedOutKey = useMemo(() => [...poppedOutTerminalIds].sort().join("|"), [poppedOutTerminalIds]);
   const sessions = useMemo(
     () => {
@@ -3101,11 +3120,12 @@ function TerminalPanel({
   }, [activeTerminalId, sessions]);
 
   useEffect(() => {
-    if (!detached) return;
+    if (!floating) return;
+    setDetachedBounds((bounds) => clampDetachedBounds(bounds));
     const onResize = () => setDetachedBounds((bounds) => clampDetachedBounds(bounds));
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
-  }, [detached]);
+  }, [floating]);
 
   function clampDetachedBounds(bounds: { left: number; top: number; width: number; height: number }) {
     const margin = 8;
@@ -3138,8 +3158,24 @@ function TerminalPanel({
     window.addEventListener("pointerup", onUp);
   }
 
+  function startSideResize(event: ReactPointerEvent<HTMLDivElement>) {
+    event.preventDefault();
+    const startX = event.clientX;
+    const startWidth = width;
+    const direction = terminalDock === "left" ? 1 : -1;
+    const onMove = (moveEvent: PointerEvent) => {
+      setWidth(Math.min(760, Math.max(320, startWidth + direction * (moveEvent.clientX - startX))));
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  }
+
   function startDetachedMove(event: ReactPointerEvent<HTMLDivElement>) {
-    if (!detached) return;
+    if (!floating) return;
     event.preventDefault();
     const startX = event.clientX;
     const startY = event.clientY;
@@ -3166,7 +3202,7 @@ function TerminalPanel({
     horizontal?: "left" | "right",
     vertical?: "top" | "bottom"
   ) {
-    if (!detached) return;
+    if (!floating) return;
     event.preventDefault();
     event.stopPropagation();
     const startX = event.clientX;
@@ -3198,35 +3234,6 @@ function TerminalPanel({
     };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp, { once: true });
-  }
-
-  function toggleDetached() {
-    if (popout) return;
-    if (!detached) {
-      setDetachedBounds((bounds) => clampDetachedBounds(bounds));
-    }
-    setDetached((value) => !value);
-  }
-
-  function openPopout() {
-    if (!session) return;
-    const params = new URLSearchParams();
-    if (session.projectId || selectedProjectId) params.set("projectId", session.projectId || selectedProjectId || "");
-    params.set("terminalId", session.id);
-    const opened = window.open(
-      `/terminal-popout${params.toString() ? `?${params.toString()}` : ""}`,
-      `agent-control-terminal-${session.id}`,
-      "popup,width=1120,height=720,left=120,top=80,resizable=yes,scrollbars=no"
-    );
-    if (!opened) {
-      addError("Pop-out terminal was blocked by the browser.");
-      return;
-    }
-    onPopoutTerminal?.(
-      session.id,
-      sessions.filter((item) => item.id !== session.id).map((item) => item.id)
-    );
-    opened.focus();
   }
 
   function dockPopout() {
@@ -3265,14 +3272,32 @@ function TerminalPanel({
     <section
       className={cn(
         "flex shrink-0 flex-col border-border bg-card",
-        popout ? "h-screen border-0" : detached ? "fixed z-40 rounded-md border shadow-2xl" : "relative border-t"
+        popout
+          ? "h-screen border-0"
+          : floating
+            ? "fixed z-40 rounded-md border shadow-2xl"
+            : terminalDock === "left"
+              ? "relative h-full border-r"
+              : terminalDock === "right"
+                ? "relative h-full border-l"
+                : "relative border-t"
       )}
-      style={popout ? undefined : detached ? detachedBounds : { height }}
+      style={popout ? undefined : floating ? detachedBounds : sideDock ? { width } : { height }}
     >
-      {!popout && !detached && (
+      {!popout && terminalDock === "bottom" && (
         <div className="absolute -top-1 left-0 right-0 h-2 cursor-ns-resize hover:bg-primary/25" onPointerDown={startResize} title="Drag to resize terminal" />
       )}
-      {!popout && detached && (
+      {sideDock && (
+        <div
+          className={cn(
+            "absolute top-0 z-20 h-full w-2 cursor-ew-resize hover:bg-primary/25",
+            terminalDock === "left" ? "-right-1" : "-left-1"
+          )}
+          onPointerDown={startSideResize}
+          title="Drag to resize terminal"
+        />
+      )}
+      {!popout && floating && (
         <>
           <div className="absolute -left-1 top-2 z-20 h-[calc(100%-1rem)] w-2 cursor-ew-resize" onPointerDown={(event) => startDetachedResize(event, "left")} />
           <div className="absolute -right-1 top-2 z-20 h-[calc(100%-1rem)] w-2 cursor-ew-resize" onPointerDown={(event) => startDetachedResize(event, "right")} />
@@ -3287,9 +3312,9 @@ function TerminalPanel({
       <div className="flex h-11 shrink-0 items-center gap-2 border-b border-border px-3">
         <SquareTerminal className="h-4 w-4 text-primary" />
         <div
-          className={cn("min-w-0 flex-1", detached && "cursor-move select-none")}
+          className={cn("min-w-0 flex-1", floating && "cursor-move select-none")}
           onPointerDown={startDetachedMove}
-          title={detached ? "Drag to move terminal" : undefined}
+          title={floating ? "Drag to move terminal" : undefined}
         >
           <div className="truncate text-sm font-medium">Terminal</div>
           <div className="truncate text-xs text-muted-foreground">{session?.cwd || "No terminal open"}</div>
@@ -3336,18 +3361,6 @@ function TerminalPanel({
           <GripVertical className="h-4 w-4" />
           Split
         </Button>
-        {!popout && (
-          <>
-            <Button variant="outline" size="sm" onClick={toggleDetached}>
-              {detached ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-              {detached ? "Dock" : "Detach"}
-            </Button>
-            <Button variant="outline" size="sm" onClick={openPopout} title="Open terminal in a separate window">
-              <ExternalLink className="h-4 w-4" />
-              Pop Out
-            </Button>
-          </>
-        )}
         {popout && (
           <Button variant="outline" size="sm" onClick={dockPopout} title="Return terminal to the docked panel">
             <Minimize2 className="h-4 w-4" />
@@ -3467,7 +3480,10 @@ export function App() {
   const setActiveTerminal = useAppStore((state) => state.setActiveTerminal);
   const setTerminalOpen = useAppStore((state) => state.setTerminalOpen);
   const terminalOpen = useAppStore((state) => state.terminalOpen);
+  const terminalDock = useAppStore((state) => state.settings.terminalDock);
   const [poppedOutTerminalIds, setPoppedOutTerminalIds] = useState(readPoppedOutTerminalIds);
+  const terminalSideDocked = terminalOpen && (terminalDock === "left" || terminalDock === "right");
+  const terminalBottomOrFloating = terminalOpen && !terminalSideDocked;
 
   const updatePoppedOutTerminalIds = useCallback((updater: (ids: Set<string>) => Set<string>) => {
     setPoppedOutTerminalIds((current) => {
@@ -3491,19 +3507,6 @@ export function App() {
     },
     [setActiveTerminal, setTerminalOpen, updatePoppedOutTerminalIds]
   );
-
-  function handlePopoutTerminal(id: string, remainingIds: string[]) {
-    updatePoppedOutTerminalIds((ids) => {
-      ids.add(id);
-      return ids;
-    });
-    const nextActive = remainingIds[remainingIds.length - 1];
-    if (nextActive) {
-      setActiveTerminal(nextActive);
-    } else {
-      setTerminalOpen(false);
-    }
-  }
 
   useEffect(() => {
     void Promise.all([api.projects(), api.capabilities(), api.settings()])
@@ -3568,10 +3571,16 @@ export function App() {
     <div className="flex h-screen min-w-[900px] flex-col overflow-hidden bg-background text-foreground">
       <Header />
       <div className="flex min-h-0 flex-1">
+        {terminalSideDocked && terminalDock === "left" && (
+          <TerminalPanel poppedOutTerminalIds={poppedOutTerminalIds} />
+        )}
         <Sidebar />
         <AgentPanel />
+        {terminalSideDocked && terminalDock === "right" && (
+          <TerminalPanel poppedOutTerminalIds={poppedOutTerminalIds} />
+        )}
       </div>
-      {terminalOpen && <TerminalPanel poppedOutTerminalIds={poppedOutTerminalIds} onPopoutTerminal={handlePopoutTerminal} />}
+      {terminalBottomOrFloating && <TerminalPanel poppedOutTerminalIds={poppedOutTerminalIds} />}
       {!terminalOpen && <TerminalMinimizedDock poppedOutTerminalIds={poppedOutTerminalIds} />}
       <LaunchDialog />
       <SendDialog />

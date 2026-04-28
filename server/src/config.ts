@@ -18,7 +18,10 @@ export interface DashboardConfig {
   tileHeight?: number;
   tileColumns?: number;
   pinLastSentMessage?: boolean;
+  terminalDock?: TerminalDockPosition;
 }
+
+export type TerminalDockPosition = "float" | "left" | "bottom" | "right";
 
 const configDir = path.join(os.homedir(), ".agent-dashboard");
 const configPath = path.join(configDir, "config.json");
@@ -71,4 +74,13 @@ export function resolveTileColumns(config: DashboardConfig): number {
 
 export function resolvePinLastSentMessage(config: DashboardConfig): boolean {
   return config.pinLastSentMessage !== false;
+}
+
+export function resolveTerminalDock(config: DashboardConfig): TerminalDockPosition {
+  return config.terminalDock === "float" ||
+    config.terminalDock === "left" ||
+    config.terminalDock === "right" ||
+    config.terminalDock === "bottom"
+    ? config.terminalDock
+    : "bottom";
 }

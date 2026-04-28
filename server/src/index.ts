@@ -10,7 +10,17 @@ import { WebSocketServer, type WebSocket } from "ws";
 import type { DashboardConfig } from "./config.js";
 import type { Capabilities, DirectoryEntry, MessageAttachment, Project, WsClientCommand, WsServerEvent } from "@agent-control/shared";
 import { detectCapabilities } from "./capabilities.js";
-import { expandHome, readConfig, resolveModels, resolvePinLastSentMessage, resolveProjectsRoot, resolveTileColumns, resolveTileHeight, writeConfig } from "./config.js";
+import {
+  expandHome,
+  readConfig,
+  resolveModels,
+  resolvePinLastSentMessage,
+  resolveProjectsRoot,
+  resolveTerminalDock,
+  resolveTileColumns,
+  resolveTileHeight,
+  writeConfig
+} from "./config.js";
 import { addMarketplace, enablePlugin, installPlugin, listPlugins, pluginCatalog } from "./plugins.js";
 import { AgentRuntimeManager } from "./runtime.js";
 import { scanConfiguredProjects, scanProject } from "./scanner.js";
@@ -248,6 +258,7 @@ app.get("/api/settings", (_request, response) => {
     tileHeight: resolveTileHeight(config),
     tileColumns: resolveTileColumns(config),
     pinLastSentMessage: resolvePinLastSentMessage(config),
+    terminalDock: resolveTerminalDock(config),
     capabilities
   });
 });
@@ -311,7 +322,8 @@ app.put("/api/settings", async (request, response) => {
     autoApprove: body.autoApprove || config.autoApprove,
     tileHeight: typeof body.tileHeight === "number" ? resolveTileHeight(body) : resolveTileHeight(config),
     tileColumns: typeof body.tileColumns === "number" ? resolveTileColumns(body) : resolveTileColumns(config),
-    pinLastSentMessage: typeof body.pinLastSentMessage === "boolean" ? body.pinLastSentMessage : resolvePinLastSentMessage(config)
+    pinLastSentMessage: typeof body.pinLastSentMessage === "boolean" ? body.pinLastSentMessage : resolvePinLastSentMessage(config),
+    terminalDock: resolveTerminalDock(body.terminalDock ? body : config)
   });
   projectsRoot = resolveProjectsRoot(config);
   projects = config.projectPaths?.length ? await scanConfiguredProjects(config.projectPaths) : [];
@@ -323,6 +335,7 @@ app.put("/api/settings", async (request, response) => {
     tileHeight: resolveTileHeight(config),
     tileColumns: resolveTileColumns(config),
     pinLastSentMessage: resolvePinLastSentMessage(config),
+    terminalDock: resolveTerminalDock(config),
     capabilities
   });
 });
