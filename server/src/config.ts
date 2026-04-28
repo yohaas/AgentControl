@@ -59,7 +59,8 @@ export type ClaudeRuntime = "cli" | "api";
 const configDir = path.join(os.homedir(), ".agent-dashboard");
 const configPath = path.join(configDir, "config.json");
 const secretsPath = path.join(configDir, "secrets.json");
-export const DEFAULT_BUILT_IN_AGENT_DIR = "~/.agent-control/built-in-agents";
+export const DEFAULT_BUILT_IN_AGENT_DIR = ".agent-control/built-in-agents";
+const LEGACY_BUILT_IN_AGENT_DIR = "~/.agent-control/built-in-agents";
 
 export interface DashboardSecrets {
   anthropicApiKey?: string;
@@ -141,7 +142,7 @@ export function resolveAgentDirs(config: DashboardConfig): Record<"claude" | "co
     claude: config.claudeAgentDir?.trim() || ".claude/agents",
     codex: config.codexAgentDir?.trim() || ".codex/agents",
     openai: config.openaiAgentDir?.trim() || ".agent-control/openai-agents",
-    builtIn: builtInAgentDir && builtInAgentDir !== ".agent-control/built-in-agents" ? builtInAgentDir : DEFAULT_BUILT_IN_AGENT_DIR
+    builtIn: !builtInAgentDir || builtInAgentDir === LEGACY_BUILT_IN_AGENT_DIR ? DEFAULT_BUILT_IN_AGENT_DIR : builtInAgentDir
   };
 }
 

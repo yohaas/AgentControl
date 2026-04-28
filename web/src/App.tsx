@@ -121,7 +121,7 @@ const EMPTY_QUEUE: QueuedMessage[] = [];
 const TERMINAL_DOCK_MESSAGE = "agent-control:dock-terminal";
 const TERMINAL_DOCK_STORAGE_KEY = "agent-control-terminal-dock-request";
 const TERMINAL_POPOUT_STORAGE_KEY = "agent-control-popped-out-terminals";
-const DEFAULT_BUILT_IN_AGENT_DIR = "~/.agent-control/built-in-agents";
+const DEFAULT_BUILT_IN_AGENT_DIR = ".agent-control/built-in-agents";
 const THINKING_PHRASES = [
   "Discombobulating",
   "Cogitating",

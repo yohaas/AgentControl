@@ -24,7 +24,7 @@ export const DEFAULT_AGENT_DIRS: AgentDirectoryConfig = {
   claude: ".claude/agents",
   codex: ".codex/agents",
   openai: ".agent-control/openai-agents",
-  builtIn: "~/.agent-control/built-in-agents"
+  builtIn: ".agent-control/built-in-agents"
 };
 
 function genericAgentDef(): AgentDef {
@@ -124,7 +124,7 @@ function resolveProjectSubdir(projectPath: string, subdir: string): string {
 function resolveBuiltInAgentDir(builtInDir: string): string {
   const expanded = expandHome(builtInDir);
   if (path.isAbsolute(expanded)) return path.resolve(expanded);
-  return path.resolve(os.homedir(), ".agent-control", expanded);
+  return path.resolve(process.cwd(), expanded);
 }
 
 export async function updateAgentPluginsFile(filePath: string, plugins: string[]): Promise<void> {
