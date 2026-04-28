@@ -2868,14 +2868,17 @@ function Sidebar() {
           {running.length > 0 && (
             <Button
               variant="ghost"
-              size="sm"
+              size="icon"
+              className="h-6 w-6"
+              title="Close all agents"
+              aria-label="Close all agents"
               onClick={() => {
                 if (window.confirm("Close all open agents in this project?")) {
                   sendCommand({ type: "clearAll", projectId: selectedProjectId });
                 }
               }}
             >
-              Close All
+              <X className="h-3.5 w-3.5" />
             </Button>
           )}
         </div>
