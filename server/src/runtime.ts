@@ -273,10 +273,13 @@ export class AgentRuntimeManager {
     const def = request.agentSource === "builtIn" ? builtInDef || projectDef : projectDef || builtInDef;
     if (!def) throw new Error("Agent definition not found.");
 
-    if (request.remoteControl) {
-      throw new Error("Remote Control is temporarily unavailable until Claude exposes stable CLI transcript and input controls.");
-    }
     const provider = request.provider || def.provider || providerForModel(request.model);
+    if (request.remoteControl && provider !== "claude") {
+      throw new Error("Remote Control is only available for Claude Code agents.");
+    }
+    if (request.remoteControl && this.getClaudeRuntime() !== "cli") {
+      throw new Error("Remote Control requires the Claude CLI runtime.");
+    }
 
     const displayName = this.uniqueDisplayName(project.id, request.displayName?.trim() || def.name);
     const timestamp = now();
@@ -296,7 +299,7 @@ export class AgentRuntimeManager {
       modelLastUpdated: timestamp,
       launchedAt: timestamp,
       updatedAt: timestamp,
-      remoteControl: false,
+      remoteControl: Boolean(request.remoteControl),
       permissionMode,
       effort: request.effort || "medium",
       thinking: request.thinking ?? true,
@@ -322,7 +325,12 @@ export class AgentRuntimeManager {
     this.persist();
     void this.refreshSlashCommands(state, project, def, provider);
 
-    if (provider === "openai") {
+    if (agent.remoteControl) {
+      void this.spawnRemoteControl(state).catch((error: unknown) => {
+        this.updateRemoteControlState(state, "error", error instanceof Error ? error.message : String(error));
+        this.setStatus(state, "error", error instanceof Error ? error.message : String(error));
+      });
+    } else if (provider === "openai") {
       this.setStatus(state, process.env.OPENAI_API_KEY ? "idle" : "error", process.env.OPENAI_API_KEY ? undefined : "OPENAI_API_KEY is not set.");
     } else if (provider === "codex") {
       this.setStatus(state, "idle");
@@ -1332,8 +1340,10 @@ export class AgentRuntimeManager {
     ];
     if (this.permissionMode(state) === "bypassPermissions") args.push("--permission-mode", "bypassPermissions");
 
-    const child = spawn(resolveClaudeCommand(), args, {
-      cwd: state.agent.projectPath,
+    const command = this.spawnCommand(state, resolveClaudeCommand(), args);
+    const child = spawn(command.command, command.args, {
+      cwd: command.cwd,
+      env: this.claudeEnv(state),
       windowsHide: true
     });
     state.child = child;
