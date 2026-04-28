@@ -5,6 +5,7 @@ import {
   useState,
   useCallback,
   type ClipboardEvent as ReactClipboardEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
   type UIEvent as ReactUIEvent
 } from "react";
@@ -93,6 +94,19 @@ const THINKING_PHRASES = [
   "Synthesizing",
   "Mulling",
   "Connecting dots"
+];
+
+interface SlashCommandSuggestion {
+  value: string;
+  label: string;
+  description: string;
+}
+
+const BASE_SLASH_COMMANDS: SlashCommandSuggestion[] = [
+  { value: "/clear", label: "/clear", description: "Clear this chat history" },
+  { value: "/exit", label: "/exit", description: "Exit this agent" },
+  { value: "/stop", label: "/stop", description: "Stop the active response" },
+  { value: "/interrupt", label: "/interrupt", description: "Stop the active response" }
 ];
 
 function readPoppedOutTerminalIds() {
@@ -461,6 +475,68 @@ function handleNativeSlashCommand(agent: RunningAgent, text: string) {
     return true;
   }
   return false;
+}
+
+function slashCommandSuggestions(draft: string, models: string[]): SlashCommandSuggestion[] {
+  const trimmed = draft.trimStart();
+  if (!trimmed.startsWith("/") || trimmed.includes("\n")) return [];
+  const query = trimmed.slice(1).toLowerCase();
+  if (query.startsWith("model ")) {
+    const modelQuery = query.slice("model ".length).trim();
+    return models
+      .filter((model) => model.toLowerCase().includes(modelQuery))
+      .slice(0, 8)
+      .map((model) => ({
+        value: `/model ${model}`,
+        label: `/model ${model}`,
+        description: "Switch this agent to this model"
+      }));
+  }
+
+  const commands = [
+    ...BASE_SLASH_COMMANDS,
+    { value: "/model ", label: "/model", description: "Switch this agent to another model" }
+  ];
+  return commands.filter((command) => command.value.slice(1).toLowerCase().startsWith(query)).slice(0, 8);
+}
+
+function SlashCommandAutocomplete({
+  suggestions,
+  activeIndex,
+  compact = false,
+  onSelect,
+  onActiveIndexChange
+}: {
+  suggestions: SlashCommandSuggestion[];
+  activeIndex: number;
+  compact?: boolean;
+  onSelect: (value: string) => void;
+  onActiveIndexChange: (index: number) => void;
+}) {
+  if (suggestions.length === 0) return null;
+  return (
+    <div className="overflow-hidden rounded-md border border-border bg-popover text-popover-foreground shadow-lg">
+      {suggestions.map((suggestion, index) => (
+        <button
+          key={suggestion.value}
+          type="button"
+          className={cn(
+            "flex w-full min-w-0 items-start gap-3 px-3 py-2 text-left hover:bg-accent",
+            compact ? "text-xs" : "text-sm",
+            index === activeIndex && "bg-accent"
+          )}
+          onMouseEnter={() => onActiveIndexChange(index)}
+          onMouseDown={(event) => {
+            event.preventDefault();
+            onSelect(suggestion.value);
+          }}
+        >
+          <span className="shrink-0 font-mono text-primary">{suggestion.label}</span>
+          <span className="min-w-0 truncate text-muted-foreground">{suggestion.description}</span>
+        </button>
+      ))}
+    </div>
+  );
 }
 
 function agentsForProject(agentsById: Record<string, RunningAgent>, projectId?: string) {
@@ -1711,7 +1787,9 @@ function AgentTile({
   const setSelectedAgent = useAppStore((state) => state.setSelectedAgent);
   const setTileWidth = useAppStore((state) => state.setTileWidth);
   const focusedAgentId = useAppStore((state) => state.focusedAgentId);
+  const settings = useAppStore((state) => state.settings);
   const [attachments, setAttachments] = useState<MessageAttachment[]>([]);
+  const [activeSlashIndex, setActiveSlashIndex] = useState(0);
   const transcriptRootId = `tile-transcript-${agent.id}`;
   const selection = useTextSelection(`#${transcriptRootId}`);
   const tileRef = useRef<HTMLElement | null>(null);
@@ -1722,6 +1800,7 @@ function AgentTile({
   const canType = !agent.remoteControl && agentHasProcess(agent);
   const showActivityIndicator = isBusy && !hasStreamingAssistantText(transcript);
   const pinnedMessage = latestUserMessage(transcript);
+  const slashSuggestions = useMemo(() => slashCommandSuggestions(draft, settings.models), [draft, settings.models]);
 
   useEffect(() => {
     const root = rootRef.current;
@@ -1750,6 +1829,10 @@ function AgentTile({
     sendCommand({ type: "userMessage", id: agent.id, text: next.text, attachments: next.attachments });
   }, [agent.id, canType, isBusy, popNextQueuedMessage, queue.length]);
 
+  useEffect(() => {
+    setActiveSlashIndex(0);
+  }, [slashSuggestions.length, draft]);
+
   function send() {
     if ((!draft.trim() && attachments.length === 0) || agent.remoteControl) return;
     if (handleNativeSlashCommand(agent, draft)) {
@@ -1772,6 +1855,43 @@ function AgentTile({
   function stopCurrentResponse() {
     sendCommand({ type: "interrupt", id: agent.id });
     window.requestAnimationFrame(() => inputRef.current?.focus());
+  }
+
+  function selectSlashCommand(value: string) {
+    setDraft(agent.id, value);
+    window.requestAnimationFrame(() => inputRef.current?.focus());
+  }
+
+  function handleComposerKeyDown(event: ReactKeyboardEvent<HTMLTextAreaElement>) {
+    if (slashSuggestions.length > 0) {
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        setActiveSlashIndex((index) => (index + 1) % slashSuggestions.length);
+        return;
+      }
+      if (event.key === "ArrowUp") {
+        event.preventDefault();
+        setActiveSlashIndex((index) => (index - 1 + slashSuggestions.length) % slashSuggestions.length);
+        return;
+      }
+      if (event.key === "Tab") {
+        event.preventDefault();
+        selectSlashCommand(slashSuggestions[activeSlashIndex]?.value || slashSuggestions[0].value);
+        return;
+      }
+      if (event.key === "Enter" && !event.shiftKey) {
+        const selected = slashSuggestions[activeSlashIndex]?.value || slashSuggestions[0].value;
+        if (draft.trim() !== selected.trim()) {
+          event.preventDefault();
+          selectSlashCommand(selected);
+          return;
+        }
+      }
+    }
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      send();
+    }
   }
 
   async function handlePaste(event: ReactClipboardEvent<HTMLTextAreaElement>) {
@@ -1932,6 +2052,13 @@ function AgentTile({
                 attachments={attachments}
                 onRemove={(id) => setAttachments((current) => current.filter((attachment) => attachment.id !== id))}
               />
+              <SlashCommandAutocomplete
+                suggestions={slashSuggestions}
+                activeIndex={activeSlashIndex}
+                compact
+                onSelect={selectSlashCommand}
+                onActiveIndexChange={setActiveSlashIndex}
+              />
               <Textarea
                 ref={inputRef}
                 className="min-h-12 resize-none text-sm"
@@ -1940,12 +2067,7 @@ function AgentTile({
                 onChange={(event) => setDraft(agent.id, event.target.value)}
                 onPaste={handlePaste}
                 placeholder={isBusy ? "Queue a message..." : "Message this agent"}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" && !event.shiftKey) {
-                    event.preventDefault();
-                    send();
-                  }
-                }}
+                onKeyDown={handleComposerKeyDown}
               />
             </div>
             <Button
@@ -2142,6 +2264,7 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
   const removeQueuedMessage = useAppStore((state) => state.removeQueuedMessage);
   const popNextQueuedMessage = useAppStore((state) => state.popNextQueuedMessage);
   const addError = useAppStore((state) => state.addError);
+  const settings = useAppStore((state) => state.settings);
   const scrollTop = useAppStore((state) => state.scrollPositions[agent.id] || 0);
   const setScrollPosition = useAppStore((state) => state.setScrollPosition);
   const searchOpen = useAppStore((state) => state.searchOpen);
@@ -2153,10 +2276,12 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
   const selection = useTextSelection(`#${transcriptRootId}`);
   const [attachments, setAttachments] = useState<MessageAttachment[]>([]);
   const [showPinnedMessage, setShowPinnedMessage] = useState(scrollTop > 24);
+  const [activeSlashIndex, setActiveSlashIndex] = useState(0);
   const isBusy = isAgentBusy(agent);
   const canType = agentHasProcess(agent);
   const showActivityIndicator = isBusy && !hasStreamingAssistantText(transcript);
   const pinnedMessage = latestUserMessage(transcript);
+  const slashSuggestions = useMemo(() => slashCommandSuggestions(draft, settings.models), [draft, settings.models]);
 
   useEffect(() => {
     const root = rootRef.current;
@@ -2177,6 +2302,10 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
     if (!next) return;
     sendCommand({ type: "userMessage", id: agent.id, text: next.text, attachments: next.attachments });
   }, [agent.id, canType, isBusy, popNextQueuedMessage, queue.length]);
+
+  useEffect(() => {
+    setActiveSlashIndex(0);
+  }, [slashSuggestions.length, draft]);
 
   function send() {
     if (!draft.trim() && attachments.length === 0) return;
@@ -2200,6 +2329,43 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
   function stopCurrentResponse() {
     sendCommand({ type: "interrupt", id: agent.id });
     window.requestAnimationFrame(() => inputRef.current?.focus());
+  }
+
+  function selectSlashCommand(value: string) {
+    setDraft(agent.id, value);
+    window.requestAnimationFrame(() => inputRef.current?.focus());
+  }
+
+  function handleComposerKeyDown(event: ReactKeyboardEvent<HTMLTextAreaElement>) {
+    if (slashSuggestions.length > 0) {
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        setActiveSlashIndex((index) => (index + 1) % slashSuggestions.length);
+        return;
+      }
+      if (event.key === "ArrowUp") {
+        event.preventDefault();
+        setActiveSlashIndex((index) => (index - 1 + slashSuggestions.length) % slashSuggestions.length);
+        return;
+      }
+      if (event.key === "Tab") {
+        event.preventDefault();
+        selectSlashCommand(slashSuggestions[activeSlashIndex]?.value || slashSuggestions[0].value);
+        return;
+      }
+      if (event.key === "Enter" && !event.shiftKey) {
+        const selected = slashSuggestions[activeSlashIndex]?.value || slashSuggestions[0].value;
+        if (draft.trim() !== selected.trim()) {
+          event.preventDefault();
+          selectSlashCommand(selected);
+          return;
+        }
+      }
+    }
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      send();
+    }
   }
 
   function handleTranscriptScroll(event: ReactUIEvent<HTMLDivElement>) {
@@ -2283,6 +2449,12 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
               attachments={attachments}
               onRemove={(id) => setAttachments((current) => current.filter((attachment) => attachment.id !== id))}
             />
+            <SlashCommandAutocomplete
+              suggestions={slashSuggestions}
+              activeIndex={activeSlashIndex}
+              onSelect={selectSlashCommand}
+              onActiveIndexChange={setActiveSlashIndex}
+            />
             <Textarea
               ref={inputRef}
               className="min-h-16 resize-none"
@@ -2291,12 +2463,7 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
               onChange={(event) => setDraft(agent.id, event.target.value)}
               onPaste={handlePaste}
               placeholder={isBusy ? "Queue a message..." : "Message this agent"}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" && !event.shiftKey) {
-                  event.preventDefault();
-                  send();
-                }
-              }}
+              onKeyDown={handleComposerKeyDown}
             />
           </div>
           <Button
