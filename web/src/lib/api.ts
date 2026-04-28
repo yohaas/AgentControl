@@ -15,6 +15,7 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ path })
     }),
+  closeProject: (id: string) => json<Project[]>(`/api/projects/${encodeURIComponent(id)}`, { method: "DELETE" }),
   directories: (path?: string) =>
     json<DirectoryListing>(`/api/filesystem/directories${path ? `?path=${encodeURIComponent(path)}` : ""}`),
   refresh: () => json<Project[]>("/api/refresh", { method: "POST" }),

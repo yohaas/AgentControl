@@ -147,6 +147,13 @@ export class TerminalManager {
     this.broadcast({ type: "terminal.closed", id });
   }
 
+  closeProject(projectId: string): void {
+    const ids = Array.from(this.terminals.values())
+      .filter((state) => state.session.projectId === projectId)
+      .map((state) => state.session.id);
+    for (const id of ids) this.close(id);
+  }
+
   rename(id: string, title?: string): void {
     const state = this.terminals.get(id);
     if (!state) return;

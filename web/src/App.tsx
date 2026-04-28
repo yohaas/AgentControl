@@ -287,6 +287,7 @@ function Header() {
   const wsConnected = useAppStore((state) => state.wsConnected);
   const setProjects = useAppStore((state) => state.setProjects);
   const addError = useAppStore((state) => state.addError);
+  const selectedProject = projects.find((project) => project.id === selectedProjectId);
   const projectAgents = useMemo(() => agentsForProject(agentsById, selectedProjectId), [agentsById, selectedProjectId]);
   const agentCount = projectAgents.length;
   const terminalCount = useMemo(
@@ -323,6 +324,19 @@ function Header() {
     setTerminalOpen(!terminalOpen);
   }
 
+  async function closeSelectedProject() {
+    if (!selectedProjectId || !selectedProject) return;
+    const confirmed = window.confirm(
+      `Close ${selectedProject.name}? This exits its agents and terminals, and removes it from the dashboard. Files stay on disk.`
+    );
+    if (!confirmed) return;
+    try {
+      setProjects(await api.closeProject(selectedProjectId));
+    } catch (error) {
+      addError(error instanceof Error ? error.message : String(error));
+    }
+  }
+
   return (
     <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border px-4">
       <div className="flex min-w-0 items-center gap-2">
@@ -344,6 +358,15 @@ function Header() {
         </Select>
         <Button variant="outline" size="icon" onClick={refresh} title="Refresh projects">
           <RefreshCw className="h-4 w-4" />
+        </Button>
+        <Button
+          variant="outline"
+          size="icon"
+          disabled={!selectedProjectId}
+          onClick={() => void closeSelectedProject()}
+          title="Close project"
+        >
+          <X className="h-4 w-4" />
         </Button>
         <Button
           variant="outline"

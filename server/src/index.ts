@@ -10,7 +10,7 @@ import { WebSocketServer, type WebSocket } from "ws";
 import type { DashboardConfig } from "./config.js";
 import type { Capabilities, DirectoryEntry, MessageAttachment, Project, WsClientCommand, WsServerEvent } from "@agent-control/shared";
 import { detectCapabilities } from "./capabilities.js";
-import { readConfig, resolveModels, resolveProjectsRoot, resolveTileColumns, resolveTileHeight, writeConfig } from "./config.js";
+import { expandHome, readConfig, resolveModels, resolveProjectsRoot, resolveTileColumns, resolveTileHeight, writeConfig } from "./config.js";
 import { enablePlugin, listPlugins } from "./plugins.js";
 import { AgentRuntimeManager } from "./runtime.js";
 import { scanConfiguredProjects, scanProject } from "./scanner.js";
@@ -52,6 +52,11 @@ async function filesystemRoots(): Promise<DirectoryEntry[]> {
     })
   );
   return roots.filter((root): root is DirectoryEntry => Boolean(root));
+}
+
+function normalizedProjectPath(projectPath: string): string {
+  const resolved = path.resolve(expandHome(projectPath));
+  return process.platform === "win32" ? resolved.toLowerCase() : resolved;
 }
 
 const runtime = new AgentRuntimeManager(
@@ -101,6 +106,23 @@ app.post("/api/projects", async (request, response) => {
   }
 
   const projectPaths = Array.from(new Set([...(config.projectPaths || []), project.path]));
+  config = await writeConfig({ ...config, projectPaths });
+  projects = await scanConfiguredProjects(projectPaths);
+  response.json(projects);
+});
+
+app.delete("/api/projects/:id", async (request, response) => {
+  const project = projects.find((candidate) => candidate.id === request.params.id);
+  if (!project) {
+    response.status(404).json({ error: "Project not found." });
+    return;
+  }
+
+  runtime.clearAll(project.id);
+  terminals.closeProject(project.id);
+
+  const closePath = normalizedProjectPath(project.path);
+  const projectPaths = (config.projectPaths || []).filter((projectPath) => normalizedProjectPath(projectPath) !== closePath);
   config = await writeConfig({ ...config, projectPaths });
   projects = await scanConfiguredProjects(projectPaths);
   response.json(projects);
