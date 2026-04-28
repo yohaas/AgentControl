@@ -2210,7 +2210,9 @@ function WorktreesDialog({ projectId }: { projectId?: string }) {
 
   function selectProjectForPath(projectList: Project[], worktreePath: string) {
     const project = projectList.find((candidate) => pathsEqual(candidate.path, worktreePath));
-    if (project) setSelectedProject(project.id);
+    if (!project) return false;
+    setSelectedProject(project.id);
+    return true;
   }
 
   function canOpenWorktree(worktreePath: string) {
@@ -2226,7 +2228,7 @@ function WorktreesDialog({ projectId }: { projectId?: string }) {
     try {
       const nextProjects = await api.addProject(worktreePath);
       setProjects(nextProjects);
-      selectProjectForPath(nextProjects, worktreePath);
+      if (selectProjectForPath(nextProjects, worktreePath)) setOpen(false);
     } catch (error) {
       addError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -2402,7 +2404,10 @@ function WorktreesDialog({ projectId }: { projectId?: string }) {
                         size="sm"
                         disabled={busyPath === worktree.path || (!canSwitch && !canOpenAndSwitch)}
                         onClick={() => {
-                          if (canSwitch && worktree.projectId) setSelectedProject(worktree.projectId);
+                          if (canSwitch && worktree.projectId) {
+                            setSelectedProject(worktree.projectId);
+                            setOpen(false);
+                          }
                           else if (canOpenAndSwitch) void openWorktreeProject(worktree.path);
                         }}
                       >
