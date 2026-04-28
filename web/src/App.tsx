@@ -1593,6 +1593,7 @@ function SettingsDialog() {
   const setProjects = useAppStore((state) => state.setProjects);
   const addError = useAppStore((state) => state.addError);
   const [open, setOpen] = useState(false);
+  const importInputRef = useRef<HTMLInputElement | null>(null);
   const [projectPathsText, setProjectPathsText] = useState((settings.projectPaths || []).join("\n"));
   const [modelsText, setModelsText] = useState(settings.models.join("\n"));
   const [autoApprove, setAutoApprove] = useState(settings.autoApprove);
@@ -1623,6 +1624,42 @@ function SettingsDialog() {
       setOpen(false);
     } catch (error) {
       addError(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  function exportConfig() {
+    const payload = {
+      app: "AgentControl",
+      exportedAt: new Date().toISOString(),
+      settings: {
+        ...settings,
+        projectPaths: projectPathsText.split(/\r?\n/).map((line) => line.trim()).filter(Boolean),
+        models: modelsText.split(/\r?\n/).map((line) => line.trim()).filter(Boolean),
+        autoApprove,
+        tileHeight,
+        tileColumns
+      }
+    };
+    downloadText("agent-control-config.json", JSON.stringify(payload, null, 2), "application/json");
+  }
+
+  async function importConfig(file: File) {
+    try {
+      const parsed = JSON.parse(await file.text()) as { settings?: unknown } | unknown;
+      const imported = parsed && typeof parsed === "object" && "settings" in parsed ? (parsed as { settings: unknown }).settings : parsed;
+      if (!imported || typeof imported !== "object") throw new Error("Config JSON must contain a settings object.");
+      const next = await api.saveSettings(imported as typeof settings);
+      setSettings(next);
+      setProjects(await api.refresh());
+      setProjectPathsText((next.projectPaths || []).join("\n"));
+      setModelsText(next.models.join("\n"));
+      setAutoApprove(next.autoApprove);
+      setTileHeight(next.tileHeight);
+      setTileColumns(next.tileColumns);
+    } catch (error) {
+      addError(error instanceof Error ? error.message : String(error));
+    } finally {
+      if (importInputRef.current) importInputRef.current.value = "";
     }
   }
 
@@ -1686,10 +1723,30 @@ function SettingsDialog() {
               Always passes --dangerously-skip-permissions when launching agents.
             </p>
           )}
-          <Button onClick={save}>
-            <Check className="h-4 w-4" />
-            Save
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={save}>
+              <Check className="h-4 w-4" />
+              Save
+            </Button>
+            <Button variant="outline" onClick={exportConfig}>
+              <Clipboard className="h-4 w-4" />
+              Export Config
+            </Button>
+            <Button variant="outline" onClick={() => importInputRef.current?.click()}>
+              <FolderOpen className="h-4 w-4" />
+              Import Config
+            </Button>
+          </div>
+          <input
+            ref={importInputRef}
+            type="file"
+            accept="application/json,.json"
+            className="hidden"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) void importConfig(file);
+            }}
+          />
         </div>
       </DialogContent>
     </Dialog>
