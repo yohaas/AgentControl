@@ -718,14 +718,6 @@ function Header() {
     setDevCommand(window.localStorage.getItem(devCommandStorageKey(selectedProjectId)) || "npm run dev");
   }, [selectedProjectId]);
 
-  async function refresh() {
-    try {
-      setProjects(await api.refresh());
-    } catch (error) {
-      addError(error instanceof Error ? error.message : String(error));
-    }
-  }
-
   function sortChatsByAgentType() {
     const sorted = orderedAgentsForTiles(projectAgents, tileOrder)
       .map((agent, index) => ({ agent, index }))
@@ -859,9 +851,6 @@ function Header() {
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-        <Button variant="outline" size="icon" onClick={refresh} title="Refresh projects">
-          <RefreshCw className="h-4 w-4" />
-        </Button>
         <Button
           variant="outline"
           size="icon"
