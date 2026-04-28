@@ -44,7 +44,7 @@ import {
   RefreshCw,
   Search,
   Settings,
-  ShieldCheck,
+  Share2,
   SlidersHorizontal,
   SquareTerminal,
   Trash2,
@@ -1510,7 +1510,7 @@ const COMPOSER_MODE_OPTIONS = [
     label: "Bypass permissions",
     compactLabel: "Bypass",
     description: "Claude will not ask for approval before running potentially dangerous commands.",
-    icon: ShieldCheck
+    icon: Share2
   }
 ] satisfies {
   mode: AgentPermissionMode;
