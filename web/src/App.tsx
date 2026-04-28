@@ -154,6 +154,13 @@ function compareSlashCommands(left: string, right: string) {
   return left.localeCompare(right, undefined, { sensitivity: "base" });
 }
 
+function arraysEqual(left: string[], right: string[]) {
+  if (left.length !== right.length) return false;
+  const sortedLeft = [...left].sort(compareSlashCommands);
+  const sortedRight = [...right].sort(compareSlashCommands);
+  return sortedLeft.every((item, index) => item === sortedRight[index]);
+}
+
 const TERMINAL_DOCK_OPTIONS = [
   { value: "float", label: "Float", icon: PictureInPicture2 },
   { value: "left", label: "Dock left", icon: PanelLeft },
@@ -2416,7 +2423,13 @@ function LaunchDialog() {
   const [model, setModel] = useState(DEFAULT_MODEL);
   const [initialPrompt, setInitialPrompt] = useState("");
   const [remoteControl, setRemoteControl] = useState(false);
-  const [pluginText, setPluginText] = useState("");
+  const [pluginIds, setPluginIds] = useState<string[]>([]);
+  const [pluginCatalog, setPluginCatalog] = useState<ClaudePluginCatalog>({ installed: [], available: [], marketplaces: [] });
+  const [pluginsLoading, setPluginsLoading] = useState(false);
+  const [pluginQuery, setPluginQuery] = useState("");
+  const [pluginScope, setPluginScope] = useState("user");
+  const [installingPlugin, setInstallingPlugin] = useState<string | undefined>();
+  const [enablingPlugin, setEnablingPlugin] = useState<string | undefined>();
   const [agentFileOpen, setAgentFileOpen] = useState(false);
 
   const projectId = selectedProjectId || "";
@@ -2446,14 +2459,16 @@ function LaunchDialog() {
     setModel(nextDef?.defaultModel || settings.models[0] || DEFAULT_MODEL);
     setInitialPrompt(modal.initialPrompt || "");
     setRemoteControl(false);
-    setPluginText((nextDef?.plugins || []).join("\n"));
+    setPluginIds(nextDef?.plugins || []);
+    setPluginQuery("");
     setAgentFileOpen(false);
+    void loadPluginCatalog();
   }, [modal, projectId, projects, settings.models]);
 
   useEffect(() => {
     if (!def) return;
     setModel(def.defaultModel || settings.models[0] || DEFAULT_MODEL);
-    setPluginText((def.plugins || []).join("\n"));
+    setPluginIds(def.plugins || []);
   }, [def, settings.models]);
 
   function selectDef(nextDefName: string) {
@@ -2463,8 +2478,55 @@ function LaunchDialog() {
     setAgentFileOpen(false);
   }
 
-  function launch() {
+  async function loadPluginCatalog() {
+    setPluginsLoading(true);
+    try {
+      setPluginCatalog(await api.pluginCatalog());
+    } catch (error) {
+      addError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setPluginsLoading(false);
+    }
+  }
+
+  function togglePlugin(pluginId: string) {
+    setPluginIds((current) =>
+      current.includes(pluginId) ? current.filter((item) => item !== pluginId) : [...current, pluginId].sort(compareSlashCommands)
+    );
+  }
+
+  async function installLaunchPlugin(pluginId: string) {
+    const id = pluginId.trim();
+    if (!id) return;
+    setInstallingPlugin(id);
+    try {
+      setPluginCatalog(await api.installPlugin(id, pluginScope));
+      setPluginIds((current) => (current.includes(id) ? current : [...current, id].sort(compareSlashCommands)));
+    } catch (error) {
+      addError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setInstallingPlugin(undefined);
+    }
+  }
+
+  async function enableLaunchPlugin(pluginId: string) {
+    setEnablingPlugin(pluginId);
+    try {
+      await api.enablePlugin(pluginId);
+      setPluginCatalog(await api.pluginCatalog());
+    } catch (error) {
+      addError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setEnablingPlugin(undefined);
+    }
+  }
+
+  async function launch() {
     if (!projectId || !defName) return;
+    if (def?.sourcePath && !arraysEqual(pluginIds, def.plugins || [])) {
+      const saved = await saveAgentPlugins();
+      if (!saved) return;
+    }
     sendCommand({
       type: "launch",
       request: {
@@ -2481,16 +2543,18 @@ function LaunchDialog() {
     closeLaunchModal();
   }
 
-  async function saveAgentPlugins() {
-    if (!projectId || !defName) return;
-    const plugins = pluginText
-      .split(/[\r\n,]+/)
-      .map((item) => item.trim())
-      .filter(Boolean);
+  async function saveAgentPlugins(): Promise<boolean> {
+    if (!projectId || !defName) return false;
+    if (!def?.sourcePath) {
+      addError("Generic agents do not have an agent file to save plugins to.");
+      return false;
+    }
     try {
-      setProjects(await api.saveAgentPlugins(projectId, defName, plugins));
+      setProjects(await api.saveAgentPlugins(projectId, defName, pluginIds));
+      return true;
     } catch (error) {
       addError(error instanceof Error ? error.message : String(error));
+      return false;
     }
   }
 
@@ -2504,11 +2568,55 @@ function LaunchDialog() {
   }
 
   const rcDisabled = !capabilities?.supportsRemoteControl;
+  const installedPlugins = useMemo(() => new Map(pluginCatalog.installed.map((plugin) => [plugin.name, plugin])), [pluginCatalog.installed]);
+  const selectedPluginRows = useMemo(
+    () =>
+      pluginIds.map((pluginId) => ({
+        id: pluginId,
+        name: installedPlugins.get(pluginId)?.name || pluginId,
+        description: undefined as string | undefined,
+        marketplaceName: undefined as string | undefined,
+        selectedOnly: true
+      })),
+    [installedPlugins, pluginIds]
+  );
+  const pluginRows = useMemo(() => {
+    const rowsById = new Map<
+      string,
+      { id: string; name: string; description?: string; marketplaceName?: string; selectedOnly?: boolean }
+    >();
+    for (const row of selectedPluginRows) rowsById.set(row.id, row);
+    for (const plugin of pluginCatalog.installed) {
+      rowsById.set(plugin.name, { id: plugin.name, name: plugin.name });
+    }
+    for (const plugin of pluginCatalog.available) {
+      rowsById.set(plugin.pluginId, {
+        id: plugin.pluginId,
+        name: plugin.name,
+        description: plugin.description,
+        marketplaceName: plugin.marketplaceName
+      });
+    }
+    const query = pluginQuery.trim().toLowerCase();
+    return [...rowsById.values()]
+      .filter((plugin) => {
+        if (!query) return true;
+        return (
+          plugin.id.toLowerCase().includes(query) ||
+          plugin.name.toLowerCase().includes(query) ||
+          plugin.marketplaceName?.toLowerCase().includes(query) ||
+          plugin.description?.toLowerCase().includes(query)
+        );
+      })
+      .sort((left, right) => compareSlashCommands(left.name, right.name))
+      .slice(0, 120);
+  }, [pluginCatalog.available, pluginCatalog.installed, pluginQuery, selectedPluginRows]);
+  const pluginsChanged = !arraysEqual(pluginIds, def?.plugins || []);
 
   return (
     <>
       <Dialog open={modal.open} onOpenChange={(open) => !open && closeLaunchModal()}>
-        <DialogContent>
+        <DialogContent className="w-[min(94vw,760px)]">
           <DialogHeader>
             <DialogTitle>Launch Agent</DialogTitle>
           </DialogHeader>
@@ -2589,20 +2697,116 @@ function LaunchDialog() {
               </SelectContent>
             </Select>
           </label>
-          <label className="grid gap-1.5 text-sm">
-            <span className="flex items-center justify-between gap-2">
-              <span>Agent plugins</span>
-              <Button type="button" variant="outline" size="sm" onClick={() => void saveAgentPlugins()} disabled={!projectId || !defName}>
-                Save
-              </Button>
-            </span>
-            <Textarea
-              value={pluginText}
-              onChange={(event) => setPluginText(event.target.value)}
-              className="min-h-16 resize-y text-xs leading-5"
-              placeholder="One plugin id per line"
-            />
-          </label>
+          <section className="grid gap-2 text-sm">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <h3 className="text-sm font-medium">Agent plugins</h3>
+                <p className="text-xs text-muted-foreground">Selections are saved to this agent definition.</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button type="button" variant="outline" size="sm" onClick={() => void loadPluginCatalog()} disabled={pluginsLoading}>
+                  <RefreshCw className="h-4 w-4" />
+                  Refresh
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void saveAgentPlugins()}
+                  disabled={!projectId || !defName || !def?.sourcePath || !pluginsChanged}
+                >
+                  Save
+                </Button>
+              </div>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-[1fr_140px]">
+              <Input value={pluginQuery} onChange={(event) => setPluginQuery(event.target.value)} placeholder="Search plugins" />
+              <Select value={pluginScope} onValueChange={setPluginScope}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="user">User scope</SelectItem>
+                  <SelectItem value="project">Project scope</SelectItem>
+                  <SelectItem value="local">Local scope</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid max-h-56 gap-2 overflow-auto pr-1">
+              {pluginsLoading ? (
+                <p className="rounded-md border border-dashed border-border px-3 py-5 text-center text-sm text-muted-foreground">
+                  Loading plugins...
+                </p>
+              ) : pluginRows.length === 0 ? (
+                <p className="rounded-md border border-dashed border-border px-3 py-5 text-center text-sm text-muted-foreground">
+                  No plugins match.
+                </p>
+              ) : (
+                pluginRows.map((plugin) => {
+                  const installed = installedPlugins.get(plugin.id);
+                  const selected = pluginIds.includes(plugin.id);
+                  const enabled = Boolean(installed?.enabled);
+                  const canSelect = Boolean(installed) || selected;
+                  return (
+                    <div key={plugin.id} className="flex items-start gap-3 rounded-md border border-border px-3 py-2">
+                      <input
+                        type="checkbox"
+                        className="mt-1"
+                        checked={selected}
+                        disabled={!canSelect}
+                        onChange={() => togglePlugin(plugin.id)}
+                        aria-label={`Select ${plugin.name}`}
+                      />
+                      <Puzzle className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex min-w-0 flex-wrap items-center gap-2">
+                          <span className="truncate text-sm font-medium">{plugin.name}</span>
+                          {plugin.marketplaceName && <Badge>{plugin.marketplaceName}</Badge>}
+                          {installed ? (
+                            <Badge className={enabled ? "border-teal-400/40 text-teal-200" : "border-zinc-500/40 text-zinc-300"}>
+                              {enabled ? "Enabled" : "Installed"}
+                            </Badge>
+                          ) : plugin.selectedOnly ? (
+                            <Badge className="border-amber-400/40 text-amber-200">Missing</Badge>
+                          ) : (
+                            <Badge>Available</Badge>
+                          )}
+                        </div>
+                        <p className="mt-1 truncate text-xs text-muted-foreground">{plugin.id}</p>
+                        {plugin.description && (
+                          <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">{plugin.description}</p>
+                        )}
+                      </div>
+                      {installed ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          disabled={enabled || enablingPlugin === plugin.id}
+                          onClick={() => void enableLaunchPlugin(plugin.id)}
+                        >
+                          {enabled ? "Enabled" : enablingPlugin === plugin.id ? "Enabling" : "Enable"}
+                        </Button>
+                      ) : (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          disabled={Boolean(installingPlugin)}
+                          onClick={() => void installLaunchPlugin(plugin.id)}
+                        >
+                          {installingPlugin === plugin.id ? "Installing" : "Install"}
+                        </Button>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+            {!def?.sourcePath && (
+              <p className="text-xs text-muted-foreground">Generic agents need an agent file before plugin selections can be saved.</p>
+            )}
+          </section>
           <label className="flex items-start gap-2 rounded-md border border-border p-3 text-sm" title={rcDisabled ? capabilities?.remoteControlReason : undefined}>
             <input
               type="checkbox"

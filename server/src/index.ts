@@ -9,7 +9,7 @@ import express from "express";
 import { nanoid } from "nanoid";
 import { WebSocketServer, type WebSocket } from "ws";
 import type { DashboardConfig } from "./config.js";
-import type { Capabilities, DirectoryEntry, GitChangedFile, GitStatus, MessageAttachment, Project, ProjectFileEntry, WsClientCommand, WsServerEvent } from "@agent-control/shared";
+import type { Capabilities, DirectoryEntry, GitChangedFile, GitStatus, LaunchRequest, MessageAttachment, Project, ProjectFileEntry, WsClientCommand, WsServerEvent } from "@agent-control/shared";
 import { detectCapabilities } from "./capabilities.js";
 import {
   expandHome,
@@ -247,6 +247,21 @@ async function projectGitStatus(project: Project): Promise<GitStatus> {
       files: [],
       message: error instanceof Error ? error.message : String(error)
     };
+  }
+}
+
+async function ensureLaunchPluginsEnabled(request: LaunchRequest): Promise<void> {
+  const project = projectById(request.projectId);
+  const def = project?.agents.find((agent) => agent.name === request.defName);
+  const plugins = def?.plugins || [];
+  if (plugins.length === 0) return;
+
+  const installed = await listPlugins();
+  const byName = new Map(installed.map((plugin) => [plugin.name, plugin]));
+  for (const plugin of plugins) {
+    const current = byName.get(plugin);
+    if (!current) throw new Error(`Plugin ${plugin} is selected for ${def?.name || request.defName} but is not installed.`);
+    if (!current.enabled) await enablePlugin(plugin);
   }
 }
 
@@ -722,7 +737,10 @@ wss.on("connection", (ws) => {
           send(ws, { type: "terminal.snapshot", snapshot: terminals.snapshot() });
           break;
         case "launch":
-          void runtime.launch(command.request).catch((error: unknown) => {
+          void (async () => {
+            await ensureLaunchPluginsEnabled(command.request);
+            await runtime.launch(command.request);
+          })().catch((error: unknown) => {
             send(ws, { type: "agent.error", message: error instanceof Error ? error.message : String(error) });
           });
           break;
