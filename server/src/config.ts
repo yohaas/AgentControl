@@ -17,6 +17,7 @@ export interface DashboardConfig {
   autoApprove?: AutoApproveMode;
   defaultAgentMode?: AgentPermissionMode;
   tileHeight?: number;
+  tileWidth?: number;
   tileColumns?: number;
   pinLastSentMessage?: boolean;
   terminalDock?: TerminalDockPosition;
@@ -67,6 +68,12 @@ function clampNumber(value: unknown, fallback: number, min: number, max: number)
 
 export function resolveTileHeight(config: DashboardConfig): number {
   return clampNumber(config.tileHeight, 460, 320, 760);
+}
+
+export function resolveTileWidth(config: DashboardConfig): number {
+  if (config.tileWidth !== undefined) return clampNumber(config.tileWidth, 520, 320, 1200);
+  if (config.tileColumns !== undefined) return clampNumber(Math.round(1040 / resolveTileColumns(config)), 520, 320, 1200);
+  return 520;
 }
 
 export function resolveTileColumns(config: DashboardConfig): number {

@@ -2118,6 +2118,8 @@ function SettingsDialog() {
   const setSettings = useAppStore((state) => state.setSettings);
   const setProjects = useAppStore((state) => state.setProjects);
   const addError = useAppStore((state) => state.addError);
+  const currentTileHeight = useAppStore((state) => state.currentTileHeight);
+  const currentTileWidth = useAppStore((state) => state.currentTileWidth);
   const [open, setOpen] = useState(false);
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const [projectPathsText, setProjectPathsText] = useState((settings.projectPaths || []).join("\n"));
@@ -2125,7 +2127,7 @@ function SettingsDialog() {
   const [autoApprove, setAutoApprove] = useState(settings.autoApprove);
   const [defaultAgentMode, setDefaultAgentMode] = useState<AgentPermissionMode>(settings.defaultAgentMode);
   const [tileHeight, setTileHeight] = useState(settings.tileHeight);
-  const [tileColumns, setTileColumns] = useState(settings.tileColumns);
+  const [tileWidth, setTileWidth] = useState(settings.tileWidth);
   const [pinLastSentMessage, setPinLastSentMessage] = useState(settings.pinLastSentMessage);
   const [terminalDock, setTerminalDock] = useState(settings.terminalDock);
 
@@ -2136,7 +2138,7 @@ function SettingsDialog() {
     setAutoApprove(settings.autoApprove);
     setDefaultAgentMode(settings.defaultAgentMode);
     setTileHeight(settings.tileHeight);
-    setTileColumns(settings.tileColumns);
+    setTileWidth(settings.tileWidth);
     setPinLastSentMessage(settings.pinLastSentMessage);
     setTerminalDock(settings.terminalDock);
   }, [open, settings]);
@@ -2150,7 +2152,7 @@ function SettingsDialog() {
         autoApprove,
         defaultAgentMode,
         tileHeight,
-        tileColumns,
+        tileWidth,
         pinLastSentMessage,
         terminalDock
       });
@@ -2173,7 +2175,7 @@ function SettingsDialog() {
         autoApprove,
         defaultAgentMode,
         tileHeight,
-        tileColumns,
+        tileWidth,
         pinLastSentMessage,
         terminalDock
       }
@@ -2194,7 +2196,7 @@ function SettingsDialog() {
       setAutoApprove(next.autoApprove);
       setDefaultAgentMode(next.defaultAgentMode);
       setTileHeight(next.tileHeight);
-      setTileColumns(next.tileColumns);
+      setTileWidth(next.tileWidth);
       setPinLastSentMessage(next.pinLastSentMessage);
       setTerminalDock(next.terminalDock);
     } catch (error) {
@@ -2267,25 +2269,35 @@ function SettingsDialog() {
           <div className="grid grid-cols-2 gap-3">
             <label className="grid gap-1.5 text-sm">
               Tile height
-              <Input
-                type="number"
-                min={320}
-                max={760}
-                step={20}
-                value={tileHeight}
-                onChange={(event) => setTileHeight(Number(event.target.value))}
-              />
+              <div className="flex gap-2">
+                <Input
+                  type="number"
+                  min={320}
+                  max={760}
+                  step={20}
+                  value={tileHeight}
+                  onChange={(event) => setTileHeight(Number(event.target.value))}
+                />
+                <Button type="button" variant="outline" onClick={() => setTileHeight(currentTileHeight || settings.tileHeight)}>
+                  Current
+                </Button>
+              </div>
             </label>
             <label className="grid gap-1.5 text-sm">
-              Columns
-              <Input
-                type="number"
-                min={1}
-                max={6}
-                step={1}
-                value={tileColumns}
-                onChange={(event) => setTileColumns(Number(event.target.value))}
-              />
+              Tile width
+              <div className="flex gap-2">
+                <Input
+                  type="number"
+                  min={320}
+                  max={1200}
+                  step={20}
+                  value={tileWidth}
+                  onChange={(event) => setTileWidth(Number(event.target.value))}
+                />
+                <Button type="button" variant="outline" onClick={() => setTileWidth(currentTileWidth || settings.tileWidth)}>
+                  Current
+                </Button>
+              </div>
             </label>
           </div>
           <label className="flex items-start gap-2 rounded-md border border-border p-3 text-sm">
@@ -2361,10 +2373,12 @@ function AgentTileGrid({ agents }: { agents: RunningAgent[] }) {
   const tileOrder = useAppStore((state) => state.tileOrder);
   const setTileOrder = useAppStore((state) => state.setTileOrder);
   const settings = useAppStore((state) => state.settings);
-  const setSettings = useAppStore((state) => state.setSettings);
-  const addError = useAppStore((state) => state.addError);
-  const tileHeight = settings.tileHeight;
-  const tileColumns = settings.tileColumns;
+  const currentTileHeight = useAppStore((state) => state.currentTileHeight);
+  const currentTileWidth = useAppStore((state) => state.currentTileWidth);
+  const setCurrentTileHeight = useAppStore((state) => state.setCurrentTileHeight);
+  const setCurrentTileWidth = useAppStore((state) => state.setCurrentTileWidth);
+  const tileHeight = currentTileHeight || settings.tileHeight;
+  const tileWidth = currentTileWidth || settings.tileWidth;
   const tileWidths = useAppStore((state) => state.tileWidths);
   const orderedAgents = useMemo(() => {
     const byId = new Map(agents.map((agent) => [agent.id, agent]));
@@ -2385,19 +2399,6 @@ function AgentTileGrid({ agents }: { agents: RunningAgent[] }) {
     setTileOrder(ids);
   }
 
-  function setTileHeight(nextHeight: number) {
-    setSettings({ ...useAppStore.getState().settings, tileHeight: nextHeight });
-  }
-
-  async function persistTileHeight(nextHeight: number) {
-    try {
-      const next = await api.saveSettings({ ...useAppStore.getState().settings, tileHeight: nextHeight });
-      setSettings(next);
-    } catch (error) {
-      addError(error instanceof Error ? error.message : String(error));
-    }
-  }
-
   if (agents.length === 0) {
     return <div className="grid flex-1 place-items-center text-sm text-muted-foreground">No agents open.</div>;
   }
@@ -2411,10 +2412,10 @@ function AgentTileGrid({ agents }: { agents: RunningAgent[] }) {
             agent={agent}
             height={tileHeight}
             width={tileWidths[agent.id]}
-            defaultWidth={`calc((100% - ${(tileColumns - 1) * 1}rem) / ${tileColumns})`}
+            defaultWidth={`${tileWidth}px`}
             onMove={moveTile}
-            onHeightChange={setTileHeight}
-            onHeightCommit={(nextHeight) => void persistTileHeight(nextHeight)}
+            onHeightChange={setCurrentTileHeight}
+            onWidthChange={setCurrentTileWidth}
           />
         ))}
       </div>
@@ -2429,7 +2430,7 @@ function AgentTile({
   defaultWidth,
   onMove,
   onHeightChange,
-  onHeightCommit
+  onWidthChange
 }: {
   agent: RunningAgent;
   height: number;
@@ -2437,7 +2438,7 @@ function AgentTile({
   defaultWidth: string;
   onMove: (sourceId: string, targetId: string) => void;
   onHeightChange: (height: number) => void;
-  onHeightCommit: (height: number) => void;
+  onWidthChange: (width: number) => void;
 }) {
   const transcript = useAppStore((state) => state.transcripts[agent.id] || EMPTY_TRANSCRIPT);
   const draft = useAppStore((state) => state.drafts[agent.id] || "");
@@ -2625,7 +2626,9 @@ function AgentTile({
 
     const onMove = (moveEvent: PointerEvent) => {
       const nextWidth = Math.min(1200, Math.max(320, startWidth + moveEvent.clientX - startX));
-      setTileWidth(agent.id, Math.round(nextWidth));
+      const roundedWidth = Math.round(nextWidth);
+      setTileWidth(agent.id, roundedWidth);
+      onWidthChange(roundedWidth);
     };
     const onUp = () => {
       window.removeEventListener("pointermove", onMove);
@@ -2652,7 +2655,6 @@ function AgentTile({
     const onUp = () => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
-      onHeightCommit(Math.round(nextHeight));
     };
 
     window.addEventListener("pointermove", onMove);

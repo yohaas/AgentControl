@@ -19,7 +19,8 @@ export interface SettingsState {
   autoApprove: AutoApproveMode;
   defaultAgentMode: AgentPermissionMode;
   tileHeight: number;
-  tileColumns: number;
+  tileWidth: number;
+  tileColumns?: number;
   pinLastSentMessage: boolean;
   terminalDock: TerminalDockPosition;
 }
@@ -64,6 +65,8 @@ interface AppState {
   flashModels: Record<string, boolean>;
   tileOrder: string[];
   tileWidths: Record<string, number>;
+  currentTileHeight?: number;
+  currentTileWidth?: number;
   sidebarCollapsed: boolean;
   terminalOpen: boolean;
   terminalSessions: Record<string, TerminalSession>;
@@ -91,6 +94,8 @@ interface AppState {
   setScrollPosition: (id: string, top: number) => void;
   setTileOrder: (ids: string[]) => void;
   setTileWidth: (id: string, width: number) => void;
+  setCurrentTileHeight: (height?: number) => void;
+  setCurrentTileWidth: (width?: number) => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
   setTerminalOpen: (open: boolean) => void;
   setActiveTerminal: (id?: string) => void;
@@ -109,6 +114,7 @@ const defaultSettings: SettingsState = {
   autoApprove: "off",
   defaultAgentMode: "acceptEdits",
   tileHeight: 460,
+  tileWidth: 520,
   tileColumns: 2,
   pinLastSentMessage: true,
   terminalDock: "bottom"
@@ -132,7 +138,8 @@ function normalizeSettings(settings: SettingsState): SettingsState {
     ...settings,
     defaultAgentMode,
     tileHeight: clampNumber(settings.tileHeight, defaultSettings.tileHeight, 320, 760),
-    tileColumns: clampNumber(settings.tileColumns, defaultSettings.tileColumns, 1, 6),
+    tileWidth: clampNumber(settings.tileWidth, defaultSettings.tileWidth, 320, 1200),
+    tileColumns: clampNumber(settings.tileColumns, defaultSettings.tileColumns || 2, 1, 6),
     terminalDock
   };
 }
@@ -190,6 +197,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   flashModels: {},
   tileOrder: [],
   tileWidths: {},
+  currentTileHeight: undefined,
+  currentTileWidth: undefined,
   sidebarCollapsed: false,
   terminalOpen: false,
   terminalSessions: {},
@@ -479,6 +488,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   setScrollPosition: (id, top) => set((state) => ({ scrollPositions: { ...state.scrollPositions, [id]: top } })),
   setTileOrder: (ids) => set({ tileOrder: ids }),
   setTileWidth: (id, width) => set((state) => ({ tileWidths: { ...state.tileWidths, [id]: width } })),
+  setCurrentTileHeight: (height) => set({ currentTileHeight: height }),
+  setCurrentTileWidth: (width) => set({ currentTileWidth: width }),
   setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
   setTerminalOpen: (open) => set({ terminalOpen: open }),
   setActiveTerminal: (id) =>
