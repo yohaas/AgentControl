@@ -7268,13 +7268,15 @@ function ErrorStack() {
   const dismissError = useAppStore((state) => state.dismissError);
   if (errors.length === 0) return null;
   return (
-    <div className="fixed bottom-4 right-4 z-50 grid max-h-[min(60vh,28rem)] w-[calc(100vw-2rem)] max-w-md gap-2 overflow-y-auto">
+    <div className="fixed bottom-4 right-4 z-50 grid max-h-[min(60vh,28rem)] w-[calc(100vw-2rem)] max-w-xl gap-2 overflow-y-auto overflow-x-hidden">
       {errors.map((error, index) => (
         <div
           key={`${error}-${index}`}
-          className="flex max-w-full items-start gap-2 rounded-md border border-red-400/40 bg-red-500/15 px-3 py-2 text-sm text-red-100 shadow-lg backdrop-blur"
+          className="flex max-w-full items-start gap-2 overflow-x-hidden rounded-md border border-red-400/40 bg-red-500/15 px-3 py-2 text-sm text-red-100 shadow-lg backdrop-blur"
         >
-          <span className="max-h-36 min-w-0 flex-1 overflow-y-auto whitespace-pre-wrap break-words pr-1">{error}</span>
+          <span className="max-h-36 min-w-0 flex-1 overflow-y-auto overflow-x-hidden whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+            {error}
+          </span>
           <button
             className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-red-100/80 hover:bg-red-500/20 hover:text-red-100"
             onClick={() => dismissError(index)}
