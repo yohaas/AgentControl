@@ -116,6 +116,89 @@
   color: hsl(var(--foreground));
 }
 
+@layer components {
+  .markdown-content {
+    @apply min-w-0 whitespace-normal break-words leading-6 [overflow-wrap:anywhere];
+  }
+
+  .markdown-content > :first-child {
+    @apply mt-0;
+  }
+
+  .markdown-content > :last-child {
+    @apply mb-0;
+  }
+
+  .markdown-content p,
+  .markdown-content ul,
+  .markdown-content ol,
+  .markdown-content pre,
+  .markdown-content blockquote,
+  .markdown-content table {
+    @apply my-2;
+  }
+
+  .markdown-content ul,
+  .markdown-content ol {
+    @apply pl-5;
+  }
+
+  .markdown-content ul {
+    @apply list-disc;
+  }
+
+  .markdown-content ol {
+    @apply list-decimal;
+  }
+
+  .markdown-content li {
+    @apply my-1;
+  }
+
+  .markdown-content a {
+    @apply underline underline-offset-2;
+  }
+
+  .markdown-content blockquote {
+    @apply border-l-4 border-border pl-3 text-muted-foreground;
+  }
+
+  .markdown-content pre {
+    @apply max-w-full overflow-x-auto rounded-md border border-border bg-muted/70 p-3 text-xs leading-5;
+  }
+
+  .markdown-content pre code {
+    @apply whitespace-pre bg-transparent p-0 font-mono text-inherit;
+  }
+
+  .markdown-inline-code {
+    @apply rounded bg-muted px-1 py-0.5 font-mono text-[0.92em];
+  }
+
+  .markdown-content table {
+    @apply block max-w-full overflow-x-auto border-collapse text-left text-xs;
+  }
+
+  .markdown-content th,
+  .markdown-content td {
+    @apply border border-border px-2 py-1 align-top;
+  }
+
+  .markdown-content th {
+    @apply bg-muted font-semibold;
+  }
+
+  .user-question .markdown-content blockquote {
+    @apply border-primary-foreground/45 text-primary-foreground/85;
+  }
+
+  .user-question .markdown-content pre,
+  .user-question .markdown-inline-code,
+  .user-question .markdown-content th {
+    @apply border-primary-foreground/25 bg-primary-foreground/15;
+  }
+}
+
 .xterm {
   height: 100%;
   padding: 8px;

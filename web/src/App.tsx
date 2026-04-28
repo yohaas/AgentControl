@@ -14,6 +14,8 @@ import {
 } from "react";
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal as XTerm } from "@xterm/xterm";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import {
   ArrowDownAZ,
   ArrowUp,
@@ -5981,7 +5983,7 @@ function CollapsibleText({ text, query = "", compact = false }: { text: string; 
     if (query.trim()) setExpanded(true);
   }, [query]);
 
-  if (!shouldCollapse) return <HighlightedText text={text} query={query} />;
+  if (!shouldCollapse) return <ChatMarkdown text={text} query={query} />;
 
   function toggleExpanded() {
     setExpanded((value) => !value);
@@ -5998,7 +6000,7 @@ function CollapsibleText({ text, query = "", compact = false }: { text: string; 
         role="button"
         tabIndex={0}
         className={cn(
-          "min-w-0 cursor-pointer rounded-sm whitespace-pre-wrap break-words outline-none [overflow-wrap:anywhere] hover:bg-accent/40 focus-visible:ring-2 focus-visible:ring-ring",
+          "min-w-0 cursor-pointer rounded-sm break-words outline-none [overflow-wrap:anywhere] hover:bg-accent/40 focus-visible:ring-2 focus-visible:ring-ring",
           !expanded && (compact ? "max-h-32 overflow-hidden" : "max-h-48 overflow-hidden")
         )}
         title={expanded ? "Collapse response" : "Expand response"}
@@ -6010,7 +6012,7 @@ function CollapsibleText({ text, query = "", compact = false }: { text: string; 
           }
         }}
       >
-        <HighlightedText text={text} query={query} />
+        <ChatMarkdown text={text} query={query} />
       </div>
       <button
         type="button"
@@ -6029,6 +6031,41 @@ function CollapsibleText({ text, query = "", compact = false }: { text: string; 
 
 function isLongTextBlock(text: string, compact = false) {
   return text.length > (compact ? 420 : 900) || text.split(/\r?\n/).length > (compact ? 8 : 14);
+}
+
+function ChatMarkdown({ text, query }: { text: string; query: string }) {
+  if (query.trim()) {
+    return (
+      <span className="whitespace-pre-wrap">
+        <HighlightedText text={text} query={query} />
+      </span>
+    );
+  }
+
+  return (
+    <div className="markdown-content">
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          a: ({ ...props }) => <a {...props} target="_blank" rel="noreferrer" />,
+          code: ({ className, children, ...props }) => {
+            const multiline = String(children).includes("\n");
+            return multiline ? (
+              <code className={className} {...props}>
+                {children}
+              </code>
+            ) : (
+              <code className={cn("markdown-inline-code", className)} {...props}>
+                {children}
+              </code>
+            );
+          }
+        }}
+      >
+        {text}
+      </ReactMarkdown>
+    </div>
+  );
 }
 
 function HighlightedText({ text, query }: { text: string; query: string }) {
