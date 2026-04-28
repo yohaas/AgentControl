@@ -119,7 +119,7 @@ interface SlashCommandSuggestion {
 
 const BASE_SLASH_COMMANDS: SlashCommandSuggestion[] = [
   { value: "/clear", label: "/clear", description: "Clear this chat history" },
-  { value: "/exit", label: "/exit", description: "Exit this agent" },
+  { value: "/exit", label: "/exit", description: "Close this agent" },
   { value: "/stop", label: "/stop", description: "Stop the active response" },
   { value: "/interrupt", label: "/interrupt", description: "Stop the active response" }
 ];
@@ -1365,12 +1365,12 @@ function Sidebar() {
               variant="ghost"
               size="sm"
               onClick={() => {
-                if (window.confirm("Exit all open agents in this project?")) {
+                if (window.confirm("Close all open agents in this project?")) {
                   sendCommand({ type: "clearAll", projectId: selectedProjectId });
                 }
               }}
             >
-              Exit All
+              Close All
             </Button>
           )}
         </div>
@@ -2436,13 +2436,13 @@ function AgentTile({
               <DropdownMenuItem onClick={() => sendCommand({ type: "resume", id: agent.id })}>Resume</DropdownMenuItem>
             )}
             <DropdownMenuItem onClick={() => sendCommand({ type: "kill", id: agent.id })}>
-              Exit
+              Close
             </DropdownMenuItem>
             {isBusy && <DropdownMenuItem onClick={() => sendCommand({ type: "interrupt", id: agent.id })}>Stop response</DropdownMenuItem>}
             <DropdownMenuItem onClick={() => exportAgentMarkdown(agent, transcript)}>Export Markdown</DropdownMenuItem>
             <DropdownMenuItem onClick={() => exportAgentJson(agent, transcript)}>Export JSON</DropdownMenuItem>
             <DropdownMenuItem onClick={() => void exportAgentRawStream(agent, addError)}>Export Raw Stream</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => sendCommand({ type: "clear", id: agent.id })}>Clear</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => sendCommand({ type: "clear", id: agent.id })}>Clear Chat</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
         <Button variant="ghost" size="icon" onClick={() => setSelectedAgent(agent.id)} title="Maximize">
@@ -2762,7 +2762,7 @@ function AgentPanelHeader({ agent }: { agent: RunningAgent }) {
           <DropdownMenuItem onClick={() => exportAgentMarkdown(agent, transcripts)}>Export Markdown</DropdownMenuItem>
           <DropdownMenuItem onClick={() => exportAgentJson(agent, transcripts)}>Export JSON</DropdownMenuItem>
           <DropdownMenuItem onClick={() => void exportAgentRawStream(agent, addError)}>Export Raw Stream</DropdownMenuItem>
-          <DropdownMenuItem onClick={() => sendCommand({ type: "clear", id: agent.id })}>Clear</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => sendCommand({ type: "clear", id: agent.id })}>Clear Chat</DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
       {isBusy && (
@@ -2773,7 +2773,7 @@ function AgentPanelHeader({ agent }: { agent: RunningAgent }) {
       )}
       <Button variant="outline" onClick={() => sendCommand({ type: "kill", id: agent.id })}>
         <X className="h-4 w-4" />
-        Exit
+        Close
       </Button>
       <Button variant="ghost" size="icon" onClick={() => setSelectedAgent(undefined)} title="Show tiles">
         <Minimize2 className="h-4 w-4" />
