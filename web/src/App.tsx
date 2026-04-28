@@ -745,6 +745,10 @@ function selectedLineCount(text: string) {
   return trimmed.split(/\r?\n/).length;
 }
 
+function draftLineCount(text: string) {
+  return text.length === 0 ? 1 : text.split(/\r?\n/).length;
+}
+
 function AttachmentChips({
   attachments,
   onRemove
@@ -4540,6 +4544,7 @@ function AgentTile({
   const [contextOpen, setContextOpen] = useState(false);
   const [contextCopyTarget, setContextCopyTarget] = useState<ContextCopyTarget | undefined>();
   const [composerDropActive, setComposerDropActive] = useState(false);
+  const [composerCollapsed, setComposerCollapsed] = useState(false);
   const [slashMenuSuppressed, setSlashMenuSuppressed] = useState(false);
   const [slashInsertedByButton, setSlashInsertedByButton] = useState(false);
   const composerDragDepthRef = useRef(0);
@@ -4554,6 +4559,9 @@ function AgentTile({
   );
   const slashSuggestions = slashMenuSuppressed ? [] : rawSlashSuggestions;
   const selectedLines = selectedLineCount(selection.selectedText);
+  const draftLines = draftLineCount(draft);
+  const hasMultilineDraft = draftLines > 1;
+  const composerExpanded = hasMultilineDraft && !composerCollapsed;
 
   useEffect(() => {
     const root = rootRef.current;
@@ -4591,6 +4599,10 @@ function AgentTile({
     setActiveSlashIndex(0);
   }, [slashSuggestions.length, draft]);
 
+  useEffect(() => {
+    if (!hasMultilineDraft && composerCollapsed) setComposerCollapsed(false);
+  }, [composerCollapsed, hasMultilineDraft]);
+
   function activateTile(focusInput = false) {
     suppressAutoFocusRef.current = !focusInput;
     setSelectedAgent(undefined);
@@ -4621,12 +4633,14 @@ function AgentTile({
     if (isBusy) {
       enqueueMessage(agent.id, { text: draft, attachments });
       setDraft(agent.id, "");
+      setComposerCollapsed(false);
       setAttachments([]);
       window.requestAnimationFrame(() => inputRef.current?.focus());
       return;
     }
     sendCommand({ type: "userMessage", id: agent.id, text: draft, attachments });
     setDraft(agent.id, "");
+    setComposerCollapsed(false);
     setAttachments([]);
     window.requestAnimationFrame(() => inputRef.current?.focus());
   }
@@ -4985,7 +4999,11 @@ function AgentTile({
             <div className="relative">
               <Textarea
                 ref={inputRef}
-                className="h-9 min-h-9 resize-none overflow-y-auto border-0 bg-transparent py-2 text-sm leading-5 focus-visible:ring-0"
+                className={cn(
+                  "min-h-9 resize-none overflow-y-auto border-0 bg-transparent py-2 text-sm leading-5 focus-visible:ring-0",
+                  hasMultilineDraft && "pr-10",
+                  composerExpanded ? "h-24 max-h-40" : "h-9"
+                )}
                 value={draft}
                 disabled={!canType}
                 onFocus={() => activateTile(true)}
@@ -4999,6 +5017,19 @@ function AgentTile({
                 placeholder={isBusy ? "Queue a message..." : `chat with ${providerLabel(agent.provider)}`}
                 onKeyDown={handleComposerKeyDown}
               />
+              {hasMultilineDraft && (
+                <button
+                  type="button"
+                  className="absolute right-2 top-2 grid h-6 w-6 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+                  title={composerExpanded ? "Collapse message" : `Expand ${draftLines}-line message`}
+                  onClick={() => {
+                    setComposerCollapsed(!composerCollapsed);
+                    window.requestAnimationFrame(() => inputRef.current?.focus());
+                  }}
+                >
+                  {composerExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+                </button>
+              )}
             </div>
             <div className="flex items-center justify-between border-t border-border px-2 py-1.5">
               <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
@@ -5284,6 +5315,7 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
   const [contextOpen, setContextOpen] = useState(false);
   const [contextCopyTarget, setContextCopyTarget] = useState<ContextCopyTarget | undefined>();
   const [composerDropActive, setComposerDropActive] = useState(false);
+  const [composerCollapsed, setComposerCollapsed] = useState(false);
   const [activeSlashIndex, setActiveSlashIndex] = useState(0);
   const [slashMenuSuppressed, setSlashMenuSuppressed] = useState(false);
   const [slashInsertedByButton, setSlashInsertedByButton] = useState(false);
@@ -5299,6 +5331,9 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
   );
   const slashSuggestions = slashMenuSuppressed ? [] : rawSlashSuggestions;
   const selectedLines = selectedLineCount(selection.selectedText);
+  const draftLines = draftLineCount(draft);
+  const hasMultilineDraft = draftLines > 1;
+  const composerExpanded = hasMultilineDraft && !composerCollapsed;
 
   useEffect(() => {
     const root = rootRef.current;
@@ -5329,6 +5364,10 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
     setActiveSlashIndex(0);
   }, [slashSuggestions.length, draft]);
 
+  useEffect(() => {
+    if (!hasMultilineDraft && composerCollapsed) setComposerCollapsed(false);
+  }, [composerCollapsed, hasMultilineDraft]);
+
   function send() {
     if (!draft.trim() && attachments.length === 0) return;
     if (handleNativeSlashCommand(agent, draft)) {
@@ -5338,12 +5377,14 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
     if (isBusy) {
       enqueueMessage(agent.id, { text: draft, attachments });
       setDraft(agent.id, "");
+      setComposerCollapsed(false);
       setAttachments([]);
       window.requestAnimationFrame(() => inputRef.current?.focus());
       return;
     }
     sendCommand({ type: "userMessage", id: agent.id, text: draft, attachments });
     setDraft(agent.id, "");
+    setComposerCollapsed(false);
     setAttachments([]);
     window.requestAnimationFrame(() => inputRef.current?.focus());
   }
@@ -5605,7 +5646,11 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
           <div className="relative">
             <Textarea
               ref={inputRef}
-              className="h-9 min-h-9 resize-none overflow-y-auto border-0 bg-transparent py-2 leading-5 focus-visible:ring-0"
+              className={cn(
+                "min-h-9 resize-none overflow-y-auto border-0 bg-transparent py-2 leading-5 focus-visible:ring-0",
+                hasMultilineDraft && "pr-10",
+                composerExpanded ? "h-28 max-h-48" : "h-9"
+              )}
               value={draft}
               disabled={!canType}
               onChange={(event) => {
@@ -5617,6 +5662,19 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
               placeholder={isBusy ? "Queue a message..." : `chat with ${providerLabel(agent.provider)}`}
               onKeyDown={handleComposerKeyDown}
             />
+            {hasMultilineDraft && (
+              <button
+                type="button"
+                className="absolute right-2 top-2 grid h-6 w-6 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+                title={composerExpanded ? "Collapse message" : `Expand ${draftLines}-line message`}
+                onClick={() => {
+                  setComposerCollapsed(!composerCollapsed);
+                  window.requestAnimationFrame(() => inputRef.current?.focus());
+                }}
+              >
+                {composerExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+              </button>
+            )}
           </div>
           <div className="flex items-center justify-between border-t border-border px-2 py-1.5">
             <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
