@@ -45,6 +45,13 @@ export interface DirectoryListing {
   entries: DirectoryEntry[];
 }
 
+export interface ProjectFileEntry {
+  path: string;
+  name: string;
+  size: number;
+  modifiedAt: string;
+}
+
 export interface GitChangedFile {
   path: string;
   status: string;
@@ -97,7 +104,9 @@ export interface MessageAttachment {
   name: string;
   mimeType: string;
   size: number;
+  kind?: "image" | "file" | "context";
   path?: string;
+  relativePath?: string;
   url?: string;
 }
 

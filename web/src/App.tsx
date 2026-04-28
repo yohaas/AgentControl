@@ -30,6 +30,7 @@ import {
   FolderOpen,
   FolderPlus,
   GitBranch,
+  Globe,
   GripVertical,
   HardDrive,
   Hand,
@@ -53,6 +54,7 @@ import {
   SquareSlash,
   SquareTerminal,
   Trash2,
+  Upload,
   Waypoints,
   X
 } from "lucide-react";
@@ -65,6 +67,7 @@ import type {
   DirectoryListing,
   GitStatus,
   MessageAttachment,
+  ProjectFileEntry,
   RunningAgent,
   TerminalSession,
   TranscriptEvent
@@ -425,7 +428,7 @@ function readFileAsDataUrl(file: File) {
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
     reader.addEventListener("load", () => resolve(String(reader.result || "")));
-    reader.addEventListener("error", () => reject(reader.error || new Error("Could not read pasted image.")));
+    reader.addEventListener("error", () => reject(reader.error || new Error("Could not read attachment.")));
     reader.readAsDataURL(file);
   });
 }
@@ -444,16 +447,22 @@ function insertPastedText(textarea: HTMLTextAreaElement, current: string, text: 
   return `${current.slice(0, start)}${text}${current.slice(end)}`;
 }
 
-async function uploadPastedImages(files: File[]) {
+async function uploadFiles(files: File[]) {
   return Promise.all(
     files.map(async (file) =>
       api.uploadAttachment({
-        name: file.name || `pasted-image.${file.type.split("/")[1] || "png"}`,
-        mimeType: file.type,
+        name: file.name || `attachment.${file.type.split("/")[1] || "bin"}`,
+        mimeType: file.type || "application/octet-stream",
         dataUrl: await readFileAsDataUrl(file)
       })
     )
   );
+}
+
+function formatFileSize(size: number) {
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${Math.round(size / 102.4) / 10} KB`;
+  return `${Math.round(size / 1024 / 102.4) / 10} MB`;
 }
 
 function selectedLineCount(text: string) {
@@ -474,15 +483,139 @@ function AttachmentChips({
     <div className="flex flex-wrap gap-2">
       {attachments.map((attachment) => (
         <span key={attachment.id} className="inline-flex max-w-full items-center gap-2 rounded-md border border-border bg-background px-2 py-1 text-xs">
-          <ImageIcon className="h-3.5 w-3.5 text-primary" />
-          {attachment.url && <img src={attachment.url} alt="" className="h-6 w-6 rounded object-cover" />}
-          <span className="truncate">{attachment.name}</span>
-          <button className="text-muted-foreground hover:text-foreground" onClick={() => onRemove(attachment.id)} title="Remove image">
+          {attachment.mimeType.startsWith("image/") ? (
+            <ImageIcon className="h-3.5 w-3.5 text-primary" />
+          ) : (
+            <FileText className="h-3.5 w-3.5 text-primary" />
+          )}
+          {attachment.mimeType.startsWith("image/") && attachment.url && <img src={attachment.url} alt="" className="h-6 w-6 rounded object-cover" />}
+          <span className="truncate">{attachment.relativePath || attachment.name}</span>
+          <button className="text-muted-foreground hover:text-foreground" onClick={() => onRemove(attachment.id)} title="Remove attachment">
             <X className="h-3.5 w-3.5" />
           </button>
         </span>
       ))}
     </div>
+  );
+}
+
+function ComposerAddMenu({
+  disabled,
+  onUpload,
+  onAddContext
+}: {
+  disabled: boolean;
+  onUpload: () => void;
+  onAddContext: () => void;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon" className="h-7 w-7" title="Add attachment or context" disabled={disabled}>
+          <Plus className="h-4 w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" side="top" className="min-w-52">
+        <DropdownMenuItem onSelect={onUpload} className="gap-3">
+          <Upload className="h-4 w-4 text-muted-foreground" />
+          Upload from computer
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={onAddContext} className="gap-3">
+          <FileText className="h-4 w-4 text-muted-foreground" />
+          Add context
+        </DropdownMenuItem>
+        <DropdownMenuItem disabled className="gap-3 opacity-50">
+          <Globe className="h-4 w-4 text-muted-foreground" />
+          Browse the web
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function AddContextDialog({
+  agent,
+  open,
+  onOpenChange,
+  onSelect,
+  onDone
+}: {
+  agent: RunningAgent;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSelect: (attachment: MessageAttachment) => void;
+  onDone?: () => void;
+}) {
+  const addError = useAppStore((state) => state.addError);
+  const [query, setQuery] = useState("");
+  const [files, setFiles] = useState<ProjectFileEntry[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    setLoading(true);
+    const timer = window.setTimeout(() => {
+      void api
+        .projectFiles(agent.projectId, query)
+        .then((next) => {
+          if (!cancelled) setFiles(next);
+        })
+        .catch((error) => {
+          if (!cancelled) addError(error instanceof Error ? error.message : String(error));
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false);
+        });
+    }, 120);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [addError, agent.projectId, open, query]);
+
+  async function addFile(file: ProjectFileEntry) {
+    try {
+      const attachment = await api.addProjectContext(agent.projectId, file.path);
+      onSelect(attachment);
+      onOpenChange(false);
+      onDone?.();
+    } catch (error) {
+      addError(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="w-[min(92vw,720px)]">
+        <DialogHeader>
+          <DialogTitle>Add context</DialogTitle>
+        </DialogHeader>
+        <div className="grid gap-3">
+          <Input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search files in this repo" />
+          <div className="max-h-[52vh] overflow-auto rounded-md border border-border">
+            {loading && files.length === 0 ? (
+              <div className="p-4 text-sm text-muted-foreground">Loading files...</div>
+            ) : files.length === 0 ? (
+              <div className="p-4 text-sm text-muted-foreground">No files found.</div>
+            ) : (
+              files.map((file) => (
+                <button
+                  key={file.path}
+                  type="button"
+                  className="flex w-full min-w-0 items-center gap-3 border-b border-border px-3 py-2 text-left text-sm last:border-b-0 hover:bg-accent"
+                  onClick={() => void addFile(file)}
+                >
+                  <FileText className="h-4 w-4 shrink-0 text-primary" />
+                  <span className="min-w-0 flex-1 truncate">{file.path}</span>
+                  <span className="shrink-0 text-xs text-muted-foreground">{formatFileSize(file.size)}</span>
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -2450,6 +2583,7 @@ function AgentTile({
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [showPinnedMessage, setShowPinnedMessage] = useState(false);
+  const [contextOpen, setContextOpen] = useState(false);
   const [slashMenuSuppressed, setSlashMenuSuppressed] = useState(false);
   const [slashInsertedByButton, setSlashInsertedByButton] = useState(false);
   const isBusy = isAgentBusy(agent);
@@ -2587,18 +2721,18 @@ function AgentTile({
     const pastedText = event.clipboardData.getData("text/plain");
     if (pastedText) setDraft(agent.id, insertPastedText(event.currentTarget, draft, pastedText));
     try {
-      const uploaded = await uploadPastedImages(files);
+      const uploaded = await uploadFiles(files);
       setAttachments((current) => [...current, ...uploaded]);
     } catch (error) {
       addError(error instanceof Error ? error.message : String(error));
     }
   }
 
-  async function handleImageAttachment(files: FileList | null) {
-    const images = Array.from(files || []).filter((file) => file.type.startsWith("image/"));
-    if (images.length === 0) return;
+  async function handleFileAttachment(files: FileList | null) {
+    const selectedFiles = Array.from(files || []);
+    if (selectedFiles.length === 0) return;
     try {
-      const uploaded = await uploadPastedImages(images);
+      const uploaded = await uploadFiles(selectedFiles);
       setAttachments((current) => [...current, ...uploaded]);
     } catch (error) {
       addError(error instanceof Error ? error.message : String(error));
@@ -2773,6 +2907,13 @@ function AgentTile({
       </ContextMenu>
       {!agent.remoteControl && (
         <div className="shrink-0 border-t border-border p-3">
+          <AddContextDialog
+            agent={agent}
+            open={contextOpen}
+            onOpenChange={setContextOpen}
+            onSelect={(attachment) => setAttachments((current) => [...current, attachment])}
+            onDone={() => window.requestAnimationFrame(() => inputRef.current?.focus())}
+          />
           <div className="rounded-md border border-border bg-background/80 focus-within:ring-1 focus-within:ring-ring">
             <div className="grid gap-2 px-2 pt-2">
               <AttachmentChips
@@ -2808,17 +2949,14 @@ function AgentTile({
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept="image/*"
                   multiple
                   className="hidden"
                   onChange={(event) => {
-                    void handleImageAttachment(event.currentTarget.files);
+                    void handleFileAttachment(event.currentTarget.files);
                     event.currentTarget.value = "";
                   }}
                 />
-                <Button variant="ghost" size="icon" className="h-7 w-7" title="Attach image" onClick={() => fileInputRef.current?.click()}>
-                  <Plus className="h-4 w-4" />
-                </Button>
+                <ComposerAddMenu disabled={!canType} onUpload={() => fileInputRef.current?.click()} onAddContext={() => setContextOpen(true)} />
                 <Button
                   variant="ghost"
                   size="icon"
@@ -3067,6 +3205,7 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
   const selection = useTextSelection(`#${transcriptRootId}`);
   const [attachments, setAttachments] = useState<MessageAttachment[]>([]);
   const [showPinnedMessage, setShowPinnedMessage] = useState(false);
+  const [contextOpen, setContextOpen] = useState(false);
   const [activeSlashIndex, setActiveSlashIndex] = useState(0);
   const [slashMenuSuppressed, setSlashMenuSuppressed] = useState(false);
   const [slashInsertedByButton, setSlashInsertedByButton] = useState(false);
@@ -3206,18 +3345,18 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
     const pastedText = event.clipboardData.getData("text/plain");
     if (pastedText) setDraft(agent.id, insertPastedText(event.currentTarget, draft, pastedText));
     try {
-      const uploaded = await uploadPastedImages(files);
+      const uploaded = await uploadFiles(files);
       setAttachments((current) => [...current, ...uploaded]);
     } catch (error) {
       addError(error instanceof Error ? error.message : String(error));
     }
   }
 
-  async function handleImageAttachment(files: FileList | null) {
-    const images = Array.from(files || []).filter((file) => file.type.startsWith("image/"));
-    if (images.length === 0) return;
+  async function handleFileAttachment(files: FileList | null) {
+    const selectedFiles = Array.from(files || []);
+    if (selectedFiles.length === 0) return;
     try {
-      const uploaded = await uploadPastedImages(images);
+      const uploaded = await uploadFiles(selectedFiles);
       setAttachments((current) => [...current, ...uploaded]);
     } catch (error) {
       addError(error instanceof Error ? error.message : String(error));
@@ -3284,6 +3423,13 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
         />
       </ContextMenu>
       <div className="border-t border-border p-3">
+        <AddContextDialog
+          agent={agent}
+          open={contextOpen}
+          onOpenChange={setContextOpen}
+          onSelect={(attachment) => setAttachments((current) => [...current, attachment])}
+          onDone={() => window.requestAnimationFrame(() => inputRef.current?.focus())}
+        />
         <div className="mx-auto w-full min-w-0 max-w-4xl rounded-md border border-border bg-background/80 focus-within:ring-1 focus-within:ring-ring">
           <div className="grid gap-2 px-2 pt-2">
             <AttachmentChips
@@ -3318,17 +3464,14 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/*"
                 multiple
                 className="hidden"
                 onChange={(event) => {
-                  void handleImageAttachment(event.currentTarget.files);
+                  void handleFileAttachment(event.currentTarget.files);
                   event.currentTarget.value = "";
                 }}
               />
-              <Button variant="ghost" size="icon" className="h-7 w-7" title="Attach image" onClick={() => fileInputRef.current?.click()}>
-                <Plus className="h-4 w-4" />
-              </Button>
+              <ComposerAddMenu disabled={!canType} onUpload={() => fileInputRef.current?.click()} onAddContext={() => setContextOpen(true)} />
               <Button
                 variant="ghost"
                 size="icon"

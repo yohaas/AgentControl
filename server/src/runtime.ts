@@ -72,6 +72,38 @@ function stringifyUnknown(value: unknown): string {
   }
 }
 
+function isTextLikeAttachment(attachment: MessageAttachment): boolean {
+  if (attachment.mimeType.startsWith("text/")) return true;
+  return [
+    "application/json",
+    "application/javascript",
+    "application/typescript",
+    "application/xml",
+    "application/x-yaml",
+    "application/yaml"
+  ].includes(attachment.mimeType);
+}
+
+function readAttachmentContext(attachment: MessageAttachment): string {
+  if (!attachment.path || !isTextLikeAttachment(attachment)) {
+    return `- ${attachment.relativePath || attachment.name}: ${attachment.path || attachment.url || attachment.id}`;
+  }
+
+  try {
+    const raw = readFileSync(attachment.path);
+    if (raw.includes(0)) {
+      return `- ${attachment.relativePath || attachment.name}: binary file at ${attachment.path}`;
+    }
+    const maxBytes = 180 * 1024;
+    const truncated = raw.length > maxBytes;
+    const text = raw.subarray(0, maxBytes).toString("utf8");
+    const label = attachment.relativePath || attachment.name;
+    return [`### ${label}`, "```", text, truncated ? "\n...truncated..." : "", "```"].filter(Boolean).join("\n");
+  } catch (error) {
+    return `- ${attachment.relativePath || attachment.name}: could not read file (${error instanceof Error ? error.message : String(error)})`;
+  }
+}
+
 export class AgentRuntimeManager {
   private readonly states = new Map<string, AgentProcessState>();
   private readonly persist: () => void;
@@ -190,7 +222,8 @@ export class AgentRuntimeManager {
 
     const trimmed = text.trim();
     const imageAttachments = attachments.filter((attachment) => attachment.mimeType.startsWith("image/"));
-    if (!trimmed && imageAttachments.length === 0) return;
+    const contextAttachments = attachments.filter((attachment) => !attachment.mimeType.startsWith("image/"));
+    if (!trimmed && attachments.length === 0) return;
 
     const attachmentNote = imageAttachments.length
       ? [
@@ -198,7 +231,27 @@ export class AgentRuntimeManager {
           ...imageAttachments.map((attachment) => `- ${attachment.name}: ${attachment.path || attachment.url || attachment.id}`)
         ].join("\n")
       : "";
-    const displayText = [trimmed || (imageAttachments.length ? "Please inspect the attached image(s)." : ""), attachmentNote]
+    const contextNote = contextAttachments.length
+      ? [
+          "Attached context file(s):",
+          ...contextAttachments.map((attachment) => `- ${attachment.relativePath || attachment.name}`)
+        ].join("\n")
+      : "";
+    const fallbackText =
+      imageAttachments.length && contextAttachments.length
+        ? "Please inspect the attached image(s) and use the attached context file(s)."
+        : imageAttachments.length
+          ? "Please inspect the attached image(s)."
+          : contextAttachments.length
+            ? "Please use the attached context file(s)."
+            : "";
+    const displayText = [trimmed || fallbackText, attachmentNote, contextNote]
+      .filter(Boolean)
+      .join("\n\n");
+    const contextPayload = contextAttachments.length
+      ? ["Context file contents:", ...contextAttachments.map(readAttachmentContext)].join("\n\n")
+      : "";
+    const payloadText = [trimmed || fallbackText, attachmentNote, contextPayload]
       .filter(Boolean)
       .join("\n\n");
 
@@ -207,13 +260,13 @@ export class AgentRuntimeManager {
       kind: "user",
       text: displayText,
       sourceAgent,
-      attachments: imageAttachments
+      attachments
     };
     this.pushTranscript(state, event);
     state.activeTurn = true;
     this.setStatus(state, "running");
 
-    const content: Record<string, unknown>[] = [{ type: "text", text: displayText }];
+    const content: Record<string, unknown>[] = [{ type: "text", text: payloadText }];
     for (const attachment of imageAttachments) {
       if (!attachment.path) continue;
       try {

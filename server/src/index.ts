@@ -9,7 +9,7 @@ import express from "express";
 import { nanoid } from "nanoid";
 import { WebSocketServer, type WebSocket } from "ws";
 import type { DashboardConfig } from "./config.js";
-import type { Capabilities, DirectoryEntry, GitChangedFile, GitStatus, MessageAttachment, Project, WsClientCommand, WsServerEvent } from "@agent-control/shared";
+import type { Capabilities, DirectoryEntry, GitChangedFile, GitStatus, MessageAttachment, Project, ProjectFileEntry, WsClientCommand, WsServerEvent } from "@agent-control/shared";
 import { detectCapabilities } from "./capabilities.js";
 import {
   expandHome,
@@ -34,6 +34,7 @@ const attachmentsDir = path.join(os.homedir(), ".agent-dashboard", "attachments"
 const controlDir = path.join(os.homedir(), ".agent-dashboard");
 const controlPath = path.join(controlDir, "control.json");
 const supervised = process.env.AGENT_CONTROL_SUPERVISED === "1";
+const ignoredContextDirs = new Set([".git", "node_modules", "dist", "build", ".next", ".turbo", ".cache", "coverage"]);
 
 let config = await readConfig();
 let projectsRoot = resolveProjectsRoot(config);
@@ -72,6 +73,74 @@ async function filesystemRoots(): Promise<DirectoryEntry[]> {
 function normalizedProjectPath(projectPath: string): string {
   const resolved = path.resolve(expandHome(projectPath));
   return process.platform === "win32" ? resolved.toLowerCase() : resolved;
+}
+
+function projectById(id: string): Project | undefined {
+  return projects.find((candidate) => candidate.id === id);
+}
+
+function pathInside(parent: string, child: string): boolean {
+  const relative = path.relative(parent, child);
+  return Boolean(relative) && !relative.startsWith("..") && !path.isAbsolute(relative);
+}
+
+function mimeTypeForPath(filePath: string): string {
+  const ext = path.extname(filePath).toLowerCase();
+  if ([".png"].includes(ext)) return "image/png";
+  if ([".jpg", ".jpeg"].includes(ext)) return "image/jpeg";
+  if ([".webp"].includes(ext)) return "image/webp";
+  if ([".gif"].includes(ext)) return "image/gif";
+  if ([".json"].includes(ext)) return "application/json";
+  if ([".md", ".markdown"].includes(ext)) return "text/markdown";
+  if ([".html", ".htm"].includes(ext)) return "text/html";
+  if ([".css"].includes(ext)) return "text/css";
+  if ([".js", ".jsx", ".mjs", ".cjs"].includes(ext)) return "text/javascript";
+  if ([".ts", ".tsx", ".mts", ".cts"].includes(ext)) return "text/typescript";
+  if ([".txt", ".log", ".yml", ".yaml", ".xml", ".csv", ".env", ".toml", ".ini", ".sql", ".py", ".rb", ".go", ".rs", ".java", ".cs", ".cpp", ".c", ".h", ".php", ".sh", ".ps1"].includes(ext)) {
+    return "text/plain";
+  }
+  return "application/octet-stream";
+}
+
+function attachmentExtension(mimeType: string, fallbackName: string): string {
+  const ext = path.extname(fallbackName).replace(/^\./, "").toLowerCase();
+  if (ext) return ext.replace(/[^a-z0-9]/g, "").slice(0, 12) || "bin";
+  if (mimeType === "image/jpeg") return "jpg";
+  if (mimeType.includes("/")) return mimeType.split("/")[1].replace(/[^a-z0-9]/g, "").slice(0, 12) || "bin";
+  return "bin";
+}
+
+async function listProjectFiles(project: Project, query = "", limit = 500): Promise<ProjectFileEntry[]> {
+  const root = path.resolve(project.path);
+  const normalizedQuery = query.trim().toLowerCase();
+  const results: ProjectFileEntry[] = [];
+  const stack = [root];
+
+  while (stack.length > 0 && results.length < limit) {
+    const current = stack.pop()!;
+    const entries = await readdir(current, { withFileTypes: true }).catch(() => []);
+    for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name, undefined, { sensitivity: "base" }))) {
+      const absolutePath = path.join(current, entry.name);
+      const relativePath = path.relative(root, absolutePath).replace(/\\/g, "/");
+      if (entry.isDirectory()) {
+        if (!ignoredContextDirs.has(entry.name)) stack.push(absolutePath);
+        continue;
+      }
+      if (!entry.isFile()) continue;
+      if (normalizedQuery && !relativePath.toLowerCase().includes(normalizedQuery)) continue;
+      const info = await stat(absolutePath).catch(() => undefined);
+      if (!info?.isFile()) continue;
+      results.push({
+        path: relativePath,
+        name: entry.name,
+        size: info.size,
+        modifiedAt: info.mtime.toISOString()
+      });
+      if (results.length >= limit) break;
+    }
+  }
+
+  return results;
 }
 
 async function requestSupervisor(command: "restart" | "shutdown"): Promise<void> {
@@ -178,12 +247,69 @@ app.get("/api/projects", (_request, response) => {
 });
 
 app.get("/api/projects/:id/agents", (request, response) => {
-  const project = projects.find((candidate) => candidate.id === request.params.id);
+  const project = projectById(request.params.id);
   if (!project) {
     response.status(404).json({ error: "Project not found." });
     return;
   }
   response.json(project.agents);
+});
+
+app.get("/api/projects/:id/files", async (request, response) => {
+  const project = projectById(request.params.id);
+  if (!project) {
+    response.status(404).json({ error: "Project not found." });
+    return;
+  }
+
+  try {
+    const query = typeof request.query.query === "string" ? request.query.query : "";
+    response.json(await listProjectFiles(project, query));
+  } catch (error) {
+    response.status(500).json({ error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+app.post("/api/projects/:id/context", async (request, response) => {
+  const project = projectById(request.params.id);
+  if (!project) {
+    response.status(404).json({ error: "Project not found." });
+    return;
+  }
+
+  const relativePath = typeof request.body?.path === "string" ? request.body.path.trim() : "";
+  if (!relativePath) {
+    response.status(400).json({ error: "File path is required." });
+    return;
+  }
+
+  const root = path.resolve(project.path);
+  const absolutePath = path.resolve(root, relativePath);
+  if (!pathInside(root, absolutePath)) {
+    response.status(400).json({ error: "Context file must be inside the project." });
+    return;
+  }
+
+  try {
+    const info = await stat(absolutePath);
+    if (!info.isFile()) {
+      response.status(400).json({ error: "Context path must be a file." });
+      return;
+    }
+    const normalizedRelativePath = path.relative(root, absolutePath).replace(/\\/g, "/");
+    const attachment: MessageAttachment = {
+      id: nanoid(12),
+      name: path.basename(absolutePath),
+      mimeType: mimeTypeForPath(absolutePath),
+      size: info.size,
+      kind: "context",
+      path: absolutePath,
+      relativePath: normalizedRelativePath
+    };
+    response.json(attachment);
+  } catch (error) {
+    response.status(500).json({ error: error instanceof Error ? error.message : String(error) });
+  }
 });
 
 app.post("/api/refresh", async (_request, response) => {
@@ -211,7 +337,7 @@ app.post("/api/projects", async (request, response) => {
 });
 
 app.delete("/api/projects/:id", async (request, response) => {
-  const project = projects.find((candidate) => candidate.id === request.params.id);
+  const project = projectById(request.params.id);
   if (!project) {
     response.status(404).json({ error: "Project not found." });
     return;
@@ -228,7 +354,7 @@ app.delete("/api/projects/:id", async (request, response) => {
 });
 
 app.get("/api/projects/:id/git/status", async (request, response) => {
-  const project = projects.find((candidate) => candidate.id === request.params.id);
+  const project = projectById(request.params.id);
   if (!project) {
     response.status(404).json({ error: "Project not found." });
     return;
@@ -237,7 +363,7 @@ app.get("/api/projects/:id/git/status", async (request, response) => {
 });
 
 app.post("/api/projects/:id/git/push", async (request, response) => {
-  const project = projects.find((candidate) => candidate.id === request.params.id);
+  const project = projectById(request.params.id);
   if (!project) {
     response.status(404).json({ error: "Project not found." });
     return;
@@ -297,24 +423,29 @@ app.get("/api/filesystem/directories", async (request, response) => {
 app.use("/api/attachments", express.static(attachmentsDir));
 
 app.post("/api/attachments", async (request, response) => {
-  const name = typeof request.body?.name === "string" ? request.body.name : "pasted-image";
+  const name = typeof request.body?.name === "string" && request.body.name.trim() ? request.body.name.trim() : "attachment";
   const mimeType = typeof request.body?.mimeType === "string" ? request.body.mimeType : "";
   const dataUrl = typeof request.body?.dataUrl === "string" ? request.body.dataUrl : "";
-  const match = dataUrl.match(/^data:(image\/(?:png|jpeg|jpg|webp|gif));base64,([\s\S]+)$/);
+  const match = dataUrl.match(/^data:([^;]+);base64,([\s\S]+)$/);
 
-  if (!mimeType.startsWith("image/") || !match) {
-    response.status(400).json({ error: "Only pasted image attachments are supported." });
+  if (!match || !mimeType || mimeType !== match[1]) {
+    response.status(400).json({ error: "Attachment data is invalid." });
     return;
   }
 
-  const mediaType = match[1] === "image/jpg" ? "image/jpeg" : match[1];
+  const mediaType =
+    match[1] === "image/jpg"
+      ? "image/jpeg"
+      : match[1] === "application/octet-stream"
+        ? mimeTypeForPath(name)
+        : match[1];
   const data = Buffer.from(match[2], "base64");
   if (data.length > 10 * 1024 * 1024) {
-    response.status(413).json({ error: "Pasted image is larger than 10 MB." });
+    response.status(413).json({ error: "Attachment is larger than 10 MB." });
     return;
   }
 
-  const ext = mediaType === "image/jpeg" ? "jpg" : mediaType.split("/")[1];
+  const ext = attachmentExtension(mediaType, name);
   const id = nanoid(12);
   const fileName = `${id}.${ext}`;
   const filePath = path.join(attachmentsDir, fileName);
@@ -326,6 +457,7 @@ app.post("/api/attachments", async (request, response) => {
     name,
     mimeType: mediaType,
     size: data.length,
+    kind: mediaType.startsWith("image/") ? "image" : "file",
     path: filePath,
     url: `/api/attachments/${fileName}`
   };
