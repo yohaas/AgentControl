@@ -60,6 +60,7 @@ export interface RunningAgent {
   sessionId?: string;
   pid?: number;
   remoteControl: boolean;
+  planMode?: boolean;
   rcUrl?: string;
   qr?: string;
   restorable?: boolean;
@@ -130,6 +131,7 @@ export interface LaunchRequest {
   model: string;
   initialPrompt?: string;
   remoteControl?: boolean;
+  planMode?: boolean;
   autoApprove?: AutoApproveMode;
 }
 
@@ -243,6 +245,12 @@ export type WsServerEvent =
       updatedAt: string;
     }
   | {
+      type: "agent.plan_mode_changed";
+      id: string;
+      planMode: boolean;
+      updatedAt: string;
+    }
+  | {
       type: "agent.transcript";
       id: string;
       event: TranscriptEvent;
@@ -335,6 +343,11 @@ export type WsClientCommand =
       type: "setModel";
       id: string;
       model: string;
+    }
+  | {
+      type: "setPlanMode";
+      id: string;
+      planMode: boolean;
     }
   | {
       type: "enablePlugin";

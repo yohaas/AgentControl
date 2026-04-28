@@ -1452,6 +1452,23 @@ function ModelMenu({ agent, compact = false }: { agent: RunningAgent; compact?: 
   );
 }
 
+function PlanModeToggle({ agent, compact = false }: { agent: RunningAgent; compact?: boolean }) {
+  const disabled = agent.remoteControl;
+  return (
+    <Button
+      variant={agent.planMode ? "default" : "outline"}
+      size="sm"
+      className={cn("h-7", compact && "px-2 text-xs")}
+      disabled={disabled}
+      aria-pressed={Boolean(agent.planMode)}
+      title={disabled ? "Remote Control agents manage plan mode in Claude." : "Toggle plan mode"}
+      onClick={() => sendCommand({ type: "setPlanMode", id: agent.id, planMode: !agent.planMode })}
+    >
+      Plan
+    </Button>
+  );
+}
+
 function LaunchDialog() {
   const projects = useAppStore((state) => state.projects);
   const modal = useAppStore((state) => state.launchModal);
@@ -2142,6 +2159,7 @@ function AgentTile({
             <LastActivityText agent={agent} compact />
           </div>
         </div>
+        <PlanModeToggle agent={agent} compact />
         <StatusPill status={agent.status} />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -2419,6 +2437,7 @@ function AgentPanelHeader({ agent }: { agent: RunningAgent }) {
           <LastActivityText agent={agent} />
         </div>
       </div>
+      <PlanModeToggle agent={agent} />
       {agent.restorable && (
         <Button variant="outline" onClick={() => sendCommand({ type: "resume", id: agent.id })}>
           Resume

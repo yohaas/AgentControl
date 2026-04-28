@@ -284,6 +284,16 @@ export const useAppStore = create<AppState>((set, get) => ({
           set((state) => ({ flashModels: { ...state.flashModels, [event.id]: false } }));
         }, 900);
         break;
+      case "agent.plan_mode_changed":
+        set((state) => ({
+          agents: withAgent(state.agents, event.id, (agent) =>
+            mergeAgent(agent, {
+              planMode: event.planMode,
+              updatedAt: event.updatedAt
+            })
+          )
+        }));
+        break;
       case "agent.transcript":
         set((state) => ({
           transcripts: {

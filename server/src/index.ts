@@ -391,6 +391,9 @@ wss.on("connection", (ws) => {
         case "setModel":
           runtime.setModel(command.id, command.model);
           break;
+        case "setPlanMode":
+          runtime.setPlanMode(command.id, command.planMode);
+          break;
         case "enablePlugin":
           void enablePlugin(command.plugin).catch((error: unknown) => {
             send(ws, { type: "agent.error", message: error instanceof Error ? error.message : String(error) });

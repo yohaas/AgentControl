@@ -143,7 +143,8 @@ export class AgentRuntimeManager {
       modelLastUpdated: timestamp,
       launchedAt: timestamp,
       updatedAt: timestamp,
-      remoteControl: Boolean(request.remoteControl)
+      remoteControl: Boolean(request.remoteControl),
+      planMode: Boolean(request.planMode)
     };
 
     const state: AgentProcessState = {
@@ -266,6 +267,36 @@ export class AgentRuntimeManager {
     } catch {
       this.fallbackModelSwitch(state, model);
     }
+  }
+
+  setPlanMode(id: string, planMode: boolean): void {
+    const state = this.requiredState(id);
+    if (state.agent.remoteControl) throw new Error("Remote Control agents cannot change plan mode from the dashboard.");
+
+    state.agent.planMode = planMode;
+    state.agent.updatedAt = now();
+    if (state.child && !state.child.killed) {
+      state.child.stdin.write(
+        `${JSON.stringify({
+          type: "control",
+          subtype: "set_permission_mode",
+          mode: this.permissionMode(state),
+          permission_mode: this.permissionMode(state)
+        })}\n`
+      );
+    }
+    this.pushTranscript(state, {
+      ...eventBase(state.agent.id, state.agent.currentModel),
+      kind: "system",
+      text: `Plan mode ${planMode ? "enabled" : "disabled"}.`
+    });
+    this.broadcast({
+      type: "agent.plan_mode_changed",
+      id: state.agent.id,
+      planMode,
+      updatedAt: state.agent.updatedAt
+    });
+    this.persist();
   }
 
   sendTo(command: SendToCommand): void {
@@ -397,7 +428,7 @@ export class AgentRuntimeManager {
           model
         ];
 
-    if (state.autoApprove === "always") args.push("--dangerously-skip-permissions");
+    args.push("--permission-mode", this.permissionMode(state));
 
     const child = spawn(resolveClaudeCommand(), args, {
       cwd: state.agent.projectPath,
@@ -512,6 +543,12 @@ export class AgentRuntimeManager {
     }
     state.restartModel = model;
     this.stopProcessTree(state);
+  }
+
+  private permissionMode(state: AgentProcessState): "bypassPermissions" | "default" | "plan" {
+    if (state.agent.planMode) return "plan";
+    if (state.autoApprove === "always") return "bypassPermissions";
+    return "default";
   }
 
   private stopProcessTree(state: AgentProcessState): void {
