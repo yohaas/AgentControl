@@ -4748,10 +4748,18 @@ function AgentTile({
   async function handlePaste(event: ReactClipboardEvent<HTMLTextAreaElement>) {
     const files = pastedImageFiles(event);
     const pastedText = event.clipboardData.getData("text/plain");
-    if (pastedText.includes("\n")) setComposerCollapsed(false);
-    if (files.length === 0) return;
+    const pastedMultilineText = /\r|\n/.test(pastedText);
+    if (files.length === 0 && !pastedMultilineText) return;
     event.preventDefault();
-    if (pastedText) setDraft(agent.id, insertPastedText(event.currentTarget, draft, pastedText));
+    if (pastedMultilineText) setComposerCollapsed(false);
+    if (pastedText) {
+      const selectionStart = event.currentTarget.selectionStart ?? draft.length;
+      const nextDraft = insertPastedText(event.currentTarget, draft, pastedText);
+      const nextCursor = selectionStart + pastedText.length;
+      setDraft(agent.id, nextDraft);
+      window.requestAnimationFrame(() => inputRef.current?.setSelectionRange(nextCursor, nextCursor));
+    }
+    if (files.length === 0) return;
     try {
       const uploaded = await uploadFiles(files);
       setAttachments((current) => [...current, ...uploaded]);
@@ -5511,10 +5519,18 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
   async function handlePaste(event: ReactClipboardEvent<HTMLTextAreaElement>) {
     const files = pastedImageFiles(event);
     const pastedText = event.clipboardData.getData("text/plain");
-    if (pastedText.includes("\n")) setComposerCollapsed(false);
-    if (files.length === 0) return;
+    const pastedMultilineText = /\r|\n/.test(pastedText);
+    if (files.length === 0 && !pastedMultilineText) return;
     event.preventDefault();
-    if (pastedText) setDraft(agent.id, insertPastedText(event.currentTarget, draft, pastedText));
+    if (pastedMultilineText) setComposerCollapsed(false);
+    if (pastedText) {
+      const selectionStart = event.currentTarget.selectionStart ?? draft.length;
+      const nextDraft = insertPastedText(event.currentTarget, draft, pastedText);
+      const nextCursor = selectionStart + pastedText.length;
+      setDraft(agent.id, nextDraft);
+      window.requestAnimationFrame(() => inputRef.current?.setSelectionRange(nextCursor, nextCursor));
+    }
+    if (files.length === 0) return;
     try {
       const uploaded = await uploadFiles(files);
       setAttachments((current) => [...current, ...uploaded]);
