@@ -3668,7 +3668,7 @@ function SettingsDialog() {
   const currentTileHeight = useAppStore((state) => state.currentTileHeight);
   const [open, setOpen] = useState(false);
   const importInputRef = useRef<HTMLInputElement | null>(null);
-  const [projectPathsText, setProjectPathsText] = useState((settings.projectPaths || []).join("\n"));
+  const [projectPaths, setProjectPaths] = useState(settings.projectPaths || []);
   const [modelsText, setModelsText] = useState(settings.models.join("\n"));
   const [modelProfilesText, setModelProfilesText] = useState((settings.modelProfiles || []).map((profile) => `${profile.provider}:${profile.id}`).join("\n"));
   const [gitPath, setGitPath] = useState(settings.gitPath || "");
@@ -3679,6 +3679,7 @@ function SettingsDialog() {
   const [openaiAgentDir, setOpenaiAgentDir] = useState(settings.openaiAgentDir || ".agent-control/openai-agents");
   const [builtInAgentDir, setBuiltInAgentDir] = useState(settings.builtInAgentDir || ".agent-control/built-in-agents");
   const [agentDirBrowser, setAgentDirBrowser] = useState<undefined | "claude" | "codex" | "openai" | "builtIn">();
+  const [projectFolderBrowserOpen, setProjectFolderBrowserOpen] = useState(false);
   const [anthropicApiKey, setAnthropicApiKey] = useState("");
   const [openaiApiKey, setOpenaiApiKey] = useState("");
   const [clearAnthropicApiKey, setClearAnthropicApiKey] = useState(false);
@@ -3692,7 +3693,7 @@ function SettingsDialog() {
 
   useEffect(() => {
     if (!open) return;
-    setProjectPathsText((settings.projectPaths || []).join("\n"));
+    setProjectPaths(settings.projectPaths || []);
     setModelsText(settings.models.join("\n"));
     setModelProfilesText((settings.modelProfiles || []).map((profile) => `${profile.provider}:${profile.id}`).join("\n"));
     setGitPath(settings.gitPath || "");
@@ -3718,7 +3719,7 @@ function SettingsDialog() {
     try {
       const next = await api.saveSettings({
         ...settings,
-        projectPaths: projectPathsText.split(/\r?\n/).map((line) => line.trim()).filter(Boolean),
+        projectPaths,
         models: modelsText.split(/\r?\n/).map((line) => line.trim()).filter(Boolean),
         modelProfiles: parseModelProfiles(modelProfilesText),
         gitPath,
@@ -3753,7 +3754,7 @@ function SettingsDialog() {
       exportedAt: new Date().toISOString(),
       settings: {
         ...settings,
-        projectPaths: projectPathsText.split(/\r?\n/).map((line) => line.trim()).filter(Boolean),
+        projectPaths,
         models: modelsText.split(/\r?\n/).map((line) => line.trim()).filter(Boolean),
         modelProfiles: parseModelProfiles(modelProfilesText),
         gitPath,
@@ -3782,7 +3783,7 @@ function SettingsDialog() {
       const next = await api.saveSettings(imported as typeof settings);
       setSettings(next);
       setProjects(await api.refresh());
-      setProjectPathsText((next.projectPaths || []).join("\n"));
+      setProjectPaths(next.projectPaths || []);
       setModelsText(next.models.join("\n"));
       setModelProfilesText((next.modelProfiles || []).map((profile) => `${profile.provider}:${profile.id}`).join("\n"));
       setGitPath(next.gitPath || "");
@@ -3819,6 +3820,12 @@ function SettingsDialog() {
     return builtInAgentDir;
   }
 
+  function addProjectPath(path: string) {
+    const trimmed = path.trim();
+    if (!trimmed) return;
+    setProjectPaths((current) => (current.some((item) => item.toLowerCase() === trimmed.toLowerCase()) ? current : [...current, trimmed]));
+  }
+
   const selectedProject = projects.find((project) => project.id === selectedProjectId);
   const browserInitialPath = agentDirBrowser
     ? currentAgentDir(agentDirBrowser).startsWith(".") && selectedProject
@@ -3837,10 +3844,44 @@ function SettingsDialog() {
           <DialogTitle>Settings</DialogTitle>
         </DialogHeader>
         <div className="grid gap-3">
-          <label className="grid gap-1.5 text-sm">
-            Project folders
-            <Textarea value={projectPathsText} onChange={(event) => setProjectPathsText(event.target.value)} placeholder="One absolute path per line" />
-          </label>
+          <section className="grid gap-2 rounded-md border border-border p-3">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <h3 className="text-sm font-medium">Project folders</h3>
+                <p className="text-xs text-muted-foreground">Choose folders to load into AgentControl.</p>
+              </div>
+              <Button type="button" variant="outline" size="sm" onClick={() => setProjectFolderBrowserOpen(true)}>
+                <FolderOpen className="h-4 w-4" />
+                Add Folder
+              </Button>
+            </div>
+            <div className="grid gap-1.5">
+              {projectPaths.length === 0 ? (
+                <p className="rounded-md border border-dashed border-border px-3 py-5 text-center text-sm text-muted-foreground">
+                  No project folders selected.
+                </p>
+              ) : (
+                projectPaths.map((projectPath) => (
+                  <div key={projectPath} className="flex min-w-0 items-center gap-2 rounded-md border border-border bg-background/50 px-2 py-2">
+                    <FolderOpen className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    <span className="min-w-0 flex-1 truncate font-mono text-xs" title={projectPath}>
+                      {projectPath}
+                    </span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                      title="Remove project folder"
+                      onClick={() => setProjectPaths((current) => current.filter((item) => item !== projectPath))}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))
+              )}
+            </div>
+          </section>
           <label className="grid gap-1.5 text-sm">
             Models
             <Textarea value={modelsText} onChange={(event) => setModelsText(event.target.value)} />
@@ -4059,6 +4100,15 @@ function SettingsDialog() {
         onSelect={(selectedPath) => {
           if (agentDirBrowser) setAgentDir(agentDirBrowser, selectedPath);
           setAgentDirBrowser(undefined);
+        }}
+      />
+      <FolderBrowserDialog
+        open={projectFolderBrowserOpen}
+        initialPath={selectedProject?.path || projectPaths[projectPaths.length - 1] || ""}
+        onOpenChange={setProjectFolderBrowserOpen}
+        onSelect={(selectedPath) => {
+          addProjectPath(selectedPath);
+          setProjectFolderBrowserOpen(false);
         }}
       />
     </>
