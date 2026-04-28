@@ -48,7 +48,7 @@ import {
   writeConfig,
   writeSecrets
 } from "./config.js";
-import { addMarketplace, enablePlugin, installPlugin, listPlugins, pluginCatalog } from "./plugins.js";
+import { addMarketplace, enablePlugin, installPlugin, listPlugins, normalizePluginProvider, pluginCatalog, supportsPluginProvider } from "./plugins.js";
 import { AgentRuntimeManager } from "./runtime.js";
 import { deleteBuiltInAgent, scanConfiguredProjects, scanProject, updateAgentPlugins, updateAgentPluginsFile, upsertBuiltInAgent } from "./scanner.js";
 import { TerminalManager } from "./terminal.js";
@@ -739,14 +739,23 @@ async function ensureLaunchPluginsEnabled(request: LaunchRequest): Promise<void>
   const def = request.agentSource === "builtIn" ? builtInDef || projectDef : projectDef || builtInDef;
   const plugins = def?.plugins || [];
   if (plugins.length === 0) return;
+  const provider = request.provider || def?.provider || "claude";
+  if (!supportsPluginProvider(provider)) {
+    throw new Error("OpenAI API sessions do not support local AgentControl plugins.");
+  }
 
-  const installed = await listPlugins();
+  const installed = await listPlugins(provider);
   const byName = new Map(installed.map((plugin) => [plugin.name, plugin]));
   for (const plugin of plugins) {
     const current = byName.get(plugin);
     if (!current) throw new Error(`Plugin ${plugin} is selected for ${def?.name || request.defName} but is not installed.`);
-    if (!current.enabled) await enablePlugin(plugin);
+    if (!current.enabled) await enablePlugin(plugin, provider);
   }
+}
+
+function requestPluginProvider(value: unknown): ReturnType<typeof normalizePluginProvider> {
+  if (value === "openai") throw new Error("OpenAI API sessions do not expose a local plugin catalog.");
+  return normalizePluginProvider(value);
 }
 
 const runtime = new AgentRuntimeManager(
@@ -1266,17 +1275,17 @@ app.get("/api/settings", (_request, response) => {
   });
 });
 
-app.get("/api/plugins", async (_request, response) => {
+app.get("/api/plugins", async (request, response) => {
   try {
-    response.json(await listPlugins());
+    response.json(await listPlugins(requestPluginProvider(request.query.provider)));
   } catch (error) {
     response.status(500).json({ error: error instanceof Error ? error.message : String(error) });
   }
 });
 
-app.get("/api/plugins/catalog", async (_request, response) => {
+app.get("/api/plugins/catalog", async (request, response) => {
   try {
-    response.json(await pluginCatalog());
+    response.json(await pluginCatalog(requestPluginProvider(request.query.provider)));
   } catch (error) {
     response.status(500).json({ error: error instanceof Error ? error.message : String(error) });
   }
@@ -1284,33 +1293,33 @@ app.get("/api/plugins/catalog", async (_request, response) => {
 
 app.post("/api/plugins/:plugin/enable", async (request, response) => {
   try {
-    response.json(await enablePlugin(request.params.plugin));
+    response.json(await enablePlugin(request.params.plugin, requestPluginProvider(request.query.provider)));
   } catch (error) {
     response.status(500).json({ error: error instanceof Error ? error.message : String(error) });
   }
 });
 
 app.post("/api/plugins/install", async (request, response) => {
-  const body = request.body as { plugin?: string; scope?: string };
+  const body = request.body as { plugin?: string; scope?: string; provider?: unknown };
   if (!body.plugin?.trim()) {
     response.status(400).json({ error: "Plugin is required." });
     return;
   }
   try {
-    response.json(await installPlugin(body.plugin.trim(), body.scope));
+    response.json(await installPlugin(body.plugin.trim(), body.scope, requestPluginProvider(body.provider)));
   } catch (error) {
     response.status(500).json({ error: error instanceof Error ? error.message : String(error) });
   }
 });
 
 app.post("/api/plugins/marketplaces", async (request, response) => {
-  const body = request.body as { source?: string };
+  const body = request.body as { source?: string; provider?: unknown };
   if (!body.source?.trim()) {
     response.status(400).json({ error: "Marketplace source is required." });
     return;
   }
   try {
-    response.json(await addMarketplace(body.source.trim()));
+    response.json(await addMarketplace(body.source.trim(), requestPluginProvider(body.provider)));
   } catch (error) {
     response.status(500).json({ error: error instanceof Error ? error.message : String(error) });
   }

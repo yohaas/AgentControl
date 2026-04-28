@@ -2631,7 +2631,7 @@ function FolderBrowserDialog({
   );
 }
 
-function PluginManagementPanel() {
+function PluginManagementPanel({ provider }: { provider: Extract<AgentProvider, "claude" | "codex"> }) {
   const addError = useAppStore((state) => state.addError);
   const [catalog, setCatalog] = useState<ClaudePluginCatalog>({ installed: [], available: [], marketplaces: [] });
   const [loading, setLoading] = useState(false);
@@ -2646,7 +2646,7 @@ function PluginManagementPanel() {
   async function loadCatalog() {
     setLoading(true);
     try {
-      setCatalog(await api.pluginCatalog());
+      setCatalog(await api.pluginCatalog(provider));
     } catch (error) {
       addError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -2656,8 +2656,8 @@ function PluginManagementPanel() {
 
   async function enable(plugin: string) {
     try {
-      await api.enablePlugin(plugin);
-      setCatalog(await api.pluginCatalog());
+      await api.enablePlugin(plugin, provider);
+      setCatalog(await api.pluginCatalog(provider));
     } catch (error) {
       addError(error instanceof Error ? error.message : String(error));
     }
@@ -2668,7 +2668,7 @@ function PluginManagementPanel() {
     if (!id) return;
     setInstallingPlugin(id);
     try {
-      setCatalog(await api.installPlugin(id, pluginScope));
+      setCatalog(await api.installPlugin(id, pluginScope, provider));
       setManualPlugin("");
     } catch (error) {
       addError(error instanceof Error ? error.message : String(error));
@@ -2682,7 +2682,7 @@ function PluginManagementPanel() {
     if (!source) return;
     setAddingMarketplace(true);
     try {
-      setCatalog(await api.addPluginMarketplace(source));
+      setCatalog(await api.addPluginMarketplace(source, provider));
       setMarketplaceSource("");
     } catch (error) {
       addError(error instanceof Error ? error.message : String(error));
@@ -2693,7 +2693,7 @@ function PluginManagementPanel() {
 
   useEffect(() => {
     void loadCatalog();
-  }, []);
+  }, [provider]);
 
   const installedIds = useMemo(() => new Set(catalog.installed.map((plugin) => plugin.name)), [catalog.installed]);
   const filteredAvailable = useMemo(() => {
@@ -2716,8 +2716,12 @@ function PluginManagementPanel() {
       <section className="grid gap-4 rounded-md border border-border p-3">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <h3 className="text-sm font-medium">Claude plugins</h3>
-            <p className="text-xs text-muted-foreground">Manage installed plugins, marketplaces, and install scope for Claude sessions.</p>
+            <h3 className="text-sm font-medium">{provider === "codex" ? "Codex plugins" : "Claude plugins"}</h3>
+            <p className="text-xs text-muted-foreground">
+              {provider === "codex"
+                ? "Manage cached Codex plugins and marketplaces from your Codex config."
+                : "Manage installed plugins, marketplaces, and install scope for Claude sessions."}
+            </p>
           </div>
           <Button variant="outline" size="sm" onClick={loadCatalog} disabled={loading}>
             <RefreshCw className="h-4 w-4" />
@@ -2800,7 +2804,11 @@ function PluginManagementPanel() {
             </Select>
           </div>
           <div className="flex min-w-0 gap-2">
-            <Input value={manualPlugin} onChange={(event) => setManualPlugin(event.target.value)} placeholder="Install by exact plugin id" />
+            <Input
+              value={manualPlugin}
+              onChange={(event) => setManualPlugin(event.target.value)}
+              placeholder={provider === "codex" ? "Enable cached plugin id" : "Install by exact plugin id"}
+            />
             <Button disabled={!manualPlugin.trim() || Boolean(installingPlugin)} onClick={() => void install(manualPlugin)}>
               <Plus className="h-4 w-4" />
               Install
@@ -3710,6 +3718,8 @@ function LaunchDialog() {
     setProvider(nextProvider);
     setModel(defaultModelForProvider(nextProvider, def));
     setPluginIds(def.plugins || []);
+    setPluginCatalog({ installed: [], available: [], marketplaces: [] });
+    setPluginPickerExpanded(false);
   }, [def, modelProfiles, settings.models]);
 
   function selectDef(nextValue: string) {
@@ -3722,6 +3732,7 @@ function LaunchDialog() {
     setModel(defaultModelForProvider(nextProvider, nextDef));
     setPluginIds(nextDef?.plugins || []);
     setPluginQuery("");
+    setPluginCatalog({ installed: [], available: [], marketplaces: [] });
     setPluginPickerExpanded(false);
     setAgentFileOpen(false);
   }
@@ -3729,7 +3740,7 @@ function LaunchDialog() {
   async function loadPluginCatalog() {
     setPluginsLoading(true);
     try {
-      setPluginCatalog(await api.pluginCatalog());
+      setPluginCatalog(await api.pluginCatalog(provider));
     } catch (error) {
       addError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -3748,7 +3759,7 @@ function LaunchDialog() {
     if (!id) return;
     setInstallingPlugin(id);
     try {
-      setPluginCatalog(await api.installPlugin(id, pluginScope));
+      setPluginCatalog(await api.installPlugin(id, pluginScope, provider));
       setPluginIds((current) => (current.includes(id) ? current : [...current, id].sort(compareSlashCommands)));
     } catch (error) {
       addError(error instanceof Error ? error.message : String(error));
@@ -3760,8 +3771,8 @@ function LaunchDialog() {
   async function enableLaunchPlugin(pluginId: string) {
     setEnablingPlugin(pluginId);
     try {
-      await api.enablePlugin(pluginId);
-      setPluginCatalog(await api.pluginCatalog());
+      await api.enablePlugin(pluginId, provider);
+      setPluginCatalog(await api.pluginCatalog(provider));
     } catch (error) {
       addError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -3875,6 +3886,8 @@ function LaunchDialog() {
       .slice(0, 120);
   }, [pluginCatalog.available, pluginCatalog.installed, pluginPickerExpanded, pluginQuery, selectedPluginRows]);
   const pluginsChanged = !arraysEqual(pluginIds, def?.plugins || []);
+  const providerCapability = capabilities?.providers?.find((item) => item.provider === provider);
+  const providerSupportsPlugins = provider === "claude" || Boolean(providerCapability?.supportsPlugins);
 
   return (
     <>
@@ -3943,6 +3956,8 @@ function LaunchDialog() {
                 setProvider(nextProvider);
                 setRemoteControl(false);
                 setModel(defaultModelForProvider(nextProvider));
+                setPluginCatalog({ installed: [], available: [], marketplaces: [] });
+                setPluginPickerExpanded(false);
               }}
             >
               <SelectTrigger>
@@ -4002,15 +4017,17 @@ function LaunchDialog() {
           {provider !== "claude" && (
             <div className="rounded-md border border-border px-3 py-2 text-xs text-muted-foreground">
               {provider === "codex"
-                ? "Codex sessions run through the configured Codex CLI. Claude plugins and Remote Control are disabled."
-                : "OpenAI API sessions stream through the Responses API using OPENAI_API_KEY. Local shell tools are not bridged by default."}
+                ? "Codex sessions run through the configured Codex CLI. Remote Control is disabled; Codex plugins are available when the CLI plugin cache is present."
+                : "OpenAI API sessions stream through the Responses API using OPENAI_API_KEY. Local CLI plugins and shell tools are not bridged by default."}
             </div>
           )}
-          {provider === "claude" && <section className="grid gap-2 text-sm">
+          {providerSupportsPlugins && provider !== "openai" && <section className="grid gap-2 text-sm">
             <div className="flex items-center justify-between gap-2">
               <div>
                 <h3 className="text-sm font-medium">Agent plugins</h3>
-                <p className="text-xs text-muted-foreground">Selections are saved to this agent definition.</p>
+                <p className="text-xs text-muted-foreground">
+                  Selections are saved to this agent definition{provider === "codex" ? " and enabled for Codex runs." : "."}
+                </p>
               </div>
               <div className="flex items-center gap-2">
                 {pluginPickerExpanded ? (
@@ -4821,7 +4838,7 @@ function SettingsDialog() {
                   Always passes --dangerously-skip-permissions when launching Claude agents.
                 </p>
               )}
-              <PluginManagementPanel />
+              <PluginManagementPanel provider="claude" />
             </>
           )}
           {settingsTab === "codex" && (
@@ -4849,6 +4866,7 @@ function SettingsDialog() {
                   </Button>
                 </div>
               </label>
+              <PluginManagementPanel provider="codex" />
             </>
           )}
           {settingsTab === "openai" && (
@@ -4882,6 +4900,12 @@ function SettingsDialog() {
                   <input type="checkbox" checked={clearOpenaiApiKey} onChange={(event) => setClearOpenaiApiKey(event.target.checked)} />
                   Clear saved OpenAI key{settings.openaiKeySaved ? "" : " (none saved)"}
                 </label>
+              </section>
+              <section className="grid gap-1 rounded-md border border-border p-3 text-sm">
+                <h3 className="text-sm font-medium">OpenAI plugins</h3>
+                <p className="text-xs text-muted-foreground">
+                  OpenAI API sessions do not expose a local plugin catalog to AgentControl. Use Codex or Claude CLI sessions for local plugins.
+                </p>
               </section>
             </>
           )}

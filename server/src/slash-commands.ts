@@ -2,7 +2,7 @@ import { readdir, readFile, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import matter from "gray-matter";
-import type { ClaudePlugin, SlashCommandInfo } from "@agent-control/shared";
+import type { AgentProvider, ClaudePlugin, SlashCommandInfo } from "@agent-control/shared";
 
 const INTERACTIVE_BUILTINS = new Set(["/config", "/login", "/mcp", "/permissions", "/terminal-setup", "/vim"]);
 
@@ -174,8 +174,10 @@ async function scanSkillsDir(root: string, source: SlashCommandInfo["source"], n
   return commands.filter((command): command is SlashCommandInfo => Boolean(command));
 }
 
-async function pluginRootCandidates(plugin: ClaudePlugin): Promise<string[]> {
-  const cacheRoot = path.join(os.homedir(), ".claude", "plugins", "cache");
+async function pluginRootCandidates(plugin: ClaudePlugin, provider: AgentProvider = "claude"): Promise<string[]> {
+  const marker = provider === "codex" ? ".codex-plugin" : ".claude-plugin";
+  const cacheRoot =
+    provider === "codex" ? path.join(os.homedir(), ".codex", "plugins", "cache") : path.join(os.homedir(), ".claude", "plugins", "cache");
   const cacheStats = await stat(cacheRoot).catch(() => undefined);
   if (!cacheStats?.isDirectory()) return [];
   const candidates: string[] = [];
@@ -183,8 +185,8 @@ async function pluginRootCandidates(plugin: ClaudePlugin): Promise<string[]> {
   while (stack.length > 0) {
     const current = stack.pop()!;
     const entries = await readdir(current, { withFileTypes: true }).catch(() => []);
-    if (entries.some((entry) => entry.isDirectory() && entry.name === ".claude-plugin")) {
-      const pluginJson = path.join(current, ".claude-plugin", "plugin.json");
+    if (entries.some((entry) => entry.isDirectory() && entry.name === marker)) {
+      const pluginJson = path.join(current, marker, "plugin.json");
       const raw = await readFile(pluginJson, "utf8").catch(() => "");
       let parsed: Record<string, unknown> = {};
       try {
@@ -203,12 +205,16 @@ async function pluginRootCandidates(plugin: ClaudePlugin): Promise<string[]> {
   return candidates;
 }
 
-async function scanPluginCommands(enabledPlugins: ClaudePlugin[], selectedPluginNames: string[]): Promise<SlashCommandInfo[]> {
+async function scanPluginCommands(
+  enabledPlugins: ClaudePlugin[],
+  selectedPluginNames: string[],
+  provider: AgentProvider = "claude"
+): Promise<SlashCommandInfo[]> {
   const selected = new Set(selectedPluginNames);
   const plugins = enabledPlugins.filter((plugin) => plugin.enabled || selected.has(plugin.name) || selected.has(pluginBaseName(plugin.name)));
   const commandSets = await Promise.all(
     plugins.map(async (plugin) => {
-      const roots = await pluginRootCandidates(plugin);
+      const roots = await pluginRootCandidates(plugin, provider);
       const scanned = await Promise.all(
         roots.map(async (root) => [
           ...(await scanCommandsDir(path.join(root, "commands"), "plugin", pluginBaseName(plugin.name))),
@@ -266,7 +272,8 @@ export function mergeSlashCommands(...groups: Array<Array<SlashCommandInfo | str
 export async function scanSlashCommands(
   projectPath: string,
   enabledPlugins: ClaudePlugin[] = [],
-  selectedPluginNames: string[] = []
+  selectedPluginNames: string[] = [],
+  provider: AgentProvider = "claude"
 ): Promise<SlashCommandInfo[]> {
   const projectClaude = path.join(projectPath, ".claude");
   const userClaude = path.join(expandHome("~"), ".claude");
@@ -276,6 +283,6 @@ export async function scanSlashCommands(
     await scanSkillsDir(path.join(projectClaude, "skills"), "project"),
     await scanCommandsDir(path.join(userClaude, "commands"), "user"),
     await scanSkillsDir(path.join(userClaude, "skills"), "user"),
-    await scanPluginCommands(enabledPlugins, selectedPluginNames)
+    await scanPluginCommands(enabledPlugins, selectedPluginNames, provider)
   );
 }

@@ -27,7 +27,7 @@ import type {
 } from "@agent-control/shared";
 import { createStateWriter, readPersistedState, type PersistedState } from "./persistence.js";
 import { resolveClaudeCommand, resolveCodexCommand } from "./capabilities.js";
-import { listPlugins } from "./plugins.js";
+import { listPlugins, supportsPluginProvider } from "./plugins.js";
 import { mergeSlashCommands, normalizeSlashCommandInfo, scanSlashCommands } from "./slash-commands.js";
 
 type Broadcast = (event: WsServerEvent) => void;
@@ -117,6 +117,10 @@ function providerForModel(model: string): AgentProvider {
   if (lower.includes("codex")) return "codex";
   if (lower.startsWith("gpt") || lower.startsWith("o")) return "openai";
   return "claude";
+}
+
+function tomlBasicString(value: string): string {
+  return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
 }
 
 function isTextLikeAttachment(attachment: MessageAttachment): boolean {
@@ -219,8 +223,8 @@ export class AgentRuntimeManager {
     const displayName = this.uniqueDisplayName(request.displayName?.trim() || def.name);
     const timestamp = now();
     const permissionMode = this.initialPermissionMode(request);
-    const installedPlugins = await listPlugins().catch(() => []);
-    const slashCommands = await scanSlashCommands(project.path, installedPlugins, def.plugins || []).catch(() => []);
+    const installedPlugins = supportsPluginProvider(provider) ? await listPlugins(provider).catch(() => []) : [];
+    const slashCommands = await scanSlashCommands(project.path, installedPlugins, def.plugins || [], provider).catch(() => []);
     const agent: RunningAgent = {
       id: nanoid(),
       provider,
@@ -242,7 +246,8 @@ export class AgentRuntimeManager {
       effort: request.effort || "medium",
       thinking: request.thinking ?? true,
       planMode: permissionMode === "plan",
-      slashCommands
+      slashCommands,
+      activePlugins: supportsPluginProvider(provider) ? def.plugins || [] : []
     };
 
     const state: AgentProcessState = {
@@ -636,7 +641,16 @@ export class AgentRuntimeManager {
   }
 
   private async runCodexTurn(state: AgentProcessState, prompt: string): Promise<void> {
-    const args = ["exec", "--json", "-m", state.agent.currentModel, prompt];
+    const args = ["exec", "--json", "-m", state.agent.currentModel];
+    const selectedPlugins = new Set(state.def?.plugins || []);
+    const installedPlugins = await listPlugins("codex").catch(() => []);
+    for (const plugin of installedPlugins) {
+      args.push("-c", `plugins.${tomlBasicString(plugin.name)}.enabled=${selectedPlugins.has(plugin.name) ? "true" : "false"}`);
+    }
+    for (const plugin of selectedPlugins) {
+      if (!installedPlugins.some((installed) => installed.name === plugin)) args.push("-c", `plugins.${tomlBasicString(plugin)}.enabled=true`);
+    }
+    args.push(prompt);
     const child = spawn(resolveCodexCommand(), args, {
       cwd: state.agent.projectPath,
       env: { ...process.env },

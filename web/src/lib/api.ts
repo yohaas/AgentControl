@@ -140,20 +140,22 @@ export const api = {
   restartApp: () => json<{ ok: boolean }>("/api/admin/restart", { method: "POST" }),
   shutdownApp: () => json<{ ok: boolean }>("/api/admin/shutdown", { method: "POST" }),
   settings: () => json<SettingsState>("/api/settings"),
-  plugins: () => json<ClaudePlugin[]>("/api/plugins"),
-  pluginCatalog: () => json<ClaudePluginCatalog>("/api/plugins/catalog"),
-  enablePlugin: (plugin: string) => json<ClaudePlugin[]>(`/api/plugins/${encodeURIComponent(plugin)}/enable`, { method: "POST" }),
-  installPlugin: (plugin: string, scope: string) =>
+  plugins: (provider: ModelProfile["provider"] = "claude") => json<ClaudePlugin[]>(`/api/plugins?provider=${encodeURIComponent(provider)}`),
+  pluginCatalog: (provider: ModelProfile["provider"] = "claude") =>
+    json<ClaudePluginCatalog>(`/api/plugins/catalog?provider=${encodeURIComponent(provider)}`),
+  enablePlugin: (plugin: string, provider: ModelProfile["provider"] = "claude") =>
+    json<ClaudePlugin[]>(`/api/plugins/${encodeURIComponent(plugin)}/enable?provider=${encodeURIComponent(provider)}`, { method: "POST" }),
+  installPlugin: (plugin: string, scope: string, provider: ModelProfile["provider"] = "claude") =>
     json<ClaudePluginCatalog>("/api/plugins/install", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ plugin, scope })
+      body: JSON.stringify({ plugin, scope, provider })
     }),
-  addPluginMarketplace: (source: string) =>
+  addPluginMarketplace: (source: string, provider: ModelProfile["provider"] = "claude") =>
     json<ClaudePluginCatalog>("/api/plugins/marketplaces", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ source })
+      body: JSON.stringify({ source, provider })
     }),
   uploadAttachment: (payload: { name: string; mimeType: string; dataUrl: string }) =>
     json<MessageAttachment>("/api/attachments", {

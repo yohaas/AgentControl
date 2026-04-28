@@ -1,9 +1,25 @@
 import { execFile } from "node:child_process";
+import { readdir, readFile, stat, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { promisify } from "node:util";
-import type { ClaudeAvailablePlugin, ClaudeMarketplace, ClaudePlugin, ClaudePluginCatalog } from "@agent-control/shared";
-import { resolveClaudeCommand } from "./capabilities.js";
+import type { AgentProvider, ClaudeAvailablePlugin, ClaudeMarketplace, ClaudePlugin, ClaudePluginCatalog } from "@agent-control/shared";
+import { resolveClaudeCommand, resolveCodexCommand } from "./capabilities.js";
 
 const execFileAsync = promisify(execFile);
+export type PluginProvider = Extract<AgentProvider, "claude" | "codex">;
+
+function providerCommand(provider: PluginProvider): string {
+  return provider === "codex" ? resolveCodexCommand() : resolveClaudeCommand();
+}
+
+export function normalizePluginProvider(value: unknown): PluginProvider {
+  return value === "codex" ? "codex" : "claude";
+}
+
+export function supportsPluginProvider(provider: AgentProvider): provider is PluginProvider {
+  return provider === "claude" || provider === "codex";
+}
 
 export function parsePluginList(output: string): ClaudePlugin[] {
   const plugins: ClaudePlugin[] = [];
@@ -24,18 +40,23 @@ export function parsePluginList(output: string): ClaudePlugin[] {
   return plugins;
 }
 
-export async function listPlugins(): Promise<ClaudePlugin[]> {
+export async function listPlugins(provider: PluginProvider = "claude"): Promise<ClaudePlugin[]> {
+  if (provider === "codex") return codexPluginCatalog().then((catalog) => catalog.installed);
   try {
-    return (await pluginCatalog()).installed;
+    return (await pluginCatalog(provider)).installed;
   } catch {
     const { stdout, stderr } = await execFileAsync(resolveClaudeCommand(), ["plugin", "list"], { timeout: 8000 });
     return parsePluginList(`${stdout}\n${stderr}`);
   }
 }
 
-export async function enablePlugin(plugin: string): Promise<ClaudePlugin[]> {
+export async function enablePlugin(plugin: string, provider: PluginProvider = "claude"): Promise<ClaudePlugin[]> {
+  if (provider === "codex") {
+    await enableCodexPlugin(plugin);
+    return listPlugins(provider);
+  }
   await execFileAsync(resolveClaudeCommand(), ["plugin", "enable", plugin], { timeout: 8000 });
-  return listPlugins();
+  return listPlugins(provider);
 }
 
 function parseJson<T>(value: string, fallback: T): T {
@@ -91,7 +112,8 @@ function normalizeMarketplace(value: unknown): ClaudeMarketplace | undefined {
   };
 }
 
-export async function pluginCatalog(): Promise<ClaudePluginCatalog> {
+export async function pluginCatalog(provider: PluginProvider = "claude"): Promise<ClaudePluginCatalog> {
+  if (provider === "codex") return codexPluginCatalog();
   const [{ stdout: pluginStdout }, { stdout: marketplaceStdout }] = await Promise.all([
     execFileAsync(resolveClaudeCommand(), ["plugin", "list", "--available", "--json"], { timeout: 20000 }),
     execFileAsync(resolveClaudeCommand(), ["plugin", "marketplace", "list", "--json"], { timeout: 8000 })
@@ -108,13 +130,187 @@ export async function pluginCatalog(): Promise<ClaudePluginCatalog> {
   return { installed, available, marketplaces };
 }
 
-export async function installPlugin(plugin: string, scope = "user"): Promise<ClaudePluginCatalog> {
+export async function installPlugin(plugin: string, scope = "user", provider: PluginProvider = "claude"): Promise<ClaudePluginCatalog> {
+  if (provider === "codex") {
+    const catalog = await codexPluginCatalog();
+    if (!catalog.installed.some((item) => item.name === plugin)) {
+      throw new Error("Codex CLI does not expose per-plugin install yet. Add or upgrade a marketplace, then enable a cached plugin.");
+    }
+    await enableCodexPlugin(plugin);
+    return codexPluginCatalog();
+  }
   const cleanScope = ["user", "project", "local"].includes(scope) ? scope : "user";
   await execFileAsync(resolveClaudeCommand(), ["plugin", "install", plugin, "--scope", cleanScope], { timeout: 120000 });
-  return pluginCatalog();
+  return pluginCatalog(provider);
 }
 
-export async function addMarketplace(source: string): Promise<ClaudePluginCatalog> {
-  await execFileAsync(resolveClaudeCommand(), ["plugin", "marketplace", "add", source], { timeout: 120000 });
-  return pluginCatalog();
+export async function addMarketplace(source: string, provider: PluginProvider = "claude"): Promise<ClaudePluginCatalog> {
+  const args = provider === "codex" ? ["plugin", "marketplace", "add", source] : ["plugin", "marketplace", "add", source];
+  await execFileAsync(providerCommand(provider), args, { timeout: 120000 });
+  return pluginCatalog(provider);
+}
+
+function codexHome(): string {
+  return process.env.CODEX_HOME || path.join(os.homedir(), ".codex");
+}
+
+function codexConfigPath(): string {
+  return path.join(codexHome(), "config.toml");
+}
+
+function unquoteTomlKey(value: string): string {
+  const trimmed = value.trim();
+  if ((trimmed.startsWith('"') && trimmed.endsWith('"')) || (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
+    return trimmed.slice(1, -1).replace(/\\"/g, '"').replace(/\\\\/g, "\\");
+  }
+  return trimmed;
+}
+
+function tomlString(value: string): string {
+  return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+}
+
+function parseCodexConfig(raw: string): {
+  enabledPlugins: Set<string>;
+  marketplaces: Map<string, ClaudeMarketplace>;
+} {
+  const enabledPlugins = new Set<string>();
+  const marketplaces = new Map<string, ClaudeMarketplace>();
+  let section: { type: "plugin" | "marketplace"; name: string } | undefined;
+
+  for (const line of raw.split(/\r?\n/)) {
+    const header = line.match(/^\s*\[(plugins|marketplaces)\.(.+)]\s*$/);
+    if (header) {
+      section = { type: header[1] === "plugins" ? "plugin" : "marketplace", name: unquoteTomlKey(header[2]) };
+      if (section.type === "marketplace") marketplaces.set(section.name, { name: section.name });
+      continue;
+    }
+    if (!section) continue;
+
+    const enabled = line.match(/^\s*enabled\s*=\s*(true|false)\s*$/i);
+    if (section.type === "plugin" && enabled?.[1]?.toLowerCase() === "true") enabledPlugins.add(section.name);
+
+    const stringField = line.match(/^\s*(source|source_type|last_updated)\s*=\s*(.+?)\s*$/);
+    if (section.type === "marketplace" && stringField) {
+      const current = marketplaces.get(section.name) || { name: section.name };
+      const key = stringField[1];
+      const value = unquoteTomlKey(stringField[2]);
+      marketplaces.set(section.name, key === "source" ? { ...current, source: value } : current);
+    }
+  }
+
+  return { enabledPlugins, marketplaces };
+}
+
+async function walkCodexPluginJson(root: string): Promise<string[]> {
+  const rootStats = await stat(root).catch(() => undefined);
+  if (!rootStats?.isDirectory()) return [];
+  const results: string[] = [];
+  const stack = [root];
+  while (stack.length > 0) {
+    const current = stack.pop()!;
+    const entries = await readdir(current, { withFileTypes: true }).catch(() => []);
+    for (const entry of entries) {
+      const fullPath = path.join(current, entry.name);
+      if (entry.isDirectory()) {
+        if (entry.name === ".codex-plugin") {
+          results.push(path.join(fullPath, "plugin.json"));
+        } else {
+          stack.push(fullPath);
+        }
+      }
+    }
+  }
+  return results;
+}
+
+function codexPluginId(pluginPath: string, parsed: Record<string, unknown>): string | undefined {
+  const name = typeof parsed.name === "string" && parsed.name.trim() ? parsed.name.trim() : undefined;
+  if (!name) return undefined;
+  const cacheRoot = path.join(codexHome(), "plugins", "cache");
+  const relative = path.relative(cacheRoot, pluginPath);
+  const marketplace = relative && !relative.startsWith("..") && !path.isAbsolute(relative) ? relative.split(path.sep)[0] : undefined;
+  return marketplace ? `${name}@${marketplace}` : name;
+}
+
+async function codexPluginCatalog(): Promise<ClaudePluginCatalog> {
+  const config = await readFile(codexConfigPath(), "utf8").catch(() => "");
+  const parsedConfig = parseCodexConfig(config);
+  const pluginFiles = await walkCodexPluginJson(path.join(codexHome(), "plugins", "cache"));
+  const installed: ClaudePlugin[] = [];
+  const available: ClaudeAvailablePlugin[] = [];
+
+  for (const pluginFile of pluginFiles) {
+    const raw = await readFile(pluginFile, "utf8").catch(() => "");
+    let parsed: Record<string, unknown> = {};
+    try {
+      parsed = raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
+    } catch {
+      parsed = {};
+    }
+    const id = codexPluginId(pluginFile, parsed);
+    if (!id) continue;
+    const description =
+      typeof parsed.description === "string"
+        ? parsed.description
+        : typeof (parsed.interface as Record<string, unknown> | undefined)?.shortDescription === "string"
+          ? String((parsed.interface as Record<string, unknown>).shortDescription)
+          : undefined;
+    const marketplaceName = id.includes("@") ? id.split("@").at(-1) : undefined;
+    installed.push({
+      name: id,
+      version: typeof parsed.version === "string" ? parsed.version : undefined,
+      scope: marketplaceName,
+      enabled: parsedConfig.enabledPlugins.has(id)
+    });
+    available.push({
+      pluginId: id,
+      name: typeof (parsed.interface as Record<string, unknown> | undefined)?.displayName === "string" ? String((parsed.interface as Record<string, unknown>).displayName) : id,
+      description,
+      marketplaceName,
+      version: typeof parsed.version === "string" ? parsed.version : undefined,
+      installed: true
+    });
+  }
+
+  const marketplaces = [...parsedConfig.marketplaces.values()];
+  return {
+    installed: installed.sort((left, right) => left.name.localeCompare(right.name)),
+    available: available.sort((left, right) => left.name.localeCompare(right.name)),
+    marketplaces
+  };
+}
+
+async function enableCodexPlugin(plugin: string): Promise<void> {
+  const configPath = codexConfigPath();
+  const raw = await readFile(configPath, "utf8").catch(() => "");
+  const lines = raw ? raw.split(/\r?\n/) : [];
+  const header = `[plugins.${tomlString(plugin)}]`;
+  const headerPattern = new RegExp(`^\\s*\\[plugins\\.${tomlString(plugin).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\]\\s*$`);
+  let sectionStart = -1;
+
+  for (let index = 0; index < lines.length; index += 1) {
+    if (headerPattern.test(lines[index])) {
+      sectionStart = index;
+      break;
+    }
+  }
+
+  if (sectionStart === -1) {
+    const prefix = lines.length && lines.at(-1)?.trim() ? [""] : [];
+    lines.push(...prefix, header, "enabled = true");
+  } else {
+    let sectionEnd = lines.length;
+    for (let index = sectionStart + 1; index < lines.length; index += 1) {
+      if (/^\s*\[/.test(lines[index])) {
+        sectionEnd = index;
+        break;
+      }
+    }
+    const enabledIndex = lines.findIndex((line, index) => index > sectionStart && index < sectionEnd && /^\s*enabled\s*=/.test(line));
+    if (enabledIndex === -1) lines.splice(sectionEnd, 0, "enabled = true");
+    else lines[enabledIndex] = "enabled = true";
+  }
+
+  await writeFile(configPath, `${lines.join("\n").replace(/\s+$/, "")}\n`, "utf8");
 }

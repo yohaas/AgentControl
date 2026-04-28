@@ -168,6 +168,9 @@ async function detectCodexCapability(): Promise<ProviderCapability> {
   const codexCommand = resolveCodexCommand();
   try {
     const { stdout, stderr } = await execFileAsync(codexCommand, ["--version"], { timeout: 4000 });
+    const supportsPlugins = await execFileAsync(codexCommand, ["plugin", "--help"], { timeout: 4000 })
+      .then(() => true)
+      .catch(() => false);
     return {
       provider: "codex",
       label: "Codex CLI",
@@ -179,7 +182,7 @@ async function detectCodexCapability(): Promise<ProviderCapability> {
       supportsImages: false,
       supportsTools: true,
       supportsMcp: true,
-      supportsPlugins: false,
+      supportsPlugins,
       supportsResume: false
     };
   } catch {
