@@ -616,6 +616,26 @@ function wslExec(project: Project, command: string, args: string[] = [], timeout
   });
 }
 
+function parseWslDistroOutput(output: string): string[] {
+  return output
+    .replace(/\0/g, "")
+    .split(/\r?\n/)
+    .map((line) => line.replace(/^\*\s*/, "").trim())
+    .filter(Boolean);
+}
+
+function listWslDistros(): Promise<string[]> {
+  return new Promise((resolve, reject) => {
+    execFile("wsl.exe", ["-l", "-q"], { timeout: 5000, windowsHide: true }, (error, stdout, stderr) => {
+      if (error) {
+        reject(new Error((stderr || error.message || "Unable to list WSL distros.").replace(/\0/g, "").trim()));
+        return;
+      }
+      resolve(parseWslDistroOutput(stdout));
+    });
+  });
+}
+
 function safeWorktreeBranchName(branch: string): string {
   return branch.trim().replace(/^refs\/heads\//, "");
 }
@@ -1176,6 +1196,15 @@ app.delete("/api/projects/:id/git/worktrees", async (request, response) => {
 
   try {
     response.json(await removeProjectWorktree(project, request.body as GitWorktreeRemoveRequest));
+  } catch (error) {
+    response.status(500).json({ error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+app.get("/api/wsl/distros", async (_request, response) => {
+  try {
+    const distros = await listWslDistros();
+    response.json({ defaultDistro: distros[0] || "Ubuntu", distros });
   } catch (error) {
     response.status(500).json({ error: error instanceof Error ? error.message : String(error) });
   }

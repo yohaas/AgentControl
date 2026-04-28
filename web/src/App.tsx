@@ -2663,13 +2663,33 @@ function AddProjectDialog({
   const [browserOpen, setBrowserOpen] = useState(false);
   const [runtime, setRuntime] = useState<"local" | "wsl">("local");
   const [wslDistro, setWslDistro] = useState("Ubuntu");
+  const [wslDistros, setWslDistros] = useState<string[]>([]);
   const [wslPath, setWslPath] = useState("");
   const [path, setPath] = useState("");
   const open = controlledOpen ?? internalOpen;
   const setOpen = onOpenChange ?? setInternalOpen;
+  const wslDistroOptions = [...new Set([wslDistro, ...wslDistros].filter(Boolean))];
+
+  useEffect(() => {
+    if (!open || runtime !== "wsl") return;
+    let cancelled = false;
+    api
+      .wslDistros()
+      .then((result) => {
+        if (cancelled) return;
+        setWslDistros(result.distros);
+        if (!wslDistro.trim() || (result.distros.length > 0 && !result.distros.includes(wslDistro))) {
+          setWslDistro(result.defaultDistro || result.distros[0] || "Ubuntu");
+        }
+      })
+      .catch((error: unknown) => addError(error instanceof Error ? error.message : String(error)));
+    return () => {
+      cancelled = true;
+    };
+  }, [addError, open, runtime, wslDistro]);
 
   async function addProject() {
-    const trimmed = runtime === "wsl" ? wslPath.trim() || path.trim() : path.trim();
+    const trimmed = runtime === "wsl" ? wslPath.trim() : path.trim();
     if (!trimmed) return;
     try {
       const projects = await api.addProject(trimmed, runtime === "wsl" ? { runtime, wslDistro: wslDistro.trim() || "Ubuntu", wslPath: trimmed } : undefined);
@@ -2715,45 +2735,65 @@ function AddProjectDialog({
               </SelectContent>
             </Select>
           </label>
-          {runtime === "wsl" && (
-            <div className="grid grid-cols-[minmax(0,0.7fr)_minmax(0,1.3fr)] gap-2">
-              <label className="grid gap-1.5 text-sm">
-                Distro
-                <Input value={wslDistro} onChange={(event) => setWslDistro(event.target.value)} placeholder="Ubuntu" />
-              </label>
-              <label className="grid gap-1.5 text-sm">
-                Linux path
+          {runtime === "wsl" ? (
+            <>
+              <div className="grid grid-cols-[minmax(0,0.7fr)_minmax(0,1.3fr)] gap-2">
+                <label className="grid gap-1.5 text-sm">
+                  Distro
+                  <Select value={wslDistro} onValueChange={setWslDistro}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select distro" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(wslDistroOptions.length ? wslDistroOptions : ["Ubuntu"]).map((distro) => (
+                        <SelectItem key={distro} value={distro}>
+                          {distro}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </label>
+                <label className="grid gap-1.5 text-sm">
+                  Linux path
+                  <div className="flex gap-2">
+                    <Input
+                      autoFocus
+                      value={wslPath}
+                      onChange={(event) => setWslPath(event.target.value)}
+                      placeholder="/home/you/projects/app"
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") void addProject();
+                      }}
+                    />
+                    <Button type="button" variant="outline" onClick={() => setBrowserOpen(true)}>
+                      <FolderOpen className="h-4 w-4" />
+                      Browse
+                    </Button>
+                  </div>
+                </label>
+              </div>
+            </>
+          ) : (
+            <label className="grid gap-1.5 text-sm">
+              Project path
+              <div className="flex gap-2">
                 <Input
-                  value={wslPath}
-                  onChange={(event) => setWslPath(event.target.value)}
-                  placeholder="/home/you/projects/app"
+                  autoFocus
+                  value={path}
+                  onChange={(event) => setPath(event.target.value)}
+                  placeholder=""
                   onKeyDown={(event) => {
                     if (event.key === "Enter") void addProject();
                   }}
                 />
-              </label>
-            </div>
+                <Button type="button" variant="outline" onClick={() => setBrowserOpen(true)}>
+                  <FolderOpen className="h-4 w-4" />
+                  Browse
+                </Button>
+              </div>
+            </label>
           )}
-          <label className="grid gap-1.5 text-sm">
-            {runtime === "wsl" ? "Windows path" : "Project path"}
-            <div className="flex gap-2">
-              <Input
-                autoFocus={runtime === "local"}
-                value={path}
-                onChange={(event) => setPath(event.target.value)}
-                disabled={runtime === "wsl"}
-                placeholder=""
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") void addProject();
-                }}
-              />
-              <Button type="button" variant="outline" onClick={() => setBrowserOpen(true)}>
-                <FolderOpen className="h-4 w-4" />
-                Browse
-              </Button>
-            </div>
-          </label>
-          <Button onClick={addProject} disabled={runtime === "wsl" ? !wslPath.trim() && !path.trim() : !path.trim()}>
+          <Button onClick={addProject} disabled={runtime === "wsl" ? !wslPath.trim() : !path.trim()}>
             <FolderPlus className="h-4 w-4" />
             Add
           </Button>
