@@ -14,6 +14,7 @@ import {
   Bot,
   Check,
   ChevronDown,
+  ChevronUp,
   Clipboard,
   ExternalLink,
   FolderOpen,
@@ -3040,9 +3041,15 @@ function TerminalPanel({ popout = false }: { popout?: boolean } = {}) {
             Dock
           </Button>
         )}
-        <Button variant="ghost" size="icon" onClick={() => (popout ? window.close() : setTerminalOpen(false))} title={popout ? "Close window" : "Close terminal"}>
-          <X className="h-4 w-4" />
-        </Button>
+        {popout ? (
+          <Button variant="ghost" size="icon" onClick={() => window.close()} title="Close window">
+            <X className="h-4 w-4" />
+          </Button>
+        ) : (
+          <Button variant="ghost" size="icon" onClick={() => setTerminalOpen(false)} title="Minimize terminal">
+            <ChevronDown className="h-4 w-4" />
+          </Button>
+        )}
       </div>
       <div
         className={cn(
@@ -3070,6 +3077,41 @@ function TerminalPanel({ popout = false }: { popout?: boolean } = {}) {
         )}
       </div>
     </section>
+  );
+}
+
+function TerminalMinimizedDock() {
+  const selectedProjectId = useAppStore((state) => state.selectedProjectId);
+  const sessionsById = useAppStore((state) => state.terminalSessions);
+  const setTerminalOpen = useAppStore((state) => state.setTerminalOpen);
+  const setActiveTerminal = useAppStore((state) => state.setActiveTerminal);
+  const sessions = useMemo(
+    () =>
+      terminalsForProject(sessionsById, selectedProjectId).sort(
+        (left, right) => +new Date(left.startedAt) - +new Date(right.startedAt)
+      ),
+    [sessionsById, selectedProjectId]
+  );
+  const latest = sessions[sessions.length - 1];
+  if (!latest) return null;
+
+  function restore() {
+    setActiveTerminal(latest.id);
+    setTerminalOpen(true);
+  }
+
+  return (
+    <button
+      className="flex h-10 shrink-0 items-center gap-2 border-t border-border bg-card px-3 text-left hover:bg-accent"
+      onClick={restore}
+      title="Restore terminal"
+    >
+      <ChevronUp className="h-4 w-4 text-primary" />
+      <SquareTerminal className="h-4 w-4 text-primary" />
+      <span className="text-sm font-medium">Terminal</span>
+      <Badge>{sessions.length}</Badge>
+      <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{latest.cwd}</span>
+    </button>
   );
 }
 
@@ -3177,6 +3219,7 @@ export function App() {
         <AgentPanel />
       </div>
       {terminalOpen && <TerminalPanel />}
+      {!terminalOpen && <TerminalMinimizedDock />}
       <LaunchDialog />
       <SendDialog />
       <ErrorStack />
