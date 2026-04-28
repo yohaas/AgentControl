@@ -3669,7 +3669,6 @@ function SettingsDialog() {
   const [open, setOpen] = useState(false);
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const [projectPaths, setProjectPaths] = useState(settings.projectPaths || []);
-  const [modelsText, setModelsText] = useState(settings.models.join("\n"));
   const [modelProfilesText, setModelProfilesText] = useState((settings.modelProfiles || []).map((profile) => `${profile.provider}:${profile.id}`).join("\n"));
   const [gitPath, setGitPath] = useState(settings.gitPath || "");
   const [claudePath, setClaudePath] = useState(settings.claudePath || "");
@@ -3694,7 +3693,6 @@ function SettingsDialog() {
   useEffect(() => {
     if (!open) return;
     setProjectPaths(settings.projectPaths || []);
-    setModelsText(settings.models.join("\n"));
     setModelProfilesText((settings.modelProfiles || []).map((profile) => `${profile.provider}:${profile.id}`).join("\n"));
     setGitPath(settings.gitPath || "");
     setClaudePath(settings.claudePath || "");
@@ -3720,7 +3718,6 @@ function SettingsDialog() {
       const next = await api.saveSettings({
         ...settings,
         projectPaths,
-        models: modelsText.split(/\r?\n/).map((line) => line.trim()).filter(Boolean),
         modelProfiles: parseModelProfiles(modelProfilesText),
         gitPath,
         claudePath,
@@ -3755,7 +3752,6 @@ function SettingsDialog() {
       settings: {
         ...settings,
         projectPaths,
-        models: modelsText.split(/\r?\n/).map((line) => line.trim()).filter(Boolean),
         modelProfiles: parseModelProfiles(modelProfilesText),
         gitPath,
         claudePath,
@@ -3784,7 +3780,6 @@ function SettingsDialog() {
       setSettings(next);
       setProjects(await api.refresh());
       setProjectPaths(next.projectPaths || []);
-      setModelsText(next.models.join("\n"));
       setModelProfilesText((next.modelProfiles || []).map((profile) => `${profile.provider}:${profile.id}`).join("\n"));
       setGitPath(next.gitPath || "");
       setClaudePath(next.claudePath || "");
@@ -3882,10 +3877,6 @@ function SettingsDialog() {
               )}
             </div>
           </section>
-          <label className="grid gap-1.5 text-sm">
-            Models
-            <Textarea value={modelsText} onChange={(event) => setModelsText(event.target.value)} />
-          </label>
           <label className="grid gap-1.5 text-sm">
             Provider models
             <Textarea
