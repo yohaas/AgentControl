@@ -28,6 +28,7 @@ import {
   FileText,
   FolderOpen,
   FolderPlus,
+  GitBranch,
   GripVertical,
   HardDrive,
   Hand,
@@ -61,6 +62,7 @@ import type {
   ClaudePluginCatalog,
   DirectoryEntry,
   DirectoryListing,
+  GitStatus,
   MessageAttachment,
   RunningAgent,
   TerminalSession,
@@ -911,6 +913,7 @@ function Header() {
         </Button>
         <PluginsDialog />
         <SettingsDialog />
+        <GitStatusMenu projectId={selectedProjectId} />
         <DropdownMenu open={connectionMenuOpen} onOpenChange={setConnectionMenuOpen}>
           <DropdownMenuTrigger asChild>
             <button
@@ -941,6 +944,120 @@ function Header() {
         </DropdownMenu>
       </div>
     </header>
+  );
+}
+
+function GitStatusMenu({ projectId }: { projectId?: string }) {
+  const addError = useAppStore((state) => state.addError);
+  const [open, setOpen] = useState(false);
+  const [status, setStatus] = useState<GitStatus | undefined>();
+  const [loading, setLoading] = useState(false);
+  const [pushing, setPushing] = useState(false);
+
+  useEffect(() => {
+    if (!open || !projectId) return;
+    void refresh();
+  }, [open, projectId]);
+
+  async function refresh() {
+    if (!projectId) return;
+    setLoading(true);
+    try {
+      setStatus(await api.gitStatus(projectId));
+    } catch (error) {
+      addError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function push() {
+    if (!projectId || !status?.isRepo || status.ahead <= 0) return;
+    setPushing(true);
+    try {
+      setStatus(await api.gitPush(projectId));
+    } catch (error) {
+      addError(error instanceof Error ? error.message : String(error));
+      void refresh();
+    } finally {
+      setPushing(false);
+    }
+  }
+
+  const changedCount = status?.files.length || 0;
+  const aheadCount = status?.ahead || 0;
+  const hasWork = changedCount > 0 || aheadCount > 0;
+
+  return (
+    <DropdownMenu open={open} onOpenChange={setOpen}>
+      <DropdownMenuTrigger asChild>
+        <Button variant={hasWork ? "default" : "outline"} size="icon" disabled={!projectId} title="Git status">
+          <GitBranch className="h-4 w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-80">
+        <div className="grid gap-3 p-2">
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <div className="text-sm font-medium">Git</div>
+              <div className="truncate text-xs text-muted-foreground">
+                {loading ? "Checking..." : status?.isRepo ? status.branch || "Repository" : status?.message || "Not a Git repository"}
+              </div>
+            </div>
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => void refresh()} disabled={!projectId || loading}>
+              <RefreshCw className="h-4 w-4" />
+            </Button>
+          </div>
+
+          {status?.isRepo && (
+            <>
+              <div className="grid gap-1 rounded-md border border-border p-2 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Pending pushes</span>
+                  <span>{aheadCount > 0 ? `${aheadCount} commit${aheadCount === 1 ? "" : "s"}` : "None"}</span>
+                </div>
+                {status.behind > 0 && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Behind upstream</span>
+                    <span>{status.behind} commit{status.behind === 1 ? "" : "s"}</span>
+                  </div>
+                )}
+                {status.upstream && (
+                  <div className="truncate text-muted-foreground" title={status.upstream}>
+                    upstream: {status.upstream}
+                  </div>
+                )}
+              </div>
+
+              <div className="grid gap-1">
+                <div className="text-xs font-medium text-muted-foreground">Uncommitted files</div>
+                {status.files.length === 0 ? (
+                  <div className="rounded-md border border-dashed border-border px-2 py-3 text-center text-xs text-muted-foreground">
+                    None
+                  </div>
+                ) : (
+                  <div className="max-h-56 overflow-y-auto rounded-md border border-border">
+                    {status.files.map((file) => (
+                      <div key={`${file.status}-${file.path}`} className="flex items-center gap-2 border-b border-border px-2 py-1.5 last:border-b-0">
+                        <Badge className="shrink-0 px-1.5 py-0 text-[10px]">{file.status}</Badge>
+                        <span className="min-w-0 truncate font-mono text-xs" title={file.path}>
+                          {file.path}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <Button onClick={() => void push()} disabled={pushing || aheadCount <= 0}>
+                <GitBranch className="h-4 w-4" />
+                {pushing ? "Pushing..." : "Push"}
+              </Button>
+            </>
+          )}
+        </div>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 

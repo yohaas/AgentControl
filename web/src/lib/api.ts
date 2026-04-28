@@ -1,4 +1,4 @@
-import type { Capabilities, ClaudePlugin, ClaudePluginCatalog, DirectoryListing, MessageAttachment, Project } from "@agent-control/shared";
+import type { Capabilities, ClaudePlugin, ClaudePluginCatalog, DirectoryListing, GitStatus, MessageAttachment, Project } from "@agent-control/shared";
 import type { SettingsState } from "../store/app-store";
 
 async function json<T>(input: RequestInfo, init?: RequestInit): Promise<T> {
@@ -21,6 +21,8 @@ export const api = {
       body: JSON.stringify({ path })
     }),
   closeProject: (id: string) => json<Project[]>(`/api/projects/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  gitStatus: (id: string) => json<GitStatus>(`/api/projects/${encodeURIComponent(id)}/git/status`),
+  gitPush: (id: string) => json<GitStatus>(`/api/projects/${encodeURIComponent(id)}/git/push`, { method: "POST" }),
   directories: (path?: string) =>
     json<DirectoryListing>(`/api/filesystem/directories${path ? `?path=${encodeURIComponent(path)}` : ""}`),
   refresh: () => json<Project[]>("/api/refresh", { method: "POST" }),

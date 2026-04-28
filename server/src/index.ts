@@ -1,4 +1,5 @@
 import http from "node:http";
+import { execFile } from "node:child_process";
 import { access, mkdir, readdir, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -8,7 +9,7 @@ import express from "express";
 import { nanoid } from "nanoid";
 import { WebSocketServer, type WebSocket } from "ws";
 import type { DashboardConfig } from "./config.js";
-import type { Capabilities, DirectoryEntry, MessageAttachment, Project, WsClientCommand, WsServerEvent } from "@agent-control/shared";
+import type { Capabilities, DirectoryEntry, GitChangedFile, GitStatus, MessageAttachment, Project, WsClientCommand, WsServerEvent } from "@agent-control/shared";
 import { detectCapabilities } from "./capabilities.js";
 import {
   expandHome,
@@ -78,6 +79,85 @@ async function requestSupervisor(command: "restart" | "shutdown"): Promise<void>
   await writeFile(controlPath, `${JSON.stringify({ command, requestedAt: new Date().toISOString(), pid: process.pid }, null, 2)}\n`, "utf8");
 }
 
+function gitStatusLabel(code: string): string {
+  if (code.includes("?")) return "untracked";
+  if (code.includes("A")) return "added";
+  if (code.includes("M")) return "modified";
+  if (code.includes("D")) return "deleted";
+  if (code.includes("R")) return "renamed";
+  if (code.includes("C")) return "copied";
+  if (code.includes("U")) return "conflict";
+  return code.trim() || "changed";
+}
+
+function parseGitStatus(output: string): GitStatus {
+  const lines = output.split(/\r?\n/).filter(Boolean);
+  const header = lines.find((line) => line.startsWith("## "));
+  let branch: string | undefined;
+  let upstream: string | undefined;
+  let ahead = 0;
+  let behind = 0;
+
+  if (header) {
+    const details = header.slice(3);
+    const [branchPart, flagsPart = ""] = details.split(" [");
+    const [nextBranch, nextUpstream] = branchPart.split("...");
+    branch = nextBranch;
+    upstream = nextUpstream;
+    const aheadMatch = flagsPart.match(/ahead (\d+)/);
+    const behindMatch = flagsPart.match(/behind (\d+)/);
+    ahead = aheadMatch ? Number(aheadMatch[1]) : 0;
+    behind = behindMatch ? Number(behindMatch[1]) : 0;
+  }
+
+  const files: GitChangedFile[] = lines
+    .filter((line) => !line.startsWith("## "))
+    .map((line) => {
+      const code = line.slice(0, 2);
+      const pathValue = line.slice(3).trim();
+      return {
+        path: pathValue,
+        status: gitStatusLabel(code)
+      };
+    });
+
+  return {
+    isRepo: true,
+    branch,
+    upstream,
+    ahead,
+    behind,
+    files
+  };
+}
+
+function gitCommand(cwd: string, args: string[], timeout = 15000): Promise<string> {
+  return new Promise((resolve, reject) => {
+    execFile("git", args, { cwd, timeout, windowsHide: true }, (error, stdout, stderr) => {
+      if (error) {
+        reject(new Error((stderr || error.message || "Git command failed.").trim()));
+        return;
+      }
+      resolve(stdout);
+    });
+  });
+}
+
+async function projectGitStatus(project: Project): Promise<GitStatus> {
+  try {
+    const output = await gitCommand(project.path, ["status", "--porcelain=v1", "--branch"]);
+    return parseGitStatus(output);
+  } catch (error) {
+    return {
+      isRepo: false,
+      ahead: 0,
+      behind: 0,
+      files: [],
+      message: error instanceof Error ? error.message : String(error)
+    };
+  }
+}
+
 const runtime = new AgentRuntimeManager(
   () => projects,
   broadcast,
@@ -145,6 +225,40 @@ app.delete("/api/projects/:id", async (request, response) => {
   config = await writeConfig({ ...config, projectPaths });
   projects = await scanConfiguredProjects(projectPaths);
   response.json(projects);
+});
+
+app.get("/api/projects/:id/git/status", async (request, response) => {
+  const project = projects.find((candidate) => candidate.id === request.params.id);
+  if (!project) {
+    response.status(404).json({ error: "Project not found." });
+    return;
+  }
+  response.json(await projectGitStatus(project));
+});
+
+app.post("/api/projects/:id/git/push", async (request, response) => {
+  const project = projects.find((candidate) => candidate.id === request.params.id);
+  if (!project) {
+    response.status(404).json({ error: "Project not found." });
+    return;
+  }
+
+  const status = await projectGitStatus(project);
+  if (!status.isRepo) {
+    response.status(400).json({ error: status.message || "Project is not a Git repository." });
+    return;
+  }
+  if (status.ahead <= 0) {
+    response.json(status);
+    return;
+  }
+
+  try {
+    await gitCommand(project.path, ["push"], 120000);
+    response.json(await projectGitStatus(project));
+  } catch (error) {
+    response.status(500).json({ error: error instanceof Error ? error.message : String(error) });
+  }
 });
 
 app.get("/api/filesystem/directories", async (request, response) => {

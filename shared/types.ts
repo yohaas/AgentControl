@@ -45,6 +45,21 @@ export interface DirectoryListing {
   entries: DirectoryEntry[];
 }
 
+export interface GitChangedFile {
+  path: string;
+  status: string;
+}
+
+export interface GitStatus {
+  isRepo: boolean;
+  branch?: string;
+  upstream?: string;
+  ahead: number;
+  behind: number;
+  files: GitChangedFile[];
+  message?: string;
+}
+
 export interface RunningAgent {
   id: string;
   projectId: string;
