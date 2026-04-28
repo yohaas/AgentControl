@@ -203,14 +203,20 @@ const TERMINAL_DOCK_OPTIONS = [
 
 function applyThemeMode(themeMode: ThemeMode) {
   const root = document.documentElement;
+  const autoDark = themeMode === "auto" && window.matchMedia("(prefers-color-scheme: dark)").matches;
   root.classList.toggle("light", themeMode === "light");
-  root.classList.toggle("dark", themeMode === "dark");
+  root.classList.toggle("dark", themeMode === "dark" || autoDark);
   root.style.colorScheme = themeMode === "auto" ? "light dark" : themeMode;
 }
 
 function useThemeMode(themeMode: ThemeMode) {
   useEffect(() => {
     applyThemeMode(themeMode);
+    if (themeMode !== "auto") return;
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const applyAutoTheme = () => applyThemeMode("auto");
+    media.addEventListener("change", applyAutoTheme);
+    return () => media.removeEventListener("change", applyAutoTheme);
   }, [themeMode]);
 }
 
