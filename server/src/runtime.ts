@@ -36,6 +36,7 @@ interface AgentProcessState {
   restartModel?: string;
   restartTimer?: NodeJS.Timeout;
   interrupting?: boolean;
+  exiting?: boolean;
 }
 
 const RAW_LINE_LIMIT = 5000;
@@ -237,10 +238,11 @@ export class AgentRuntimeManager {
 
   kill(id: string): void {
     const state = this.requiredState(id);
+    state.exiting = true;
     if (state.child && !state.child.killed) {
       this.stopProcessTree(state);
     } else {
-      this.markTerminated(state, null, null);
+      this.removeExitedAgent(state);
     }
   }
 
@@ -770,7 +772,18 @@ export class AgentRuntimeManager {
     this.persist();
   }
 
+  private removeExitedAgent(state: AgentProcessState): void {
+    this.states.delete(state.agent.id);
+    this.broadcast({ type: "agent.snapshot", snapshot: this.snapshot() });
+    this.persist();
+  }
+
   private markTerminated(state: AgentProcessState, exitCode: number | null, signal: NodeJS.Signals | null): void {
+    if (state.exiting) {
+      this.removeExitedAgent(state);
+      return;
+    }
+
     const failed = typeof exitCode === "number" && exitCode !== 0;
     const status: AgentStatus = failed ? "error" : "killed";
     const statusMessage = failed
