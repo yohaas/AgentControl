@@ -3886,8 +3886,7 @@ function LaunchDialog() {
       .slice(0, 120);
   }, [pluginCatalog.available, pluginCatalog.installed, pluginPickerExpanded, pluginQuery, selectedPluginRows]);
   const pluginsChanged = !arraysEqual(pluginIds, def?.plugins || []);
-  const providerCapability = capabilities?.providers?.find((item) => item.provider === provider);
-  const providerSupportsPlugins = provider === "claude" || Boolean(providerCapability?.supportsPlugins);
+  const providerSupportsPlugins = provider === "claude" || provider === "codex";
 
   return (
     <>
@@ -4021,7 +4020,7 @@ function LaunchDialog() {
                 : "OpenAI API sessions stream through the Responses API using OPENAI_API_KEY. Local CLI plugins and shell tools are not bridged by default."}
             </div>
           )}
-          {providerSupportsPlugins && provider !== "openai" && <section className="grid gap-2 text-sm">
+          {providerSupportsPlugins && <section className="grid gap-2 text-sm">
             <div className="flex items-center justify-between gap-2">
               <div>
                 <h3 className="text-sm font-medium">Agent plugins</h3>
