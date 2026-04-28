@@ -132,7 +132,7 @@ export class TerminalManager {
         state.output.splice(0, state.output.length - MAX_OUTPUT_CHUNKS);
       }
       state.session.updatedAt = now();
-      this.broadcast({ type: "terminal.output", id: session.id, chunk });
+      this.broadcast({ type: "terminal.output", id: session.id, chunk, updatedAt: state.session.updatedAt });
     });
 
     pty.onExit(({ exitCode, signal }) => {

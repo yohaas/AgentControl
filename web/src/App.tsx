@@ -4062,15 +4062,19 @@ function TerminalMinimizedDock({ poppedOutTerminalIds }: { poppedOutTerminalIds:
     () =>
       terminalsForProject(sessionsById, selectedProjectId)
         .filter((item) => !poppedOutTerminalIds.has(item.id))
-        .sort((left, right) => +new Date(left.startedAt) - +new Date(right.startedAt)),
+        .sort(
+          (left, right) =>
+            timestampValue(left.updatedAt || left.startedAt) - timestampValue(right.updatedAt || right.startedAt) ||
+            timestampValue(left.startedAt) - timestampValue(right.startedAt)
+        ),
     [poppedOutTerminalIds, sessionsById, selectedProjectId]
   );
-  const latest = sessions[sessions.length - 1];
-  const line = latest ? latestTerminalLine(outputById[latest.id] || []) : "";
-  if (!latest) return null;
+  const lastActive = sessions[sessions.length - 1];
+  const line = lastActive ? latestTerminalLine(outputById[lastActive.id] || []) : "";
+  if (!lastActive) return null;
 
   function restore() {
-    setActiveTerminal(latest.id);
+    setActiveTerminal(lastActive.id);
     setTerminalOpen(true);
   }
 
@@ -4085,7 +4089,7 @@ function TerminalMinimizedDock({ poppedOutTerminalIds }: { poppedOutTerminalIds:
       <span className="text-sm font-medium">Terminal</span>
       <Badge className="border-emerald-400/40 bg-emerald-500/15 text-emerald-100">{sessions.length}</Badge>
       <span className="min-w-0 flex-1 truncate font-mono text-xs text-emerald-200/85">
-        {line ? `${latest.title || latest.projectName || "Shell"}: ${line}` : latest.cwd}
+        {line ? `${lastActive.title || lastActive.projectName || "Shell"}: ${line}` : lastActive.cwd}
       </span>
     </button>
   );

@@ -313,6 +313,7 @@ export type WsServerEvent =
       type: "terminal.output";
       id: string;
       chunk: string;
+      updatedAt: string;
     }
   | {
       type: "terminal.exited";

@@ -389,6 +389,10 @@ export const useAppStore = create<AppState>((set, get) => ({
         break;
       case "terminal.output":
         set((state) => ({
+          terminalSessions: withTerminal(state.terminalSessions, event.id, (terminal) => ({
+            ...terminal,
+            updatedAt: event.updatedAt
+          })),
           terminalOutput: {
             ...state.terminalOutput,
             [event.id]: [...(state.terminalOutput[event.id] || []), event.chunk].slice(-1200)
@@ -468,7 +472,13 @@ export const useAppStore = create<AppState>((set, get) => ({
   setTileWidth: (id, width) => set((state) => ({ tileWidths: { ...state.tileWidths, [id]: width } })),
   setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
   setTerminalOpen: (open) => set({ terminalOpen: open }),
-  setActiveTerminal: (id) => set({ activeTerminalId: id }),
+  setActiveTerminal: (id) =>
+    set((state) => ({
+      activeTerminalId: id,
+      terminalSessions: id
+        ? withTerminal(state.terminalSessions, id, (terminal) => ({ ...terminal, updatedAt: new Date().toISOString() }))
+        : state.terminalSessions
+    })),
   openLaunchModal: (modal) => set({ launchModal: { open: true, ...modal } }),
   closeLaunchModal: () => set({ launchModal: { open: false } }),
   openSendDialog: (dialog) => set({ sendDialog: { open: true, ...dialog } }),
