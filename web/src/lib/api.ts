@@ -68,11 +68,11 @@ export const api = {
     if (!response.ok) throw new Error(await response.text());
     return response.text();
   },
-  addProject: (path: string) =>
+  addProject: (path: string, options?: { runtime?: "local" | "wsl"; wslDistro?: string; wslPath?: string }) =>
     json<Project[]>("/api/projects", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ path })
+      body: JSON.stringify({ path, ...options })
     }),
   closeProject: (id: string) => json<Project[]>(`/api/projects/${encodeURIComponent(id)}`, { method: "DELETE" }),
   gitStatus: (id: string) => json<GitStatus>(`/api/projects/${encodeURIComponent(id)}/git/status`),

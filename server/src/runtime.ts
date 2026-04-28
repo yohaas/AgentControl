@@ -30,6 +30,7 @@ import { DEFAULT_MODEL_PROFILES } from "./config.js";
 import { resolveClaudeCommand, resolveCodexInvocation } from "./capabilities.js";
 import { listPlugins, supportsPluginProvider } from "./plugins.js";
 import { mergeSlashCommands, normalizeSlashCommandInfo, scanSlashCommands } from "./slash-commands.js";
+import { isWslProject, windowsPathToWslPath, wslCommandArgs, wslProjectPath } from "./wsl.js";
 
 type Broadcast = (event: WsServerEvent) => void;
 type ProjectProvider = () => Project[];
@@ -59,6 +60,8 @@ interface AgentProcessState {
   rcLastDiagnostic?: string;
   apiAbort?: AbortController;
 }
+
+type SpawnCommand = { command: string; args: string[]; cwd: string };
 
 const RAW_LINE_LIMIT = 5000;
 const TRANSCRIPT_PERSIST_LIMIT = 1000;
@@ -173,6 +176,26 @@ export class AgentRuntimeManager {
   ) {
     this.cleanupStalePermissionMcpConfigs();
     this.persist = createStateWriter(() => this.persistedState());
+  }
+
+  private projectForState(state: AgentProcessState): Project | undefined {
+    return this.getProjects().find((project) => project.id === state.agent.projectId);
+  }
+
+  private spawnCommand(state: AgentProcessState, command: string, args: string[]): SpawnCommand {
+    const project = this.projectForState(state);
+    if (project && isWslProject(project)) {
+      return {
+        command: "wsl.exe",
+        args: wslCommandArgs(project, command, args),
+        cwd: process.cwd()
+      };
+    }
+    return {
+      command,
+      args,
+      cwd: state.agent.projectPath
+    };
   }
 
   async loadPersistedState(): Promise<void> {
@@ -686,8 +709,9 @@ export class AgentRuntimeManager {
     }
     args.push("-");
     const codexInvocation = resolveCodexInvocation();
-    const child = spawn(codexInvocation.command, [...codexInvocation.args, ...args], {
-      cwd: state.agent.projectPath,
+    const command = this.spawnCommand(state, codexInvocation.command, [...codexInvocation.args, ...args]);
+    const child = spawn(command.command, command.args, {
+      cwd: command.cwd,
       env: { ...process.env },
       windowsHide: true
     });
@@ -1176,17 +1200,20 @@ export class AgentRuntimeManager {
       JSON.stringify({ alwaysThinkingEnabled: state.agent.thinking !== false })
     );
     const permissionMcpConfig = this.writePermissionMcpConfig(state);
+    const project = this.projectForState(state);
+    const mcpConfigArg = isWslProject(project) ? windowsPathToWslPath(permissionMcpConfig) : permissionMcpConfig;
     args.push(
       "--mcp-config",
-      permissionMcpConfig,
+      mcpConfigArg,
       "--permission-prompt-tool",
       PERMISSION_MCP_TOOL_NAME,
       "--allowedTools",
       PERMISSION_MCP_TOOL_NAME
     );
 
-    const child = spawn(resolveClaudeCommand(), args, {
-      cwd: state.agent.projectPath,
+    const command = this.spawnCommand(state, resolveClaudeCommand(), args);
+    const child = spawn(command.command, command.args, {
+      cwd: command.cwd,
       env: this.claudeEnv(state),
       windowsHide: true
     });
@@ -1400,13 +1427,16 @@ export class AgentRuntimeManager {
     } catch {
       // Best effort on Windows, where POSIX modes may not map cleanly to ACLs.
     }
+    const project = this.projectForState(state);
     const script = this.permissionMcpScriptPath();
+    const mcpCommand = isWslProject(project) ? "node" : script.command;
+    const mcpArgs = isWslProject(project) ? script.args.map((arg) => (path.isAbsolute(arg) ? windowsPathToWslPath(arg) : arg)) : script.args;
     const configPath = path.join(configDir, `${state.agent.id}-permissions.json`);
     const config = {
       mcpServers: {
         [PERMISSION_MCP_SERVER_NAME]: {
-          command: script.command,
-          args: script.args,
+          command: mcpCommand,
+          args: mcpArgs,
           env: {
             AGENTCONTROL_AGENT_ID: state.agent.id,
             AGENTCONTROL_PERMISSION_TOKEN: state.permissionToken,

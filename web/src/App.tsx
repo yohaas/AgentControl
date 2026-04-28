@@ -239,7 +239,7 @@ function slashCommandMatchesProvider(command: SlashCommandInfo, provider: AgentP
 }
 
 const TERMINAL_DOCK_OPTIONS = [
-  { value: "float", label: "Float", icon: PictureInPicture2 },
+  { value: "float", label: "Pop out", icon: PictureInPicture2 },
   { value: "left", label: "Dock left", icon: PanelLeft },
   { value: "bottom", label: "Dock bottom", icon: PanelBottom },
   { value: "right", label: "Dock right", icon: PanelRight }
@@ -289,20 +289,21 @@ function writePoppedOutTerminalIds(ids: Set<string>) {
 
 function readTerminalDockRequest(value: string | null) {
   try {
-    return JSON.parse(value || "{}") as { terminalId?: string };
+    return JSON.parse(value || "{}") as { terminalId?: string; dock?: boolean; nextDock?: "left" | "bottom" | "right" };
   } catch {
     return {};
   }
 }
 
-function notifyTerminalDock(terminalId?: string, focusOpener = false) {
+function notifyTerminalDock(terminalId?: string, focusOpener = false, dock = false, nextDock?: "left" | "bottom" | "right") {
+  const payload = { type: TERMINAL_DOCK_MESSAGE, terminalId, dock, nextDock };
   try {
-    window.opener?.postMessage({ type: TERMINAL_DOCK_MESSAGE, terminalId }, window.location.origin);
+    window.opener?.postMessage(payload, window.location.origin);
     if (focusOpener) window.opener?.focus();
   } catch {
     // Fall back to a storage event for browsers that block opener access.
   }
-  window.localStorage.setItem(TERMINAL_DOCK_STORAGE_KEY, JSON.stringify({ terminalId, at: Date.now() }));
+  window.localStorage.setItem(TERMINAL_DOCK_STORAGE_KEY, JSON.stringify({ terminalId, dock, nextDock, at: Date.now() }));
 }
 
 function useThinkingPhrase(active = true) {
@@ -1873,6 +1874,10 @@ function Header() {
     void refreshAdminStatus();
   }, [connectionMenuOpen]);
 
+  useEffect(() => {
+    void refreshAdminStatus();
+  }, []);
+
   async function refreshAdminStatus() {
     try {
       const status = await api.adminStatus();
@@ -1974,53 +1979,56 @@ function Header() {
     }
   }
 
-  async function openSelectedProjectFolder() {
-    if (!selectedProject) return;
-    try {
-      await api.openFile(selectedProject.path);
-    } catch (error) {
-      addError(error instanceof Error ? error.message : String(error));
-    }
-  }
-
   return (
     <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border px-4">
       <div className="flex min-w-0 items-center gap-2">
         <Bot className="h-5 w-5 text-primary" />
         <h1 className="truncate text-base font-semibold">Agent Control</h1>
-        <DropdownMenu open={connectionMenuOpen} onOpenChange={setConnectionMenuOpen}>
-          <DropdownMenuTrigger asChild>
-            <button
-              className={cn(
-                "grid h-5 w-5 shrink-0 place-items-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                wsConnected ? "text-emerald-400" : "text-red-400"
-              )}
-              title={
-                wsConnected
-                  ? "AgentControl is connected. Click for restart and shutdown options."
-                  : "AgentControl is disconnected. The dashboard is not receiving live updates."
-              }
-              aria-label={wsConnected ? "AgentControl connected" : "AgentControl disconnected"}
-            >
-              <span className="h-2.5 w-2.5 rounded-full bg-current shadow-[0_0_0_3px_rgba(255,255,255,0.06)]" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-56">
-            <DropdownMenuItem onClick={() => void restartAgentControl()} disabled={supervised === false}>
-              <RefreshCw className="mr-2 h-4 w-4" />
-              Restart AgentControl
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => void shutdownAgentControl()}>
-              <X className="mr-2 h-4 w-4" />
-              Shutdown AgentControl
-            </DropdownMenuItem>
-            {supervised === false && (
-              <div className="px-2 py-1.5 text-xs text-muted-foreground">
-                Restart is available after launching with npm run dev:supervised.
-              </div>
+        {supervised ? (
+          <DropdownMenu open={connectionMenuOpen} onOpenChange={setConnectionMenuOpen}>
+            <DropdownMenuTrigger asChild>
+              <button
+                className={cn(
+                  "grid h-5 w-5 shrink-0 place-items-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  wsConnected ? "text-emerald-400" : "text-red-400"
+                )}
+                title={
+                  wsConnected
+                    ? "AgentControl is connected and running in supervised mode. Click for restart and shutdown options."
+                    : "AgentControl is disconnected. The dashboard is not receiving live updates."
+                }
+                aria-label={wsConnected ? "AgentControl connected" : "AgentControl disconnected"}
+              >
+                <span className="h-2.5 w-2.5 rounded-full bg-current shadow-[0_0_0_3px_rgba(255,255,255,0.06)]" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-56">
+              <DropdownMenuItem onClick={() => void restartAgentControl()}>
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Restart AgentControl
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => void shutdownAgentControl()}>
+                <X className="mr-2 h-4 w-4" />
+                Shutdown AgentControl
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : (
+          <span
+            className={cn(
+              "grid h-5 w-5 shrink-0 place-items-center rounded-full",
+              wsConnected ? "text-emerald-400" : "text-red-400"
             )}
-          </DropdownMenuContent>
-        </DropdownMenu>
+            title={
+              wsConnected
+                ? "AgentControl is connected. Restart controls are available when launched with npm run dev:supervised."
+                : "AgentControl is disconnected. The dashboard is not receiving live updates."
+            }
+            aria-label={wsConnected ? "AgentControl connected" : "AgentControl disconnected"}
+          >
+            <span className="h-2.5 w-2.5 rounded-full bg-current shadow-[0_0_0_3px_rgba(255,255,255,0.06)]" />
+          </span>
+        )}
       </div>
       <div className="ml-auto flex items-center gap-2">
         <DropdownMenu>
@@ -2053,16 +2061,6 @@ function Header() {
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-        <Button
-          variant="outline"
-          size="icon"
-          disabled={!selectedProject}
-          onClick={() => void openSelectedProjectFolder()}
-          title="Open project folder"
-          aria-label="Open project folder"
-        >
-          <FolderOpen className="h-4 w-4" />
-        </Button>
         <div className="flex items-center">
           <Button
             variant="outline"
@@ -2652,19 +2650,26 @@ function AddProjectDialog({
   const addError = useAppStore((state) => state.addError);
   const [internalOpen, setInternalOpen] = useState(false);
   const [browserOpen, setBrowserOpen] = useState(false);
+  const [runtime, setRuntime] = useState<"local" | "wsl">("local");
+  const [wslDistro, setWslDistro] = useState("Ubuntu");
+  const [wslPath, setWslPath] = useState("");
   const [path, setPath] = useState("");
   const open = controlledOpen ?? internalOpen;
   const setOpen = onOpenChange ?? setInternalOpen;
 
   async function addProject() {
-    const trimmed = path.trim();
+    const trimmed = runtime === "wsl" ? wslPath.trim() || path.trim() : path.trim();
     if (!trimmed) return;
     try {
-      const projects = await api.addProject(trimmed);
+      const projects = await api.addProject(trimmed, runtime === "wsl" ? { runtime, wslDistro: wslDistro.trim() || "Ubuntu", wslPath: trimmed } : undefined);
       setProjects(projects);
-      const added = projects.find((project) => project.path.toLowerCase() === trimmed.toLowerCase()) || projects[projects.length - 1];
+      const added =
+        runtime === "wsl"
+          ? projects.find((project) => project.runtime === "wsl" && project.wslDistro === (wslDistro.trim() || "Ubuntu") && project.wslPath === trimmed) || projects[projects.length - 1]
+          : projects.find((project) => project.path.toLowerCase() === trimmed.toLowerCase()) || projects[projects.length - 1];
       setSelectedProject(added?.id);
       setPath("");
+      setWslPath("");
       setOpen(false);
     } catch (error) {
       addError(error instanceof Error ? error.message : String(error));
@@ -2688,24 +2693,56 @@ function AddProjectDialog({
             Add a project folder directly. Agent definitions are loaded from its `.claude/agents` folder when present.
           </p>
           <label className="grid gap-1.5 text-sm">
-            Project path
+            Runtime
+            <Select value={runtime} onValueChange={(value) => setRuntime(value as "local" | "wsl")}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="local">Local</SelectItem>
+                <SelectItem value="wsl">WSL</SelectItem>
+              </SelectContent>
+            </Select>
+          </label>
+          {runtime === "wsl" && (
+            <div className="grid grid-cols-[minmax(0,0.7fr)_minmax(0,1.3fr)] gap-2">
+              <label className="grid gap-1.5 text-sm">
+                Distro
+                <Input value={wslDistro} onChange={(event) => setWslDistro(event.target.value)} placeholder="Ubuntu" />
+              </label>
+              <label className="grid gap-1.5 text-sm">
+                Linux path
+                <Input
+                  value={wslPath}
+                  onChange={(event) => setWslPath(event.target.value)}
+                  placeholder="/home/you/projects/app"
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") void addProject();
+                  }}
+                />
+              </label>
+            </div>
+          )}
+          <label className="grid gap-1.5 text-sm">
+            {runtime === "wsl" ? "Windows path" : "Project path"}
             <div className="flex gap-2">
               <Input
-                autoFocus
+                autoFocus={runtime === "local"}
                 value={path}
                 onChange={(event) => setPath(event.target.value)}
+                disabled={runtime === "wsl"}
                 placeholder=""
                 onKeyDown={(event) => {
                   if (event.key === "Enter") void addProject();
                 }}
               />
-              <Button type="button" variant="outline" onClick={() => setBrowserOpen(true)}>
+              <Button type="button" variant="outline" onClick={() => setBrowserOpen(true)} disabled={runtime === "wsl"}>
                 <FolderOpen className="h-4 w-4" />
                 Browse
               </Button>
             </div>
           </label>
-          <Button onClick={addProject} disabled={!path.trim()}>
+          <Button onClick={addProject} disabled={runtime === "wsl" ? !wslPath.trim() && !path.trim() : !path.trim()}>
             <FolderPlus className="h-4 w-4" />
             Add
           </Button>
@@ -7766,7 +7803,19 @@ function TerminalPanel({
 
   function dockPopout() {
     if (!popout) return;
-    notifyTerminalDock(popoutTerminalId || session?.id, true);
+    const terminalId = popoutTerminalId || session?.id;
+    if (terminalDock === "float") {
+      void api
+        .saveSettings({ ...settings, terminalDock: "bottom" })
+        .then((next) => {
+          setSettings(next);
+          notifyTerminalDock(terminalId, true, true, "bottom");
+          window.close();
+        })
+        .catch((error: unknown) => addError(error instanceof Error ? error.message : String(error)));
+      return;
+    }
+    notifyTerminalDock(terminalId, true, true);
     window.close();
   }
 
@@ -8101,13 +8150,15 @@ export function App() {
   const setActiveTerminal = useAppStore((state) => state.setActiveTerminal);
   const setTerminalOpen = useAppStore((state) => state.setTerminalOpen);
   const terminalOpen = useAppStore((state) => state.terminalOpen);
+  const terminalSessions = useAppStore((state) => state.terminalSessions);
+  const activeTerminalId = useAppStore((state) => state.activeTerminalId);
   const terminalDock = useAppStore((state) => state.settings.terminalDock);
   const themeMode = useAppStore((state) => state.settings.themeMode);
   const [poppedOutTerminalIds, setPoppedOutTerminalIds] = useState(readPoppedOutTerminalIds);
   const [serverStartupError, setServerStartupError] = useState<string | undefined>();
   const [serverRetryCount, setServerRetryCount] = useState(0);
   const terminalSideDocked = terminalOpen && (terminalDock === "left" || terminalDock === "right");
-  const terminalBottomOrFloating = terminalOpen && !terminalSideDocked;
+  const terminalBottomDocked = terminalOpen && terminalDock === "bottom";
   useThemeMode(themeMode);
 
   const updatePoppedOutTerminalIds = useCallback((updater: (ids: Set<string>) => Set<string>) => {
@@ -8118,8 +8169,30 @@ export function App() {
     });
   }, []);
 
+  const openTerminalPopout = useCallback(
+    (terminalId: string) => {
+      updatePoppedOutTerminalIds((ids) => {
+        ids.add(terminalId);
+        return ids;
+      });
+      setActiveTerminal(terminalId);
+      const params = new URLSearchParams();
+      if (selectedProjectId) params.set("projectId", selectedProjectId);
+      params.set("terminalId", terminalId);
+      const popup = window.open(`/terminal-popout?${params.toString()}`, `agent-control-terminal-${terminalId}`, "popup,width=1100,height=720");
+      if (!popup) {
+        updatePoppedOutTerminalIds((ids) => {
+          ids.delete(terminalId);
+          return ids;
+        });
+      }
+    },
+    [selectedProjectId, setActiveTerminal, updatePoppedOutTerminalIds]
+  );
+
   const dockTerminal = useCallback(
-    (terminalId?: string) => {
+    (request: { terminalId?: string; dock?: boolean; nextDock?: "left" | "bottom" | "right" }) => {
+      const terminalId = request.terminalId;
       if (terminalId) {
         updatePoppedOutTerminalIds((ids) => {
           ids.delete(terminalId);
@@ -8127,10 +8200,11 @@ export function App() {
         });
         setActiveTerminal(terminalId);
       }
-      setTerminalOpen(true);
+      if (request.nextDock) setSettings({ ...useAppStore.getState().settings, terminalDock: request.nextDock });
+      setTerminalOpen(request.dock || useAppStore.getState().settings.terminalDock !== "float");
       window.focus();
     },
-    [setActiveTerminal, setTerminalOpen, updatePoppedOutTerminalIds]
+    [setActiveTerminal, setSettings, setTerminalOpen, updatePoppedOutTerminalIds]
   );
 
   useEffect(() => {
@@ -8157,10 +8231,10 @@ export function App() {
     const onMessage = (event: MessageEvent) => {
       if (event.origin !== window.location.origin) return;
       const data = event.data as { type?: string; terminalId?: string } | undefined;
-      if (data?.type === TERMINAL_DOCK_MESSAGE) dockTerminal(data.terminalId);
+      if (data?.type === TERMINAL_DOCK_MESSAGE) dockTerminal(data);
     };
     const onStorage = (event: StorageEvent) => {
-      if (event.key === TERMINAL_DOCK_STORAGE_KEY) dockTerminal(readTerminalDockRequest(event.newValue).terminalId);
+      if (event.key === TERMINAL_DOCK_STORAGE_KEY) dockTerminal(readTerminalDockRequest(event.newValue));
       if (event.key === TERMINAL_POPOUT_STORAGE_KEY) setPoppedOutTerminalIds(readPoppedOutTerminalIds());
     };
     window.addEventListener("message", onMessage);
@@ -8170,6 +8244,16 @@ export function App() {
       window.removeEventListener("storage", onStorage);
     };
   }, [dockTerminal]);
+
+  useEffect(() => {
+    if (!terminalOpen || terminalDock !== "float") return;
+    const projectSessions = terminalsForProject(terminalSessions, selectedProjectId).filter((session) => !poppedOutTerminalIds.has(session.id));
+    const activeSession = activeTerminalId ? projectSessions.find((session) => session.id === activeTerminalId) : undefined;
+    const session = activeSession || projectSessions[projectSessions.length - 1];
+    if (!session) return;
+    openTerminalPopout(session.id);
+    setTerminalOpen(false);
+  }, [activeTerminalId, openTerminalPopout, poppedOutTerminalIds, selectedProjectId, setTerminalOpen, terminalDock, terminalOpen, terminalSessions]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -8218,7 +8302,7 @@ export function App() {
           <TerminalPanel poppedOutTerminalIds={poppedOutTerminalIds} />
         )}
       </div>
-      {terminalBottomOrFloating && <TerminalPanel poppedOutTerminalIds={poppedOutTerminalIds} />}
+      {terminalBottomDocked && <TerminalPanel poppedOutTerminalIds={poppedOutTerminalIds} />}
       {!terminalOpen && <TerminalMinimizedDock poppedOutTerminalIds={poppedOutTerminalIds} />}
       <LaunchDialog />
       <SendDialog />

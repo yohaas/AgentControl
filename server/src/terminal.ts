@@ -4,6 +4,7 @@ import path from "node:path";
 import { nanoid } from "nanoid";
 import { spawn as spawnPty, type IPty } from "node-pty";
 import type { Project, TerminalSession, TerminalSnapshot, WsServerEvent } from "@agent-control/shared";
+import { isWslProject, wslProjectPath } from "./wsl.js";
 
 const MAX_OUTPUT_CHUNKS = 2000;
 const DEFAULT_COLS = 100;
@@ -38,14 +39,30 @@ function powershellString(value: string): string {
   return `'${value.replace(/'/g, "''")}'`;
 }
 
+function powershellWslCommand(project: Project): string {
+  return [
+    "& wsl.exe",
+    "-d",
+    powershellString(project.wslDistro || "Ubuntu"),
+    "--cd",
+    powershellString(wslProjectPath(project))
+  ].join(" ");
+}
+
 function historyPathForProject(projectId?: string): string {
   mkdirSync(terminalHistoryDir, { recursive: true });
   return path.join(terminalHistoryDir, `${projectId || "global"}.history`);
 }
 
-function defaultShell(historyPath: string): ShellSpec {
+function defaultShell(historyPath: string, project?: Project): ShellSpec {
+  if (project && isWslProject(project)) {
+    return {
+      command: "powershell.exe",
+      args: ["-NoLogo", "-NoExit", "-Command", powershellWslCommand(project)]
+    };
+  }
   if (process.platform === "win32") {
-    const command = process.env.AGENT_CONTROL_SHELL || process.env.SHELL || "powershell.exe";
+    const command = process.env.AGENT_CONTROL_SHELL?.trim() || "powershell.exe";
     const name = shellName(command);
     if (name === "powershell.exe" || name === "pwsh.exe" || name === "powershell" || name === "pwsh") {
       return {
@@ -97,14 +114,14 @@ export class TerminalManager {
 
   start(projectId?: string, cols = DEFAULT_COLS, rows = DEFAULT_ROWS, initialCommand?: string, title?: string): TerminalSession {
     const project = projectId ? this.projects().find((candidate) => candidate.id === projectId) : undefined;
-    const shell = defaultShell(historyPathForProject(project?.id || projectId));
+    const shell = defaultShell(historyPathForProject(project?.id || projectId), project);
     const timestamp = now();
     const session: TerminalSession = {
       id: nanoid(10),
       title,
       projectId: project?.id,
       projectName: project?.name,
-      cwd: project?.path || process.cwd(),
+      cwd: project && isWslProject(project) ? wslProjectPath(project) : project?.path || process.cwd(),
       shell: shell.command,
       cols,
       rows,
@@ -112,13 +129,18 @@ export class TerminalManager {
       startedAt: timestamp,
       updatedAt: timestamp
     };
-    const pty = spawnPty(shell.command, shell.args, {
-      name: "xterm-256color",
-      cols,
-      rows,
-      cwd: session.cwd,
-      env: { ...envForPty(), ...shell.env }
-    });
+    let pty: IPty;
+    try {
+      pty = spawnPty(shell.command, shell.args, {
+        name: "xterm-256color",
+        cols,
+        rows,
+        cwd: project && isWslProject(project) ? process.cwd() : session.cwd,
+        env: { ...envForPty(), ...shell.env }
+      });
+    } catch (error) {
+      throw new Error(`Unable to start terminal (${shell.command}): ${error instanceof Error ? error.message : String(error)}`);
+    }
     const state: TerminalState = {
       session,
       process: pty,

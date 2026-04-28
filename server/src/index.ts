@@ -52,6 +52,7 @@ import { addMarketplace, enablePlugin, installPlugin, listPlugins, normalizePlug
 import { AgentRuntimeManager } from "./runtime.js";
 import { deleteBuiltInAgent, scanConfiguredProjects, scanProject, updateAgentPlugins, updateAgentPluginsFile, upsertBuiltInAgent } from "./scanner.js";
 import { TerminalManager } from "./terminal.js";
+import { isWslProject, normalizeWslPath, parseWslUncPath, wslCommandArgs, wslProjectPath, wslUncPath } from "./wsl.js";
 
 const PORT = Number(process.env.PORT || 4317);
 const HOST = process.env.HOST || "127.0.0.1";
@@ -588,11 +589,26 @@ function parseGitWorktrees(output: string, currentPath: string): GitWorktree[] {
   });
 }
 
-function gitCommand(cwd: string, args: string[], timeout = 15000): Promise<string> {
+function gitCommand(target: string | Project, args: string[], timeout = 15000): Promise<string> {
   return new Promise((resolve, reject) => {
-    execFile(process.env.GIT_PATH || "git", args, { cwd, timeout, windowsHide: true }, (error, stdout, stderr) => {
+    const command = typeof target !== "string" && isWslProject(target) ? "wsl.exe" : process.env.GIT_PATH || "git";
+    const commandArgs = typeof target !== "string" && isWslProject(target) ? wslCommandArgs(target, "git", args) : args;
+    const cwd = typeof target === "string" ? target : target.path;
+    execFile(command, commandArgs, { cwd, timeout, windowsHide: true }, (error, stdout, stderr) => {
       if (error) {
         reject(new Error((stderr || error.message || "Git command failed.").trim()));
+        return;
+      }
+      resolve(stdout);
+    });
+  });
+}
+
+function wslExec(project: Project, command: string, args: string[] = [], timeout = 15000): Promise<string> {
+  return new Promise((resolve, reject) => {
+    execFile("wsl.exe", wslCommandArgs(project, command, args), { cwd: project.path, timeout, windowsHide: true }, (error, stdout, stderr) => {
+      if (error) {
+        reject(new Error((stderr || error.message || "WSL command failed.").trim()));
         return;
       }
       resolve(stdout);
@@ -606,6 +622,10 @@ function safeWorktreeBranchName(branch: string): string {
 
 function defaultWorktreePath(project: Project, branch: string): string {
   const safeBranch = safeWorktreeBranchName(branch).replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "worktree";
+  if (isWslProject(project)) {
+    const baseName = path.posix.basename(wslProjectPath(project));
+    return path.posix.join(path.posix.dirname(wslProjectPath(project)), `${baseName}-worktrees`, safeBranch);
+  }
   return path.join(path.dirname(project.path), `${path.basename(project.path)}-worktrees`, safeBranch);
 }
 
@@ -661,14 +681,22 @@ async function removeProjectPath(projectPath: string): Promise<void> {
 
 async function projectWorktrees(project: Project): Promise<GitWorktreeList> {
   try {
-    const repoPath = (await gitCommand(project.path, ["rev-parse", "--show-toplevel"])).trim();
-    const output = await gitCommand(project.path, ["worktree", "list", "--porcelain"]);
+    const repoPath = (await gitCommand(project, ["rev-parse", "--show-toplevel"])).trim();
+    const output = await gitCommand(project, ["worktree", "list", "--porcelain"]);
     return {
       isRepo: true,
       projectId: project.id,
-      repoPath,
+      repoPath: isWslProject(project) ? wslUncPath(project.wslDistro || "Ubuntu", repoPath) : repoPath,
       currentPath: project.path,
-      worktrees: parseGitWorktrees(output, project.path)
+      worktrees: parseGitWorktrees(output, isWslProject(project) ? wslProjectPath(project) : project.path).map((worktree) => {
+        const worktreePath = isWslProject(project) ? wslUncPath(project.wslDistro || "Ubuntu", worktree.path) : worktree.path;
+        const openProject = projects.find((candidate) => normalizedProjectPath(candidate.path) === normalizedProjectPath(worktreePath));
+        return {
+          ...worktree,
+          path: worktreePath,
+          projectId: openProject?.id
+        };
+      })
     };
   } catch (error) {
     return {
@@ -683,40 +711,56 @@ async function projectWorktrees(project: Project): Promise<GitWorktreeList> {
 async function createProjectWorktree(project: Project, request: GitWorktreeCreateRequest): Promise<{ projects: Project[]; worktrees: GitWorktreeList }> {
   const branch = safeWorktreeBranchName(request.branch);
   if (!branch) throw new Error("Branch name is required.");
-  const targetPath = path.resolve(expandHome(request.path?.trim() || defaultWorktreePath(project, branch)));
-  if (projects.some((candidate) => normalizedProjectPath(candidate.path) === normalizedProjectPath(targetPath))) {
+  const rawTargetPath = request.path?.trim() || defaultWorktreePath(project, branch);
+  const targetPath = isWslProject(project)
+    ? normalizeWslPath(parseWslUncPath(rawTargetPath)?.wslPath || rawTargetPath)
+    : path.resolve(expandHome(rawTargetPath));
+  const projectPathToStore = isWslProject(project) ? wslUncPath(project.wslDistro || "Ubuntu", targetPath) : targetPath;
+  if (projects.some((candidate) => normalizedProjectPath(candidate.path) === normalizedProjectPath(projectPathToStore))) {
     throw new Error("That worktree is already open as a project.");
   }
-  await mkdir(path.dirname(targetPath), { recursive: true });
-  const parentInfo = await stat(path.dirname(targetPath)).catch(() => undefined);
-  if (!parentInfo?.isDirectory()) throw new Error("Worktree parent folder does not exist.");
-  const existing = await stat(targetPath).catch(() => undefined);
-  if (existing) throw new Error("Worktree path already exists.");
+  if (!isWslProject(project)) {
+    await mkdir(path.dirname(targetPath), { recursive: true });
+    const parentInfo = await stat(path.dirname(targetPath)).catch(() => undefined);
+    if (!parentInfo?.isDirectory()) throw new Error("Worktree parent folder does not exist.");
+    const existing = await stat(targetPath).catch(() => undefined);
+    if (existing) throw new Error("Worktree path already exists.");
+  } else {
+    await wslExec(project, "mkdir", ["-p", path.posix.dirname(targetPath)]);
+    const existing = await wslExec(project, "test", ["-e", targetPath])
+      .then(() => true)
+      .catch(() => false);
+    if (existing) throw new Error("Worktree path already exists.");
+  }
 
   const args = ["worktree", "add"];
   if (request.createBranch !== false) args.push("-b", branch, targetPath, request.base?.trim() || "HEAD");
   else args.push(targetPath, branch);
-  await gitCommand(project.path, args, 120000);
-  if (request.copyLocalAgentFiles) await copyLocalAgentFiles(project.path, targetPath);
-  await ensureProjectPath(targetPath);
+  await gitCommand(project, args, 120000);
+  if (request.copyLocalAgentFiles && !isWslProject(project)) await copyLocalAgentFiles(project.path, targetPath);
+  await ensureProjectPath(projectPathToStore);
   return { projects, worktrees: await projectWorktrees(project) };
 }
 
 async function mergeProjectWorktree(project: Project, request: GitWorktreeMergeRequest): Promise<GitWorktreeList> {
-  const sourcePath = path.resolve(expandHome(request.sourcePath));
+  const sourcePath = isWslProject(project)
+    ? wslUncPath(project.wslDistro || "Ubuntu", normalizeWslPath(parseWslUncPath(request.sourcePath)?.wslPath || request.sourcePath))
+    : path.resolve(expandHome(request.sourcePath));
   const worktrees = await projectWorktrees(project);
   const source = worktrees.worktrees.find((worktree) => normalizedProjectPath(worktree.path) === normalizedProjectPath(sourcePath));
   if (!source) throw new Error("Worktree was not found for this repository.");
   if (source.current) throw new Error("Choose a different worktree to merge into the current project.");
   if (!source.branch) throw new Error("Detached worktrees cannot be merged from the dashboard.");
-  const dirty = (await gitCommand(project.path, ["status", "--porcelain"])).trim();
+  const dirty = (await gitCommand(project, ["status", "--porcelain"])).trim();
   if (dirty) throw new Error("Current project has uncommitted changes. Commit, stash, or discard them before merging.");
-  await gitCommand(project.path, ["merge", source.branch], 120000);
+  await gitCommand(project, ["merge", source.branch], 120000);
   return projectWorktrees(project);
 }
 
 async function removeProjectWorktree(project: Project, request: GitWorktreeRemoveRequest): Promise<{ projects: Project[]; worktrees: GitWorktreeList }> {
-  const targetPath = path.resolve(expandHome(request.path));
+  const targetPath = isWslProject(project)
+    ? wslUncPath(project.wslDistro || "Ubuntu", normalizeWslPath(parseWslUncPath(request.path)?.wslPath || request.path))
+    : path.resolve(expandHome(request.path));
   const worktrees = await projectWorktrees(project);
   const target = worktrees.worktrees.find((worktree) => normalizedProjectPath(worktree.path) === normalizedProjectPath(targetPath));
   if (!target) throw new Error("Worktree was not found for this repository.");
@@ -724,8 +768,8 @@ async function removeProjectWorktree(project: Project, request: GitWorktreeRemov
 
   const args = ["worktree", "remove"];
   if (request.force) args.push("--force");
-  args.push(target.path);
-  await gitCommand(project.path, args, 120000);
+  args.push(isWslProject(project) ? wslProjectPath({ path: target.path, wslPath: parseWslUncPath(target.path)?.wslPath }) : target.path);
+  await gitCommand(project, args, 120000);
   await removeProjectPath(target.path);
   if (target.prunable) await rm(target.path, { recursive: true, force: true }).catch(() => undefined);
   return { projects, worktrees: await projectWorktrees(project) };
@@ -773,7 +817,7 @@ function isOpenablePath(filePath: string): boolean {
 
 async function projectGitStatus(project: Project): Promise<GitStatus> {
   try {
-    const output = await gitCommand(project.path, ["status", "--porcelain=v1", "--branch"]);
+    const output = await gitCommand(project, ["status", "--porcelain=v1", "--branch"]);
     return parseGitStatus(output);
   } catch (error) {
     return {
@@ -1006,7 +1050,18 @@ app.post("/api/refresh", async (_request, response) => {
 });
 
 app.post("/api/projects", async (request, response) => {
-  const projectPath = typeof request.body?.path === "string" ? request.body.path.trim() : "";
+  const runtime = request.body?.runtime === "wsl" ? "wsl" : "local";
+  const wslDistroName = typeof request.body?.wslDistro === "string" ? request.body.wslDistro.trim() : "";
+  const bodyWslPath = typeof request.body?.wslPath === "string" ? request.body.wslPath.trim() : "";
+  const bodyPath = typeof request.body?.path === "string" ? request.body.path.trim() : "";
+  if (runtime === "wsl" && !bodyWslPath && !bodyPath) {
+    response.status(400).json({ error: "WSL project path is required." });
+    return;
+  }
+  const projectPath =
+    runtime === "wsl"
+      ? wslUncPath(wslDistroName || "Ubuntu", normalizeWslPath(bodyWslPath || parseWslUncPath(bodyPath)?.wslPath || bodyPath))
+      : bodyPath;
   if (!projectPath) {
     response.status(400).json({ error: "Project path is required." });
     return;
@@ -1068,7 +1123,7 @@ app.post("/api/projects/:id/git/push", async (request, response) => {
   }
 
   try {
-    await gitCommand(project.path, ["push"], 120000);
+    await gitCommand(project, ["push"], 120000);
     response.json(await projectGitStatus(project));
   } catch (error) {
     response.status(500).json({ error: error instanceof Error ? error.message : String(error) });

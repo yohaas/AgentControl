@@ -36,6 +36,9 @@ export interface Project {
   id: string;
   name: string;
   path: string;
+  runtime?: "local" | "wsl";
+  wslDistro?: string;
+  wslPath?: string;
   agents: AgentDef[];
   builtInAgents?: AgentDef[];
 }

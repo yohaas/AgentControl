@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import matter from "gray-matter";
 import type { AgentDef, AgentProvider, Project } from "@agent-control/shared";
+import { parseWslUncPath } from "./wsl.js";
 import { APP_ROOT, DEFAULT_BUILT_IN_AGENT_DIR } from "./config.js";
 
 const agentColorPalette = [
@@ -139,6 +140,11 @@ function generalAgentDef(): AgentDef {
 
 function projectId(projectPath: string): string {
   return Buffer.from(path.resolve(projectPath)).toString("base64url");
+}
+
+function projectRuntimeFields(projectPath: string): Pick<Project, "runtime" | "wslDistro" | "wslPath"> {
+  const wsl = parseWslUncPath(projectPath);
+  return wsl ? { runtime: "wsl", wslDistro: wsl.distro, wslPath: wsl.wslPath } : { runtime: "local" };
 }
 
 function expandHome(input: string): string {
@@ -334,6 +340,7 @@ export async function scanProjects(projectsRoot: string, agentDirs = DEFAULT_AGE
       id: projectId(projectPath),
       name: entry.name,
       path: projectPath,
+      ...projectRuntimeFields(projectPath),
       agents,
       builtInAgents
     });
@@ -354,6 +361,7 @@ export async function scanProject(projectPath: string, agentDirs = DEFAULT_AGENT
     id: projectId(resolvedPath),
     name: path.basename(resolvedPath),
     path: resolvedPath,
+    ...projectRuntimeFields(resolvedPath),
     agents,
     builtInAgents
   };
