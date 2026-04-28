@@ -698,10 +698,10 @@ async function removeProjectWorktree(project: Project, request: GitWorktreeRemov
 }
 
 function openWithDefaultApp(filePath: string): Promise<void> {
-  const command = process.platform === "win32" ? "powershell.exe" : process.platform === "darwin" ? "open" : "xdg-open";
+  const command = process.platform === "win32" ? "rundll32.exe" : process.platform === "darwin" ? "open" : "xdg-open";
   const args =
     process.platform === "win32"
-      ? ["-NoProfile", "-NonInteractive", "-Command", "Start-Process -LiteralPath $args[0]", filePath]
+      ? ["url.dll,FileProtocolHandler", filePath]
       : [filePath];
 
   return new Promise((resolve, reject) => {
