@@ -650,7 +650,7 @@ export class AgentRuntimeManager {
     for (const plugin of selectedPlugins) {
       if (!installedPlugins.some((installed) => installed.name === plugin)) args.push("-c", `plugins.${tomlBasicString(plugin)}.enabled=true`);
     }
-    args.push(prompt);
+    args.push("-");
     const codexInvocation = resolveCodexInvocation();
     const child = spawn(codexInvocation.command, [...codexInvocation.args, ...args], {
       cwd: state.agent.projectPath,
@@ -663,6 +663,7 @@ export class AgentRuntimeManager {
     this.persist();
 
     await new Promise<void>((resolve, reject) => {
+      child.stdin.on("error", reject);
       child.stdout.on("data", (chunk: Buffer) => {
         state.stdoutBuffer = this.consumeLines(`${state.stdoutBuffer}${chunk.toString("utf8")}`, (line) => {
           this.storeRawLine(state, line);
@@ -672,11 +673,13 @@ export class AgentRuntimeManager {
       child.stderr.on("data", (chunk: Buffer) => {
         state.stderrBuffer = this.consumeLines(`${state.stderrBuffer}${chunk.toString("utf8")}`, (line) => {
           this.storeRawLine(state, `[stderr] ${line}`);
-          this.pushTranscript(state, {
-            ...eventBase(state.agent.id, state.agent.currentModel),
-            kind: "system",
-            text: line
-          });
+          if (this.shouldShowCodexStderrLine(line)) {
+            this.pushTranscript(state, {
+              ...eventBase(state.agent.id, state.agent.currentModel),
+              kind: "system",
+              text: line
+            });
+          }
         });
       });
       child.on("error", reject);
@@ -692,18 +695,31 @@ export class AgentRuntimeManager {
         else this.setStatus(state, "idle");
         resolve();
       });
+      child.stdin.end(prompt);
     });
   }
 
   private handleCodexLine(state: AgentProcessState, line: string): void {
     try {
       const payload = JSON.parse(line) as Record<string, unknown>;
-      const text = this.extractTextDelta(payload) || this.textField(payload.message);
+      const type = String(payload.type || "");
+      const text = this.extractCodexText(payload);
       if (text) {
-        this.appendAssistantText(state, text);
+        const completedItem = this.isCodexCompletedItem(payload);
+        this.appendAssistantText(state, text, completedItem, !completedItem);
         return;
       }
-      const type = String(payload.type || "");
+      if (type === "turn.completed") {
+        this.finishAssistantStream(state, false);
+        state.activeTurn = false;
+        this.setStatus(state, "idle");
+        return;
+      }
+      if (type === "thread.started") {
+        const threadId = this.trimmedStringField(payload.thread_id) || this.trimmedStringField(payload.threadId);
+        if (threadId) state.agent.sessionId = threadId;
+        return;
+      }
       if (type.includes("tool") || payload.tool || payload.command) {
         const toolUseId = this.trimmedStringField(payload.id) || transcriptId();
         this.pushTranscript(state, {
@@ -717,6 +733,51 @@ export class AgentRuntimeManager {
     } catch {
       this.appendAssistantText(state, `${line}\n`);
     }
+  }
+
+  private extractCodexText(payload: Record<string, unknown>): string | undefined {
+    const item = payload.item && typeof payload.item === "object" ? (payload.item as Record<string, unknown>) : undefined;
+    const direct = this.extractTextDelta(payload) || this.textField(payload.message) || this.textField(item?.text);
+    if (direct) return direct;
+
+    const content = Array.isArray(item?.content)
+      ? item.content
+      : Array.isArray(payload.content)
+        ? payload.content
+        : undefined;
+    if (!content) return undefined;
+    const parts = content
+      .map((block) => {
+        if (typeof block === "string") return block;
+        if (!block || typeof block !== "object") return "";
+        const value = block as Record<string, unknown>;
+        return this.textField(value.text) || this.textField(value.content) || "";
+      })
+      .filter(Boolean);
+    return parts.length ? parts.join("") : undefined;
+  }
+
+  private isCodexCompletedItem(payload: Record<string, unknown>): boolean {
+    return String(payload.type || "") === "item.completed";
+  }
+
+  private shouldShowCodexStderrLine(line: string): boolean {
+    const lower = line.toLowerCase();
+    if (
+      lower.includes("warn codex_core::plugins") ||
+      lower.includes("warn codex_core_plugins::manifest") ||
+      lower.includes("warn codex_analytics::client") ||
+      lower.includes("failed to warm featured plugin ids cache") ||
+      lower.includes("startup remote plugin sync failed") ||
+      lower.includes("failed to record rollout items") ||
+      lower.includes("/backend-api/plugins/") ||
+      lower.includes("/backend-api/codex/analytics-events/")
+    ) {
+      return false;
+    }
+    if (/^\s*<\/?[a-z][^>]*>/i.test(line)) return false;
+    if (/^\s*(window\._cf_chl_opt|var a = document\.createElement|history\.replaceState|document\.getElementsByTagName)/.test(line)) return false;
+    return true;
   }
 
   private async runAnthropicTurn(state: AgentProcessState, prompt: string, images: MessageAttachment[]): Promise<void> {
