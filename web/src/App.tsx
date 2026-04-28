@@ -685,7 +685,6 @@ function Header() {
   const projects = useAppStore((state) => state.projects);
   const selectedProjectId = useAppStore((state) => state.selectedProjectId);
   const setSelectedProject = useAppStore((state) => state.setSelectedProject);
-  const openLaunchModal = useAppStore((state) => state.openLaunchModal);
   const agentsById = useAppStore((state) => state.agents);
   const tileOrder = useAppStore((state) => state.tileOrder);
   const setTileOrder = useAppStore((state) => state.setTileOrder);
@@ -697,6 +696,7 @@ function Header() {
   const setProjects = useAppStore((state) => state.setProjects);
   const addError = useAppStore((state) => state.addError);
   const [devCommand, setDevCommand] = useState("npm run dev");
+  const [addProjectOpen, setAddProjectOpen] = useState(false);
   const selectedProject = projects.find((project) => project.id === selectedProjectId);
   const projectAgents = useMemo(() => agentsForProject(agentsById, selectedProjectId), [agentsById, selectedProjectId]);
   const agentCount = projectAgents.length;
@@ -806,18 +806,26 @@ function Header() {
         <h1 className="truncate text-base font-semibold">Agent Control</h1>
       </div>
       <div className="ml-auto flex items-center gap-2">
-        <Select value={selectedProjectId ?? ""} onValueChange={setSelectedProject}>
-          <SelectTrigger className="w-60">
-            <SelectValue placeholder="Select project" />
-          </SelectTrigger>
-          <SelectContent>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" className="w-60 justify-between">
+              <span className="truncate">{selectedProject?.name || "Select project"}</span>
+              <ChevronDown className="h-4 w-4 shrink-0" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-60">
             {projects.map((project) => (
-              <SelectItem key={project.id} value={project.id}>
-                {project.name}
-              </SelectItem>
+              <DropdownMenuItem key={project.id} onClick={() => setSelectedProject(project.id)} className="justify-between gap-2">
+                <span className="truncate">{project.name}</span>
+                {project.id === selectedProjectId && <Check className="h-4 w-4" />}
+              </DropdownMenuItem>
             ))}
-          </SelectContent>
-        </Select>
+            <DropdownMenuItem className="gap-2 border-t border-border" onClick={() => setAddProjectOpen(true)}>
+              <FolderPlus className="h-4 w-4" />
+              Add Project
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" disabled={!selectedProjectId} title={`Dev command: ${devCommand}`}>
@@ -857,11 +865,7 @@ function Header() {
             <DropdownMenuItem onClick={sortChatsByLastActivity}>Sort by last activity</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-        <AddProjectDialog />
-        <Button disabled={!selectedProjectId} onClick={() => openLaunchModal({ projectId: selectedProjectId })}>
-          <Plus className="h-4 w-4" />
-          Launch Agent
-        </Button>
+        <AddProjectDialog open={addProjectOpen} onOpenChange={setAddProjectOpen} showTrigger={false} />
         <Button variant={terminalOpen ? "default" : "outline"} size="icon" onClick={toggleTerminal} title="Terminal">
           <SquareTerminal className="h-4 w-4" />
         </Button>
@@ -875,13 +879,23 @@ function Header() {
   );
 }
 
-function AddProjectDialog() {
+function AddProjectDialog({
+  open: controlledOpen,
+  onOpenChange,
+  showTrigger = true
+}: {
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  showTrigger?: boolean;
+}) {
   const setProjects = useAppStore((state) => state.setProjects);
   const setSelectedProject = useAppStore((state) => state.setSelectedProject);
   const addError = useAppStore((state) => state.addError);
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
   const [browserOpen, setBrowserOpen] = useState(false);
   const [path, setPath] = useState("");
+  const open = controlledOpen ?? internalOpen;
+  const setOpen = onOpenChange ?? setInternalOpen;
 
   async function addProject() {
     const trimmed = path.trim();
@@ -900,10 +914,12 @@ function AddProjectDialog() {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <Button variant="outline" onClick={() => setOpen(true)}>
-        <FolderPlus className="h-4 w-4" />
-        Add Project
-      </Button>
+      {showTrigger && (
+        <Button variant="outline" onClick={() => setOpen(true)}>
+          <FolderPlus className="h-4 w-4" />
+          Add Project
+        </Button>
+      )}
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Add Project</DialogTitle>
@@ -1359,6 +1375,15 @@ function Sidebar() {
               <PanelLeftClose className="h-4 w-4" />
             </Button>
             <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Running</h2>
+            <Button
+              size="icon"
+              className="h-7 w-7"
+              disabled={!selectedProjectId}
+              onClick={() => selectedProjectId && openLaunchModal({ projectId: selectedProjectId })}
+              title="Launch agent"
+            >
+              <Plus className="h-4 w-4" />
+            </Button>
           </div>
           {running.length > 0 && (
             <Button
