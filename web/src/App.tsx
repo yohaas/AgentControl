@@ -3004,10 +3004,10 @@ function Sidebar() {
                   className="flex min-w-0 flex-1 items-center gap-2 rounded-sm px-1 py-1 text-left"
                   onClick={() => focusRunningAgent(agent.id)}
                 >
-                  <ProviderIcon provider={agent.provider} className="h-10 w-7 rounded-md" iconClassName="h-4 w-4" />
+                  <AgentDot color={agent.color} />
+                  <ProviderIcon provider={agent.provider} className="h-5 w-5 border-0 bg-transparent" iconClassName="h-4 w-4" />
                   <span className="min-w-0 flex-1">
                     <span className="flex items-center gap-1 truncate text-sm">
-                      <AgentDot color={agent.color} className="h-2 w-2" />
                       {agent.displayName}
                       {agent.remoteControl && <Badge className="px-1 py-0 text-[10px]">RC</Badge>}
                     </span>
@@ -5186,10 +5186,10 @@ function AgentTile({
         >
           <GripVertical className="h-4 w-4 shrink-0" />
         </span>
-        <ProviderIcon provider={agent.provider} className="h-9 w-7 rounded-md" iconClassName="h-4 w-4" />
+        <AgentDot color={agent.color} />
+        <ProviderIcon provider={agent.provider} className="h-5 w-5 border-0 bg-transparent" iconClassName="h-4 w-4" />
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-1">
-            <AgentDot color={agent.color} className="h-2 w-2" />
             <span className="truncate text-sm font-semibold">{agent.displayName}</span>
             {agent.remoteControl && <Badge className="px-1 py-0 text-[10px]">RC</Badge>}
           </div>
@@ -5576,10 +5576,10 @@ function AgentPanelHeader({ agent }: { agent: RunningAgent }) {
 
   return (
     <div className="flex h-14 shrink-0 items-center gap-3 border-b border-border px-4">
-      <ProviderIcon provider={agent.provider} className="h-10 w-8 rounded-md" iconClassName="h-4 w-4" />
+      <AgentDot color={agent.color} />
+      <ProviderIcon provider={agent.provider} className="h-5 w-5 border-0 bg-transparent" iconClassName="h-4 w-4" />
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-center gap-2">
-          <AgentDot color={agent.color} className="h-2 w-2" />
           <span className="truncate text-sm font-semibold">{agent.displayName}</span>
           {agent.remoteControl && <Badge>RC</Badge>}
         </div>
