@@ -48,7 +48,7 @@ import {
 } from "./config.js";
 import { addMarketplace, enablePlugin, installPlugin, listPlugins, pluginCatalog } from "./plugins.js";
 import { AgentRuntimeManager } from "./runtime.js";
-import { deleteBuiltInAgent, scanConfiguredProjects, scanProject, updateAgentPlugins, upsertBuiltInAgent } from "./scanner.js";
+import { deleteBuiltInAgent, scanConfiguredProjects, scanProject, updateAgentPlugins, updateAgentPluginsFile, upsertBuiltInAgent } from "./scanner.js";
 import { TerminalManager } from "./terminal.js";
 
 const PORT = Number(process.env.PORT || 4317);
@@ -597,7 +597,9 @@ app.put("/api/projects/:id/agents/:name/plugins", async (request, response) => {
         .map((item: string) => item.trim())
     : [];
   try {
-    await updateAgentPlugins(project.path, request.params.name, plugins, agentDirs);
+    const agent = project.agents.find((item) => item.name === request.params.name);
+    if (agent?.sourcePath) await updateAgentPluginsFile(agent.sourcePath, plugins);
+    else await updateAgentPlugins(project.path, request.params.name, plugins, agentDirs);
     await refreshConfiguredProjects();
     response.json(projects);
   } catch (error) {

@@ -49,6 +49,22 @@ function expandHome(input: string): string {
   return input;
 }
 
+function normalizedProjectPath(projectPath: string): string {
+  const resolved = path.resolve(expandHome(projectPath));
+  return process.platform === "win32" ? resolved.toLowerCase() : resolved;
+}
+
+function isDescendantPath(childPath: string, parentPath: string): boolean {
+  const relative = path.relative(normalizedProjectPath(parentPath), normalizedProjectPath(childPath));
+  return Boolean(relative) && !relative.startsWith("..") && !path.isAbsolute(relative);
+}
+
+function nearestAgentSourcePath(projectPath: string, configuredPaths: string[]): string | undefined {
+  return configuredPaths
+    .filter((candidatePath) => isDescendantPath(projectPath, candidatePath))
+    .sort((left, right) => normalizedProjectPath(right).length - normalizedProjectPath(left).length)[0];
+}
+
 function stringValue(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
@@ -111,6 +127,17 @@ function resolveBuiltInAgentDir(builtInDir: string): string {
   return path.resolve(os.homedir(), ".agent-control", expanded);
 }
 
+export async function updateAgentPluginsFile(filePath: string, plugins: string[]): Promise<void> {
+  const raw = await readFile(filePath, "utf8");
+  const parsed = matter(raw);
+  const data = parsed.data as Record<string, unknown>;
+  const next = matter.stringify(parsed.content.trim() ? `${parsed.content.trim()}\n` : "", {
+    ...data,
+    plugins
+  });
+  await writeFile(filePath, next, "utf8");
+}
+
 export async function updateAgentPlugins(projectPath: string, agentName: string, plugins: string[], agentDirs = DEFAULT_AGENT_DIRS): Promise<void> {
   const agentsPath = resolveProjectSubdir(projectPath, agentDirs.claude);
   const agentFiles = await readdir(agentsPath, { withFileTypes: true }).catch(() => []);
@@ -121,11 +148,7 @@ export async function updateAgentPlugins(projectPath: string, agentName: string,
     const data = parsed.data as Record<string, unknown>;
     const name = stringValue(data.name) || path.basename(filePath, ".md");
     if (name !== agentName) continue;
-    const next = matter.stringify(parsed.content.trim() ? `${parsed.content.trim()}\n` : "", {
-      ...data,
-      plugins
-    });
-    await writeFile(filePath, next, "utf8");
+    await updateAgentPluginsFile(filePath, plugins);
     return;
   }
   throw new Error("Agent definition file not found.");
@@ -221,11 +244,12 @@ export async function scanProjects(projectsRoot: string, agentDirs = DEFAULT_AGE
   return projects.sort((left, right) => left.name.localeCompare(right.name));
 }
 
-export async function scanProject(projectPath: string, agentDirs = DEFAULT_AGENT_DIRS): Promise<Project | null> {
+export async function scanProject(projectPath: string, agentDirs = DEFAULT_AGENT_DIRS, agentSourcePath?: string): Promise<Project | null> {
   const resolvedPath = path.resolve(expandHome(projectPath));
   const projectStats = await stat(resolvedPath).catch(() => null);
   if (!projectStats?.isDirectory()) return null;
-  const agents = await readAgentDefs(resolvedPath, agentDirs);
+  const resolvedAgentSourcePath = agentSourcePath ? path.resolve(expandHome(agentSourcePath)) : resolvedPath;
+  const agents = await readAgentDefs(resolvedAgentSourcePath, agentDirs);
   const builtInAgents = await readBuiltInAgentDefs(resolvedPath, agentDirs);
 
   return {
@@ -238,8 +262,11 @@ export async function scanProject(projectPath: string, agentDirs = DEFAULT_AGENT
 }
 
 export async function scanConfiguredProjects(projectPaths: string[], agentDirs = DEFAULT_AGENT_DIRS): Promise<Project[]> {
+  const resolvedProjectPaths = projectPaths.map((projectPath) => path.resolve(expandHome(projectPath)));
   const projects = (
-    await Promise.all(projectPaths.map((projectPath) => scanProject(projectPath, agentDirs).catch(() => null)))
+    await Promise.all(
+      resolvedProjectPaths.map((projectPath) => scanProject(projectPath, agentDirs, nearestAgentSourcePath(projectPath, resolvedProjectPaths)).catch(() => null))
+    )
   ).filter((project): project is Project => Boolean(project));
 
   const byId = new Map<string, Project>();
