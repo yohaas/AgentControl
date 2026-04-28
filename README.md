@@ -19,7 +19,6 @@ The app is built for local development workflows. It starts an Express/WebSocket
 - Toggle Claude thinking for a session.
 - Use provider-aware slash command autocomplete from AgentControl commands, Claude built-ins, project commands, user commands, plugin commands, and session-reported commands. Commands that require the Claude TUI are shown disabled.
 - Add context from local files, drag/drop files into chat, paste images, and send selected transcript/tool text to another agent.
-- Launch Remote Control agents and show their link/QR code plus stdout/stderr diagnostics.
 - Run project terminals with tabs, command history, rename, split panes, resize, pop out, dock left/right/bottom/float, and kill-on-close behavior.
 - Show Git status for the selected project, including changed files, unpushed commit count, and a Push action.
 - Browse, install, enable, and persist Claude/Codex plugins per agent definition when the provider exposes a local plugin catalog.
@@ -89,14 +88,9 @@ claude auth status --text
 
 You can also run `claude` interactively and use `/login` if prompted.
 
-Claude Code supports several auth methods, including Claude.ai subscription login, Claude Console/API credentials, and enterprise cloud providers. Standard Agent Control agents can use whatever Claude Code can use in your terminal environment.
+Claude Code supports several auth methods, including Claude.ai subscription login, Claude Console/API credentials, and enterprise cloud providers. Standard Agent Control agents can use whatever Claude Code can use in your terminal environment. See Anthropic's auth reference for current details: https://code.claude.com/docs/en/authentication
 
-Remote Control has stricter requirements in this app:
-
-- Claude Code CLI version `2.1.51` or newer.
-- `claude.ai` authentication, not API-key-only auth.
-
-Agent Control checks `claude --version` and `claude auth status` on startup and explains why Remote Control is unavailable when those checks fail. See Anthropic's auth reference for current details: https://code.claude.com/docs/en/authentication
+Remote Control is temporarily unavailable in Agent Control. Claude Code can start `claude remote-control`, but the current CLI does not expose stable enough transcript and input controls for a reliable dashboard chat experience. Use claude.ai/code or the Claude mobile app directly for Remote Control sessions until Claude exposes more CLI control.
 
 ## Install Agent Control
 
@@ -194,7 +188,6 @@ Launch options include:
 - Model.
 - Initial prompt.
 - Selected plugins.
-- Remote Control toggle for Claude CLI sessions only.
 
 New agents are selected after launch and focus moves to the chat box. "Launch All" starts every available definition with its default model, default plugins, and app default mode.
 
@@ -278,14 +271,9 @@ Agent definitions can persist selected plugin IDs in their frontmatter. On launc
 
 ## Remote Control
 
-Remote Control starts Claude Code in `claude remote-control --name <agent name> --spawn session` mode so each Agent Control tile maps to one remote session. The dashboard shows:
+Remote Control is intentionally hidden from the launch flow for now.
 
-- Link and QR code.
-- State: starting, waiting for browser/mobile, connected, closed, or error.
-- stdout/stderr diagnostics.
-
-Remote Control sessions are controlled from claude.ai/code or the Claude app. They do not accept dashboard chat messages. Closing a Remote Control chat also stops the Remote Control process and removes the tile.
-Claude does not currently expose the live remote conversation back through the local CLI process; Agent Control can show connection state and diagnostics, while the transcript stays in Claude's web/mobile UI.
+Claude Code can start `claude remote-control --name <agent name> --spawn session`, but the local CLI currently does not provide stable bidirectional transcript/input control for Agent Control. Earlier Agent Control builds could show QR/status diagnostics, but dashboard chat parity was unreliable. The backend diagnostics code is left in place for future support, but new Remote Control launches are disabled until Claude exposes more complete CLI control.
 
 ## Terminals
 
@@ -392,9 +380,8 @@ Not authenticated:
 
 Remote Control unavailable:
 
-- Confirm `claude --version` is `2.1.51` or newer.
-- Confirm `claude auth status` reports `claude.ai` auth.
-- Remote Control does not work with API-key-only auth.
+- This is expected. Remote Control is temporarily hidden and blocked in Agent Control until Claude exposes stable CLI transcript and input control.
+- Use claude.ai/code or the Claude mobile app directly for Remote Control sessions.
 
 No streaming text:
 

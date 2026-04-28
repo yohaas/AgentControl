@@ -4001,7 +4001,6 @@ function LaunchDialog() {
   const selectedProjectId = useAppStore((state) => state.selectedProjectId);
   const modal = useAppStore((state) => state.launchModal);
   const settings = useAppStore((state) => state.settings);
-  const capabilities = useAppStore((state) => state.capabilities);
   const agents = useAppStore((state) => state.agents);
   const setProjects = useAppStore((state) => state.setProjects);
   const addError = useAppStore((state) => state.addError);
@@ -4012,7 +4011,6 @@ function LaunchDialog() {
   const [provider, setProvider] = useState<AgentProvider>("claude");
   const [model, setModel] = useState(DEFAULT_MODEL);
   const [initialPrompt, setInitialPrompt] = useState("");
-  const [remoteControl, setRemoteControl] = useState(false);
   const [pluginIds, setPluginIds] = useState<string[]>([]);
   const [pluginCatalog, setPluginCatalog] = useState<ClaudePluginCatalog>({ installed: [], available: [], marketplaces: [] });
   const [pluginsLoading, setPluginsLoading] = useState(false);
@@ -4105,7 +4103,6 @@ function LaunchDialog() {
     setProvider(nextProvider);
     setModel(defaultModelForProvider(nextProvider, nextDef));
     setInitialPrompt(modal.initialPrompt || "");
-    setRemoteControl(false);
     setPluginIds(nextDef?.plugins || []);
     setPluginQuery("");
     setPluginCatalog({ installed: [], available: [], marketplaces: [] });
@@ -4194,7 +4191,6 @@ function LaunchDialog() {
       const saved = await saveAgentPlugins();
       if (!saved) return;
     }
-    const launchRemoteControl = provider === "claude" && remoteControl;
     sendCommand({
       type: "launch",
       request: {
@@ -4204,8 +4200,8 @@ function LaunchDialog() {
         displayName,
         provider,
         model,
-        initialPrompt: launchRemoteControl ? undefined : initialPrompt,
-        remoteControl: launchRemoteControl,
+        initialPrompt,
+        remoteControl: false,
         permissionMode: settings.defaultAgentMode,
         autoApprove: settings.autoApprove
       }
@@ -4241,7 +4237,6 @@ function LaunchDialog() {
     }
   }
 
-  const rcDisabled = provider !== "claude" || !capabilities?.supportsRemoteControl;
   const installedPlugins = useMemo(() => new Map(pluginCatalog.installed.map((plugin) => [plugin.name, plugin])), [pluginCatalog.installed]);
   const selectedPluginRows = useMemo(
     () =>
@@ -4355,7 +4350,6 @@ function LaunchDialog() {
               onValueChange={(value) => {
                 const nextProvider = value as AgentProvider;
                 setProvider(nextProvider);
-                setRemoteControl(false);
                 setModel(defaultModelForProvider(nextProvider));
                 setPluginCatalog({ installed: [], available: [], marketplaces: [] });
                 setPluginPickerExpanded(false);
@@ -4418,7 +4412,7 @@ function LaunchDialog() {
           {provider !== "claude" && (
             <div className="rounded-md border border-border px-3 py-2 text-xs text-muted-foreground">
               {provider === "codex"
-                ? "Codex sessions run through the configured Codex CLI. Remote Control is disabled; Codex plugins are available when the CLI plugin cache is present."
+                ? "Codex sessions run through the configured Codex CLI. Codex plugins are available when the CLI plugin cache is present."
                 : "OpenAI API sessions stream through the Responses API using OPENAI_API_KEY. Local CLI plugins and shell tools are not bridged by default."}
             </div>
           )}
@@ -4549,29 +4543,10 @@ function LaunchDialog() {
               <p className="text-xs text-muted-foreground">This agent needs an agent file before plugin selections can be saved.</p>
             )}
           </section>}
-          {provider === "claude" && (
-            <label className="flex items-start gap-2 rounded-md border border-border p-3 text-sm" title={rcDisabled ? capabilities?.remoteControlReason : undefined}>
-              <input
-                type="checkbox"
-                className="mt-1"
-                checked={remoteControl}
-                disabled={rcDisabled}
-                onChange={(event) => setRemoteControl(event.target.checked)}
-              />
-              <span>
-                <span className="block font-medium">Remote Control</span>
-                <span className="block text-xs text-muted-foreground">
-                  Live transcript and interaction happen in claude.ai/code or the Claude mobile app. The dashboard tracks status,
-                  model, and uptime.
-                </span>
-              </span>
-            </label>
-          )}
           <label className="grid gap-1.5 text-sm">
             Initial prompt
             <Textarea
               value={initialPrompt}
-              disabled={remoteControl}
               onChange={(event) => setInitialPrompt(event.target.value)}
               placeholder="Optional"
             />

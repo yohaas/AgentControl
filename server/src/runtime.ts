@@ -227,13 +227,10 @@ export class AgentRuntimeManager {
     const def = request.agentSource === "builtIn" ? builtInDef || projectDef : projectDef || builtInDef;
     if (!def) throw new Error("Agent definition not found.");
 
-    if (request.remoteControl && !this.getCapabilities().supportsRemoteControl) {
-      throw new Error(this.getCapabilities().remoteControlReason || "Remote Control is not available.");
+    if (request.remoteControl) {
+      throw new Error("Remote Control is temporarily unavailable until Claude exposes stable CLI transcript and input controls.");
     }
-    const provider = request.remoteControl ? "claude" : request.provider || def.provider || providerForModel(request.model);
-    if (provider !== "claude" && request.remoteControl) {
-      throw new Error("Remote Control is only available for Claude Code sessions.");
-    }
+    const provider = request.provider || def.provider || providerForModel(request.model);
 
     const displayName = this.uniqueDisplayName(request.displayName?.trim() || def.name);
     const timestamp = now();
@@ -255,9 +252,7 @@ export class AgentRuntimeManager {
       modelLastUpdated: timestamp,
       launchedAt: timestamp,
       updatedAt: timestamp,
-      remoteControl: Boolean(request.remoteControl),
-      rcState: request.remoteControl ? "starting" : undefined,
-      rcDiagnostics: request.remoteControl ? [] : undefined,
+      remoteControl: false,
       permissionMode,
       effort: request.effort || "medium",
       thinking: request.thinking ?? true,
@@ -286,8 +281,6 @@ export class AgentRuntimeManager {
       this.setStatus(state, process.env.OPENAI_API_KEY ? "idle" : "error", process.env.OPENAI_API_KEY ? undefined : "OPENAI_API_KEY is not set.");
     } else if (provider === "codex") {
       this.setStatus(state, "idle");
-    } else if (request.remoteControl) {
-      await this.spawnRemoteControl(state);
     } else if (this.isClaudeApi(state)) {
       this.setStatus(
         state,
