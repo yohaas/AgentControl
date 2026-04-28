@@ -4544,20 +4544,20 @@ function SettingsDialog() {
               <h3 className="text-sm font-medium">Appearance</h3>
               <p className="text-xs text-muted-foreground">Control the app theme and chat layout.</p>
             </div>
-            <label className="grid gap-1.5 text-sm">
-              Color mode
-              <Select value={themeMode} onValueChange={(value) => setThemeMode(value as ThemeMode)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="auto">Auto</SelectItem>
-                  <SelectItem value="light">Light</SelectItem>
-                  <SelectItem value="dark">Dark</SelectItem>
-                </SelectContent>
-              </Select>
-            </label>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid gap-3 sm:grid-cols-[1fr_1.4fr_0.8fr]">
+              <label className="grid gap-1.5 text-sm">
+                Color mode
+                <Select value={themeMode} onValueChange={(value) => setThemeMode(value as ThemeMode)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="auto">Auto</SelectItem>
+                    <SelectItem value="light">Light</SelectItem>
+                    <SelectItem value="dark">Dark</SelectItem>
+                  </SelectContent>
+                </Select>
+              </label>
               <label className="grid gap-1.5 text-sm">
                 Tile height
                 <div className="flex gap-2">
