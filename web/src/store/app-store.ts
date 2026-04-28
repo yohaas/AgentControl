@@ -273,6 +273,7 @@ export const useAppStore = create<AppState>((set, get) => ({
           agents: { ...state.agents, [event.agent.id]: event.agent },
           transcripts: { ...state.transcripts, [event.agent.id]: state.transcripts[event.agent.id] || [] },
           selectedAgentId: state.selectedAgentId ? event.agent.id : undefined,
+          focusedAgentId: event.agent.id,
           tileOrder: [...state.tileOrder.filter((id) => id !== event.agent.id), event.agent.id]
         }));
         break;
