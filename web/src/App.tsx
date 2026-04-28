@@ -734,7 +734,6 @@ function Header() {
         <Button variant={terminalOpen ? "default" : "outline"} size="icon" onClick={toggleTerminal} title="Terminal">
           <SquareTerminal className="h-4 w-4" />
         </Button>
-        <AppAdminMenu />
         <PluginsDialog />
         <SettingsDialog />
         <Badge className={wsConnected ? "border-teal-400/40 text-teal-200" : "border-red-400/40 text-red-200"}>
@@ -816,64 +815,6 @@ function AddProjectDialog() {
         }}
       />
     </Dialog>
-  );
-}
-
-function AppAdminMenu() {
-  const addError = useAppStore((state) => state.addError);
-  const [supervised, setSupervised] = useState<boolean | undefined>();
-
-  async function refreshStatus() {
-    try {
-      const status = await api.adminStatus();
-      setSupervised(status.supervised);
-    } catch (error) {
-      addError(error instanceof Error ? error.message : String(error));
-    }
-  }
-
-  async function restart() {
-    if (!window.confirm("Restart AgentControl? The dashboard will disconnect briefly.")) return;
-    try {
-      await api.restartApp();
-    } catch (error) {
-      addError(error instanceof Error ? error.message : String(error));
-    }
-  }
-
-  async function shutdown() {
-    if (!window.confirm("Shutdown AgentControl? You will need to start it again from a terminal unless supervised.")) return;
-    try {
-      await api.shutdownApp();
-    } catch (error) {
-      addError(error instanceof Error ? error.message : String(error));
-    }
-  }
-
-  useEffect(() => {
-    void refreshStatus();
-  }, []);
-
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="outline" title="AgentControl process controls">
-          <Settings className="h-4 w-4" />
-          App
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <DropdownMenuItem onClick={restart} disabled={supervised === false}>
-          Restart AgentControl
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={shutdown}>Shutdown AgentControl</DropdownMenuItem>
-        {supervised === false && (
-          <div className="max-w-64 px-2 py-1.5 text-xs text-muted-foreground">
-            Restart is available after launching with npm run dev:supervised.
-          </div>
-        )}
-      </DropdownMenuContent>
-    </DropdownMenu>
   );
 }
 
@@ -1599,6 +1540,7 @@ function SettingsDialog() {
   const [autoApprove, setAutoApprove] = useState(settings.autoApprove);
   const [tileHeight, setTileHeight] = useState(settings.tileHeight);
   const [tileColumns, setTileColumns] = useState(settings.tileColumns);
+  const [supervised, setSupervised] = useState<boolean | undefined>();
 
   useEffect(() => {
     if (!open) return;
@@ -1607,7 +1549,17 @@ function SettingsDialog() {
     setAutoApprove(settings.autoApprove);
     setTileHeight(settings.tileHeight);
     setTileColumns(settings.tileColumns);
+    void refreshAdminStatus();
   }, [open, settings]);
+
+  async function refreshAdminStatus() {
+    try {
+      const status = await api.adminStatus();
+      setSupervised(status.supervised);
+    } catch (error) {
+      addError(error instanceof Error ? error.message : String(error));
+    }
+  }
 
   async function save() {
     try {
@@ -1660,6 +1612,24 @@ function SettingsDialog() {
       addError(error instanceof Error ? error.message : String(error));
     } finally {
       if (importInputRef.current) importInputRef.current.value = "";
+    }
+  }
+
+  async function restartAgentControl() {
+    if (!window.confirm("Restart AgentControl? The dashboard will disconnect briefly.")) return;
+    try {
+      await api.restartApp();
+    } catch (error) {
+      addError(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  async function shutdownAgentControl() {
+    if (!window.confirm("Shutdown AgentControl? You will need to start it again from a terminal unless supervised.")) return;
+    try {
+      await api.shutdownApp();
+    } catch (error) {
+      addError(error instanceof Error ? error.message : String(error));
     }
   }
 
@@ -1736,6 +1706,24 @@ function SettingsDialog() {
               <FolderOpen className="h-4 w-4" />
               Import Config
             </Button>
+          </div>
+          <div className="grid gap-2 rounded-md border border-border p-3">
+            <div className="text-sm font-medium">AgentControl</div>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" onClick={restartAgentControl} disabled={supervised === false}>
+                <RefreshCw className="h-4 w-4" />
+                Restart
+              </Button>
+              <Button variant="outline" onClick={shutdownAgentControl}>
+                <X className="h-4 w-4" />
+                Shutdown
+              </Button>
+            </div>
+            {supervised === false && (
+              <p className="text-xs text-muted-foreground">
+                Restart is available after launching with npm run dev:supervised.
+              </p>
+            )}
           </div>
           <input
             ref={importInputRef}
