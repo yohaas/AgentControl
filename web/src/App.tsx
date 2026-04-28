@@ -30,7 +30,6 @@ import {
   FolderOpen,
   FolderPlus,
   GitBranch,
-  Globe,
   GripVertical,
   HardDrive,
   Hand,
@@ -523,10 +522,6 @@ function ComposerAddMenu({
         <DropdownMenuItem onSelect={onAddContext} className="gap-3">
           <FileText className="h-4 w-4 text-muted-foreground" />
           Add context
-        </DropdownMenuItem>
-        <DropdownMenuItem disabled className="gap-3 opacity-50">
-          <Globe className="h-4 w-4 text-muted-foreground" />
-          Browse the web
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
