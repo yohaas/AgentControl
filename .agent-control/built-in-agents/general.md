@@ -1,6 +1,7 @@
 ---
 name: general
 description: General-purpose engineering assistant for tasks that don't cleanly fit a specialist role, span multiple domains, or require open-ended exploration. Use as the default when no other subagent is a clear fit, or for codebase exploration, refactors crossing layers, scripting, and miscellaneous engineering work.
+color: "#ffffff"
 tools: Read, Write, Edit, Bash, Grep, Glob
 ---
 
