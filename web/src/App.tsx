@@ -2256,7 +2256,6 @@ function SettingsDialog() {
   const [tileHeight, setTileHeight] = useState(settings.tileHeight);
   const [tileColumns, setTileColumns] = useState(settings.tileColumns);
   const [pinLastSentMessage, setPinLastSentMessage] = useState(settings.pinLastSentMessage);
-  const [terminalDock, setTerminalDock] = useState(settings.terminalDock);
 
   useEffect(() => {
     if (!open) return;
@@ -2267,7 +2266,6 @@ function SettingsDialog() {
     setTileHeight(settings.tileHeight);
     setTileColumns(settings.tileColumns);
     setPinLastSentMessage(settings.pinLastSentMessage);
-    setTerminalDock(settings.terminalDock);
   }, [open, settings]);
 
   async function save() {
@@ -2280,8 +2278,7 @@ function SettingsDialog() {
         defaultAgentMode,
         tileHeight,
         tileColumns,
-        pinLastSentMessage,
-        terminalDock
+        pinLastSentMessage
       });
       setSettings(next);
       setProjects(await api.refresh());
@@ -2303,8 +2300,7 @@ function SettingsDialog() {
         defaultAgentMode,
         tileHeight,
         tileColumns,
-        pinLastSentMessage,
-        terminalDock
+        pinLastSentMessage
       }
     };
     downloadText("agent-control-config.json", JSON.stringify(payload, null, 2), "application/json");
@@ -2325,7 +2321,6 @@ function SettingsDialog() {
       setTileHeight(next.tileHeight);
       setTileColumns(next.tileColumns);
       setPinLastSentMessage(next.pinLastSentMessage);
-      setTerminalDock(next.terminalDock);
     } catch (error) {
       addError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -2376,20 +2371,6 @@ function SettingsDialog() {
                 <SelectItem value="off">Off</SelectItem>
                 <SelectItem value="session">This session</SelectItem>
                 <SelectItem value="always">Always</SelectItem>
-              </SelectContent>
-            </Select>
-          </label>
-          <label className="grid gap-1.5 text-sm">
-            Terminal dock
-            <Select value={terminalDock} onValueChange={(value) => setTerminalDock(value as typeof terminalDock)}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="float">Float</SelectItem>
-                <SelectItem value="left">Left</SelectItem>
-                <SelectItem value="bottom">Bottom</SelectItem>
-                <SelectItem value="right">Right</SelectItem>
               </SelectContent>
             </Select>
           </label>
