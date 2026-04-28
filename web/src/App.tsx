@@ -25,6 +25,7 @@ import {
   Code2,
   Columns2,
   ExternalLink,
+  FileText,
   FolderOpen,
   FolderPlus,
   GripVertical,
@@ -33,6 +34,7 @@ import {
   Home,
   Image as ImageIcon,
   Maximize2,
+  Mic,
   Minimize2,
   MoreHorizontal,
   PanelLeftClose,
@@ -46,6 +48,7 @@ import {
   RefreshCw,
   Search,
   Settings,
+  SquareSlash,
   SquareTerminal,
   Trash2,
   X
@@ -443,6 +446,12 @@ async function uploadPastedImages(files: File[]) {
       })
     )
   );
+}
+
+function selectedLineCount(text: string) {
+  const trimmed = text.trim();
+  if (!trimmed) return 0;
+  return trimmed.split(/\r?\n/).length;
 }
 
 function AttachmentChips({
@@ -1549,7 +1558,15 @@ function currentEffort(agent: RunningAgent): AgentEffort {
   return agent.effort || "medium";
 }
 
-function ComposerModeMenu({ agent, compact = false }: { agent: RunningAgent; compact?: boolean }) {
+function ComposerModeMenu({
+  agent,
+  compact = false,
+  inline = false
+}: {
+  agent: RunningAgent;
+  compact?: boolean;
+  inline?: boolean;
+}) {
   const activeMode = currentPermissionMode(agent);
   const activeEffort = currentEffort(agent);
   const activeEffortLabel = EFFORT_OPTIONS.find((option) => option.effort === activeEffort)?.label || "Medium";
@@ -1570,9 +1587,13 @@ function ComposerModeMenu({ agent, compact = false }: { agent: RunningAgent; com
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button
-          variant="outline"
+          variant={inline ? "ghost" : "outline"}
           size="sm"
-          className={cn("h-7 justify-between gap-1 px-2", compact ? "w-24 text-[11px]" : "w-full")}
+          className={cn(
+            "h-7 justify-between gap-1 px-2",
+            compact ? "w-24 text-[11px]" : "w-full",
+            inline && "h-8 w-auto rounded-md border-0 bg-transparent px-2 text-xs"
+          )}
           title={activeOption.label}
           disabled={agent.remoteControl}
         >
@@ -2168,6 +2189,7 @@ function AgentTile({
   const tileRef = useRef<HTMLElement | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [showPinnedMessage, setShowPinnedMessage] = useState(false);
   const isBusy = isAgentBusy(agent);
   const canType = !agent.remoteControl && agentHasProcess(agent);
@@ -2175,6 +2197,7 @@ function AgentTile({
   const pinnedMessage = latestUserMessage(transcript);
   const pinLastSentMessage = settings.pinLastSentMessage;
   const slashSuggestions = useMemo(() => slashCommandSuggestions(draft, settings.models), [draft, settings.models]);
+  const selectedLines = selectedLineCount(selection.selectedText);
 
   useEffect(() => {
     const root = rootRef.current;
@@ -2277,6 +2300,17 @@ function AgentTile({
     if (pastedText) setDraft(agent.id, insertPastedText(event.currentTarget, draft, pastedText));
     try {
       const uploaded = await uploadPastedImages(files);
+      setAttachments((current) => [...current, ...uploaded]);
+    } catch (error) {
+      addError(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  async function handleImageAttachment(files: FileList | null) {
+    const images = Array.from(files || []).filter((file) => file.type.startsWith("image/"));
+    if (images.length === 0) return;
+    try {
+      const uploaded = await uploadPastedImages(images);
       setAttachments((current) => [...current, ...uploaded]);
     } catch (error) {
       addError(error instanceof Error ? error.message : String(error));
@@ -2429,8 +2463,8 @@ function AgentTile({
       </ContextMenu>
       {!agent.remoteControl && (
         <div className="shrink-0 border-t border-border p-3">
-          <div className="flex gap-2">
-            <div className="grid flex-1 gap-2">
+          <div className="rounded-md border border-border bg-background/80 focus-within:ring-1 focus-within:ring-ring">
+            <div className="grid gap-2 px-2 pt-2">
               <AttachmentChips
                 attachments={attachments}
                 onRemove={(id) => setAttachments((current) => current.filter((attachment) => attachment.id !== id))}
@@ -2442,27 +2476,67 @@ function AgentTile({
                 onSelect={selectSlashCommand}
                 onActiveIndexChange={setActiveSlashIndex}
               />
+            </div>
+            <div className="relative">
               <Textarea
                 ref={inputRef}
-                className="min-h-12 resize-none text-sm"
+                className="min-h-14 resize-none border-0 bg-transparent pb-2 pr-9 pt-3 text-sm focus-visible:ring-0"
                 value={draft}
                 disabled={!canType}
                 onChange={(event) => setDraft(agent.id, event.target.value)}
                 onPaste={handlePaste}
-                placeholder={isBusy ? "Queue a message..." : "Message this agent"}
+                placeholder={isBusy ? "Queue a message..." : "ctrl esc to focus or unfocus Claude"}
                 onKeyDown={handleComposerKeyDown}
               />
+              <Mic className="pointer-events-none absolute right-3 top-3 h-4 w-4 text-muted-foreground" />
             </div>
-            <div className="flex self-end flex-col gap-1">
-              <Button
-                size="icon"
-                disabled={isBusy ? !agentHasProcess(agent) : !canType || (!draft.trim() && attachments.length === 0)}
-                onClick={isBusy ? stopCurrentResponse : send}
-                title={isBusy ? "Stop response" : "Send"}
-              >
-                {isBusy ? <X className="h-4 w-4" /> : <ArrowUp className="h-4 w-4" />}
-              </Button>
-              <ComposerModeMenu agent={agent} compact />
+            <div className="flex items-center justify-between border-t border-border px-2 py-1.5">
+              <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={(event) => {
+                    void handleImageAttachment(event.currentTarget.files);
+                    event.currentTarget.value = "";
+                  }}
+                />
+                <Button variant="ghost" size="icon" className="h-7 w-7" title="Attach image" onClick={() => fileInputRef.current?.click()}>
+                  <Plus className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  title="Slash commands"
+                  onClick={() => {
+                    setDraft(agent.id, draft.startsWith("/") ? draft : `/${draft}`);
+                    window.requestAnimationFrame(() => inputRef.current?.focus());
+                  }}
+                >
+                  <SquareSlash className="h-4 w-4" />
+                </Button>
+                {selectedLines > 0 && (
+                  <span className="inline-flex min-w-0 items-center gap-1.5">
+                    <FileText className="h-3.5 w-3.5" />
+                    <span className="truncate">{selectedLines} {selectedLines === 1 ? "line" : "lines"} selected</span>
+                  </span>
+                )}
+              </div>
+              <div className="flex shrink-0 items-center gap-1.5">
+                <ComposerModeMenu agent={agent} compact inline />
+                <Button
+                  size="icon"
+                  className="h-8 w-8"
+                  disabled={isBusy ? !agentHasProcess(agent) : !canType || (!draft.trim() && attachments.length === 0)}
+                  onClick={isBusy ? stopCurrentResponse : send}
+                  title={isBusy ? "Stop response" : "Send"}
+                >
+                  {isBusy ? <X className="h-4 w-4" /> : <ArrowUp className="h-4 w-4" />}
+                </Button>
+              </div>
             </div>
           </div>
           {queue.length > 0 && (
@@ -2673,6 +2747,7 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
   const setSearchQuery = useAppStore((state) => state.setSearchQuery);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const transcriptRootId = `transcript-root-${agent.id}`;
   const selection = useTextSelection(`#${transcriptRootId}`);
   const [attachments, setAttachments] = useState<MessageAttachment[]>([]);
@@ -2684,6 +2759,7 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
   const pinnedMessage = latestUserMessage(transcript);
   const pinLastSentMessage = settings.pinLastSentMessage;
   const slashSuggestions = useMemo(() => slashCommandSuggestions(draft, settings.models), [draft, settings.models]);
+  const selectedLines = selectedLineCount(selection.selectedText);
 
   useEffect(() => {
     const root = rootRef.current;
@@ -2793,6 +2869,17 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
     }
   }
 
+  async function handleImageAttachment(files: FileList | null) {
+    const images = Array.from(files || []).filter((file) => file.type.startsWith("image/"));
+    if (images.length === 0) return;
+    try {
+      const uploaded = await uploadPastedImages(images);
+      setAttachments((current) => [...current, ...uploaded]);
+    } catch (error) {
+      addError(error instanceof Error ? error.message : String(error));
+    }
+  }
+
   return (
     <main className="flex min-w-0 flex-1 flex-col">
       <AgentPanelHeader agent={agent} />
@@ -2853,8 +2940,8 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
         />
       </ContextMenu>
       <div className="border-t border-border p-3">
-        <div className="mx-auto flex w-full min-w-0 max-w-4xl gap-2">
-          <div className="grid flex-1 gap-2">
+        <div className="mx-auto w-full min-w-0 max-w-4xl rounded-md border border-border bg-background/80 focus-within:ring-1 focus-within:ring-ring">
+          <div className="grid gap-2 px-2 pt-2">
             <AttachmentChips
               attachments={attachments}
               onRemove={(id) => setAttachments((current) => current.filter((attachment) => attachment.id !== id))}
@@ -2865,26 +2952,67 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
               onSelect={selectSlashCommand}
               onActiveIndexChange={setActiveSlashIndex}
             />
+          </div>
+          <div className="relative">
             <Textarea
               ref={inputRef}
-              className="min-h-16 resize-none"
+              className="min-h-16 resize-none border-0 bg-transparent pb-2 pr-10 pt-3 focus-visible:ring-0"
               value={draft}
               disabled={!canType}
               onChange={(event) => setDraft(agent.id, event.target.value)}
               onPaste={handlePaste}
-              placeholder={isBusy ? "Queue a message..." : "Message this agent"}
+              placeholder={isBusy ? "Queue a message..." : "ctrl esc to focus or unfocus Claude"}
               onKeyDown={handleComposerKeyDown}
             />
+            <Mic className="pointer-events-none absolute right-3 top-3 h-4 w-4 text-muted-foreground" />
           </div>
-          <div className="flex min-w-24 self-end flex-col gap-1">
-            <Button
-              disabled={isBusy ? !agentHasProcess(agent) : !canType || (!draft.trim() && attachments.length === 0)}
-              onClick={isBusy ? stopCurrentResponse : send}
-            >
-              {isBusy ? <X className="h-4 w-4" /> : <ArrowUp className="h-4 w-4" />}
-              {isBusy ? "Stop" : "Send"}
-            </Button>
-            <ComposerModeMenu agent={agent} />
+          <div className="flex items-center justify-between border-t border-border px-2 py-1.5">
+            <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={(event) => {
+                  void handleImageAttachment(event.currentTarget.files);
+                  event.currentTarget.value = "";
+                }}
+              />
+              <Button variant="ghost" size="icon" className="h-7 w-7" title="Attach image" onClick={() => fileInputRef.current?.click()}>
+                <Plus className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                title="Slash commands"
+                onClick={() => {
+                  setDraft(agent.id, draft.startsWith("/") ? draft : `/${draft}`);
+                  window.requestAnimationFrame(() => inputRef.current?.focus());
+                }}
+              >
+                <SquareSlash className="h-4 w-4" />
+              </Button>
+              {selectedLines > 0 && (
+                <span className="inline-flex min-w-0 items-center gap-1.5">
+                  <FileText className="h-3.5 w-3.5" />
+                  <span className="truncate">{selectedLines} {selectedLines === 1 ? "line" : "lines"} selected</span>
+                </span>
+              )}
+            </div>
+            <div className="flex shrink-0 items-center gap-1.5">
+              <ComposerModeMenu agent={agent} inline />
+              <Button
+                size="icon"
+                className="h-8 w-8"
+                disabled={isBusy ? !agentHasProcess(agent) : !canType || (!draft.trim() && attachments.length === 0)}
+                onClick={isBusy ? stopCurrentResponse : send}
+                title={isBusy ? "Stop response" : "Send"}
+              >
+                {isBusy ? <X className="h-4 w-4" /> : <ArrowUp className="h-4 w-4" />}
+              </Button>
+            </div>
           </div>
         </div>
         {queue.length > 0 && (
