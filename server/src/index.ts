@@ -18,6 +18,7 @@ import {
   resolveModels,
   resolvePinLastSentMessage,
   resolveProjectsRoot,
+  resolveSidebarWidth,
   resolveTerminalDock,
   resolveTileColumns,
   resolveTileHeight,
@@ -505,6 +506,7 @@ app.get("/api/settings", (_request, response) => {
     defaultAgentMode: resolveDefaultAgentMode(config),
     tileHeight: resolveTileHeight(config),
     tileColumns: resolveTileColumns(config),
+    sidebarWidth: resolveSidebarWidth(config),
     pinLastSentMessage: resolvePinLastSentMessage(config),
     terminalDock: resolveTerminalDock(config),
     capabilities
@@ -571,6 +573,7 @@ app.put("/api/settings", async (request, response) => {
     defaultAgentMode: resolveDefaultAgentMode(body.defaultAgentMode ? body : config),
     tileHeight: typeof body.tileHeight === "number" ? resolveTileHeight(body) : resolveTileHeight(config),
     tileColumns: typeof body.tileColumns === "number" ? resolveTileColumns(body) : resolveTileColumns(config),
+    sidebarWidth: typeof body.sidebarWidth === "number" ? resolveSidebarWidth(body) : resolveSidebarWidth(config),
     pinLastSentMessage: typeof body.pinLastSentMessage === "boolean" ? body.pinLastSentMessage : resolvePinLastSentMessage(config),
     terminalDock: resolveTerminalDock(body.terminalDock ? body : config)
   });
@@ -584,6 +587,7 @@ app.put("/api/settings", async (request, response) => {
     defaultAgentMode: resolveDefaultAgentMode(config),
     tileHeight: resolveTileHeight(config),
     tileColumns: resolveTileColumns(config),
+    sidebarWidth: resolveSidebarWidth(config),
     pinLastSentMessage: resolvePinLastSentMessage(config),
     terminalDock: resolveTerminalDock(config),
     capabilities

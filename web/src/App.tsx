@@ -1618,6 +1618,8 @@ function Sidebar() {
   const collapsed = useAppStore((state) => state.sidebarCollapsed);
   const setCollapsed = useAppStore((state) => state.setSidebarCollapsed);
   const settings = useAppStore((state) => state.settings);
+  const setSettings = useAppStore((state) => state.setSettings);
+  const addError = useAppStore((state) => state.addError);
   const [runningSort, setRunningSort] = useState<"lastActivity" | "type">("lastActivity");
 
   const project = projects.find((candidate) => candidate.id === selectedProjectId);
@@ -1640,10 +1642,38 @@ function Sidebar() {
     [agentsById, runningSort, selectedProjectId]
   );
   const activeAgentId = selectedAgentId || focusedAgentId;
+  const sidebarWidth = settings.sidebarWidth || 280;
 
   function focusRunningAgent(id: string) {
     setSelectedAgent(undefined);
     setFocusedAgent(id);
+  }
+
+  function startSidebarResize(event: ReactPointerEvent<HTMLDivElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    const startX = event.clientX;
+    const startWidth = sidebarWidth;
+    let nextWidth = sidebarWidth;
+    const pointerId = event.pointerId;
+    event.currentTarget.setPointerCapture(pointerId);
+
+    const onMove = (moveEvent: PointerEvent) => {
+      nextWidth = Math.min(420, Math.max(240, startWidth + moveEvent.clientX - startX));
+      setSettings({ ...settings, sidebarWidth: Math.round(nextWidth) });
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      const width = Math.round(nextWidth);
+      void api
+        .saveSettings({ ...settings, sidebarWidth: width })
+        .then(setSettings)
+        .catch((error: unknown) => addError(error instanceof Error ? error.message : String(error)));
+    };
+
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp, { once: true });
   }
 
   function launchAllDefinitions() {
@@ -1700,7 +1730,10 @@ function Sidebar() {
   }
 
   return (
-    <aside className="flex w-[280px] shrink-0 flex-col overflow-x-hidden border-r border-border bg-card/45">
+    <aside
+      className="relative flex shrink-0 flex-col overflow-x-hidden border-r border-border bg-card/45"
+      style={{ width: sidebarWidth }}
+    >
       <section className="flex min-h-0 flex-1 flex-col p-3">
         <div className="mb-2 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -1840,6 +1873,11 @@ function Sidebar() {
           )}
         </div>
       </section>
+      <div
+        className="absolute bottom-0 right-0 top-0 z-20 w-2 cursor-ew-resize hover:bg-primary/20"
+        onPointerDown={startSidebarResize}
+        title="Drag to resize sidebar"
+      />
     </aside>
   );
 }

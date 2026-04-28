@@ -20,6 +20,7 @@ export interface SettingsState {
   defaultAgentMode: AgentPermissionMode;
   tileHeight: number;
   tileColumns: number;
+  sidebarWidth: number;
   pinLastSentMessage: boolean;
   terminalDock: TerminalDockPosition;
 }
@@ -112,6 +113,7 @@ const defaultSettings: SettingsState = {
   defaultAgentMode: "acceptEdits",
   tileHeight: 460,
   tileColumns: 2,
+  sidebarWidth: 280,
   pinLastSentMessage: true,
   terminalDock: "bottom"
 };
@@ -135,6 +137,7 @@ function normalizeSettings(settings: SettingsState): SettingsState {
     defaultAgentMode,
     tileHeight: clampNumber(settings.tileHeight, defaultSettings.tileHeight, 320, 760),
     tileColumns: clampNumber(settings.tileColumns, defaultSettings.tileColumns, 1, 6),
+    sidebarWidth: clampNumber(settings.sidebarWidth, defaultSettings.sidebarWidth, 240, 420),
     terminalDock
   };
 }

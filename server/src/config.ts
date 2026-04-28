@@ -18,6 +18,7 @@ export interface DashboardConfig {
   defaultAgentMode?: AgentPermissionMode;
   tileHeight?: number;
   tileColumns?: number;
+  sidebarWidth?: number;
   pinLastSentMessage?: boolean;
   terminalDock?: TerminalDockPosition;
 }
@@ -71,6 +72,10 @@ export function resolveTileHeight(config: DashboardConfig): number {
 
 export function resolveTileColumns(config: DashboardConfig): number {
   return clampNumber(config.tileColumns, 2, 1, 6);
+}
+
+export function resolveSidebarWidth(config: DashboardConfig): number {
+  return clampNumber(config.sidebarWidth, 280, 240, 420);
 }
 
 export function resolvePinLastSentMessage(config: DashboardConfig): boolean {
