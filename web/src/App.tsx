@@ -1016,6 +1016,7 @@ function Header() {
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
+        <GitStatusMenu projectId={selectedProjectId} />
         <Button
           variant="outline"
           size="icon"
@@ -1042,7 +1043,6 @@ function Header() {
         </Button>
         <PluginsDialog />
         <SettingsDialog />
-        <GitStatusMenu projectId={selectedProjectId} />
         <DropdownMenu open={connectionMenuOpen} onOpenChange={setConnectionMenuOpen}>
           <DropdownMenuTrigger asChild>
             <button
