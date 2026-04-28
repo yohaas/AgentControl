@@ -1413,6 +1413,34 @@ function providerLabel(provider?: AgentProvider) {
   return "Claude";
 }
 
+const CURRENT_OPENAI_MODEL_PROFILES = [
+  { id: "gpt-5.5", provider: "openai", default: true, supportedEfforts: ["low", "medium", "high", "xhigh"] },
+  { id: "gpt-5.4", provider: "openai", supportedEfforts: ["low", "medium", "high", "xhigh"] },
+  { id: "gpt-5.4-mini", provider: "openai", supportedEfforts: ["low", "medium", "high", "xhigh"] },
+  { id: "gpt-5.4-nano", provider: "openai", supportedEfforts: ["low", "medium", "high", "xhigh"] }
+] satisfies ModelProfile[];
+
+const CURRENT_CODEX_MODEL_PROFILES = [
+  { id: "gpt-5.3-codex", provider: "codex", default: true, supportedEfforts: ["low", "medium", "high", "xhigh"] },
+  { id: "gpt-5.2-codex", provider: "codex", supportedEfforts: ["low", "medium", "high", "xhigh"] },
+  { id: "gpt-5.1-codex", provider: "codex", supportedEfforts: ["low", "medium", "high", "xhigh"] },
+  { id: "gpt-5.1-codex-max", provider: "codex", supportedEfforts: ["low", "medium", "high", "xhigh"] },
+  { id: "gpt-5.1-codex-mini", provider: "codex", supportedEfforts: ["low", "medium", "high", "xhigh"] },
+  { id: "gpt-5-codex", provider: "codex", supportedEfforts: ["low", "medium", "high", "xhigh"] }
+] satisfies ModelProfile[];
+
+function currentModelProfilesForProvider(provider: AgentProvider) {
+  if (provider === "openai") return CURRENT_OPENAI_MODEL_PROFILES;
+  if (provider === "codex") return CURRENT_CODEX_MODEL_PROFILES;
+  return [];
+}
+
+function currentModelText(provider: AgentProvider) {
+  return currentModelProfilesForProvider(provider)
+    .map((profile) => profile.id)
+    .join("\n");
+}
+
 function modelProfilesForSettings(settings: { models: string[]; modelProfiles?: ModelProfile[] }): ModelProfile[] {
   if (settings.modelProfiles?.length) return settings.modelProfiles;
   return settings.models.map((model, index) => ({ id: model, provider: "claude", default: index === 0 }));
@@ -1433,31 +1461,55 @@ function modelIdsForProvider(settings: { models: string[]; modelProfiles?: Model
 }
 
 function parseProviderModels(text: string, provider: AgentProvider): ModelProfile[] {
+  const currentModels = currentModelProfilesForProvider(provider);
   return text
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean)
-    .map((id, index) => ({ id, provider, default: index === 0 }));
+    .map((id, index) => {
+      const current = currentModels.find((profile) => profile.id === id);
+      return { ...current, id, provider, default: index === 0 };
+    });
 }
 
 function ProviderModelsField({
   label,
   value,
   onChange,
-  placeholder
+  placeholder,
+  currentModels,
+  onUseCurrentModels
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   placeholder: string;
+  currentModels?: string[];
+  onUseCurrentModels?: () => void;
 }) {
   return (
     <label className="grid gap-1.5 text-sm">
-      <span>
-        <span className="block">{label}</span>
-        <span className="block text-xs text-muted-foreground">One model id per line. The first model is the provider default.</span>
+      <span className="flex items-start justify-between gap-3">
+        <span>
+          <span className="block">{label}</span>
+          <span className="block text-xs text-muted-foreground">One model id per line. The first model is the provider default.</span>
+        </span>
+        {onUseCurrentModels && (
+          <Button type="button" variant="outline" size="sm" onClick={onUseCurrentModels}>
+            Use Current List
+          </Button>
+        )}
       </span>
       <Textarea value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} />
+      {currentModels && currentModels.length > 0 && (
+        <span className="flex flex-wrap gap-1.5 rounded-md border border-border bg-muted/30 p-2">
+          {currentModels.map((model) => (
+            <span key={model} className="rounded bg-background px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
+              {model}
+            </span>
+          ))}
+        </span>
+      )}
     </label>
   );
 }
@@ -4384,6 +4436,8 @@ function SettingsDialog() {
                 value={codexModelsText}
                 onChange={setCodexModelsText}
                 placeholder="One Codex model id per line"
+                currentModels={CURRENT_CODEX_MODEL_PROFILES.map((profile) => profile.id)}
+                onUseCurrentModels={() => setCodexModelsText(currentModelText("codex"))}
               />
               <label className="grid gap-1.5 text-sm">
                 Codex agents directory
@@ -4404,6 +4458,8 @@ function SettingsDialog() {
                 value={openaiModelsText}
                 onChange={setOpenaiModelsText}
                 placeholder="One OpenAI model id per line"
+                currentModels={CURRENT_OPENAI_MODEL_PROFILES.map((profile) => profile.id)}
+                onUseCurrentModels={() => setOpenaiModelsText(currentModelText("openai"))}
               />
               <label className="grid gap-1.5 text-sm">
                 OpenAI agents directory

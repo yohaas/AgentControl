@@ -135,8 +135,16 @@ const defaultSettings: SettingsState = {
     { id: "claude-opus-4-6", provider: "claude" },
     { id: "claude-sonnet-4-6", provider: "claude", default: true },
     { id: "claude-haiku-4-5", provider: "claude" },
-    { id: "gpt-5.3-codex", provider: "codex", default: true },
-    { id: "gpt-5.4", provider: "openai", default: true }
+    { id: "gpt-5.5", provider: "openai", default: true, supportedEfforts: ["low", "medium", "high", "xhigh"] },
+    { id: "gpt-5.4", provider: "openai", supportedEfforts: ["low", "medium", "high", "xhigh"] },
+    { id: "gpt-5.4-mini", provider: "openai", supportedEfforts: ["low", "medium", "high", "xhigh"] },
+    { id: "gpt-5.4-nano", provider: "openai", supportedEfforts: ["low", "medium", "high", "xhigh"] },
+    { id: "gpt-5.3-codex", provider: "codex", default: true, supportedEfforts: ["low", "medium", "high", "xhigh"] },
+    { id: "gpt-5.2-codex", provider: "codex", supportedEfforts: ["low", "medium", "high", "xhigh"] },
+    { id: "gpt-5.1-codex", provider: "codex", supportedEfforts: ["low", "medium", "high", "xhigh"] },
+    { id: "gpt-5.1-codex-max", provider: "codex", supportedEfforts: ["low", "medium", "high", "xhigh"] },
+    { id: "gpt-5.1-codex-mini", provider: "codex", supportedEfforts: ["low", "medium", "high", "xhigh"] },
+    { id: "gpt-5-codex", provider: "codex", supportedEfforts: ["low", "medium", "high", "xhigh"] }
   ],
   autoApprove: "off",
   defaultAgentMode: "acceptEdits",

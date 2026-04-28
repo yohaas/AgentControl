@@ -15,9 +15,16 @@ export const DEFAULT_MODEL_PROFILES: ModelProfile[] = [
   { id: "claude-opus-4-6", provider: "claude", supportsThinking: true, supportedEfforts: ["low", "medium", "high", "xhigh", "max"] },
   { id: "claude-sonnet-4-6", provider: "claude", default: true, supportsThinking: true, supportedEfforts: ["low", "medium", "high", "xhigh", "max"] },
   { id: "claude-haiku-4-5", provider: "claude", supportsThinking: true, supportedEfforts: ["low", "medium", "high", "xhigh", "max"] },
-  { id: "gpt-5.4", provider: "openai", default: true, supportedEfforts: ["low", "medium", "high"] },
+  { id: "gpt-5.5", provider: "openai", default: true, supportedEfforts: ["low", "medium", "high", "xhigh"] },
+  { id: "gpt-5.4", provider: "openai", supportedEfforts: ["low", "medium", "high", "xhigh"] },
+  { id: "gpt-5.4-mini", provider: "openai", supportedEfforts: ["low", "medium", "high", "xhigh"] },
+  { id: "gpt-5.4-nano", provider: "openai", supportedEfforts: ["low", "medium", "high", "xhigh"] },
   { id: "gpt-5.3-codex", provider: "codex", default: true, supportedEfforts: ["low", "medium", "high", "xhigh"] },
-  { id: "gpt-5.4-mini", provider: "openai", supportedEfforts: ["low", "medium", "high"] }
+  { id: "gpt-5.2-codex", provider: "codex", supportedEfforts: ["low", "medium", "high", "xhigh"] },
+  { id: "gpt-5.1-codex", provider: "codex", supportedEfforts: ["low", "medium", "high", "xhigh"] },
+  { id: "gpt-5.1-codex-max", provider: "codex", supportedEfforts: ["low", "medium", "high", "xhigh"] },
+  { id: "gpt-5.1-codex-mini", provider: "codex", supportedEfforts: ["low", "medium", "high", "xhigh"] },
+  { id: "gpt-5-codex", provider: "codex", supportedEfforts: ["low", "medium", "high", "xhigh"] }
 ];
 
 export interface DashboardConfig {
@@ -114,6 +121,7 @@ export function resolveModelProfiles(config: DashboardConfig): ModelProfile[] {
         .map((profile) => ({ ...profile, id: profile.id.trim(), label: profile.label?.trim() || undefined }))
     : [];
   if (profiles.length) return profiles;
+  if (!config.models?.length) return DEFAULT_MODEL_PROFILES;
   return resolveModels(config).map((model, index) => ({
     id: model,
     provider: "claude",
