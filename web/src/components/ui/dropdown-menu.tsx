@@ -5,8 +5,31 @@ import { cn } from "../../lib/utils";
 export const DropdownMenu = DropdownMenuPrimitive.Root;
 export const DropdownMenuTrigger = DropdownMenuPrimitive.Trigger;
 export const DropdownMenuSub = DropdownMenuPrimitive.Sub;
-export const DropdownMenuSubTrigger = DropdownMenuPrimitive.SubTrigger;
-export const DropdownMenuSubContent = DropdownMenuPrimitive.SubContent;
+
+export const DropdownMenuSubTrigger = React.forwardRef<
+  React.ElementRef<typeof DropdownMenuPrimitive.SubTrigger>,
+  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.SubTrigger>
+>(({ className, ...props }, ref) => (
+  <DropdownMenuPrimitive.SubTrigger
+    ref={ref}
+    className={cn("flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none focus:bg-accent", className)}
+    {...props}
+  />
+));
+DropdownMenuSubTrigger.displayName = DropdownMenuPrimitive.SubTrigger.displayName;
+
+export const DropdownMenuSubContent = React.forwardRef<
+  React.ElementRef<typeof DropdownMenuPrimitive.SubContent>,
+  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.SubContent>
+>(({ className, sideOffset = 6, ...props }, ref) => (
+  <DropdownMenuPrimitive.SubContent
+    ref={ref}
+    sideOffset={sideOffset}
+    className={cn("z-50 min-w-40 rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-lg", className)}
+    {...props}
+  />
+));
+DropdownMenuSubContent.displayName = DropdownMenuPrimitive.SubContent.displayName;
 
 export const DropdownMenuContent = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.Content>,

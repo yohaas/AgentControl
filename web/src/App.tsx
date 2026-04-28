@@ -97,6 +97,9 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger
 } from "./components/ui/dropdown-menu";
 import { Input } from "./components/ui/input";
@@ -1101,6 +1104,30 @@ function exportAgentMarkdown(agent: RunningAgent, transcripts: TranscriptEvent[]
         })
       ];
   downloadText(`${agent.displayName}.md`, lines.join("\n\n"), "text/markdown");
+}
+
+function ExportChatMenu({
+  agent,
+  transcripts,
+  addError
+}: {
+  agent: RunningAgent;
+  transcripts: TranscriptEvent[];
+  addError: (message: string) => void;
+}) {
+  return (
+    <DropdownMenuSub>
+      <DropdownMenuSubTrigger className="justify-between gap-3">
+        <span>Export Chat</span>
+        <ChevronRight className="h-4 w-4" />
+      </DropdownMenuSubTrigger>
+      <DropdownMenuSubContent>
+        <DropdownMenuItem onClick={() => exportAgentJson(agent, transcripts)}>JSON</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => exportAgentMarkdown(agent, transcripts)}>Markdown</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => void exportAgentRawStream(agent, addError)}>Raw Stream</DropdownMenuItem>
+      </DropdownMenuSubContent>
+    </DropdownMenuSub>
+  );
 }
 
 function handleNativeSlashCommand(agent: RunningAgent, text: string) {
@@ -4879,9 +4906,7 @@ function AgentTile({
               <DropdownMenuItem onClick={() => sendCommand({ type: "resume", id: agent.id })}>Resume</DropdownMenuItem>
             )}
             {isBusy && <DropdownMenuItem onClick={() => sendCommand({ type: "interrupt", id: agent.id })}>Stop response</DropdownMenuItem>}
-            <DropdownMenuItem onClick={() => exportAgentMarkdown(agent, transcript)}>Export Markdown</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => exportAgentJson(agent, transcript)}>Export JSON</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => void exportAgentRawStream(agent, addError)}>Export Raw Stream</DropdownMenuItem>
+            <ExportChatMenu agent={agent} transcripts={transcript} addError={addError} />
             <DropdownMenuItem onClick={() => sendCommand({ type: "clear", id: agent.id })}>Clear Chat</DropdownMenuItem>
             <DropdownMenuItem onClick={() => sendCommand({ type: "kill", id: agent.id })}>Close Chat</DropdownMenuItem>
           </DropdownMenuContent>
@@ -5270,9 +5295,7 @@ function AgentPanelHeader({ agent }: { agent: RunningAgent }) {
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          <DropdownMenuItem onClick={() => exportAgentMarkdown(agent, transcripts)}>Export Markdown</DropdownMenuItem>
-          <DropdownMenuItem onClick={() => exportAgentJson(agent, transcripts)}>Export JSON</DropdownMenuItem>
-          <DropdownMenuItem onClick={() => void exportAgentRawStream(agent, addError)}>Export Raw Stream</DropdownMenuItem>
+          <ExportChatMenu agent={agent} transcripts={transcripts} addError={addError} />
           <DropdownMenuItem onClick={() => sendCommand({ type: "clear", id: agent.id })}>Clear Chat</DropdownMenuItem>
           <DropdownMenuItem onClick={() => sendCommand({ type: "kill", id: agent.id })}>Close Chat</DropdownMenuItem>
         </DropdownMenuContent>
