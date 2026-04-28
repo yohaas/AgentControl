@@ -2487,7 +2487,7 @@ function AgentTile({
             <div className="relative">
               <Textarea
                 ref={inputRef}
-                className="min-h-11 resize-none border-0 bg-transparent pb-1.5 pt-2 text-sm focus-visible:ring-0"
+                className="h-9 min-h-9 resize-none overflow-y-auto border-0 bg-transparent py-2 text-sm leading-5 focus-visible:ring-0"
                 value={draft}
                 disabled={!canType}
                 onChange={(event) => {
@@ -2978,7 +2978,7 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
           <div className="relative">
             <Textarea
               ref={inputRef}
-              className="min-h-12 resize-none border-0 bg-transparent pb-1.5 pt-2 focus-visible:ring-0"
+              className="h-9 min-h-9 resize-none overflow-y-auto border-0 bg-transparent py-2 leading-5 focus-visible:ring-0"
               value={draft}
               disabled={!canType}
               onChange={(event) => {
