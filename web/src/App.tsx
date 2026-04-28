@@ -1392,12 +1392,41 @@ function providerModelsText(settings: { models: string[]; modelProfiles?: ModelP
     .join("\n");
 }
 
+function modelIdsForProvider(settings: { models: string[]; modelProfiles?: ModelProfile[] }, provider: AgentProvider) {
+  const models = modelProfilesForSettings(settings)
+    .filter((profile) => profile.provider === provider)
+    .map((profile) => profile.id);
+  return models.length ? models : settings.models;
+}
+
 function parseProviderModels(text: string, provider: AgentProvider): ModelProfile[] {
   return text
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean)
     .map((id, index) => ({ id, provider, default: index === 0 }));
+}
+
+function ProviderModelsField({
+  label,
+  value,
+  onChange,
+  placeholder
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+}) {
+  return (
+    <label className="grid gap-1.5 text-sm">
+      <span>
+        <span className="block">{label}</span>
+        <span className="block text-xs text-muted-foreground">One model id per line. The first model is the provider default.</span>
+      </span>
+      <Textarea value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} />
+    </label>
+  );
 }
 
 function orderedAgentsForTiles(agents: RunningAgent[], tileOrder: string[]) {
@@ -4248,10 +4277,12 @@ function SettingsDialog() {
                 Claude path
                 <Input value={claudePath} onChange={(event) => setClaudePath(event.target.value)} placeholder="claude" />
               </label>
-              <label className="grid gap-1.5 text-sm">
-                Claude models
-                <Textarea value={claudeModelsText} onChange={(event) => setClaudeModelsText(event.target.value)} placeholder="One Claude model id per line" />
-              </label>
+              <ProviderModelsField
+                label="Claude provider models"
+                value={claudeModelsText}
+                onChange={setClaudeModelsText}
+                placeholder="One Claude model id per line"
+              />
               <label className="grid gap-1.5 text-sm">
                 Claude agents directory
                 <div className="flex gap-2">
@@ -4315,10 +4346,12 @@ function SettingsDialog() {
                 Codex path
                 <Input value={codexPath} onChange={(event) => setCodexPath(event.target.value)} placeholder="codex" />
               </label>
-              <label className="grid gap-1.5 text-sm">
-                Codex models
-                <Textarea value={codexModelsText} onChange={(event) => setCodexModelsText(event.target.value)} placeholder="One Codex model id per line" />
-              </label>
+              <ProviderModelsField
+                label="Codex provider models"
+                value={codexModelsText}
+                onChange={setCodexModelsText}
+                placeholder="One Codex model id per line"
+              />
               <label className="grid gap-1.5 text-sm">
                 Codex agents directory
                 <div className="flex gap-2">
@@ -4333,10 +4366,12 @@ function SettingsDialog() {
           )}
           {settingsTab === "openai" && (
             <>
-              <label className="grid gap-1.5 text-sm">
-                OpenAI models
-                <Textarea value={openaiModelsText} onChange={(event) => setOpenaiModelsText(event.target.value)} placeholder="One OpenAI model id per line" />
-              </label>
+              <ProviderModelsField
+                label="OpenAI provider models"
+                value={openaiModelsText}
+                onChange={setOpenaiModelsText}
+                placeholder="One OpenAI model id per line"
+              />
               <label className="grid gap-1.5 text-sm">
                 OpenAI agents directory
                 <div className="flex gap-2">
@@ -4514,8 +4549,8 @@ function AgentTile({
   const pinnedMessage = latestUserMessage(transcript);
   const pinLastSentMessage = settings.pinLastSentMessage;
   const rawSlashSuggestions = useMemo(
-    () => slashCommandSuggestions(draft, settings.models, agent.slashCommands),
-    [agent.slashCommands, draft, settings.models]
+    () => slashCommandSuggestions(draft, modelIdsForProvider(settings, agent.provider || "claude"), agent.slashCommands),
+    [agent.provider, agent.slashCommands, draft, settings]
   );
   const slashSuggestions = slashMenuSuppressed ? [] : rawSlashSuggestions;
   const selectedLines = selectedLineCount(selection.selectedText);
@@ -5259,8 +5294,8 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
   const pinnedMessage = latestUserMessage(transcript);
   const pinLastSentMessage = settings.pinLastSentMessage;
   const rawSlashSuggestions = useMemo(
-    () => slashCommandSuggestions(draft, settings.models, agent.slashCommands),
-    [agent.slashCommands, draft, settings.models]
+    () => slashCommandSuggestions(draft, modelIdsForProvider(settings, agent.provider || "claude"), agent.slashCommands),
+    [agent.provider, agent.slashCommands, draft, settings]
   );
   const slashSuggestions = slashMenuSuppressed ? [] : rawSlashSuggestions;
   const selectedLines = selectedLineCount(selection.selectedText);
