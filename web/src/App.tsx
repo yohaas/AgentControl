@@ -18,6 +18,7 @@ import {
   ChevronDown,
   ChevronUp,
   Clipboard,
+  Columns2,
   ExternalLink,
   FolderOpen,
   FolderPlus,
@@ -40,7 +41,6 @@ import {
   Search,
   Send,
   Settings,
-  Split,
   SquareTerminal,
   Trash2,
   X
@@ -3496,7 +3496,7 @@ function TerminalPanel({
           New
         </Button>
         <Button variant="outline" size="sm" onClick={splitTerminal} disabled={!projects.length && !selectedProjectId}>
-          <Split className="h-4 w-4" />
+          <Columns2 className="h-4 w-4" />
           Split
         </Button>
         {!popout && (
