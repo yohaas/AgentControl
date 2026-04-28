@@ -60,6 +60,7 @@ interface LaunchModalState {
   open: boolean;
   projectId?: string;
   defName?: string;
+  agentSource?: "project" | "builtIn";
   initialPrompt?: string;
 }
 

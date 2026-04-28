@@ -219,6 +219,7 @@ export type TranscriptEvent =
 export interface LaunchRequest {
   projectId: string;
   defName: string;
+  agentSource?: "project" | "builtIn";
   provider?: AgentProvider;
   displayName?: string;
   model: string;

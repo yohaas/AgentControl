@@ -65,14 +65,6 @@ const PERMISSION_MCP_SERVER_NAME = "agentcontrol_permissions";
 const PERMISSION_MCP_TOOL_NAME = `mcp__${PERMISSION_MCP_SERVER_NAME}__approval_prompt`;
 const PERMISSION_REQUEST_TIMEOUT_MS = 10 * 60 * 1000;
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const GENERIC_AGENT_DEF: AgentDef = {
-  name: "Generic",
-  description: "General-purpose Claude agent",
-  color: "#ffffff",
-  tools: [],
-  systemPrompt: ""
-};
-
 interface PendingPermissionRequest {
   toolUseId: string;
   toolName: string;
@@ -211,10 +203,9 @@ export class AgentRuntimeManager {
   async launch(request: LaunchRequest): Promise<RunningAgent> {
     const project = this.getProjects().find((candidate) => candidate.id === request.projectId);
     if (!project) throw new Error("Project not found.");
-    const def =
-      project.agents.find((candidate) => candidate.name === request.defName) ||
-      (project.builtInAgents || []).find((candidate) => candidate.name === request.defName) ||
-      (request.defName.toLowerCase() === "generic" ? GENERIC_AGENT_DEF : undefined);
+    const projectDef = project.agents.find((candidate) => candidate.name === request.defName);
+    const builtInDef = (project.builtInAgents || []).find((candidate) => candidate.name === request.defName);
+    const def = request.agentSource === "builtIn" ? builtInDef || projectDef : projectDef || builtInDef;
     if (!def) throw new Error("Agent definition not found.");
 
     if (request.remoteControl && !this.getCapabilities().supportsRemoteControl) {

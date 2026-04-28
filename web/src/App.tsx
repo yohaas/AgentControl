@@ -145,6 +145,8 @@ const GENERAL_AGENT_DEF: AgentDef = {
   builtIn: true
 };
 
+type AgentDefSource = "project" | "builtIn";
+
 interface SlashCommandSuggestion {
   value: string;
   label: string;
@@ -1302,6 +1304,33 @@ function groupedAgentDefsWithBuiltIns(project?: { agents: AgentDef[]; builtInAge
     projectAgents,
     builtInAgents
   };
+}
+
+function agentOptionKey(source: AgentDefSource, name: string) {
+  return `${source}:${name}`;
+}
+
+function parseAgentOptionKey(value: string): { source: AgentDefSource; name: string } {
+  const separatorIndex = value.indexOf(":");
+  const source = value.slice(0, separatorIndex) === "builtIn" ? "builtIn" : "project";
+  return { source, name: separatorIndex >= 0 ? value.slice(separatorIndex + 1) : value };
+}
+
+function findAgentOption(
+  groups: { projectAgents: AgentDef[]; builtInAgents: AgentDef[] },
+  source: AgentDefSource,
+  name: string
+) {
+  return (source === "project" ? groups.projectAgents : groups.builtInAgents).find((candidate) => candidate.name === name);
+}
+
+function defaultLaunchAgentOption(groups: { projectAgents: AgentDef[]; builtInAgents: AgentDef[] }) {
+  const projectGeneral = groups.projectAgents.find((agent) => agent.name.toLowerCase() === "general");
+  if (projectGeneral) return { source: "project" as const, def: projectGeneral };
+  const builtInGeneral = groups.builtInAgents.find((agent) => agent.name.toLowerCase() === "general");
+  if (builtInGeneral) return { source: "builtIn" as const, def: builtInGeneral };
+  if (groups.projectAgents[0]) return { source: "project" as const, def: groups.projectAgents[0] };
+  return { source: "builtIn" as const, def: groups.builtInAgents[0] };
 }
 
 function terminalsForProject(sessionsById: Record<string, TerminalSession>, projectId?: string) {
@@ -2884,6 +2913,7 @@ function Sidebar() {
         request: {
           projectId: project.id,
           defName: agent.name,
+          agentSource: agentTab,
           provider: agent.provider,
           model: agent.defaultModel || settings.models[0] || DEFAULT_MODEL,
           permissionMode: settings.defaultAgentMode,
@@ -3103,7 +3133,7 @@ function Sidebar() {
                 <button
                   key={agent.name}
                   className="group relative grid min-h-20 content-start gap-1 rounded-md border border-border bg-background/40 px-2 py-2 text-left hover:bg-accent"
-                  onClick={() => openLaunchModal({ projectId: project.id, defName: agent.name })}
+                  onClick={() => openLaunchModal({ projectId: project.id, defName: agent.name, agentSource: agentTab })}
                 >
                   {agentTab === "builtIn" && (
                     <span className="absolute right-1 top-1 hidden gap-1 group-hover:flex">
@@ -3587,6 +3617,7 @@ function LaunchDialog() {
   const addError = useAppStore((state) => state.addError);
   const closeLaunchModal = useAppStore((state) => state.closeLaunchModal);
   const [defName, setDefName] = useState("");
+  const [agentSource, setAgentSource] = useState<AgentDefSource>("builtIn");
   const [displayName, setDisplayName] = useState("");
   const [provider, setProvider] = useState<AgentProvider>("claude");
   const [model, setModel] = useState(DEFAULT_MODEL);
@@ -3609,7 +3640,12 @@ function LaunchDialog() {
     () => [...agentOptionGroups.projectAgents, ...agentOptionGroups.builtInAgents],
     [agentOptionGroups.builtInAgents, agentOptionGroups.projectAgents]
   );
-  const def = agentOptions.find((candidate) => candidate.name === defName);
+  const def = findAgentOption(agentOptionGroups, agentSource, defName) || agentOptions.find((candidate) => candidate.name === defName);
+  const duplicateAgentNames = useMemo(() => {
+    const projectNames = new Set(agentOptionGroups.projectAgents.map((agent) => agent.name.toLowerCase()));
+    return new Set(agentOptionGroups.builtInAgents.map((agent) => agent.name.toLowerCase()).filter((name) => projectNames.has(name)));
+  }, [agentOptionGroups.builtInAgents, agentOptionGroups.projectAgents]);
+  const selectedAgentOptionKey = defName ? agentOptionKey(agentSource, defName) : "";
   const modelProfiles = useMemo(() => modelProfilesForSettings(settings), [settings]);
   function modelBelongsToProvider(modelId: string | undefined, targetProvider: AgentProvider) {
     if (!modelId) return false;
@@ -3655,11 +3691,26 @@ function LaunchDialog() {
   useEffect(() => {
     if (!modal.open) return;
     const nextProject = projects.find((candidate) => candidate.id === projectId);
-    const nextAgentOptions = agentDefsWithBuiltIns(nextProject);
-    const nextDefName = modal.defName || nextAgentOptions[0]?.name || "";
-    const nextDef = nextAgentOptions.find((candidate) => candidate.name === nextDefName);
+    const nextGroups = groupedAgentDefsWithBuiltIns(nextProject);
+    let nextSource = modal.agentSource;
+    let nextDef = nextSource && modal.defName ? findAgentOption(nextGroups, nextSource, modal.defName) : undefined;
+    if (!nextDef && modal.defName) {
+      nextDef = findAgentOption(nextGroups, "project", modal.defName);
+      nextSource = nextDef ? "project" : nextSource;
+    }
+    if (!nextDef && modal.defName) {
+      nextDef = findAgentOption(nextGroups, "builtIn", modal.defName);
+      nextSource = nextDef ? "builtIn" : nextSource;
+    }
+    if (!nextDef) {
+      const fallback = defaultLaunchAgentOption(nextGroups);
+      nextDef = fallback.def;
+      nextSource = fallback.source;
+    }
+    const nextDefName = nextDef?.name || "";
     const nextProvider = nextDef?.provider || "claude";
     setDefName(nextDefName);
+    setAgentSource(nextSource || "builtIn");
     setDisplayName("");
     setProvider(nextProvider);
     setModel(defaultModelForProvider(nextProvider, nextDef));
@@ -3680,10 +3731,12 @@ function LaunchDialog() {
     setPluginIds(def.plugins || []);
   }, [def, modelProfiles, settings.models]);
 
-  function selectDef(nextDefName: string) {
-    const nextDef = agentOptions.find((candidate) => candidate.name === nextDefName);
+  function selectDef(nextValue: string) {
+    const { source: nextSource, name: nextDefName } = parseAgentOptionKey(nextValue);
+    const nextDef = findAgentOption(agentOptionGroups, nextSource, nextDefName);
     const nextProvider = nextDef?.provider || provider;
     setDefName(nextDefName);
+    setAgentSource(nextSource);
     setProvider(nextProvider);
     setModel(defaultModelForProvider(nextProvider, nextDef));
     setPluginIds(nextDef?.plugins || []);
@@ -3753,6 +3806,7 @@ function LaunchDialog() {
       request: {
         projectId,
         defName,
+        agentSource,
         displayName,
         provider,
         model,
@@ -3772,7 +3826,11 @@ function LaunchDialog() {
       return false;
     }
     try {
-      setProjects(await api.saveAgentPlugins(projectId, defName, pluginIds));
+      setProjects(
+        agentSource === "builtIn"
+          ? await api.saveBuiltInAgent(projectId, { ...def, plugins: pluginIds, originalName: def.name })
+          : await api.saveAgentPlugins(projectId, defName, pluginIds)
+      );
       return true;
     } catch (error) {
       addError(error instanceof Error ? error.message : String(error));
@@ -3857,7 +3915,7 @@ function LaunchDialog() {
                 View agent file
               </button>
             </span>
-            <Select value={defName} onValueChange={selectDef}>
+            <Select value={selectedAgentOptionKey} onValueChange={selectDef}>
               <SelectTrigger>
                 <SelectValue placeholder="Agent type" />
               </SelectTrigger>
@@ -3866,10 +3924,11 @@ function LaunchDialog() {
                   <SelectGroup>
                     <SelectLabel>Project Agents</SelectLabel>
                     {agentOptionGroups.projectAgents.map((agent) => (
-                      <SelectItem key={`project:${agent.name}`} value={agent.name}>
+                      <SelectItem key={`project:${agent.name}`} value={agentOptionKey("project", agent.name)}>
                         <span className="inline-flex items-center gap-2">
                           <AgentDot color={agent.color} />
-                          {agent.name}
+                          <span>{agent.name}</span>
+                          {duplicateAgentNames.has(agent.name.toLowerCase()) && <Badge className="px-1 py-0 text-[10px]">Project</Badge>}
                         </span>
                       </SelectItem>
                     ))}
@@ -3878,10 +3937,11 @@ function LaunchDialog() {
                 <SelectGroup>
                   <SelectLabel>Built-In Agents</SelectLabel>
                   {agentOptionGroups.builtInAgents.map((agent) => (
-                    <SelectItem key={`built-in:${agent.name}`} value={agent.name}>
+                    <SelectItem key={`built-in:${agent.name}`} value={agentOptionKey("builtIn", agent.name)}>
                       <span className="inline-flex items-center gap-2">
                         <AgentDot color={agent.color} />
-                        {agent.name}
+                        <span>{agent.name}</span>
+                        {duplicateAgentNames.has(agent.name.toLowerCase()) && <Badge className="px-1 py-0 text-[10px]">Built-In</Badge>}
                       </span>
                     </SelectItem>
                   ))}

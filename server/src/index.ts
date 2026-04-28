@@ -732,7 +732,9 @@ async function projectGitStatus(project: Project): Promise<GitStatus> {
 
 async function ensureLaunchPluginsEnabled(request: LaunchRequest): Promise<void> {
   const project = projectById(request.projectId);
-  const def = [...(project?.agents || []), ...(project?.builtInAgents || [])].find((agent) => agent.name === request.defName);
+  const projectDef = project?.agents.find((agent) => agent.name === request.defName);
+  const builtInDef = project?.builtInAgents?.find((agent) => agent.name === request.defName);
+  const def = request.agentSource === "builtIn" ? builtInDef || projectDef : projectDef || builtInDef;
   const plugins = def?.plugins || [];
   if (plugins.length === 0) return;
 
