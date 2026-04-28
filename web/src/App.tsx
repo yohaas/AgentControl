@@ -56,6 +56,7 @@ import {
   RefreshCw,
   Search,
   Settings,
+  Sparkles,
   Square,
   SquareSlash,
   SquareTerminal,
@@ -343,6 +344,27 @@ function AgentActivityIndicator({ agent, compact = false }: { agent: RunningAgen
 
 function AgentDot({ color, className }: { color: string; className?: string }) {
   return <span className={cn("h-3 w-3 shrink-0 rounded-full", className)} style={{ background: color }} />;
+}
+
+function ProviderIcon({ provider, className }: { provider?: AgentProvider; className?: string }) {
+  const resolvedProvider = provider || "claude";
+  const Icon = resolvedProvider === "openai" ? Brain : resolvedProvider === "codex" ? Code2 : Sparkles;
+  const label = providerLabel(resolvedProvider);
+  return (
+    <span
+      className={cn(
+        "inline-grid h-4 w-4 shrink-0 place-items-center rounded-sm border",
+        resolvedProvider === "openai" && "border-emerald-400/40 bg-emerald-500/10 text-emerald-500",
+        resolvedProvider === "codex" && "border-sky-400/40 bg-sky-500/10 text-sky-500",
+        resolvedProvider === "claude" && "border-orange-400/40 bg-orange-500/10 text-orange-500",
+        className
+      )}
+      title={label}
+      aria-label={label}
+    >
+      <Icon className="h-3 w-3" />
+    </span>
+  );
 }
 
 function LastActivityText({
@@ -3265,10 +3287,11 @@ function ModelText({ agent }: { agent: RunningAgent }) {
   const flash = useAppStore((state) => state.flashModels[agent.id]);
   return (
     <span
-      className={cn("block truncate rounded-sm text-xs text-muted-foreground", flash && "animate-model-flash text-primary")}
+      className={cn("flex min-w-0 items-center gap-1 rounded-sm text-xs text-muted-foreground", flash && "animate-model-flash text-primary")}
       title={agent.remoteControl ? "Last known model. May have changed in claude.ai/code." : agent.currentModel}
     >
-      {agent.currentModel}
+      <ProviderIcon provider={agent.provider} />
+      <span className="truncate">{agent.currentModel}</span>
     </span>
   );
 }
@@ -3284,12 +3307,15 @@ function ModelMenu({ agent, compact = false }: { agent: RunningAgent; compact?: 
         <button
           disabled={!canSwitch}
           className={cn(
-            "truncate rounded-sm text-left text-xs text-muted-foreground hover:text-foreground disabled:hover:text-muted-foreground",
+            "flex min-w-0 items-center gap-1 rounded-sm text-left text-xs text-muted-foreground hover:text-foreground disabled:hover:text-muted-foreground",
             compact ? "max-w-40" : "max-w-full"
           )}
           title={agent.remoteControl ? "Last known model. May have changed in claude.ai/code." : canSwitch ? "Switch model" : "Agent process is not running."}
         >
-          {agent.status === "switching-model" ? agent.statusMessage || "Switching model..." : agent.currentModel}
+          <ProviderIcon provider={agent.provider} />
+          <span className="truncate">
+            {agent.status === "switching-model" ? agent.statusMessage || "Switching model..." : agent.currentModel}
+          </span>
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-64">
