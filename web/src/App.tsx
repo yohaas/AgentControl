@@ -8,6 +8,7 @@ import {
   type ClipboardEvent as ReactClipboardEvent,
   type DragEvent as ReactDragEvent,
   type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
   type UIEvent as ReactUIEvent
 } from "react";
@@ -149,6 +150,7 @@ type ToolResultEvent = Extract<TranscriptEvent, { kind: "tool_result" }>;
 type ToolTranscriptItem =
   | { kind: "single"; event: TranscriptEvent }
   | { kind: "tool_pair"; event: ToolUseEvent; result?: ToolResultEvent };
+type ContextCopyTarget = { scope: "block" | "chat"; text: string };
 
 const BASE_SLASH_COMMANDS: SlashCommandSuggestion[] = [
   { value: "/clear", label: "/clear", description: "Clear this chat history", source: "agentcontrol" },
@@ -458,6 +460,33 @@ function transcriptToPlainText(agent: RunningAgent, transcripts: TranscriptEvent
     })
     .join("\n\n")
     .trim();
+}
+
+function transcriptEventToPlainText(agent: RunningAgent, event: TranscriptEvent, transcripts: TranscriptEvent[]) {
+  if (event.kind === "assistant_text") return `Assistant (${event.model || agent.currentModel}):\n${event.text}`;
+  if (event.kind === "user") return `User:\n${event.text}`;
+  if (event.kind === "tool_use") {
+    const result = transcripts.find((candidate): candidate is ToolResultEvent => candidate.kind === "tool_result" && candidate.toolUseId === event.toolUseId);
+    return result ? toolPairDetail(event, result) : `Tool Use: ${event.name}\n${prettyJson(event.input)}`;
+  }
+  if (event.kind === "tool_result") return `Tool Result:\n${prettyJson(event.output)}`;
+  if (event.kind === "model_switch") return `System: switched to ${event.to}`;
+  return `System:\n${event.text}`;
+}
+
+function contextCopyTargetFromEvent(
+  event: ReactMouseEvent<HTMLElement>,
+  root: HTMLElement | null,
+  agent: RunningAgent,
+  transcripts: TranscriptEvent[]
+): ContextCopyTarget | undefined {
+  if (!root || !(event.target instanceof Element)) return undefined;
+  const block = event.target.closest<HTMLElement>("[data-copy-block='true']");
+  if (!block || !root.contains(block)) return undefined;
+  const eventId = block.dataset.copyEventId;
+  const transcriptEvent = eventId ? transcripts.find((item) => item.id === eventId) : undefined;
+  const text = transcriptEvent ? transcriptEventToPlainText(agent, transcriptEvent, transcripts) : block.innerText.trim();
+  return text ? { scope: "block", text } : undefined;
 }
 
 function pairedTranscriptItems(transcript: TranscriptEvent[]): ToolTranscriptItem[] {
@@ -3977,6 +4006,7 @@ function AgentTile({
   const suppressAutoFocusRef = useRef(false);
   const [showPinnedMessage, setShowPinnedMessage] = useState(false);
   const [contextOpen, setContextOpen] = useState(false);
+  const [contextCopyTarget, setContextCopyTarget] = useState<ContextCopyTarget | undefined>();
   const [composerDropActive, setComposerDropActive] = useState(false);
   const [slashMenuSuppressed, setSlashMenuSuppressed] = useState(false);
   const [slashInsertedByButton, setSlashInsertedByButton] = useState(false);
@@ -4033,6 +4063,21 @@ function AgentTile({
     suppressAutoFocusRef.current = !focusInput;
     setSelectedAgent(undefined);
     setFocusedAgent(agent.id);
+  }
+
+  function prepareContextMenu(event: ReactMouseEvent<HTMLDivElement>) {
+    if (getSelectionInRoot(`#${transcriptRootId}`)) {
+      selection.captureSelection();
+      setContextCopyTarget(undefined);
+      return;
+    }
+    selection.clearSelection();
+    setContextCopyTarget(
+      contextCopyTargetFromEvent(event, rootRef.current, agent, transcript) || {
+        scope: "chat",
+        text: transcriptToPlainText(agent, transcript)
+      }
+    );
   }
 
   function send() {
@@ -4244,7 +4289,7 @@ function AgentTile({
       onDragOver={(event) => event.preventDefault()}
       onPointerDown={(event) => {
         activateTile(false);
-        selection.clearSelection();
+        if (event.button === 0) selection.clearSelection();
       }}
       onDrop={(event) => {
         event.preventDefault();
@@ -4308,7 +4353,7 @@ function AgentTile({
             onScroll={handleTranscriptScroll}
             onMouseUp={() => selection.captureSelection()}
             onKeyUp={() => selection.captureSelection()}
-            onContextMenuCapture={() => selection.captureSelection()}
+            onContextMenuCapture={prepareContextMenu}
           >
             {pinLastSentMessage && pinnedMessage && showPinnedMessage && <PinnedUserMessage event={pinnedMessage} compact />}
             {agent.statusMessage && (
@@ -4362,6 +4407,7 @@ function AgentTile({
           selectedText={selection.selectedText}
           transcripts={transcript}
           rootSelector={`#${transcriptRootId}`}
+          contextTarget={contextCopyTarget}
           captureSelectedText={selection.captureSelection}
           getCachedSelectedText={selection.getCachedSelection}
         />
@@ -4503,13 +4549,21 @@ function TranscriptPreview({
   }
   const event = item.event;
   if (event.kind === "model_switch") {
-    return <p className="text-center text-xs text-muted-foreground">switched to {event.to}</p>;
+    return (
+      <p className="text-center text-xs text-muted-foreground" data-copy-block="true" data-copy-event-id={event.id}>
+        switched to {event.to}
+      </p>
+    );
   }
   if (event.kind === "tool_use" || event.kind === "tool_result") {
     return <ToolCard event={event} agent={agent} compact />;
   }
   if (event.kind === "system") {
-    return <p className="text-center text-xs text-muted-foreground">{event.text}</p>;
+    return (
+      <p className="text-center text-xs text-muted-foreground" data-copy-block="true" data-copy-event-id={event.id}>
+        {event.text}
+      </p>
+    );
   }
 
   const isUser = event.kind === "user";
@@ -4523,6 +4577,8 @@ function TranscriptPreview({
           "max-w-[86%] whitespace-pre-wrap break-words rounded-md border border-border px-3 py-2 text-sm leading-5",
           isUser ? "user-question bg-primary text-primary-foreground" : "bg-background/60"
         )}
+        data-copy-block="true"
+        data-copy-event-id={event.id}
         style={!isUser ? { borderLeftColor: agent.color, borderLeftWidth: 4 } : undefined}
       >
         <CollapsibleText text={event.text} compact />
@@ -4560,6 +4616,8 @@ function PinnedUserMessage({
           "user-question",
           compact ? "text-xs leading-4" : "text-sm leading-5"
         )}
+        data-copy-block="true"
+        data-copy-event-id={event.id}
       >
         <div className="line-clamp-2 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{event.text || "Attachment"}</div>
         {event.attachments && event.attachments.length > 0 && (
@@ -4698,6 +4756,7 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
   const [attachments, setAttachments] = useState<MessageAttachment[]>([]);
   const [showPinnedMessage, setShowPinnedMessage] = useState(false);
   const [contextOpen, setContextOpen] = useState(false);
+  const [contextCopyTarget, setContextCopyTarget] = useState<ContextCopyTarget | undefined>();
   const [composerDropActive, setComposerDropActive] = useState(false);
   const [activeSlashIndex, setActiveSlashIndex] = useState(0);
   const [slashMenuSuppressed, setSlashMenuSuppressed] = useState(false);
@@ -4843,6 +4902,21 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
     setShowPinnedMessage((current) => (current === nextVisible ? current : nextVisible));
   }
 
+  function prepareContextMenu(event: ReactMouseEvent<HTMLDivElement>) {
+    if (getSelectionInRoot(`#${transcriptRootId}`)) {
+      selection.captureSelection();
+      setContextCopyTarget(undefined);
+      return;
+    }
+    selection.clearSelection();
+    setContextCopyTarget(
+      contextCopyTargetFromEvent(event, rootRef.current, agent, transcript) || {
+        scope: "chat",
+        text: transcriptToPlainText(agent, transcript)
+      }
+    );
+  }
+
   async function handlePaste(event: ReactClipboardEvent<HTMLTextAreaElement>) {
     const files = pastedImageFiles(event);
     if (files.length === 0) return;
@@ -4923,11 +4997,11 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
             className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-4"
             onScroll={handleTranscriptScroll}
             onPointerDown={(event) => {
-              selection.clearSelection();
+              if (event.button === 0) selection.clearSelection();
             }}
             onMouseUp={() => selection.captureSelection()}
             onKeyUp={() => selection.captureSelection()}
-            onContextMenuCapture={() => selection.captureSelection()}
+            onContextMenuCapture={prepareContextMenu}
           >
             <div className="mx-auto grid w-full min-w-0 max-w-4xl gap-3">
               {pinLastSentMessage && pinnedMessage && showPinnedMessage && <PinnedUserMessage event={pinnedMessage} />}
@@ -4961,6 +5035,7 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
           selectedText={selection.selectedText}
           transcripts={transcript}
           rootSelector={`#${transcriptRootId}`}
+          contextTarget={contextCopyTarget}
           captureSelectedText={selection.captureSelection}
           getCachedSelectedText={selection.getCachedSelection}
         />
@@ -5078,6 +5153,7 @@ function SendToMenu({
   selectedText,
   transcripts,
   rootSelector,
+  contextTarget,
   captureSelectedText,
   getCachedSelectedText
 }: {
@@ -5085,6 +5161,7 @@ function SendToMenu({
   selectedText: string;
   transcripts: TranscriptEvent[];
   rootSelector: string;
+  contextTarget?: ContextCopyTarget;
   captureSelectedText: () => string;
   getCachedSelectedText: () => string;
 }) {
@@ -5100,10 +5177,19 @@ function SendToMenu({
   );
   const targetAgents = useMemo(() => agents.filter((agent) => agent.id !== source.id), [agents, source.id]);
   const fallbackText = useMemo(() => transcriptToPlainText(source, transcripts), [source, transcripts]);
-  const activeText = selectedText || getCachedSelectedText() || getSelectionInRoot(rootSelector) || fallbackText;
+  const activeTarget = selectedText || getCachedSelectedText()
+    ? { scope: "selection" as const, text: selectedText || getCachedSelectedText() }
+    : contextTarget?.text
+      ? contextTarget
+      : { scope: "chat" as const, text: fallbackText };
+  const activeText = activeTarget.text;
+  const targetLabel = activeTarget.scope === "selection" ? "selection" : activeTarget.scope === "block" ? "text block" : "chat";
 
-  function currentSelectedText() {
-    return captureSelectedText() || selectedText || getCachedSelectedText() || getSelectionInRoot(rootSelector) || fallbackText;
+  function currentCopyTarget() {
+    const selected = captureSelectedText() || selectedText || getCachedSelectedText() || getSelectionInRoot(rootSelector);
+    if (selected) return { scope: "selection" as const, text: selected };
+    if (contextTarget?.text) return contextTarget;
+    return { scope: "chat" as const, text: fallbackText };
   }
 
   return (
@@ -5111,19 +5197,19 @@ function SendToMenu({
       <ContextMenuItem
         disabled={!activeText}
         onClick={() => {
-          const text = currentSelectedText();
-          if (!text) return;
-          void navigator.clipboard.writeText(text).catch((error: unknown) => {
+          const target = currentCopyTarget();
+          if (!target.text) return;
+          void navigator.clipboard.writeText(target.text).catch((error: unknown) => {
             addError(error instanceof Error ? error.message : String(error));
           });
         }}
       >
         <Clipboard className="mr-2 h-4 w-4" />
-        Copy
+        Copy {targetLabel}
       </ContextMenuItem>
       <ContextMenuSub>
         <ContextMenuSubTrigger className="flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none focus:bg-accent data-[disabled]:opacity-45" disabled={!activeText}>
-          <span className="flex-1">Send to</span>
+          <span className="flex-1">Send {targetLabel} to</span>
           <ChevronRight className="ml-4 h-4 w-4 text-muted-foreground" />
         </ContextMenuSubTrigger>
         <ContextMenuSubContent>
@@ -5136,12 +5222,12 @@ function SendToMenu({
                 <ContextMenuItem
                   key={def.name}
                   onClick={() => {
-                    const text = currentSelectedText();
-                    if (!text) return;
+                    const target = currentCopyTarget();
+                    if (!target.text) return;
                     openLaunchModal({
                       projectId: source.projectId,
                       defName: def.name,
-                      initialPrompt: wrapForwardedText(source, text)
+                      initialPrompt: wrapForwardedText(source, target.text)
                     });
                   }}
                 >
@@ -5164,12 +5250,12 @@ function SendToMenu({
                   key={agent.id}
                   disabled={agent.remoteControl}
                   onClick={() => {
-                    const text = currentSelectedText();
-                    if (!text) return;
+                    const target = currentCopyTarget();
+                    if (!target.text) return;
                     openSendDialog({
                       sourceAgentId: source.id,
                       targetAgentId: agent.id,
-                      selectedText: text,
+                      selectedText: target.text,
                       framing: ""
                     });
                   }}
@@ -5205,7 +5291,7 @@ function TranscriptItem({
   const event = item.event;
   if (event.kind === "model_switch") {
     return (
-      <div className="flex items-center gap-3 py-2 text-xs text-muted-foreground">
+      <div className="flex items-center gap-3 py-2 text-xs text-muted-foreground" data-copy-block="true" data-copy-event-id={event.id}>
         <span className="h-px flex-1 bg-border" />
         switched to {event.to}
         <span className="h-px flex-1 bg-border" />
@@ -5216,7 +5302,11 @@ function TranscriptItem({
     return <ToolCard event={event} agent={agent} />;
   }
   if (event.kind === "system") {
-    return <p className="text-center text-xs text-muted-foreground">{event.text}</p>;
+    return (
+      <p className="text-center text-xs text-muted-foreground" data-copy-block="true" data-copy-event-id={event.id}>
+        {event.text}
+      </p>
+    );
   }
 
   const isUser = event.kind === "user";
@@ -5230,6 +5320,8 @@ function TranscriptItem({
           "min-w-0 max-w-[78%] whitespace-pre-wrap break-words [overflow-wrap:anywhere] rounded-lg border border-border px-3 py-2 text-sm leading-6",
           isUser ? "user-question bg-primary text-primary-foreground" : "bg-card"
         )}
+        data-copy-block="true"
+        data-copy-event-id={event.id}
         style={!isUser ? { borderLeftColor: agent.color, borderLeftWidth: 4 } : undefined}
       >
         {event.sourceAgent && (
@@ -5371,6 +5463,8 @@ function ToolCard({
         awaitingPermission ? "border-amber-300/70 bg-amber-500/10 shadow-[0_0_0_1px_rgba(251,191,36,0.18)]" : resultIsError ? "border-red-400/50" : "border-border",
         compact ? "text-xs" : "text-sm"
       )}
+      data-copy-block="true"
+      data-copy-event-id={event.id}
     >
       <button className={cn("flex w-full min-w-0 items-center justify-between gap-3 text-left", compact ? "px-2 py-2" : "px-3 py-2")} onClick={() => setOpen((value) => !value)}>
         <span className="min-w-0 flex-1">
