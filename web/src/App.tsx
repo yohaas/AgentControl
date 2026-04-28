@@ -127,8 +127,10 @@ const GENERIC_AGENT_DEF: AgentDef = {
   name: "Generic",
   description: "General-purpose Claude agent",
   color: "#ffffff",
+  provider: "claude",
   tools: [],
-  systemPrompt: ""
+  systemPrompt: "",
+  builtIn: true
 };
 
 interface SlashCommandSuggestion {
@@ -1034,8 +1036,8 @@ function agentsForProject(agentsById: Record<string, RunningAgent>, projectId?: 
   return Object.values(agentsById).filter((agent) => !projectId || agent.projectId === projectId);
 }
 
-function agentDefsWithGeneric(project?: { agents: AgentDef[] }) {
-  const agents = project?.agents || [];
+function agentDefsWithGeneric(project?: { agents: AgentDef[]; builtInAgents?: AgentDef[] }) {
+  const agents = [...(project?.agents || []), ...(project?.builtInAgents || [])];
   return agents.some((agent) => agent.name.toLowerCase() === "generic") ? agents : [...agents, GENERIC_AGENT_DEF];
 }
 
@@ -2179,10 +2181,16 @@ function Sidebar() {
   const setCollapsed = useAppStore((state) => state.setSidebarCollapsed);
   const settings = useAppStore((state) => state.settings);
   const setSettings = useAppStore((state) => state.setSettings);
+  const setProjects = useAppStore((state) => state.setProjects);
   const addError = useAppStore((state) => state.addError);
   const [runningSort, setRunningSort] = useState<"lastActivity" | "type">("lastActivity");
+  const [agentTab, setAgentTab] = useState<"project" | "builtIn">("builtIn");
+  const [builtInEditor, setBuiltInEditor] = useState<{ open: boolean; agent?: AgentDef; originalName?: string }>({ open: false });
 
   const project = projects.find((candidate) => candidate.id === selectedProjectId);
+  const projectAgentDefs = project?.agents || [];
+  const builtInAgentDefs = project?.builtInAgents?.length ? project.builtInAgents : [GENERIC_AGENT_DEF];
+  const availableAgentDefs = agentTab === "project" ? projectAgentDefs : builtInAgentDefs;
   const running = useMemo(
     () => {
       const agents = agentsForProject(agentsById, selectedProjectId);
@@ -2203,6 +2211,14 @@ function Sidebar() {
   );
   const activeAgentId = selectedAgentId || focusedAgentId;
   const sidebarWidth = settings.sidebarWidth || 280;
+
+  useEffect(() => {
+    if (!project) {
+      setAgentTab("builtIn");
+      return;
+    }
+    setAgentTab(project.agents.length > 0 ? "project" : "builtIn");
+  }, [project?.id]);
 
   function focusRunningAgent(id: string) {
     setSelectedAgent(undefined);
@@ -2237,13 +2253,14 @@ function Sidebar() {
   }
 
   function launchAllDefinitions() {
-    if (!project || project.agents.length === 0) return;
-    project.agents.forEach((agent) => {
+    if (!project || availableAgentDefs.length === 0) return;
+    availableAgentDefs.forEach((agent) => {
       sendCommand({
         type: "launch",
         request: {
           projectId: project.id,
           defName: agent.name,
+          provider: agent.provider,
           model: agent.defaultModel || settings.models[0] || DEFAULT_MODEL,
           permissionMode: settings.defaultAgentMode,
           autoApprove: settings.autoApprove
@@ -2251,6 +2268,16 @@ function Sidebar() {
       });
     });
     setSelectedAgent(undefined);
+  }
+
+  async function deleteBuiltIn(agent: AgentDef) {
+    if (!project || !agent.sourcePath) return;
+    if (!window.confirm(`Remove built-in agent ${agent.name}?`)) return;
+    try {
+      setProjects(await api.deleteBuiltInAgent(project.id, agent.name));
+    } catch (error) {
+      addError(error instanceof Error ? error.message : String(error));
+    }
   }
 
   if (collapsed) {
@@ -2395,7 +2422,7 @@ function Sidebar() {
           <Button
             variant="ghost"
             size="sm"
-            disabled={!project || project.agents.length === 0}
+            disabled={!project || availableAgentDefs.length === 0}
             onClick={launchAllDefinitions}
             title="Launch all definitions with defaults"
           >
@@ -2403,23 +2430,84 @@ function Sidebar() {
             Launch All
           </Button>
         </div>
+        <div className="mb-2 grid grid-cols-2 gap-1 rounded-md bg-muted p-1">
+          <button
+            className={cn("rounded px-2 py-1 text-xs font-medium", agentTab === "project" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground")}
+            onClick={() => setAgentTab("project")}
+          >
+            Project
+          </button>
+          <button
+            className={cn("rounded px-2 py-1 text-xs font-medium", agentTab === "builtIn" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground")}
+            onClick={() => setAgentTab("builtIn")}
+          >
+            Built-In
+          </button>
+        </div>
+        {agentTab === "builtIn" && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="mb-2 w-full"
+            disabled={!project}
+            onClick={() => setBuiltInEditor({ open: true })}
+          >
+            <Plus className="h-4 w-4" />
+            Add Built-In Agent
+          </Button>
+        )}
         <div className="max-h-[38vh] space-y-1 overflow-y-auto overflow-x-hidden pr-1">
           {!project ? (
             <p className="rounded-md border border-dashed border-border px-3 py-5 text-center text-sm text-muted-foreground">
               Add a project to get started.
             </p>
-          ) : project.agents.length === 0 ? (
+          ) : agentTab === "project" && projectAgentDefs.length === 0 ? (
             <p className="rounded-md border border-dashed border-border px-3 py-5 text-center text-sm text-muted-foreground">
-              No agent definition files found.
+              Add agents to your project to show them here.
+            </p>
+          ) : availableAgentDefs.length === 0 ? (
+            <p className="rounded-md border border-dashed border-border px-3 py-5 text-center text-sm text-muted-foreground">
+              Add a built-in agent to show it here.
             </p>
           ) : (
             <div className="grid grid-cols-2 gap-2">
-              {project.agents.map((agent) => (
+              {availableAgentDefs.map((agent) => (
                 <button
                   key={agent.name}
-                  className="grid min-h-20 content-start gap-1 rounded-md border border-border bg-background/40 px-2 py-2 text-left hover:bg-accent"
+                  className="group relative grid min-h-20 content-start gap-1 rounded-md border border-border bg-background/40 px-2 py-2 text-left hover:bg-accent"
                   onClick={() => openLaunchModal({ projectId: project.id, defName: agent.name })}
                 >
+                  {agentTab === "builtIn" && (
+                    <span className="absolute right-1 top-1 hidden gap-1 group-hover:flex">
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        className="grid h-5 w-5 place-items-center rounded bg-background/90 text-muted-foreground hover:text-foreground"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setBuiltInEditor({ open: true, agent, originalName: agent.name });
+                        }}
+                        title="Edit built-in agent"
+                      >
+                        <Settings className="h-3 w-3" />
+                      </span>
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        className={cn(
+                          "grid h-5 w-5 place-items-center rounded bg-background/90 text-muted-foreground hover:text-foreground",
+                          !agent.sourcePath && "cursor-not-allowed opacity-40"
+                        )}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void deleteBuiltIn(agent);
+                        }}
+                        title={agent.sourcePath ? "Remove built-in agent" : "Default built-in agent cannot be removed"}
+                      >
+                        <X className="h-3 w-3" />
+                      </span>
+                    </span>
+                  )}
                   <span className="flex min-w-0 items-center gap-1.5">
                     <AgentDot color={agent.color} />
                     <span className="truncate text-xs font-medium">{agent.name}</span>
@@ -2438,7 +2526,151 @@ function Sidebar() {
         onPointerDown={startSidebarResize}
         title="Drag to resize sidebar"
       />
+      {project && (
+        <BuiltInAgentDialog
+          project={project}
+          state={builtInEditor}
+          onOpenChange={(open) => setBuiltInEditor((current) => ({ ...current, open }))}
+          onSaved={(nextProjects) => {
+            setProjects(nextProjects);
+            setBuiltInEditor({ open: false });
+            setAgentTab("builtIn");
+          }}
+        />
+      )}
     </aside>
+  );
+}
+
+function BuiltInAgentDialog({
+  project,
+  state,
+  onOpenChange,
+  onSaved
+}: {
+  project: Project;
+  state: { open: boolean; agent?: AgentDef; originalName?: string };
+  onOpenChange: (open: boolean) => void;
+  onSaved: (projects: Project[]) => void;
+}) {
+  const settings = useAppStore((store) => store.settings);
+  const addError = useAppStore((store) => store.addError);
+  const modelProfiles = useMemo(() => modelProfilesForSettings(settings), [settings]);
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [color, setColor] = useState("#ffffff");
+  const [provider, setProvider] = useState<AgentProvider>("claude");
+  const [defaultModel, setDefaultModel] = useState("");
+  const [systemPrompt, setSystemPrompt] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!state.open) return;
+    const agent = state.agent;
+    const nextProvider = agent?.provider || "claude";
+    setName(agent?.name || "");
+    setDescription(agent?.description || "");
+    setColor(agent?.color || "#ffffff");
+    setProvider(nextProvider);
+    setDefaultModel(agent?.defaultModel || modelProfiles.find((profile) => profile.provider === nextProvider && profile.default)?.id || "");
+    setSystemPrompt(agent?.systemPrompt || "");
+  }, [modelProfiles, state.agent, state.open]);
+
+  async function save() {
+    const trimmedName = name.trim();
+    if (!trimmedName) return;
+    setSaving(true);
+    try {
+      const projects = await api.saveBuiltInAgent(project.id, {
+        originalName: state.originalName,
+        name: trimmedName,
+        description: description.trim() || undefined,
+        color: color.trim() || "#ffffff",
+        provider,
+        defaultModel: defaultModel.trim() || undefined,
+        tools: [],
+        plugins: [],
+        systemPrompt
+      });
+      onSaved(projects);
+    } catch (error) {
+      addError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const providerModels = modelProfiles.filter((profile) => profile.provider === provider);
+
+  return (
+    <Dialog open={state.open} onOpenChange={onOpenChange}>
+      <DialogContent className="w-[min(94vw,680px)]">
+        <DialogHeader>
+          <DialogTitle>{state.agent ? "Edit Built-In Agent" : "Add Built-In Agent"}</DialogTitle>
+        </DialogHeader>
+        <div className="grid gap-3">
+          <div className="grid gap-3 sm:grid-cols-[1fr_120px]">
+            <label className="grid gap-1.5 text-sm">
+              Name
+              <Input autoFocus value={name} onChange={(event) => setName(event.target.value)} />
+            </label>
+            <label className="grid gap-1.5 text-sm">
+              Color
+              <Input value={color} onChange={(event) => setColor(event.target.value)} placeholder="#ffffff" />
+            </label>
+          </div>
+          <label className="grid gap-1.5 text-sm">
+            Description
+            <Input value={description} onChange={(event) => setDescription(event.target.value)} />
+          </label>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="grid gap-1.5 text-sm">
+              Provider
+              <Select
+                value={provider}
+                onValueChange={(value) => {
+                  const nextProvider = value as AgentProvider;
+                  setProvider(nextProvider);
+                  setDefaultModel(modelProfiles.find((profile) => profile.provider === nextProvider && profile.default)?.id || "");
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="claude">Claude Code</SelectItem>
+                  <SelectItem value="codex">Codex CLI</SelectItem>
+                  <SelectItem value="openai">OpenAI API</SelectItem>
+                </SelectContent>
+              </Select>
+            </label>
+            <label className="grid gap-1.5 text-sm">
+              Default model
+              <Select value={defaultModel || "__none__"} onValueChange={(value) => setDefaultModel(value === "__none__" ? "" : value)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">Use app default</SelectItem>
+                  {providerModels.map((profile) => (
+                    <SelectItem key={profile.id} value={profile.id}>
+                      {profile.label || profile.id}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </label>
+          </div>
+          <label className="grid gap-1.5 text-sm">
+            Agent prompt
+            <Textarea className="min-h-48" value={systemPrompt} onChange={(event) => setSystemPrompt(event.target.value)} />
+          </label>
+          <Button onClick={() => void save()} disabled={saving || !name.trim()}>
+            {saving ? "Saving..." : "Save Built-In Agent"}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -3249,6 +3481,8 @@ function SettingsDialog() {
   const settings = useAppStore((state) => state.settings);
   const setSettings = useAppStore((state) => state.setSettings);
   const setProjects = useAppStore((state) => state.setProjects);
+  const projects = useAppStore((state) => state.projects);
+  const selectedProjectId = useAppStore((state) => state.selectedProjectId);
   const addError = useAppStore((state) => state.addError);
   const currentTileHeight = useAppStore((state) => state.currentTileHeight);
   const [open, setOpen] = useState(false);
@@ -3259,6 +3493,11 @@ function SettingsDialog() {
   const [gitPath, setGitPath] = useState(settings.gitPath || "");
   const [claudePath, setClaudePath] = useState(settings.claudePath || "");
   const [codexPath, setCodexPath] = useState(settings.codexPath || "");
+  const [claudeAgentDir, setClaudeAgentDir] = useState(settings.claudeAgentDir || ".claude/agents");
+  const [codexAgentDir, setCodexAgentDir] = useState(settings.codexAgentDir || ".codex/agents");
+  const [openaiAgentDir, setOpenaiAgentDir] = useState(settings.openaiAgentDir || ".agent-control/openai-agents");
+  const [builtInAgentDir, setBuiltInAgentDir] = useState(settings.builtInAgentDir || ".agent-control/built-in-agents");
+  const [agentDirBrowser, setAgentDirBrowser] = useState<undefined | "claude" | "codex" | "openai" | "builtIn">();
   const [anthropicApiKey, setAnthropicApiKey] = useState("");
   const [openaiApiKey, setOpenaiApiKey] = useState("");
   const [clearAnthropicApiKey, setClearAnthropicApiKey] = useState(false);
@@ -3277,6 +3516,10 @@ function SettingsDialog() {
     setGitPath(settings.gitPath || "");
     setClaudePath(settings.claudePath || "");
     setCodexPath(settings.codexPath || "");
+    setClaudeAgentDir(settings.claudeAgentDir || ".claude/agents");
+    setCodexAgentDir(settings.codexAgentDir || ".codex/agents");
+    setOpenaiAgentDir(settings.openaiAgentDir || ".agent-control/openai-agents");
+    setBuiltInAgentDir(settings.builtInAgentDir || ".agent-control/built-in-agents");
     setAnthropicApiKey("");
     setOpenaiApiKey("");
     setClearAnthropicApiKey(false);
@@ -3298,6 +3541,10 @@ function SettingsDialog() {
         gitPath,
         claudePath,
         codexPath,
+        claudeAgentDir,
+        codexAgentDir,
+        openaiAgentDir,
+        builtInAgentDir,
         anthropicApiKey: anthropicApiKey.trim() || undefined,
         openaiApiKey: openaiApiKey.trim() || undefined,
         clearAnthropicApiKey,
@@ -3328,6 +3575,10 @@ function SettingsDialog() {
         gitPath,
         claudePath,
         codexPath,
+        claudeAgentDir,
+        codexAgentDir,
+        openaiAgentDir,
+        builtInAgentDir,
         autoApprove,
         defaultAgentMode,
         tileHeight,
@@ -3352,6 +3603,10 @@ function SettingsDialog() {
       setGitPath(next.gitPath || "");
       setClaudePath(next.claudePath || "");
       setCodexPath(next.codexPath || "");
+      setClaudeAgentDir(next.claudeAgentDir || ".claude/agents");
+      setCodexAgentDir(next.codexAgentDir || ".codex/agents");
+      setOpenaiAgentDir(next.openaiAgentDir || ".agent-control/openai-agents");
+      setBuiltInAgentDir(next.builtInAgentDir || ".agent-control/built-in-agents");
       setAutoApprove(next.autoApprove);
       setDefaultAgentMode(next.defaultAgentMode);
       setTileHeight(next.tileHeight);
@@ -3364,12 +3619,34 @@ function SettingsDialog() {
     }
   }
 
+  function setAgentDir(kind: "claude" | "codex" | "openai" | "builtIn", value: string) {
+    if (kind === "claude") setClaudeAgentDir(value);
+    else if (kind === "codex") setCodexAgentDir(value);
+    else if (kind === "openai") setOpenaiAgentDir(value);
+    else setBuiltInAgentDir(value);
+  }
+
+  function currentAgentDir(kind: "claude" | "codex" | "openai" | "builtIn") {
+    if (kind === "claude") return claudeAgentDir;
+    if (kind === "codex") return codexAgentDir;
+    if (kind === "openai") return openaiAgentDir;
+    return builtInAgentDir;
+  }
+
+  const selectedProject = projects.find((project) => project.id === selectedProjectId);
+  const browserInitialPath = agentDirBrowser
+    ? currentAgentDir(agentDirBrowser).startsWith(".") && selectedProject
+      ? `${selectedProject.path}\\${currentAgentDir(agentDirBrowser)}`
+      : currentAgentDir(agentDirBrowser)
+    : "";
+
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <Button variant="outline" size="icon" onClick={() => setOpen(true)} title="Settings">
-        <Settings className="h-4 w-4" />
-      </Button>
-      <DialogContent>
+    <>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <Button variant="outline" size="icon" onClick={() => setOpen(true)} title="Settings">
+          <Settings className="h-4 w-4" />
+        </Button>
+        <DialogContent>
         <DialogHeader>
           <DialogTitle>Settings</DialogTitle>
         </DialogHeader>
@@ -3407,6 +3684,29 @@ function SettingsDialog() {
               Codex path
               <Input value={codexPath} onChange={(event) => setCodexPath(event.target.value)} placeholder="codex" />
             </label>
+          </section>
+          <section className="grid gap-2 rounded-md border border-border p-3">
+            <div>
+              <h3 className="text-sm font-medium">Agent directories</h3>
+              <p className="text-xs text-muted-foreground">Relative paths are resolved inside each project.</p>
+            </div>
+            {([
+              ["claude", "Claude agents", claudeAgentDir, setClaudeAgentDir, ".claude/agents"],
+              ["codex", "Codex agents", codexAgentDir, setCodexAgentDir, ".codex/agents"],
+              ["openai", "OpenAI agents", openaiAgentDir, setOpenaiAgentDir, ".agent-control/openai-agents"],
+              ["builtIn", "Built-in agents", builtInAgentDir, setBuiltInAgentDir, ".agent-control/built-in-agents"]
+            ] as const).map(([kind, label, value, setter, placeholder]) => (
+              <label key={kind} className="grid gap-1.5 text-sm">
+                {label}
+                <div className="flex gap-2">
+                  <Input value={value} onChange={(event) => setter(event.target.value)} placeholder={placeholder} />
+                  <Button type="button" variant="outline" onClick={() => setAgentDirBrowser(kind)}>
+                    <FolderOpen className="h-4 w-4" />
+                    Browse
+                  </Button>
+                </div>
+              </label>
+            ))}
           </section>
           <section className="grid gap-2 rounded-md border border-border p-3">
             <div>
@@ -3549,8 +3849,20 @@ function SettingsDialog() {
             </Button>
           </div>
         </div>
-      </DialogContent>
-    </Dialog>
+        </DialogContent>
+      </Dialog>
+      <FolderBrowserDialog
+        open={Boolean(agentDirBrowser)}
+        initialPath={browserInitialPath}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) setAgentDirBrowser(undefined);
+        }}
+        onSelect={(selectedPath) => {
+          if (agentDirBrowser) setAgentDir(agentDirBrowser, selectedPath);
+          setAgentDirBrowser(undefined);
+        }}
+      />
+    </>
   );
 }
 

@@ -28,6 +28,10 @@ export interface DashboardConfig {
   gitPath?: string;
   claudePath?: string;
   codexPath?: string;
+  claudeAgentDir?: string;
+  codexAgentDir?: string;
+  openaiAgentDir?: string;
+  builtInAgentDir?: string;
   autoApprove?: AutoApproveMode;
   defaultAgentMode?: AgentPermissionMode;
   tileHeight?: number;
@@ -114,6 +118,15 @@ export function resolveModelProfiles(config: DashboardConfig): ModelProfile[] {
     supportsThinking: true,
     supportedEfforts: ["low", "medium", "high", "xhigh", "max"]
   }));
+}
+
+export function resolveAgentDirs(config: DashboardConfig): Record<"claude" | "codex" | "openai" | "builtIn", string> {
+  return {
+    claude: config.claudeAgentDir?.trim() || ".claude/agents",
+    codex: config.codexAgentDir?.trim() || ".codex/agents",
+    openai: config.openaiAgentDir?.trim() || ".agent-control/openai-agents",
+    builtIn: config.builtInAgentDir?.trim() || ".agent-control/built-in-agents"
+  };
 }
 
 function clampNumber(value: unknown, fallback: number, min: number, max: number): number {

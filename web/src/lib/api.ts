@@ -105,6 +105,14 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ plugins })
     }),
+  saveBuiltInAgent: (projectId: string, agent: Partial<Project["agents"][number]> & { originalName?: string }) =>
+    json<Project[]>(`/api/projects/${encodeURIComponent(projectId)}/built-in-agents`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(agent)
+    }),
+  deleteBuiltInAgent: (projectId: string, agentName: string) =>
+    json<Project[]>(`/api/projects/${encodeURIComponent(projectId)}/built-in-agents/${encodeURIComponent(agentName)}`, { method: "DELETE" }),
   addProjectContext: (id: string, path: string) =>
     json<MessageAttachment>(`/api/projects/${encodeURIComponent(id)}/context`, {
       method: "POST",

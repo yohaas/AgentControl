@@ -211,6 +211,7 @@ export class AgentRuntimeManager {
     if (!project) throw new Error("Project not found.");
     const def =
       project.agents.find((candidate) => candidate.name === request.defName) ||
+      (project.builtInAgents || []).find((candidate) => candidate.name === request.defName) ||
       (request.defName.toLowerCase() === "generic" ? GENERIC_AGENT_DEF : undefined);
     if (!def) throw new Error("Agent definition not found.");
 

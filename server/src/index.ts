@@ -11,6 +11,7 @@ import { WebSocketServer, type WebSocket } from "ws";
 import type { DashboardConfig } from "./config.js";
 import type {
   Capabilities,
+  AgentDef,
   DirectoryEntry,
   GitChangedFile,
   GitStatus,
@@ -32,6 +33,7 @@ import {
   readConfig,
   readSecrets,
   resolveDefaultAgentMode,
+  resolveAgentDirs,
   resolveModelProfiles,
   resolveModels,
   resolvePinLastSentMessage,
@@ -45,7 +47,7 @@ import {
 } from "./config.js";
 import { addMarketplace, enablePlugin, installPlugin, listPlugins, pluginCatalog } from "./plugins.js";
 import { AgentRuntimeManager } from "./runtime.js";
-import { scanConfiguredProjects, scanProject, updateAgentPlugins } from "./scanner.js";
+import { deleteBuiltInAgent, scanConfiguredProjects, scanProject, updateAgentPlugins, upsertBuiltInAgent } from "./scanner.js";
 import { TerminalManager } from "./terminal.js";
 
 const PORT = Number(process.env.PORT || 4317);
@@ -65,8 +67,9 @@ if (config.claudePath) process.env.AGENTCONTROL_CLAUDE_PATH = config.claudePath;
 if (config.codexPath) process.env.AGENTCONTROL_CODEX_PATH = config.codexPath;
 if (!process.env.ANTHROPIC_API_KEY && secrets.anthropicApiKey) process.env.ANTHROPIC_API_KEY = secrets.anthropicApiKey;
 if (!process.env.OPENAI_API_KEY && secrets.openaiApiKey) process.env.OPENAI_API_KEY = secrets.openaiApiKey;
+let agentDirs = resolveAgentDirs(config);
 let projectsRoot = resolveProjectsRoot(config);
-let projects: Project[] = config.projectPaths?.length ? await scanConfiguredProjects(config.projectPaths) : [];
+let projects: Project[] = config.projectPaths?.length ? await scanConfiguredProjects(config.projectPaths, agentDirs) : [];
 let capabilities: Capabilities = await detectCapabilities();
 
 const app = express();
@@ -377,12 +380,12 @@ function defaultWorktreePath(project: Project, branch: string): string {
 }
 
 async function refreshConfiguredProjects(): Promise<Project[]> {
-  projects = config.projectPaths?.length ? await scanConfiguredProjects(config.projectPaths) : [];
+  projects = config.projectPaths?.length ? await scanConfiguredProjects(config.projectPaths, agentDirs) : [];
   return projects;
 }
 
 async function ensureProjectPath(projectPath: string): Promise<Project | null> {
-  const project = await scanProject(projectPath);
+  const project = await scanProject(projectPath, agentDirs);
   if (!project) return null;
   const projectPaths = Array.from(new Set([...(config.projectPaths || []), project.path]));
   config = await writeConfig({ ...config, projectPaths });
@@ -507,7 +510,7 @@ async function projectGitStatus(project: Project): Promise<GitStatus> {
 
 async function ensureLaunchPluginsEnabled(request: LaunchRequest): Promise<void> {
   const project = projectById(request.projectId);
-  const def = project?.agents.find((agent) => agent.name === request.defName);
+  const def = [...(project?.agents || []), ...(project?.builtInAgents || [])].find((agent) => agent.name === request.defName);
   const plugins = def?.plugins || [];
   if (plugins.length === 0) return;
 
@@ -593,8 +596,55 @@ app.put("/api/projects/:id/agents/:name/plugins", async (request, response) => {
         .map((item: string) => item.trim())
     : [];
   try {
-    await updateAgentPlugins(project.path, request.params.name, plugins);
-    projects = config.projectPaths?.length ? await scanConfiguredProjects(config.projectPaths) : [];
+    await updateAgentPlugins(project.path, request.params.name, plugins, agentDirs);
+    await refreshConfiguredProjects();
+    response.json(projects);
+  } catch (error) {
+    response.status(500).json({ error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+app.post("/api/projects/:id/built-in-agents", async (request, response) => {
+  const project = projectById(request.params.id);
+  if (!project) {
+    response.status(404).json({ error: "Project not found." });
+    return;
+  }
+  const body = request.body as Partial<AgentDef> & { originalName?: string };
+  const name = typeof body.name === "string" ? body.name.trim() : "";
+  if (!name) {
+    response.status(400).json({ error: "Agent name is required." });
+    return;
+  }
+  const agent: AgentDef = {
+    name,
+    description: typeof body.description === "string" && body.description.trim() ? body.description.trim() : undefined,
+    color: typeof body.color === "string" && body.color.trim() ? body.color.trim() : "#ffffff",
+    provider: body.provider === "codex" || body.provider === "openai" || body.provider === "claude" ? body.provider : "claude",
+    defaultModel: typeof body.defaultModel === "string" && body.defaultModel.trim() ? body.defaultModel.trim() : undefined,
+    tools: Array.isArray(body.tools) ? body.tools.filter((item): item is string => typeof item === "string" && item.trim().length > 0) : [],
+    plugins: Array.isArray(body.plugins) ? body.plugins.filter((item): item is string => typeof item === "string" && item.trim().length > 0) : [],
+    systemPrompt: typeof body.systemPrompt === "string" ? body.systemPrompt : "",
+    builtIn: true
+  };
+  try {
+    await upsertBuiltInAgent(project.path, agent, typeof body.originalName === "string" ? body.originalName : undefined, agentDirs);
+    await refreshConfiguredProjects();
+    response.json(projects);
+  } catch (error) {
+    response.status(500).json({ error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+app.delete("/api/projects/:id/built-in-agents/:name", async (request, response) => {
+  const project = projectById(request.params.id);
+  if (!project) {
+    response.status(404).json({ error: "Project not found." });
+    return;
+  }
+  try {
+    await deleteBuiltInAgent(project.path, request.params.name, agentDirs);
+    await refreshConfiguredProjects();
     response.json(projects);
   } catch (error) {
     response.status(500).json({ error: error instanceof Error ? error.message : String(error) });
@@ -659,7 +709,7 @@ app.post("/api/projects/:id/context", async (request, response) => {
 });
 
 app.post("/api/refresh", async (_request, response) => {
-  projects = config.projectPaths?.length ? await scanConfiguredProjects(config.projectPaths) : [];
+  await refreshConfiguredProjects();
   response.json(projects);
 });
 
@@ -670,7 +720,7 @@ app.post("/api/projects", async (request, response) => {
     return;
   }
 
-  const project = await scanProject(projectPath);
+  const project = await scanProject(projectPath, agentDirs);
   if (!project) {
     response.status(404).json({ error: "Project path was not found or is not a directory." });
     return;
@@ -678,7 +728,7 @@ app.post("/api/projects", async (request, response) => {
 
   const projectPaths = Array.from(new Set([...(config.projectPaths || []), project.path]));
   config = await writeConfig({ ...config, projectPaths });
-  projects = await scanConfiguredProjects(projectPaths);
+  projects = await scanConfiguredProjects(projectPaths, agentDirs);
   response.json(projects);
 });
 
@@ -695,7 +745,7 @@ app.delete("/api/projects/:id", async (request, response) => {
   const closePath = normalizedProjectPath(project.path);
   const projectPaths = (config.projectPaths || []).filter((projectPath) => normalizedProjectPath(projectPath) !== closePath);
   config = await writeConfig({ ...config, projectPaths });
-  projects = await scanConfiguredProjects(projectPaths);
+  projects = await scanConfiguredProjects(projectPaths, agentDirs);
   response.json(projects);
 });
 
@@ -953,6 +1003,10 @@ app.get("/api/settings", (_request, response) => {
     gitPath: config.gitPath || process.env.GIT_PATH || "git",
     claudePath: config.claudePath || process.env.CLAUDE_CODE_CLI || process.env.AGENTCONTROL_CLAUDE_PATH || "",
     codexPath: config.codexPath || process.env.CODEX_CLI || process.env.AGENTCONTROL_CODEX_PATH || "",
+    claudeAgentDir: agentDirs.claude,
+    codexAgentDir: agentDirs.codex,
+    openaiAgentDir: agentDirs.openai,
+    builtInAgentDir: agentDirs.builtIn,
     anthropicKeySaved: Boolean(secrets.anthropicApiKey),
     openaiKeySaved: Boolean(secrets.openaiApiKey),
     anthropicKeySource: process.env.ANTHROPIC_API_KEY ? (secrets.anthropicApiKey === process.env.ANTHROPIC_API_KEY ? "local" : "env") : "missing",
@@ -1036,6 +1090,10 @@ app.put("/api/settings", async (request, response) => {
     gitPath: typeof body.gitPath === "string" ? body.gitPath.trim() : config.gitPath,
     claudePath: typeof body.claudePath === "string" ? body.claudePath.trim() : config.claudePath,
     codexPath: typeof body.codexPath === "string" ? body.codexPath.trim() : config.codexPath,
+    claudeAgentDir: typeof body.claudeAgentDir === "string" ? body.claudeAgentDir.trim() : config.claudeAgentDir,
+    codexAgentDir: typeof body.codexAgentDir === "string" ? body.codexAgentDir.trim() : config.codexAgentDir,
+    openaiAgentDir: typeof body.openaiAgentDir === "string" ? body.openaiAgentDir.trim() : config.openaiAgentDir,
+    builtInAgentDir: typeof body.builtInAgentDir === "string" ? body.builtInAgentDir.trim() : config.builtInAgentDir,
     autoApprove: body.autoApprove || config.autoApprove,
     defaultAgentMode: resolveDefaultAgentMode(body.defaultAgentMode ? body : config),
     tileHeight: typeof body.tileHeight === "number" ? resolveTileHeight(body) : resolveTileHeight(config),
@@ -1049,6 +1107,7 @@ app.put("/api/settings", async (request, response) => {
   if (config.codexPath) process.env.AGENTCONTROL_CODEX_PATH = config.codexPath;
   else delete process.env.AGENTCONTROL_CODEX_PATH;
   if (config.gitPath) process.env.GIT_PATH = config.gitPath;
+  agentDirs = resolveAgentDirs(config);
   if (!process.env.ANTHROPIC_API_KEY || secrets.anthropicApiKey) {
     if (secrets.anthropicApiKey) process.env.ANTHROPIC_API_KEY = secrets.anthropicApiKey;
     else delete process.env.ANTHROPIC_API_KEY;
@@ -1059,7 +1118,7 @@ app.put("/api/settings", async (request, response) => {
   }
   capabilities = await detectCapabilities();
   projectsRoot = resolveProjectsRoot(config);
-  projects = config.projectPaths?.length ? await scanConfiguredProjects(config.projectPaths) : [];
+  projects = config.projectPaths?.length ? await scanConfiguredProjects(config.projectPaths, agentDirs) : [];
   response.json({
     projectsRoot,
     projectPaths: config.projectPaths || [],
@@ -1068,6 +1127,10 @@ app.put("/api/settings", async (request, response) => {
     gitPath: config.gitPath || process.env.GIT_PATH || "git",
     claudePath: config.claudePath || process.env.CLAUDE_CODE_CLI || process.env.AGENTCONTROL_CLAUDE_PATH || "",
     codexPath: config.codexPath || process.env.CODEX_CLI || process.env.AGENTCONTROL_CODEX_PATH || "",
+    claudeAgentDir: agentDirs.claude,
+    codexAgentDir: agentDirs.codex,
+    openaiAgentDir: agentDirs.openai,
+    builtInAgentDir: agentDirs.builtIn,
     anthropicKeySaved: Boolean(secrets.anthropicApiKey),
     openaiKeySaved: Boolean(secrets.openaiApiKey),
     anthropicKeySource: process.env.ANTHROPIC_API_KEY ? (secrets.anthropicApiKey === process.env.ANTHROPIC_API_KEY ? "local" : "env") : "missing",

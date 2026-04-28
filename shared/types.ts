@@ -29,6 +29,7 @@ export interface AgentDef {
   systemPrompt: string;
   sourcePath?: string;
   sourceContent?: string;
+  builtIn?: boolean;
 }
 
 export interface Project {
@@ -36,6 +37,7 @@ export interface Project {
   name: string;
   path: string;
   agents: AgentDef[];
+  builtInAgents?: AgentDef[];
 }
 
 export interface DirectoryEntry {

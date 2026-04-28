@@ -21,6 +21,10 @@ export interface SettingsState {
   gitPath?: string;
   claudePath?: string;
   codexPath?: string;
+  claudeAgentDir?: string;
+  codexAgentDir?: string;
+  openaiAgentDir?: string;
+  builtInAgentDir?: string;
   anthropicKeySaved?: boolean;
   openaiKeySaved?: boolean;
   anthropicKeySource?: "env" | "local" | "missing";
@@ -136,7 +140,11 @@ const defaultSettings: SettingsState = {
   tileColumns: 2,
   sidebarWidth: 280,
   pinLastSentMessage: true,
-  terminalDock: "bottom"
+  terminalDock: "bottom",
+  claudeAgentDir: ".claude/agents",
+  codexAgentDir: ".codex/agents",
+  openaiAgentDir: ".agent-control/openai-agents",
+  builtInAgentDir: ".agent-control/built-in-agents"
 };
 
 function clampNumber(value: unknown, fallback: number, min: number, max: number): number {
