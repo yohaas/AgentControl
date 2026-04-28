@@ -952,6 +952,11 @@ function draftLineCount(text: string) {
   return text.length === 0 ? 1 : text.split(/\r?\n/).length;
 }
 
+function composerNeedsExpansion(textarea: HTMLTextAreaElement | null, collapsedHeight: number) {
+  if (!textarea) return false;
+  return textarea.scrollHeight > collapsedHeight + 4;
+}
+
 function AttachmentChips({
   attachments,
   onRemove
@@ -5637,7 +5642,8 @@ function AgentTile({
   const slashSuggestions = slashMenuOpen ? pickerSlashSuggestions : slashMenuSuppressed ? [] : rawSlashSuggestions;
   const selectedLines = selectedLineCount(selection.selectedText);
   const draftLines = draftLineCount(draft);
-  const hasMultilineDraft = draftLines > 1;
+  const [composerWrapped, setComposerWrapped] = useState(false);
+  const hasMultilineDraft = draftLines > 1 || composerWrapped;
   const composerExpanded = hasMultilineDraft && !composerCollapsed;
 
   useEffect(() => {
@@ -5679,6 +5685,13 @@ function AgentTile({
   useEffect(() => {
     if (!hasMultilineDraft && composerCollapsed) setComposerCollapsed(false);
   }, [composerCollapsed, hasMultilineDraft]);
+
+  useEffect(() => {
+    const measure = () => setComposerWrapped(composerNeedsExpansion(inputRef.current, 36));
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [draft]);
 
   function activateTile(focusInput = false) {
     suppressAutoFocusRef.current = !focusInput;
@@ -6171,6 +6184,7 @@ function AgentTile({
                   setSlashMenuOpen(false);
                   setSlashMenuSuppressed(false);
                   setDraft(agent.id, event.target.value);
+                  setComposerWrapped(composerNeedsExpansion(event.currentTarget, 36));
                 }}
                 onPaste={handlePaste}
                 placeholder={isBusy ? "Queue a message..." : `chat with ${providerLabel(agent.provider)}`}
@@ -6737,7 +6751,8 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
   const slashSuggestions = slashMenuOpen ? pickerSlashSuggestions : slashMenuSuppressed ? [] : rawSlashSuggestions;
   const selectedLines = selectedLineCount(selection.selectedText);
   const draftLines = draftLineCount(draft);
-  const hasMultilineDraft = draftLines > 1;
+  const [composerWrapped, setComposerWrapped] = useState(false);
+  const hasMultilineDraft = draftLines > 1 || composerWrapped;
   const composerExpanded = hasMultilineDraft && !composerCollapsed;
 
   useEffect(() => {
@@ -6772,6 +6787,13 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
   useEffect(() => {
     if (!hasMultilineDraft && composerCollapsed) setComposerCollapsed(false);
   }, [composerCollapsed, hasMultilineDraft]);
+
+  useEffect(() => {
+    const measure = () => setComposerWrapped(composerNeedsExpansion(inputRef.current, 76));
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [draft]);
 
   function send() {
     if (!draft.trim() && attachments.length === 0) return;
@@ -7106,6 +7128,7 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
                 setSlashMenuOpen(false);
                 setSlashMenuSuppressed(false);
                 setDraft(agent.id, event.target.value);
+                setComposerWrapped(composerNeedsExpansion(event.currentTarget, 76));
               }}
               onPaste={handlePaste}
               placeholder={isBusy ? "Queue a message..." : `chat with ${providerLabel(agent.provider)}`}
