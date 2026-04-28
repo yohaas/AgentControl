@@ -308,11 +308,12 @@ export class AgentRuntimeManager {
     this.persist();
   }
 
-  clearAll(): void {
+  clearAll(projectId?: string): void {
     for (const state of this.states.values()) {
+      if (projectId && state.agent.projectId !== projectId) continue;
       this.stopProcessTree(state);
+      this.states.delete(state.agent.id);
     }
-    this.states.clear();
     this.broadcast({ type: "agent.snapshot", snapshot: this.snapshot() });
     this.persist();
   }

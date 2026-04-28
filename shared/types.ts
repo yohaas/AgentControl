@@ -324,6 +324,7 @@ export type WsClientCommand =
     }
   | {
       type: "clearAll";
+      projectId?: string;
     }
   | {
       type: "resume";

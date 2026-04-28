@@ -136,6 +136,13 @@ function agentMap(agents: RunningAgent[]) {
   return Object.fromEntries(agents.map((agent) => [agent.id, agent]));
 }
 
+function latestTerminalForProject(terminals: Record<string, TerminalSession>, projectId?: string) {
+  return Object.values(terminals)
+    .filter((terminal) => !projectId || terminal.projectId === projectId)
+    .sort((left, right) => +new Date(left.startedAt) - +new Date(right.startedAt))
+    .at(-1)?.id;
+}
+
 export const useAppStore = create<AppState>((set, get) => ({
   projects: [],
   agents: {},
@@ -159,11 +166,34 @@ export const useAppStore = create<AppState>((set, get) => ({
   searchOpen: false,
   searchQuery: "",
   setProjects: (projects) =>
+    set((state) => {
+      const selectedProjectId =
+        state.selectedProjectId && projects.some((project) => project.id === state.selectedProjectId)
+          ? state.selectedProjectId
+          : projects[0]?.id;
+      const selectedAgent =
+        state.selectedAgentId && state.agents[state.selectedAgentId]?.projectId === selectedProjectId
+          ? state.selectedAgentId
+          : undefined;
+      const focusedAgent =
+        state.focusedAgentId && state.agents[state.focusedAgentId]?.projectId === selectedProjectId
+          ? state.focusedAgentId
+          : undefined;
+      return {
+        projects,
+        selectedProjectId,
+        selectedAgentId: selectedAgent,
+        focusedAgentId: focusedAgent,
+        activeTerminalId: latestTerminalForProject(state.terminalSessions, selectedProjectId)
+      };
+    }),
+  setSelectedProject: (id) =>
     set((state) => ({
-      projects,
-      selectedProjectId: state.selectedProjectId || projects[0]?.id
+      selectedProjectId: id,
+      selectedAgentId: undefined,
+      focusedAgentId: undefined,
+      activeTerminalId: latestTerminalForProject(state.terminalSessions, id)
     })),
-  setSelectedProject: (id) => set({ selectedProjectId: id }),
   setSelectedAgent: (id) => set({ selectedAgentId: id }),
   setFocusedAgent: (id) => set({ focusedAgentId: id }),
   setCapabilities: (capabilities) => set({ capabilities }),

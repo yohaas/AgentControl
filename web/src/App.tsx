@@ -256,8 +256,15 @@ function exportAgentMarkdown(agent: RunningAgent, transcripts: TranscriptEvent[]
   downloadText(`${agent.displayName}.md`, lines.join("\n\n"), "text/markdown");
 }
 
-function orderedAgentsForTiles(agentsById: Record<string, RunningAgent>, tileOrder: string[]) {
-  const agents = Object.values(agentsById);
+function agentsForProject(agentsById: Record<string, RunningAgent>, projectId?: string) {
+  return Object.values(agentsById).filter((agent) => !projectId || agent.projectId === projectId);
+}
+
+function terminalsForProject(sessionsById: Record<string, TerminalSession>, projectId?: string) {
+  return Object.values(sessionsById).filter((session) => !projectId || session.projectId === projectId);
+}
+
+function orderedAgentsForTiles(agents: RunningAgent[], tileOrder: string[]) {
   const byId = new Map(agents.map((agent) => [agent.id, agent]));
   return [
     ...tileOrder.map((id) => byId.get(id)).filter((agent): agent is RunningAgent => Boolean(agent)),
@@ -280,8 +287,12 @@ function Header() {
   const wsConnected = useAppStore((state) => state.wsConnected);
   const setProjects = useAppStore((state) => state.setProjects);
   const addError = useAppStore((state) => state.addError);
-  const agentCount = Object.keys(agentsById).length;
-  const terminalCount = Object.keys(terminalSessions).length;
+  const projectAgents = useMemo(() => agentsForProject(agentsById, selectedProjectId), [agentsById, selectedProjectId]);
+  const agentCount = projectAgents.length;
+  const terminalCount = useMemo(
+    () => terminalsForProject(terminalSessions, selectedProjectId).length,
+    [terminalSessions, selectedProjectId]
+  );
 
   async function refresh() {
     try {
@@ -292,7 +303,7 @@ function Header() {
   }
 
   function sortChatsByAgentType() {
-    const sorted = orderedAgentsForTiles(agentsById, tileOrder)
+    const sorted = orderedAgentsForTiles(projectAgents, tileOrder)
       .map((agent, index) => ({ agent, index }))
       .sort(
         (left, right) =>
@@ -300,7 +311,8 @@ function Header() {
           left.index - right.index
       )
       .map(({ agent }) => agent.id);
-    setTileOrder(sorted);
+    const sortedIds = new Set(sorted);
+    setTileOrder([...sorted, ...tileOrder.filter((id) => !sortedIds.has(id))]);
     setSelectedAgent(undefined);
   }
 
@@ -622,8 +634,11 @@ function Sidebar() {
 
   const project = projects.find((candidate) => candidate.id === selectedProjectId);
   const running = useMemo(
-    () => Object.values(agentsById).sort((left, right) => +new Date(right.launchedAt) - +new Date(left.launchedAt)),
-    [agentsById]
+    () =>
+      agentsForProject(agentsById, selectedProjectId).sort(
+        (left, right) => +new Date(right.launchedAt) - +new Date(left.launchedAt)
+      ),
+    [agentsById, selectedProjectId]
   );
   const activeAgentId = selectedAgentId || focusedAgentId;
 
@@ -689,7 +704,9 @@ function Sidebar() {
               variant="ghost"
               size="sm"
               onClick={() => {
-                if (window.confirm("Exit and clear all open agents?")) sendCommand({ type: "clearAll" });
+                if (window.confirm("Exit and clear all open agents in this project?")) {
+                  sendCommand({ type: "clearAll", projectId: selectedProjectId });
+                }
               }}
             >
               Clear All
@@ -1092,11 +1109,16 @@ function SettingsDialog() {
 
 function AgentPanel() {
   const selectedAgentId = useAppStore((state) => state.selectedAgentId);
+  const selectedProjectId = useAppStore((state) => state.selectedProjectId);
   const agentsById = useAppStore((state) => state.agents);
-  const agent = selectedAgentId ? agentsById[selectedAgentId] : undefined;
+  const selectedAgent = selectedAgentId ? agentsById[selectedAgentId] : undefined;
+  const agent = selectedAgent && (!selectedProjectId || selectedAgent.projectId === selectedProjectId) ? selectedAgent : undefined;
   const agents = useMemo(
-    () => Object.values(agentsById).sort((left, right) => +new Date(right.launchedAt) - +new Date(left.launchedAt)),
-    [agentsById]
+    () =>
+      agentsForProject(agentsById, selectedProjectId).sort(
+        (left, right) => +new Date(right.launchedAt) - +new Date(left.launchedAt)
+      ),
+    [agentsById, selectedProjectId]
   );
 
   if (agent) {
@@ -1648,7 +1670,10 @@ function SendToMenu({
   const openSendDialog = useAppStore((state) => state.openSendDialog);
   const addError = useAppStore((state) => state.addError);
   const project = projects.find((candidate) => candidate.id === source.projectId);
-  const agents = useMemo(() => Object.values(agentsById), [agentsById]);
+  const agents = useMemo(
+    () => Object.values(agentsById).filter((agent) => agent.projectId === source.projectId),
+    [agentsById, source.projectId]
+  );
   const fallbackText = useMemo(() => transcriptToPlainText(source, transcripts), [source, transcripts]);
   const activeText = selectedText || getCachedSelectedText() || getSelectionInRoot(rootSelector) || fallbackText;
 
@@ -2053,10 +2078,14 @@ function TerminalPanel() {
   const [height, setHeight] = useState(320);
   const [visiblePaneIds, setVisiblePaneIds] = useState<string[]>([]);
   const sessions = useMemo(
-    () => Object.values(sessionsById).sort((left, right) => +new Date(left.startedAt) - +new Date(right.startedAt)),
-    [sessionsById]
+    () =>
+      terminalsForProject(sessionsById, selectedProjectId).sort(
+        (left, right) => +new Date(left.startedAt) - +new Date(right.startedAt)
+      ),
+    [sessionsById, selectedProjectId]
   );
-  const session = activeTerminalId ? sessionsById[activeTerminalId] : sessions[sessions.length - 1];
+  const activeSession = activeTerminalId ? sessions.find((item) => item.id === activeTerminalId) : undefined;
+  const session = activeSession || sessions[sessions.length - 1];
 
   useEffect(() => {
     const sessionIds = new Set(sessions.map((item) => item.id));
@@ -2105,7 +2134,9 @@ function TerminalPanel() {
     });
   }
 
-  const visibleSessions = visiblePaneIds.map((id) => sessionsById[id]).filter((item): item is TerminalSession => Boolean(item));
+  const visibleSessions = visiblePaneIds
+    .map((id) => sessions.find((item) => item.id === id))
+    .filter((item): item is TerminalSession => Boolean(item));
 
   return (
     <section
@@ -2256,7 +2287,9 @@ export function App() {
         sendCommand({ type: "kill", id: selectedAgentId });
         setSelectedAgent(undefined);
       } else if (/^[1-9]$/.test(event.key)) {
-        const agents = Object.values(useAppStore.getState().agents).sort((left, right) => +new Date(right.launchedAt) - +new Date(left.launchedAt));
+        const agents = agentsForProject(useAppStore.getState().agents, selectedProjectId).sort(
+          (left, right) => +new Date(right.launchedAt) - +new Date(left.launchedAt)
+        );
         const agent = agents[Number(event.key) - 1];
         if (agent) {
           event.preventDefault();

@@ -299,7 +299,7 @@ wss.on("connection", (ws) => {
           runtime.clear(command.id);
           break;
         case "clearAll":
-          runtime.clearAll();
+          runtime.clearAll(command.projectId);
           break;
         case "resume":
           runtime.resume(command.id);
