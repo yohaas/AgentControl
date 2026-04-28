@@ -278,7 +278,7 @@ export class AgentRuntimeManager {
     }
     const provider = request.provider || def.provider || providerForModel(request.model);
 
-    const displayName = this.uniqueDisplayName(request.displayName?.trim() || def.name);
+    const displayName = this.uniqueDisplayName(project.id, request.displayName?.trim() || def.name);
     const timestamp = now();
     const permissionMode = this.initialPermissionMode(request);
     const currentModel = isSyntheticModel(request.model) ? this.defaultModelForDefinition(def, provider) : request.model;
@@ -1172,8 +1172,12 @@ export class AgentRuntimeManager {
     return { agents, transcripts };
   }
 
-  private uniqueDisplayName(base: string): string {
-    const existing = new Set([...this.states.values()].map((state) => state.agent.displayName));
+  private uniqueDisplayName(projectId: string, base: string): string {
+    const existing = new Set(
+      [...this.states.values()]
+        .filter((state) => state.agent.projectId === projectId)
+        .map((state) => state.agent.displayName)
+    );
     if (!existing.has(base)) return base;
     let suffix = 2;
     while (existing.has(`${base} #${suffix}`)) suffix += 1;
