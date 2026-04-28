@@ -3924,6 +3924,16 @@ function SettingsDialog() {
               Git path
               <Input value={gitPath} onChange={(event) => setGitPath(event.target.value)} placeholder="git" />
             </label>
+            <label className="grid gap-1.5 text-sm">
+              Built-in agents directory
+              <div className="flex gap-2">
+                <Input value={builtInAgentDir} onChange={(event) => setBuiltInAgentDir(event.target.value)} placeholder=".agent-control/built-in-agents" />
+                <Button type="button" variant="outline" onClick={() => setAgentDirBrowser("builtIn")}>
+                  <FolderOpen className="h-4 w-4" />
+                  Browse
+                </Button>
+              </div>
+            </label>
           </section>
           <label className="grid gap-1.5 text-sm">
             Appearance
@@ -4024,16 +4034,6 @@ function SettingsDialog() {
                 <div className="flex gap-2">
                   <Input value={claudeAgentDir} onChange={(event) => setClaudeAgentDir(event.target.value)} placeholder=".claude/agents" />
                   <Button type="button" variant="outline" onClick={() => setAgentDirBrowser("claude")}>
-                    <FolderOpen className="h-4 w-4" />
-                    Browse
-                  </Button>
-                </div>
-              </label>
-              <label className="grid gap-1.5 text-sm">
-                Built-in agents directory
-                <div className="flex gap-2">
-                  <Input value={builtInAgentDir} onChange={(event) => setBuiltInAgentDir(event.target.value)} placeholder=".agent-control/built-in-agents" />
-                  <Button type="button" variant="outline" onClick={() => setAgentDirBrowser("builtIn")}>
                     <FolderOpen className="h-4 w-4" />
                     Browse
                   </Button>
