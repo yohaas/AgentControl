@@ -390,8 +390,12 @@ function terminalsForProject(sessionsById: Record<string, TerminalSession>, proj
   return Object.values(sessionsById).filter((session) => !projectId || session.projectId === projectId);
 }
 
-function isNpmDevTerminal(session: TerminalSession) {
-  return session.title === "npm run dev";
+function devCommandStorageKey(projectId: string) {
+  return `agent-control-dev-command:${projectId}`;
+}
+
+function isDevTerminal(session: TerminalSession) {
+  return session.title?.startsWith("Dev: ") || session.title === "npm run dev";
 }
 
 function agentHasProcess(agent: RunningAgent) {
@@ -421,6 +425,7 @@ function Header() {
   const wsConnected = useAppStore((state) => state.wsConnected);
   const setProjects = useAppStore((state) => state.setProjects);
   const addError = useAppStore((state) => state.addError);
+  const [devCommand, setDevCommand] = useState("npm run dev");
   const selectedProject = projects.find((project) => project.id === selectedProjectId);
   const projectAgents = useMemo(() => agentsForProject(agentsById, selectedProjectId), [agentsById, selectedProjectId]);
   const agentCount = projectAgents.length;
@@ -429,9 +434,17 @@ function Header() {
     [terminalSessions, selectedProjectId]
   );
   const projectDevTerminals = useMemo(
-    () => terminalsForProject(terminalSessions, selectedProjectId).filter(isNpmDevTerminal),
+    () => terminalsForProject(terminalSessions, selectedProjectId).filter(isDevTerminal),
     [terminalSessions, selectedProjectId]
   );
+
+  useEffect(() => {
+    if (!selectedProjectId) {
+      setDevCommand("npm run dev");
+      return;
+    }
+    setDevCommand(window.localStorage.getItem(devCommandStorageKey(selectedProjectId)) || "npm run dev");
+  }, [selectedProjectId]);
 
   async function refresh() {
     try {
@@ -464,8 +477,9 @@ function Header() {
 
   function runProjectDev() {
     if (!selectedProjectId) return;
+    const command = devCommand.trim() || "npm run dev";
     setTerminalOpen(true);
-    sendCommand({ type: "terminalStart", projectId: selectedProjectId, command: "npm run dev", title: "npm run dev" });
+    sendCommand({ type: "terminalStart", projectId: selectedProjectId, command, title: `Dev: ${command}` });
   }
 
   function stopProjectDev() {
@@ -475,6 +489,15 @@ function Header() {
   function restartProjectDev() {
     stopProjectDev();
     window.setTimeout(runProjectDev, 150);
+  }
+
+  function customizeProjectDev() {
+    if (!selectedProjectId) return;
+    const nextCommand = window.prompt("Command to run for this project", devCommand.trim() || "npm run dev");
+    if (nextCommand === null) return;
+    const trimmed = nextCommand.trim() || "npm run dev";
+    window.localStorage.setItem(devCommandStorageKey(selectedProjectId), trimmed);
+    setDevCommand(trimmed);
   }
 
   async function closeSelectedProject() {
@@ -509,6 +532,22 @@ function Header() {
             ))}
           </SelectContent>
         </Select>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" disabled={!selectedProjectId} title={`Dev command: ${devCommand}`}>
+              <SquareTerminal className="h-4 w-4" />
+              Dev
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={runProjectDev}>Run {devCommand}</DropdownMenuItem>
+            <DropdownMenuItem onClick={restartProjectDev}>Restart {devCommand}</DropdownMenuItem>
+            <DropdownMenuItem disabled={projectDevTerminals.length === 0} onClick={stopProjectDev}>
+              Stop dev command
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={customizeProjectDev}>Customize...</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
         <Button variant="outline" size="icon" onClick={refresh} title="Refresh projects">
           <RefreshCw className="h-4 w-4" />
         </Button>
@@ -538,21 +577,6 @@ function Header() {
         <Button variant={terminalOpen ? "default" : "outline"} size="icon" onClick={toggleTerminal} title="Terminal">
           <SquareTerminal className="h-4 w-4" />
         </Button>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" disabled={!selectedProjectId}>
-              <SquareTerminal className="h-4 w-4" />
-              Dev
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={runProjectDev}>Run npm run dev</DropdownMenuItem>
-            <DropdownMenuItem onClick={restartProjectDev}>Restart npm run dev</DropdownMenuItem>
-            <DropdownMenuItem disabled={projectDevTerminals.length === 0} onClick={stopProjectDev}>
-              Stop npm run dev
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
         <AppAdminMenu />
         <PluginsDialog />
         <SettingsDialog />
