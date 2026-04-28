@@ -1686,6 +1686,9 @@ wss.on("connection", (ws) => {
         case "answerQuestions":
           runtime.answerQuestions(command.id, command.eventId, command.answers);
           break;
+        case "answerPlan":
+          runtime.answerPlan(command.id, command.eventId, command.decision, command.response);
+          break;
         case "clear":
           runtime.clear(command.id);
           break;

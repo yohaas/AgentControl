@@ -305,6 +305,7 @@ This is used for gated write/edit/tool calls in modes that require approval.
 - Streaming output auto-scrolls.
 - Last sent message can pin while scrolling; this is enabled by default in Settings.
 - Claude clarification questions render as selectable answer cards in the transcript, including an Other option for custom answers.
+- Claude plan-mode results render as formatted plan cards with Approve, Deny, Keep planning, and Other responses.
 - Right-click selected text to copy or send it to another agent. If nothing is selected, the current message/tool card under the pointer is used; outside a block, the whole chat is used.
 - Long chat blocks include a popout button. The popout supports Markdown view, raw-text view, copy, and send-to-agent, including selected text.
 - Clear Chat clears only the transcript. Close Chat exits the agent and removes the tile.

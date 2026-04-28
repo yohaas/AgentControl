@@ -8,6 +8,7 @@ import QRCode from "qrcode";
 import type {
   AgentDef,
   AgentEffort,
+  AgentPlanDecision,
   AgentQuestion,
   AgentQuestionAnswer,
   AgentProvider,
@@ -700,6 +701,25 @@ export class AgentRuntimeManager {
       timestamp: now()
     });
     this.userMessage(id, this.formatQuestionAnswers(event.questions, normalizedAnswers));
+  }
+
+  answerPlan(id: string, eventId: string, decision: AgentPlanDecision, response?: string): void {
+    const state = this.requiredState(id);
+    const event = state.transcript.find((candidate) => candidate.id === eventId);
+    if (event?.kind !== "plan") throw new Error("Plan request not found.");
+    if (event.answered) throw new Error("Plan request was already answered.");
+    const normalizedResponse = response?.trim();
+    this.updateTranscript(state, {
+      ...event,
+      answered: true,
+      decision,
+      ...(normalizedResponse ? { response: normalizedResponse } : {}),
+      timestamp: now()
+    });
+    if (decision === "approve" && state.agent.permissionMode === "plan") {
+      this.setPermissionMode(id, "default");
+    }
+    this.userMessage(id, this.formatPlanAnswer(decision, normalizedResponse));
   }
 
   private async providerUserMessage(
@@ -1702,6 +1722,10 @@ export class AgentRuntimeManager {
     if (type === "tool_use") {
       state.activeTurn = true;
       const toolUseId = this.trimmedStringField(value.id) || this.trimmedStringField(value.tool_use_id) || this.trimmedStringField(value.toolUseId) || transcriptId();
+      if (this.isExitPlanModeToolUse(value)) {
+        this.pushPlanRequest(state, this.extractPlanText(value));
+        return;
+      }
       const awaitingPermission = this.isAwaitingPermissionToolUse(value);
       this.pushTranscript(state, {
         ...eventBase(state.agent.id, state.agent.currentModel),
@@ -1727,6 +1751,40 @@ export class AgentRuntimeManager {
       });
       this.setStatus(state, "running");
     }
+  }
+
+  private isExitPlanModeToolUse(value: Record<string, unknown>): boolean {
+    const name = this.trimmedStringField(value.name)?.toLowerCase();
+    return name === "exitplanmode" || name === "exit_plan_mode";
+  }
+
+  private extractPlanText(value: Record<string, unknown>): string {
+    const input = value.input && typeof value.input === "object" ? (value.input as Record<string, unknown>) : {};
+    return (
+      this.textField(input.plan) ||
+      this.textField(input.content) ||
+      this.textField(input.text) ||
+      this.textField(value.plan) ||
+      stringifyUnknown(input || value)
+    );
+  }
+
+  private pushPlanRequest(state: AgentProcessState, plan: string): void {
+    state.activeTurn = false;
+    this.finishAssistantStream(state, false);
+    this.pushTranscript(state, {
+      ...eventBase(state.agent.id, state.agent.currentModel),
+      kind: "plan",
+      plan
+    });
+    this.setStatus(state, "awaiting-input");
+  }
+
+  private formatPlanAnswer(decision: AgentPlanDecision, response?: string): string {
+    if (decision === "approve") return "I approve this plan. Proceed with implementation.";
+    if (decision === "deny") return response ? `I do not approve this plan.\n\n${response}` : "I do not approve this plan. Do not implement it.";
+    if (decision === "keepPlanning") return response ? `Keep planning. Please revise the plan with this feedback:\n\n${response}` : "Keep planning. Please revise the plan before implementing.";
+    return response || "Other response.";
   }
 
   private extractQuestionRequest(payload: Record<string, unknown>): AgentQuestion[] | undefined {

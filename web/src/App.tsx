@@ -44,6 +44,7 @@ import {
   Image as ImageIcon,
   Loader2,
   Maximize2,
+  MessageSquare,
   Minimize2,
   MoreHorizontal,
   PanelLeftClose,
@@ -163,6 +164,7 @@ interface SlashCommandSuggestion {
 type ToolUseEvent = Extract<TranscriptEvent, { kind: "tool_use" }>;
 type ToolResultEvent = Extract<TranscriptEvent, { kind: "tool_result" }>;
 type QuestionsEvent = Extract<TranscriptEvent, { kind: "questions" }>;
+type PlanEvent = Extract<TranscriptEvent, { kind: "plan" }>;
 type ToolTranscriptItem =
   | { kind: "single"; event: TranscriptEvent }
   | { kind: "tool_pair"; event: ToolUseEvent; result?: ToolResultEvent };
@@ -658,6 +660,7 @@ function transcriptToPlainText(agent: RunningAgent, transcripts: TranscriptEvent
       if (event.kind === "tool_use") return `Tool Use: ${event.name}\n${prettyJson(event.input)}`;
       if (event.kind === "tool_result") return `Tool Result:\n${prettyJson(event.output)}`;
       if (event.kind === "questions") return questionEventPlainText(event);
+      if (event.kind === "plan") return planEventPlainText(event);
       if (event.kind === "model_switch") return `System: switched to ${event.to}`;
       return `System:\n${event.text}`;
     })
@@ -674,6 +677,7 @@ function transcriptEventToPlainText(agent: RunningAgent, event: TranscriptEvent,
   }
   if (event.kind === "tool_result") return `Tool Result:\n${prettyJson(event.output)}`;
   if (event.kind === "questions") return questionEventPlainText(event);
+  if (event.kind === "plan") return planEventPlainText(event);
   if (event.kind === "model_switch") return `System: switched to ${event.to}`;
   return `System:\n${event.text}`;
 }
@@ -694,6 +698,17 @@ function questionEventPlainText(event: QuestionsEvent) {
         .join("\n");
     })
   ].join("\n\n");
+}
+
+function planEventPlainText(event: PlanEvent) {
+  return [
+    "Plan:",
+    event.plan,
+    event.decision ? `Decision: ${event.decision}` : undefined,
+    event.response ? `Response: ${event.response}` : undefined
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 }
 
 function contextCopyTargetFromEvent(
@@ -1285,6 +1300,7 @@ function exportAgentMarkdown(agent: RunningAgent, transcripts: TranscriptEvent[]
           if (event.kind === "tool_use") return `### Tool Use: ${event.name} · ${time}\n\n\`\`\`json\n${prettyJson(event.input)}\n\`\`\``;
           if (event.kind === "tool_result") return `### Tool Result · ${time}\n\n\`\`\`\n${prettyJson(event.output)}\n\`\`\``;
           if (event.kind === "questions") return `### Questions · ${time}\n\n${questionEventPlainText(event)}`;
+          if (event.kind === "plan") return `### Plan · ${time}\n\n${planEventPlainText(event)}`;
           if (event.kind === "model_switch") return `---\n\nswitched to ${event.to}`;
           return `### System · ${time}\n\n${event.text}`;
         })
@@ -6260,6 +6276,9 @@ function TranscriptPreview({
   if (event.kind === "questions") {
     return <QuestionCard event={event} agent={agent} compact />;
   }
+  if (event.kind === "plan") {
+    return <PlanCard event={event} agent={agent} compact />;
+  }
   if (event.kind === "system") {
     return (
       <p className="text-center text-xs text-muted-foreground" data-copy-block="true" data-copy-event-id={event.id}>
@@ -6485,6 +6504,81 @@ function QuestionCard({ event, agent, compact = false }: { event: QuestionsEvent
           </Button>
         </div>
       )}
+    </div>
+  );
+}
+
+function PlanCard({ event, agent, compact = false }: { event: PlanEvent; agent: RunningAgent; compact?: boolean }) {
+  const [otherText, setOtherText] = useState(event.response || "");
+  const [activeDecision, setActiveDecision] = useState<PlanEvent["decision"] | "">("");
+
+  useEffect(() => {
+    setOtherText(event.response || "");
+    setActiveDecision(event.decision || "");
+  }, [event]);
+
+  function answer(decision: NonNullable<PlanEvent["decision"]>) {
+    setActiveDecision(decision);
+    sendCommand({
+      type: "answerPlan",
+      id: agent.id,
+      eventId: event.id,
+      decision,
+      response: decision === "approve" ? undefined : otherText.trim() || undefined
+    });
+  }
+
+  return (
+    <div
+      className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm"
+      data-copy-block="true"
+      data-copy-event-id={event.id}
+      style={{ borderLeftColor: agentAccentColor(agent.color), borderLeftWidth: 4 }}
+    >
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <div>
+          <h3 className={cn("font-semibold", compact ? "text-sm" : "text-base")}>Claude returned a plan</h3>
+          <p className="text-xs text-muted-foreground">{event.answered ? "Plan response sent." : "Review the plan before implementation starts."}</p>
+        </div>
+        {event.answered && <Badge>Answered</Badge>}
+      </div>
+      <div className="rounded-md border border-border bg-background/70 p-3">
+        <ReactMarkdown remarkPlugins={[remarkGfm]}>{event.plan}</ReactMarkdown>
+      </div>
+      {event.response && (
+        <div className="mt-3 rounded-md border border-border bg-background/60 px-3 py-2 text-xs text-muted-foreground">
+          Response: {event.response}
+        </div>
+      )}
+      {!event.answered && (
+        <div className="mt-3 grid gap-2">
+          <Textarea
+            value={otherText}
+            onChange={(inputEvent) => setOtherText(inputEvent.target.value)}
+            placeholder="Optional feedback for Deny, Keep planning, or Other"
+            className="min-h-20 text-sm"
+          />
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button size="sm" variant="outline" onClick={() => answer("deny")}>
+              <X className="h-4 w-4" />
+              Deny
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => answer("keepPlanning")}>
+              <Pencil className="h-4 w-4" />
+              Keep planning
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => answer("other")} disabled={!otherText.trim()}>
+              <MessageSquare className="h-4 w-4" />
+              Other
+            </Button>
+            <Button size="sm" onClick={() => answer("approve")}>
+              <Check className="h-4 w-4" />
+              Approve
+            </Button>
+          </div>
+        </div>
+      )}
+      {activeDecision && event.answered && <div className="mt-2 text-xs text-muted-foreground">Decision: {activeDecision}</div>}
     </div>
   );
 }
@@ -7235,6 +7329,9 @@ function TranscriptItem({
   }
   if (event.kind === "questions") {
     return <QuestionCard event={event} agent={agent} />;
+  }
+  if (event.kind === "plan") {
+    return <PlanCard event={event} agent={agent} />;
   }
   if (event.kind === "system") {
     return (

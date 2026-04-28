@@ -37,6 +37,8 @@ export interface AgentQuestionAnswer {
   otherText?: string;
 }
 
+export type AgentPlanDecision = "approve" | "deny" | "keepPlanning" | "other";
+
 export interface AgentDef {
   name: string;
   description?: string;
@@ -233,6 +235,13 @@ export type TranscriptEvent =
       questions: AgentQuestion[];
       answered?: boolean;
       answers?: AgentQuestionAnswer[];
+    })
+  | (TranscriptBase & {
+      kind: "plan";
+      plan: string;
+      answered?: boolean;
+      decision?: AgentPlanDecision;
+      response?: string;
     })
   | (TranscriptBase & {
       kind: "model_switch";
@@ -581,6 +590,13 @@ export type WsClientCommand =
       id: string;
       eventId: string;
       answers: AgentQuestionAnswer[];
+    }
+  | {
+      type: "answerPlan";
+      id: string;
+      eventId: string;
+      decision: AgentPlanDecision;
+      response?: string;
     }
   | {
       type: "clear";
