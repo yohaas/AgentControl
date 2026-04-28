@@ -1573,7 +1573,7 @@ function Sidebar() {
 
   return (
     <aside className="flex w-[280px] shrink-0 flex-col border-r border-border bg-card/45">
-      <section className="min-h-0 border-b border-border p-3">
+      <section className="flex min-h-0 flex-1 flex-col p-3">
         <div className="mb-2 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="icon" onClick={() => setCollapsed(true)} title="Collapse sidebar">
@@ -1621,7 +1621,7 @@ function Sidebar() {
             </Button>
           )}
         </div>
-        <div className="max-h-[42vh] space-y-1 overflow-auto pr-1">
+        <div className="min-h-0 flex-1 space-y-1 overflow-auto pr-1">
           {running.length === 0 ? (
             <p className="rounded-md border border-dashed border-border px-3 py-5 text-center text-sm text-muted-foreground">
               No agents running.
@@ -1668,9 +1668,9 @@ function Sidebar() {
           )}
         </div>
       </section>
-      <section className="min-h-0 flex-1 p-3">
+      <section className="mt-auto shrink-0 border-t border-border p-3">
         <div className="mb-2 flex items-center justify-between gap-2">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Agent definitions</h2>
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Available Agents</h2>
           <Button
             variant="ghost"
             size="sm"
@@ -1682,7 +1682,7 @@ function Sidebar() {
             Launch All
           </Button>
         </div>
-        <div className="space-y-1 overflow-auto pr-1">
+        <div className="max-h-[38vh] space-y-1 overflow-auto pr-1">
           {!project ? (
             <p className="rounded-md border border-dashed border-border px-3 py-5 text-center text-sm text-muted-foreground">
               Add a project to get started.
@@ -1692,21 +1692,23 @@ function Sidebar() {
               No agent definition files found.
             </p>
           ) : (
-            project.agents.map((agent) => (
-              <button
-                key={agent.name}
-                className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left hover:bg-accent"
-                onClick={() => openLaunchModal({ projectId: project.id, defName: agent.name })}
-              >
-                <AgentDot color={agent.color} />
-                <span className="min-w-0">
-                  <span className="block truncate text-sm font-normal">{agent.name}</span>
+            <div className="grid grid-cols-2 gap-2">
+              {project.agents.map((agent) => (
+                <button
+                  key={agent.name}
+                  className="grid min-h-20 content-start gap-1 rounded-md border border-border bg-background/40 px-2 py-2 text-left hover:bg-accent"
+                  onClick={() => openLaunchModal({ projectId: project.id, defName: agent.name })}
+                >
+                  <span className="flex min-w-0 items-center gap-1.5">
+                    <AgentDot color={agent.color} />
+                    <span className="truncate text-xs font-medium">{agent.name}</span>
+                  </span>
                   {agent.defaultModel && (
-                    <span className="block truncate text-xs text-muted-foreground">{agent.defaultModel}</span>
+                    <span className="line-clamp-2 text-[11px] leading-4 text-muted-foreground">{agent.defaultModel}</span>
                   )}
-                </span>
-              </button>
-            ))
+                </button>
+              ))}
+            </div>
           )}
         </div>
       </section>
