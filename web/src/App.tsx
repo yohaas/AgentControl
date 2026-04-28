@@ -4609,6 +4609,7 @@ function TranscriptPreview({
   }
 
   const isUser = event.kind === "user";
+  const showPopout = isLongTextBlock(event.text, true);
   return (
     <div
       className={cn("flex", isUser && "justify-end")}
@@ -4616,13 +4617,15 @@ function TranscriptPreview({
     >
       <div
         className={cn(
-          "max-w-[86%] whitespace-pre-wrap break-words rounded-md border border-border px-3 py-2 text-sm leading-5",
-          isUser ? "user-question bg-primary text-primary-foreground" : "bg-background/60"
+          "relative max-w-[86%] whitespace-pre-wrap break-words rounded-md border border-border px-3 py-2 text-sm leading-5",
+          isUser ? "user-question bg-primary text-primary-foreground" : "bg-background/60",
+          showPopout && "pr-10"
         )}
         data-copy-block="true"
         data-copy-event-id={event.id}
         style={!isUser ? { borderLeftColor: agent.color, borderLeftWidth: 4 } : undefined}
       >
+        {showPopout && <ChatBlockPopoutButton source={agent} text={event.text} compact />}
         <CollapsibleText text={event.text} compact />
         {event.kind === "user" && event.attachments && event.attachments.length > 0 && (
           <span className="mt-2 flex flex-wrap gap-2">
@@ -5353,6 +5356,7 @@ function TranscriptItem({
   }
 
   const isUser = event.kind === "user";
+  const showPopout = isLongTextBlock(event.text);
   return (
     <div
       className={cn("flex", isUser && "justify-end")}
@@ -5360,13 +5364,15 @@ function TranscriptItem({
     >
       <div
         className={cn(
-          "min-w-0 max-w-[78%] whitespace-pre-wrap break-words [overflow-wrap:anywhere] rounded-lg border border-border px-3 py-2 text-sm leading-6",
-          isUser ? "user-question bg-primary text-primary-foreground" : "bg-card"
+          "relative min-w-0 max-w-[78%] whitespace-pre-wrap break-words [overflow-wrap:anywhere] rounded-lg border border-border px-3 py-2 text-sm leading-6",
+          isUser ? "user-question bg-primary text-primary-foreground" : "bg-card",
+          showPopout && "pr-12"
         )}
         data-copy-block="true"
         data-copy-event-id={event.id}
         style={!isUser ? { borderLeftColor: agent.color, borderLeftWidth: 4 } : undefined}
       >
+        {showPopout && <ChatBlockPopoutButton source={agent} text={event.text} />}
         {event.sourceAgent && (
           <Badge className="mb-2" style={{ borderColor: event.sourceAgent.color, color: event.sourceAgent.color }}>
             from {event.sourceAgent.displayName}
@@ -5395,7 +5401,7 @@ function TranscriptItem({
 }
 
 function CollapsibleText({ text, query = "", compact = false }: { text: string; query?: string; compact?: boolean }) {
-  const shouldCollapse = text.length > (compact ? 420 : 900) || text.split(/\r?\n/).length > (compact ? 8 : 14);
+  const shouldCollapse = isLongTextBlock(text, compact);
   const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
@@ -5448,6 +5454,10 @@ function CollapsibleText({ text, query = "", compact = false }: { text: string; 
   );
 }
 
+function isLongTextBlock(text: string, compact = false) {
+  return text.length > (compact ? 420 : 900) || text.split(/\r?\n/).length > (compact ? 8 : 14);
+}
+
 function HighlightedText({ text, query }: { text: string; query: string }) {
   if (!query.trim()) return <>{text}</>;
   const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -5463,6 +5473,123 @@ function HighlightedText({ text, query }: { text: string; query: string }) {
           <span key={index}>{part}</span>
         )
       )}
+    </>
+  );
+}
+
+function ChatBlockPopoutButton({
+  source,
+  text,
+  compact = false
+}: {
+  source: RunningAgent;
+  text: string;
+  compact?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const projects = useAppStore((state) => state.projects);
+  const agentsById = useAppStore((state) => state.agents);
+  const openLaunchModal = useAppStore((state) => state.openLaunchModal);
+  const openSendDialog = useAppStore((state) => state.openSendDialog);
+  const addError = useAppStore((state) => state.addError);
+  const project = projects.find((candidate) => candidate.id === source.projectId);
+  const newAgentDefs = useMemo(() => agentDefsWithGeneric(project), [project]);
+  const targetAgents = useMemo(
+    () => Object.values(agentsById).filter((agent) => agent.projectId === source.projectId && agent.id !== source.id),
+    [agentsById, source.id, source.projectId]
+  );
+
+  function copyText() {
+    void navigator.clipboard.writeText(text).catch((error: unknown) => {
+      addError(error instanceof Error ? error.message : String(error));
+    });
+  }
+
+  return (
+    <>
+      <Button
+        variant="ghost"
+        size="icon"
+        className={cn("absolute right-1 top-1 opacity-70 hover:opacity-100", compact ? "h-6 w-6" : "h-7 w-7")}
+        onClick={(event) => {
+          event.stopPropagation();
+          setOpen(true);
+        }}
+        title="Open text block"
+      >
+        <Maximize2 className={compact ? "h-3.5 w-3.5" : "h-4 w-4"} />
+      </Button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="w-[min(94vw,900px)]">
+          <DialogHeader>
+            <DialogTitle>Text block</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" onClick={copyText}>
+              <Clipboard className="h-4 w-4" />
+              Copy
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" disabled={!text.trim()}>
+                  Send to new agent
+                  <ChevronDown className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                {newAgentDefs.map((def) => (
+                  <DropdownMenuItem
+                    key={`${def.provider || "claude"}:${def.name}`}
+                    onClick={() => {
+                      openLaunchModal({
+                        projectId: source.projectId,
+                        defName: def.name,
+                        initialPrompt: wrapForwardedText(source, text)
+                      });
+                      setOpen(false);
+                    }}
+                  >
+                    <AgentDot color={def.color} />
+                    <span className="ml-2">{def.name}</span>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" disabled={targetAgents.length === 0 || !text.trim()}>
+                  Send to existing agent
+                  <ChevronDown className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                {targetAgents.map((agent) => (
+                  <DropdownMenuItem
+                    key={agent.id}
+                    disabled={agent.remoteControl}
+                    onClick={() => {
+                      openSendDialog({
+                        sourceAgentId: source.id,
+                        targetAgentId: agent.id,
+                        selectedText: text,
+                        framing: ""
+                      });
+                      setOpen(false);
+                    }}
+                  >
+                    <AgentDot color={agent.color} />
+                    <span className="ml-2">{agent.displayName}</span>
+                    {agent.remoteControl && <Badge className="ml-2">RC</Badge>}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+          <pre className="max-h-[65vh] overflow-auto whitespace-pre-wrap break-words rounded-md border border-border bg-background/70 p-3 text-sm leading-6 [overflow-wrap:anywhere]">
+            {text}
+          </pre>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
