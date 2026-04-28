@@ -3198,6 +3198,7 @@ function SendToMenu({
     () => Object.values(agentsById).filter((agent) => agent.projectId === source.projectId),
     [agentsById, source.projectId]
   );
+  const targetAgents = useMemo(() => agents.filter((agent) => agent.id !== source.id), [agents, source.id]);
   const fallbackText = useMemo(() => transcriptToPlainText(source, transcripts), [source, transcripts]);
   const activeText = selectedText || getCachedSelectedText() || getSelectionInRoot(rootSelector) || fallbackText;
 
@@ -3250,33 +3251,34 @@ function SendToMenu({
             </ContextMenuSubContent>
           </ContextMenuSub>
           <ContextMenuSub>
-            <ContextMenuSubTrigger className="flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none focus:bg-accent">
+            <ContextMenuSubTrigger
+              className="flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none focus:bg-accent data-[disabled]:opacity-45"
+              disabled={targetAgents.length === 0}
+            >
               Existing agent
             </ContextMenuSubTrigger>
             <ContextMenuSubContent>
-              {agents
-                .filter((agent) => agent.id !== source.id)
-                .map((agent) => (
-                  <ContextMenuItem
-                    key={agent.id}
-                    disabled={agent.remoteControl}
-                    onClick={() => {
-                      const text = currentSelectedText();
-                      if (!text) return;
-                      openSendDialog({
-                        sourceAgentId: source.id,
-                        targetAgentId: agent.id,
-                        selectedText: text,
-                        framing: ""
-                      });
-                    }}
-                    title={agent.remoteControl ? "Remote Control agents cannot receive dashboard messages." : undefined}
-                  >
-                    <AgentDot color={agent.color} />
-                    <span className="ml-2">{agent.displayName}</span>
-                    {agent.remoteControl && <Badge className="ml-2">RC</Badge>}
-                  </ContextMenuItem>
-                ))}
+              {targetAgents.map((agent) => (
+                <ContextMenuItem
+                  key={agent.id}
+                  disabled={agent.remoteControl}
+                  onClick={() => {
+                    const text = currentSelectedText();
+                    if (!text) return;
+                    openSendDialog({
+                      sourceAgentId: source.id,
+                      targetAgentId: agent.id,
+                      selectedText: text,
+                      framing: ""
+                    });
+                  }}
+                  title={agent.remoteControl ? "Remote Control agents cannot receive dashboard messages." : undefined}
+                >
+                  <AgentDot color={agent.color} />
+                  <span className="ml-2">{agent.displayName}</span>
+                  {agent.remoteControl && <Badge className="ml-2">RC</Badge>}
+                </ContextMenuItem>
+              ))}
             </ContextMenuSubContent>
           </ContextMenuSub>
         </ContextMenuSubContent>
