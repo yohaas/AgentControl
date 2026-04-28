@@ -1302,18 +1302,19 @@ function modelProfilesForSettings(settings: { models: string[]; modelProfiles?: 
   return settings.models.map((model, index) => ({ id: model, provider: "claude", default: index === 0 }));
 }
 
-function parseModelProfiles(text: string): ModelProfile[] {
+function providerModelsText(settings: { models: string[]; modelProfiles?: ModelProfile[] }, provider: AgentProvider) {
+  return modelProfilesForSettings(settings)
+    .filter((profile) => profile.provider === provider)
+    .map((profile) => profile.id)
+    .join("\n");
+}
+
+function parseProviderModels(text: string, provider: AgentProvider): ModelProfile[] {
   return text
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean)
-    .map((line) => {
-      const [maybeProvider, ...modelParts] = line.split(":");
-      const provider: AgentProvider = maybeProvider === "claude" || maybeProvider === "codex" || maybeProvider === "openai" ? maybeProvider : "claude";
-      const id = modelParts.length ? modelParts.join(":").trim() : line;
-      return { provider, id: id.trim() };
-    })
-    .filter((profile) => profile.id.length > 0);
+    .map((id, index) => ({ id, provider, default: index === 0 }));
 }
 
 function orderedAgentsForTiles(agents: RunningAgent[], tileOrder: string[]) {
@@ -3669,7 +3670,10 @@ function SettingsDialog() {
   const [open, setOpen] = useState(false);
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const [projectPaths, setProjectPaths] = useState(settings.projectPaths || []);
-  const [modelProfilesText, setModelProfilesText] = useState((settings.modelProfiles || []).map((profile) => `${profile.provider}:${profile.id}`).join("\n"));
+  const [settingsTab, setSettingsTab] = useState<"general" | "claude" | "codex" | "openai">("general");
+  const [claudeModelsText, setClaudeModelsText] = useState(providerModelsText(settings, "claude"));
+  const [codexModelsText, setCodexModelsText] = useState(providerModelsText(settings, "codex"));
+  const [openaiModelsText, setOpenaiModelsText] = useState(providerModelsText(settings, "openai"));
   const [gitPath, setGitPath] = useState(settings.gitPath || "");
   const [claudePath, setClaudePath] = useState(settings.claudePath || "");
   const [codexPath, setCodexPath] = useState(settings.codexPath || "");
@@ -3693,7 +3697,9 @@ function SettingsDialog() {
   useEffect(() => {
     if (!open) return;
     setProjectPaths(settings.projectPaths || []);
-    setModelProfilesText((settings.modelProfiles || []).map((profile) => `${profile.provider}:${profile.id}`).join("\n"));
+    setClaudeModelsText(providerModelsText(settings, "claude"));
+    setCodexModelsText(providerModelsText(settings, "codex"));
+    setOpenaiModelsText(providerModelsText(settings, "openai"));
     setGitPath(settings.gitPath || "");
     setClaudePath(settings.claudePath || "");
     setCodexPath(settings.codexPath || "");
@@ -3718,7 +3724,11 @@ function SettingsDialog() {
       const next = await api.saveSettings({
         ...settings,
         projectPaths,
-        modelProfiles: parseModelProfiles(modelProfilesText),
+        modelProfiles: [
+          ...parseProviderModels(claudeModelsText, "claude"),
+          ...parseProviderModels(codexModelsText, "codex"),
+          ...parseProviderModels(openaiModelsText, "openai")
+        ],
         gitPath,
         claudePath,
         codexPath,
@@ -3752,7 +3762,11 @@ function SettingsDialog() {
       settings: {
         ...settings,
         projectPaths,
-        modelProfiles: parseModelProfiles(modelProfilesText),
+        modelProfiles: [
+          ...parseProviderModels(claudeModelsText, "claude"),
+          ...parseProviderModels(codexModelsText, "codex"),
+          ...parseProviderModels(openaiModelsText, "openai")
+        ],
         gitPath,
         claudePath,
         codexPath,
@@ -3780,7 +3794,9 @@ function SettingsDialog() {
       setSettings(next);
       setProjects(await api.refresh());
       setProjectPaths(next.projectPaths || []);
-      setModelProfilesText((next.modelProfiles || []).map((profile) => `${profile.provider}:${profile.id}`).join("\n"));
+      setClaudeModelsText(providerModelsText(next, "claude"));
+      setCodexModelsText(providerModelsText(next, "codex"));
+      setOpenaiModelsText(providerModelsText(next, "openai"));
       setGitPath(next.gitPath || "");
       setClaudePath(next.claudePath || "");
       setCodexPath(next.codexPath || "");
@@ -3838,7 +3854,29 @@ function SettingsDialog() {
         <DialogHeader>
           <DialogTitle>Settings</DialogTitle>
         </DialogHeader>
+        <div className="grid grid-cols-4 gap-1 rounded-md bg-muted p-1 text-sm">
+          {([
+            ["general", "General"],
+            ["claude", "Claude"],
+            ["codex", "Codex"],
+            ["openai", "OpenAI"]
+          ] as const).map(([tab, label]) => (
+            <button
+              key={tab}
+              type="button"
+              className={cn(
+                "rounded px-3 py-1.5 text-muted-foreground hover:text-foreground",
+                settingsTab === tab && "bg-background text-foreground shadow-sm"
+              )}
+              onClick={() => setSettingsTab(tab)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
         <div className="grid gap-3">
+          {settingsTab === "general" && (
+            <>
           <section className="grid gap-2 rounded-md border border-border p-3">
             <div className="flex items-center justify-between gap-2">
               <div>
@@ -3877,14 +3915,6 @@ function SettingsDialog() {
               )}
             </div>
           </section>
-          <label className="grid gap-1.5 text-sm">
-            Provider models
-            <Textarea
-              value={modelProfilesText}
-              onChange={(event) => setModelProfilesText(event.target.value)}
-              placeholder="claude:claude-sonnet-4-6&#10;codex:gpt-5.3-codex&#10;openai:gpt-5.4"
-            />
-          </label>
           <section className="grid gap-2 rounded-md border border-border p-3">
             <div>
               <h3 className="text-sm font-medium">Paths</h3>
@@ -3894,85 +3924,7 @@ function SettingsDialog() {
               Git path
               <Input value={gitPath} onChange={(event) => setGitPath(event.target.value)} placeholder="git" />
             </label>
-            <label className="grid gap-1.5 text-sm">
-              Claude path
-              <Input value={claudePath} onChange={(event) => setClaudePath(event.target.value)} placeholder="claude" />
-            </label>
-            <label className="grid gap-1.5 text-sm">
-              Codex path
-              <Input value={codexPath} onChange={(event) => setCodexPath(event.target.value)} placeholder="codex" />
-            </label>
           </section>
-          <section className="grid gap-2 rounded-md border border-border p-3">
-            <div>
-              <h3 className="text-sm font-medium">Agent directories</h3>
-              <p className="text-xs text-muted-foreground">Relative paths are resolved inside each project.</p>
-            </div>
-            {([
-              ["claude", "Claude agents", claudeAgentDir, setClaudeAgentDir, ".claude/agents"],
-              ["codex", "Codex agents", codexAgentDir, setCodexAgentDir, ".codex/agents"],
-              ["openai", "OpenAI agents", openaiAgentDir, setOpenaiAgentDir, ".agent-control/openai-agents"],
-              ["builtIn", "Built-in agents", builtInAgentDir, setBuiltInAgentDir, ".agent-control/built-in-agents"]
-            ] as const).map(([kind, label, value, setter, placeholder]) => (
-              <label key={kind} className="grid gap-1.5 text-sm">
-                {label}
-                <div className="flex gap-2">
-                  <Input value={value} onChange={(event) => setter(event.target.value)} placeholder={placeholder} />
-                  <Button type="button" variant="outline" onClick={() => setAgentDirBrowser(kind)}>
-                    <FolderOpen className="h-4 w-4" />
-                    Browse
-                  </Button>
-                </div>
-              </label>
-            ))}
-          </section>
-          <section className="grid gap-2 rounded-md border border-border p-3">
-            <div>
-              <h3 className="text-sm font-medium">Provider keys</h3>
-              <p className="text-xs text-muted-foreground">Environment variables win unless you save a local key here. Saved keys are not exported.</p>
-            </div>
-            <label className="grid gap-1.5 text-sm">
-              Anthropic API key
-              <Input
-                type="password"
-                value={anthropicApiKey}
-                onChange={(event) => setAnthropicApiKey(event.target.value)}
-                placeholder={`Current: ${settings.anthropicKeySource || "missing"}`}
-              />
-            </label>
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={clearAnthropicApiKey} onChange={(event) => setClearAnthropicApiKey(event.target.checked)} />
-              Clear saved Anthropic key{settings.anthropicKeySaved ? "" : " (none saved)"}
-            </label>
-            <label className="grid gap-1.5 text-sm">
-              OpenAI API key
-              <Input
-                type="password"
-                value={openaiApiKey}
-                onChange={(event) => setOpenaiApiKey(event.target.value)}
-                placeholder={`Current: ${settings.openaiKeySource || "missing"}`}
-              />
-            </label>
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={clearOpenaiApiKey} onChange={(event) => setClearOpenaiApiKey(event.target.checked)} />
-              Clear saved OpenAI key{settings.openaiKeySaved ? "" : " (none saved)"}
-            </label>
-          </section>
-          <label className="grid gap-1.5 text-sm">
-            Default mode for new agents
-            <Select value={defaultAgentMode} onValueChange={(value) => setDefaultAgentMode(value as AgentPermissionMode)}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {COMPOSER_MODE_OPTIONS.map((option) => (
-                  <SelectItem key={option.mode} value={option.mode}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </label>
           <label className="grid gap-1.5 text-sm">
             Appearance
             <Select value={themeMode} onValueChange={(value) => setThemeMode(value as ThemeMode)}>
@@ -3983,19 +3935,6 @@ function SettingsDialog() {
                 <SelectItem value="auto">Auto</SelectItem>
                 <SelectItem value="light">Light</SelectItem>
                 <SelectItem value="dark">Dark</SelectItem>
-              </SelectContent>
-            </Select>
-          </label>
-          <label className="grid gap-1.5 text-sm">
-            Auto-approve tool use
-            <Select value={autoApprove} onValueChange={(value) => setAutoApprove(value as typeof autoApprove)}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="off">Off</SelectItem>
-                <SelectItem value="session">This session</SelectItem>
-                <SelectItem value="always">Always</SelectItem>
               </SelectContent>
             </Select>
           </label>
@@ -4042,10 +3981,134 @@ function SettingsDialog() {
               </span>
             </span>
           </label>
-          {autoApprove === "always" && (
-            <p className="rounded-md border border-amber-400/40 bg-amber-500/10 p-3 text-sm text-amber-100">
-              Always passes --dangerously-skip-permissions when launching agents.
-            </p>
+          </>
+          )}
+          {settingsTab === "claude" && (
+            <>
+              <label className="grid gap-1.5 text-sm">
+                Claude path
+                <Input value={claudePath} onChange={(event) => setClaudePath(event.target.value)} placeholder="claude" />
+              </label>
+              <label className="grid gap-1.5 text-sm">
+                Claude models
+                <Textarea value={claudeModelsText} onChange={(event) => setClaudeModelsText(event.target.value)} placeholder="One Claude model id per line" />
+              </label>
+              <label className="grid gap-1.5 text-sm">
+                Claude agents directory
+                <div className="flex gap-2">
+                  <Input value={claudeAgentDir} onChange={(event) => setClaudeAgentDir(event.target.value)} placeholder=".claude/agents" />
+                  <Button type="button" variant="outline" onClick={() => setAgentDirBrowser("claude")}>
+                    <FolderOpen className="h-4 w-4" />
+                    Browse
+                  </Button>
+                </div>
+              </label>
+              <label className="grid gap-1.5 text-sm">
+                Built-in agents directory
+                <div className="flex gap-2">
+                  <Input value={builtInAgentDir} onChange={(event) => setBuiltInAgentDir(event.target.value)} placeholder=".agent-control/built-in-agents" />
+                  <Button type="button" variant="outline" onClick={() => setAgentDirBrowser("builtIn")}>
+                    <FolderOpen className="h-4 w-4" />
+                    Browse
+                  </Button>
+                </div>
+              </label>
+              <section className="grid gap-2 rounded-md border border-border p-3">
+                <div>
+                  <h3 className="text-sm font-medium">Anthropic key</h3>
+                  <p className="text-xs text-muted-foreground">Environment variables win unless you save a local key here.</p>
+                </div>
+                <Input type="password" value={anthropicApiKey} onChange={(event) => setAnthropicApiKey(event.target.value)} placeholder={`Current: ${settings.anthropicKeySource || "missing"}`} />
+                <label className="flex items-center gap-2 text-sm">
+                  <input type="checkbox" checked={clearAnthropicApiKey} onChange={(event) => setClearAnthropicApiKey(event.target.checked)} />
+                  Clear saved Anthropic key{settings.anthropicKeySaved ? "" : " (none saved)"}
+                </label>
+              </section>
+              <label className="grid gap-1.5 text-sm">
+                Default mode for new Claude agents
+                <Select value={defaultAgentMode} onValueChange={(value) => setDefaultAgentMode(value as AgentPermissionMode)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {COMPOSER_MODE_OPTIONS.map((option) => (
+                      <SelectItem key={option.mode} value={option.mode}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </label>
+              <label className="grid gap-1.5 text-sm">
+                Auto-approve tool use
+                <Select value={autoApprove} onValueChange={(value) => setAutoApprove(value as typeof autoApprove)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="off">Off</SelectItem>
+                    <SelectItem value="session">This session</SelectItem>
+                    <SelectItem value="always">Always</SelectItem>
+                  </SelectContent>
+                </Select>
+              </label>
+              {autoApprove === "always" && (
+                <p className="rounded-md border border-amber-400/40 bg-amber-500/10 p-3 text-sm text-amber-100">
+                  Always passes --dangerously-skip-permissions when launching Claude agents.
+                </p>
+              )}
+            </>
+          )}
+          {settingsTab === "codex" && (
+            <>
+              <label className="grid gap-1.5 text-sm">
+                Codex path
+                <Input value={codexPath} onChange={(event) => setCodexPath(event.target.value)} placeholder="codex" />
+              </label>
+              <label className="grid gap-1.5 text-sm">
+                Codex models
+                <Textarea value={codexModelsText} onChange={(event) => setCodexModelsText(event.target.value)} placeholder="One Codex model id per line" />
+              </label>
+              <label className="grid gap-1.5 text-sm">
+                Codex agents directory
+                <div className="flex gap-2">
+                  <Input value={codexAgentDir} onChange={(event) => setCodexAgentDir(event.target.value)} placeholder=".codex/agents" />
+                  <Button type="button" variant="outline" onClick={() => setAgentDirBrowser("codex")}>
+                    <FolderOpen className="h-4 w-4" />
+                    Browse
+                  </Button>
+                </div>
+              </label>
+            </>
+          )}
+          {settingsTab === "openai" && (
+            <>
+              <label className="grid gap-1.5 text-sm">
+                OpenAI models
+                <Textarea value={openaiModelsText} onChange={(event) => setOpenaiModelsText(event.target.value)} placeholder="One OpenAI model id per line" />
+              </label>
+              <label className="grid gap-1.5 text-sm">
+                OpenAI agents directory
+                <div className="flex gap-2">
+                  <Input value={openaiAgentDir} onChange={(event) => setOpenaiAgentDir(event.target.value)} placeholder=".agent-control/openai-agents" />
+                  <Button type="button" variant="outline" onClick={() => setAgentDirBrowser("openai")}>
+                    <FolderOpen className="h-4 w-4" />
+                    Browse
+                  </Button>
+                </div>
+              </label>
+              <section className="grid gap-2 rounded-md border border-border p-3">
+                <div>
+                  <h3 className="text-sm font-medium">OpenAI key</h3>
+                  <p className="text-xs text-muted-foreground">Environment variables win unless you save a local key here.</p>
+                </div>
+                <Input type="password" value={openaiApiKey} onChange={(event) => setOpenaiApiKey(event.target.value)} placeholder={`Current: ${settings.openaiKeySource || "missing"}`} />
+                <label className="flex items-center gap-2 text-sm">
+                  <input type="checkbox" checked={clearOpenaiApiKey} onChange={(event) => setClearOpenaiApiKey(event.target.checked)} />
+                  Clear saved OpenAI key{settings.openaiKeySaved ? "" : " (none saved)"}
+                </label>
+              </section>
+            </>
           )}
           <section className="grid gap-2 rounded-md border border-border p-3">
             <div>
