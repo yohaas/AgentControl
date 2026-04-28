@@ -4346,8 +4346,8 @@ function SettingsDialog() {
         <DialogHeader>
           <DialogTitle>Settings</DialogTitle>
         </DialogHeader>
-        <div className="grid min-h-0 grid-cols-[180px_minmax(0,1fr)] gap-4">
-          <nav className="flex flex-col gap-1 rounded-md border border-border bg-muted/30 p-2 text-sm">
+        <div className="grid h-[72vh] min-h-0 grid-cols-[180px_minmax(0,1fr)] gap-4">
+          <nav className="flex min-h-0 flex-col gap-1 rounded-md border border-border bg-muted/30 p-2 text-sm">
             {settingsTabs.map(([tab, label]) => (
               <button
                 key={tab}
@@ -4362,7 +4362,7 @@ function SettingsDialog() {
               </button>
             ))}
           </nav>
-          <div className="flex max-h-[72vh] min-h-0 flex-col">
+          <div className="flex min-h-0 flex-col">
             <div className="grid min-h-0 flex-1 gap-3 overflow-y-auto pr-1">
           {settingsTab === "general" && (
             <>
