@@ -1239,6 +1239,27 @@ function devCommandStorageKey(projectId: string) {
   return `agent-control-dev-command:${projectId}`;
 }
 
+function isLikelyWindowsPath(value: string) {
+  return /^[a-zA-Z]:[\\/]/.test(value) || value.includes("\\");
+}
+
+function comparablePath(value: string, windowsPath: boolean) {
+  const normalized = value.trim().replace(/\\/g, "/").replace(/\/+$/g, "");
+  return windowsPath ? normalized.toLowerCase() : normalized;
+}
+
+function pathsEqual(left: string, right: string) {
+  const windowsPath = isLikelyWindowsPath(left) || isLikelyWindowsPath(right);
+  return comparablePath(left, windowsPath) === comparablePath(right, windowsPath);
+}
+
+function pathIsDescendant(child: string, parent: string) {
+  const windowsPath = isLikelyWindowsPath(child) || isLikelyWindowsPath(parent);
+  const normalizedChild = comparablePath(child, windowsPath);
+  const normalizedParent = comparablePath(parent, windowsPath);
+  return normalizedChild !== normalizedParent && normalizedChild.startsWith(`${normalizedParent}/`);
+}
+
 function isDevTerminal(session: TerminalSession) {
   return session.title?.startsWith("Dev: ") || session.title === "npm run dev";
 }
@@ -1837,9 +1858,26 @@ function WorktreesDialog({ projectId }: { projectId?: string }) {
   }
 
   function selectProjectForPath(projectList: Project[], worktreePath: string) {
-    const normalized = worktreePath.toLowerCase();
-    const project = projectList.find((candidate) => candidate.path.toLowerCase() === normalized);
+    const project = projectList.find((candidate) => pathsEqual(candidate.path, worktreePath));
     if (project) setSelectedProject(project.id);
+  }
+
+  function canOpenWorktree(worktreePath: string) {
+    return Boolean(selectedProject?.path && pathIsDescendant(worktreePath, selectedProject.path));
+  }
+
+  async function openWorktreeProject(worktreePath: string) {
+    if (!canOpenWorktree(worktreePath)) return;
+    setBusyPath(worktreePath);
+    try {
+      const nextProjects = await api.addProject(worktreePath);
+      setProjects(nextProjects);
+      selectProjectForPath(nextProjects, worktreePath);
+    } catch (error) {
+      addError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setBusyPath(undefined);
+    }
   }
 
   async function createWorktree() {
@@ -1855,7 +1893,7 @@ function WorktreesDialog({ projectId }: { projectId?: string }) {
       setProjects(result.projects);
       setWorktrees(result.worktrees);
       const created =
-        result.worktrees.worktrees.find((worktree) => pathText.trim() && worktree.path.toLowerCase() === pathText.trim().toLowerCase()) ||
+        result.worktrees.worktrees.find((worktree) => pathText.trim() && pathsEqual(worktree.path, pathText.trim())) ||
         result.worktrees.worktrees.find((worktree) => worktree.branch === branch.trim());
       if (created) selectProjectForPath(result.projects, created.path);
       setBranch("");
@@ -1955,49 +1993,58 @@ function WorktreesDialog({ projectId }: { projectId?: string }) {
             </div>
           ) : (
             <div className="grid max-h-[56vh] gap-2 overflow-auto">
-              {worktrees.worktrees.map((worktree) => (
-                <div key={worktree.path} className="grid gap-2 rounded-md border border-border p-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="truncate text-sm font-medium">{worktree.branch || "Detached"}</span>
-                        {worktree.current && <Badge>Current</Badge>}
-                        {worktree.projectId && <Badge>Open</Badge>}
-                        {worktree.prunable && <Badge>Prunable</Badge>}
+              {worktrees.worktrees.map((worktree) => {
+                const descendantWorktree = canOpenWorktree(worktree.path);
+                const canSwitch = Boolean(worktree.projectId) && !worktree.current;
+                const canOpenAndSwitch = !worktree.projectId && !worktree.current && descendantWorktree;
+                return (
+                  <div key={worktree.path} className="grid gap-2 rounded-md border border-border p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="truncate text-sm font-medium">{worktree.branch || "Detached"}</span>
+                          {worktree.current && <Badge>Current</Badge>}
+                          {worktree.projectId && <Badge>Open</Badge>}
+                          {!worktree.projectId && descendantWorktree && <Badge>Inside project</Badge>}
+                          {worktree.prunable && <Badge>Prunable</Badge>}
+                        </div>
+                        <div className="mt-1 break-all font-mono text-xs text-muted-foreground">{worktree.path}</div>
                       </div>
-                      <div className="mt-1 break-all font-mono text-xs text-muted-foreground">{worktree.path}</div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={busyPath === worktree.path || (!canSwitch && !canOpenAndSwitch)}
+                        onClick={() => {
+                          if (canSwitch && worktree.projectId) setSelectedProject(worktree.projectId);
+                          else if (canOpenAndSwitch) void openWorktreeProject(worktree.path);
+                        }}
+                      >
+                        {canOpenAndSwitch ? "Open & Switch" : "Switch"}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={worktree.current || !worktree.branch || busyPath === worktree.path}
+                        onClick={() => void mergeWorktree(worktree.path, worktree.branch)}
+                      >
+                        <GitBranch className="h-4 w-4" />
+                        Merge
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={worktree.current || busyPath === worktree.path}
+                        onClick={() => void removeWorktree(worktree.path)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        Remove
+                      </Button>
                     </div>
                   </div>
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={!worktree.projectId || worktree.current}
-                      onClick={() => worktree.projectId && setSelectedProject(worktree.projectId)}
-                    >
-                      Switch
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={worktree.current || !worktree.branch || busyPath === worktree.path}
-                      onClick={() => void mergeWorktree(worktree.path, worktree.branch)}
-                    >
-                      <GitBranch className="h-4 w-4" />
-                      Merge
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={worktree.current || busyPath === worktree.path}
-                      onClick={() => void removeWorktree(worktree.path)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                      Remove
-                    </Button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
