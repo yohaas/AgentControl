@@ -75,6 +75,7 @@ interface AppState {
   setSettings: (settings: SettingsState) => void;
   setWsConnected: (connected: boolean) => void;
   addError: (message: string) => void;
+  dismissError: (index: number) => void;
   hydrateSnapshot: (snapshot: AgentSnapshot) => void;
   handleServerEvent: (event: WsServerEvent) => void;
   setDraft: (id: string, text: string) => void;
@@ -212,6 +213,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   setSettings: (settings) => set({ settings: normalizeSettings(settings) }),
   setWsConnected: (connected) => set({ wsConnected: connected }),
   addError: (message) => set((state) => ({ errors: [message, ...state.errors].slice(0, 5) })),
+  dismissError: (index) => set((state) => ({ errors: state.errors.filter((_, candidateIndex) => candidateIndex !== index) })),
   hydrateSnapshot: (snapshot) =>
     set((state) => ({
       agents: agentMap(snapshot.agents),

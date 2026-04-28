@@ -2605,12 +2605,20 @@ function TerminalPanel({ popout = false }: { popout?: boolean } = {}) {
 
 function ErrorStack() {
   const errors = useAppStore((state) => state.errors);
+  const dismissError = useAppStore((state) => state.dismissError);
   if (errors.length === 0) return null;
   return (
     <div className="fixed bottom-4 right-4 z-50 grid max-w-md gap-2">
       {errors.map((error, index) => (
-        <div key={`${error}-${index}`} className="rounded-md border border-red-400/40 bg-red-500/15 px-3 py-2 text-sm text-red-100 shadow-lg">
-          {error}
+        <div key={`${error}-${index}`} className="flex items-start gap-2 rounded-md border border-red-400/40 bg-red-500/15 px-3 py-2 text-sm text-red-100 shadow-lg">
+          <span className="min-w-0 flex-1">{error}</span>
+          <button
+            className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-red-100/80 hover:bg-red-500/20 hover:text-red-100"
+            onClick={() => dismissError(index)}
+            title="Dismiss error"
+          >
+            <X className="h-4 w-4" />
+          </button>
         </div>
       ))}
     </div>
