@@ -2099,6 +2099,7 @@ function TerminalPanel() {
   const setTerminalOpen = useAppStore((state) => state.setTerminalOpen);
   const [detached, setDetached] = useState(false);
   const [height, setHeight] = useState(320);
+  const [detachedBounds, setDetachedBounds] = useState({ left: 96, top: 72, width: 960, height: 520 });
   const [visiblePaneIds, setVisiblePaneIds] = useState<string[]>([]);
   const sessions = useMemo(
     () =>
@@ -2120,6 +2121,29 @@ function TerminalPanel() {
     });
   }, [activeTerminalId, sessions]);
 
+  useEffect(() => {
+    if (!detached) return;
+    const onResize = () => setDetachedBounds((bounds) => clampDetachedBounds(bounds));
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [detached]);
+
+  function clampDetachedBounds(bounds: { left: number; top: number; width: number; height: number }) {
+    const margin = 8;
+    const minWidth = 420;
+    const minHeight = 260;
+    const viewportWidth = window.innerWidth || 1024;
+    const viewportHeight = window.innerHeight || 720;
+    const width = Math.min(Math.max(bounds.width, minWidth), Math.max(minWidth, viewportWidth - margin * 2));
+    const height = Math.min(Math.max(bounds.height, minHeight), Math.max(minHeight, viewportHeight - margin * 2));
+    return {
+      width,
+      height,
+      left: Math.min(Math.max(bounds.left, margin), Math.max(margin, viewportWidth - width - margin)),
+      top: Math.min(Math.max(bounds.top, margin), Math.max(margin, viewportHeight - height - margin))
+    };
+  }
+
   function startResize(event: ReactPointerEvent<HTMLDivElement>) {
     event.preventDefault();
     const startY = event.clientY;
@@ -2133,6 +2157,75 @@ function TerminalPanel() {
     };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
+  }
+
+  function startDetachedMove(event: ReactPointerEvent<HTMLDivElement>) {
+    if (!detached) return;
+    event.preventDefault();
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const startBounds = detachedBounds;
+    const onMove = (moveEvent: PointerEvent) => {
+      setDetachedBounds(
+        clampDetachedBounds({
+          ...startBounds,
+          left: startBounds.left + moveEvent.clientX - startX,
+          top: startBounds.top + moveEvent.clientY - startY
+        })
+      );
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp, { once: true });
+  }
+
+  function startDetachedResize(
+    event: ReactPointerEvent<HTMLDivElement>,
+    horizontal?: "left" | "right",
+    vertical?: "top" | "bottom"
+  ) {
+    if (!detached) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const startBounds = detachedBounds;
+    const onMove = (moveEvent: PointerEvent) => {
+      const deltaX = moveEvent.clientX - startX;
+      const deltaY = moveEvent.clientY - startY;
+      const next = { ...startBounds };
+
+      if (horizontal === "right") next.width = startBounds.width + deltaX;
+      if (horizontal === "left") {
+        next.width = startBounds.width - deltaX;
+        next.left = startBounds.left + deltaX;
+      }
+      if (vertical === "bottom") next.height = startBounds.height + deltaY;
+      if (vertical === "top") {
+        next.height = startBounds.height - deltaY;
+        next.top = startBounds.top + deltaY;
+      }
+
+      if (next.width < 420 && horizontal === "left") next.left -= 420 - next.width;
+      if (next.height < 260 && vertical === "top") next.top -= 260 - next.height;
+      setDetachedBounds(clampDetachedBounds(next));
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp, { once: true });
+  }
+
+  function toggleDetached() {
+    if (!detached) {
+      setDetachedBounds((bounds) => clampDetachedBounds(bounds));
+    }
+    setDetached((value) => !value);
   }
 
   function startTerminal() {
@@ -2165,16 +2258,32 @@ function TerminalPanel() {
     <section
       className={cn(
         "flex shrink-0 flex-col border-border bg-card",
-        detached ? "fixed inset-8 z-40 rounded-md border shadow-2xl" : "relative border-t"
+        detached ? "fixed z-40 rounded-md border shadow-2xl" : "relative border-t"
       )}
-      style={detached ? undefined : { height }}
+      style={detached ? detachedBounds : { height }}
     >
       {!detached && (
         <div className="absolute -top-1 left-0 right-0 h-2 cursor-ns-resize hover:bg-primary/25" onPointerDown={startResize} title="Drag to resize terminal" />
       )}
+      {detached && (
+        <>
+          <div className="absolute -left-1 top-2 z-20 h-[calc(100%-1rem)] w-2 cursor-ew-resize" onPointerDown={(event) => startDetachedResize(event, "left")} />
+          <div className="absolute -right-1 top-2 z-20 h-[calc(100%-1rem)] w-2 cursor-ew-resize" onPointerDown={(event) => startDetachedResize(event, "right")} />
+          <div className="absolute -top-1 left-2 z-20 h-2 w-[calc(100%-1rem)] cursor-ns-resize" onPointerDown={(event) => startDetachedResize(event, undefined, "top")} />
+          <div className="absolute -bottom-1 left-2 z-20 h-2 w-[calc(100%-1rem)] cursor-ns-resize" onPointerDown={(event) => startDetachedResize(event, undefined, "bottom")} />
+          <div className="absolute -left-1 -top-1 z-30 h-4 w-4 cursor-nwse-resize" onPointerDown={(event) => startDetachedResize(event, "left", "top")} />
+          <div className="absolute -right-1 -top-1 z-30 h-4 w-4 cursor-nesw-resize" onPointerDown={(event) => startDetachedResize(event, "right", "top")} />
+          <div className="absolute -bottom-1 -left-1 z-30 h-4 w-4 cursor-nesw-resize" onPointerDown={(event) => startDetachedResize(event, "left", "bottom")} />
+          <div className="absolute -bottom-1 -right-1 z-30 h-4 w-4 cursor-nwse-resize" onPointerDown={(event) => startDetachedResize(event, "right", "bottom")} />
+        </>
+      )}
       <div className="flex h-11 shrink-0 items-center gap-2 border-b border-border px-3">
         <SquareTerminal className="h-4 w-4 text-primary" />
-        <div className="min-w-0 flex-1">
+        <div
+          className={cn("min-w-0 flex-1", detached && "cursor-move select-none")}
+          onPointerDown={startDetachedMove}
+          title={detached ? "Drag to move terminal" : undefined}
+        >
           <div className="truncate text-sm font-medium">Terminal</div>
           <div className="truncate text-xs text-muted-foreground">{session?.cwd || "No terminal open"}</div>
         </div>
@@ -2220,7 +2329,7 @@ function TerminalPanel() {
           <GripVertical className="h-4 w-4" />
           Split
         </Button>
-        <Button variant="outline" size="sm" onClick={() => setDetached((value) => !value)}>
+        <Button variant="outline" size="sm" onClick={toggleDetached}>
           {detached ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
           {detached ? "Dock" : "Detach"}
         </Button>
