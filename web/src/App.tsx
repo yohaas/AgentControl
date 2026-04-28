@@ -464,6 +464,48 @@ function formatFileSize(size: number) {
   return `${Math.round(size / 1024 / 102.4) / 10} MB`;
 }
 
+interface ContextTreeNode {
+  name: string;
+  path: string;
+  folders: ContextTreeNode[];
+  files: ProjectFileEntry[];
+}
+
+function buildContextTree(files: ProjectFileEntry[]): ContextTreeNode {
+  const root: ContextTreeNode = { name: "", path: "", folders: [], files: [] };
+  const foldersByPath = new Map<string, ContextTreeNode>([["", root]]);
+
+  for (const file of files) {
+    const parts = file.path.split("/").filter(Boolean);
+    let current = root;
+    let currentPath = "";
+    for (const part of parts.slice(0, -1)) {
+      currentPath = currentPath ? `${currentPath}/${part}` : part;
+      let folder = foldersByPath.get(currentPath);
+      if (!folder) {
+        folder = { name: part, path: currentPath, folders: [], files: [] };
+        foldersByPath.set(currentPath, folder);
+        current.folders.push(folder);
+      }
+      current = folder;
+    }
+    current.files.push(file);
+  }
+
+  function sortNode(node: ContextTreeNode) {
+    node.folders.sort((left, right) => left.name.localeCompare(right.name, undefined, { sensitivity: "base" }));
+    node.files.sort((left, right) => left.name.localeCompare(right.name, undefined, { sensitivity: "base" }));
+    node.folders.forEach(sortNode);
+  }
+
+  sortNode(root);
+  return root;
+}
+
+function contextFolderPaths(node: ContextTreeNode): string[] {
+  return node.folders.flatMap((folder) => [folder.path, ...contextFolderPaths(folder)]);
+}
+
 function selectedLineCount(text: string) {
   const trimmed = text.trim();
   if (!trimmed) return 0;
@@ -545,6 +587,12 @@ function AddContextDialog({
   const [query, setQuery] = useState("");
   const [files, setFiles] = useState<ProjectFileEntry[]>([]);
   const [loading, setLoading] = useState(false);
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(() => new Set());
+  const tree = useMemo(() => buildContextTree(files), [files]);
+  const visibleFolders = useMemo(
+    () => (query.trim() ? new Set(contextFolderPaths(tree)) : expandedFolders),
+    [expandedFolders, query, tree]
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -580,6 +628,59 @@ function AddContextDialog({
     }
   }
 
+  function toggleFolder(path: string) {
+    setExpandedFolders((current) => {
+      const next = new Set(current);
+      if (next.has(path)) {
+        next.delete(path);
+      } else {
+        next.add(path);
+      }
+      return next;
+    });
+  }
+
+  function renderFile(file: ProjectFileEntry, depth: number) {
+    return (
+      <button
+        key={file.path}
+        type="button"
+        className="flex w-full min-w-0 items-center gap-3 px-3 py-2 text-left text-sm hover:bg-accent"
+        style={{ paddingLeft: 12 + depth * 18 }}
+        onClick={() => void addFile(file)}
+      >
+        <FileText className="h-4 w-4 shrink-0 text-primary" />
+        <span className="min-w-0 flex-1 truncate">{file.name}</span>
+        <span className="shrink-0 text-xs text-muted-foreground">{formatFileSize(file.size)}</span>
+      </button>
+    );
+  }
+
+  function renderFolder(folder: ContextTreeNode, depth: number) {
+    const expanded = visibleFolders.has(folder.path);
+    return (
+      <div key={folder.path}>
+        <button
+          type="button"
+          className="flex w-full min-w-0 items-center gap-2 px-3 py-2 text-left text-sm hover:bg-accent"
+          style={{ paddingLeft: 12 + depth * 18 }}
+          onClick={() => toggleFolder(folder.path)}
+        >
+          {expanded ? <ChevronDown className="h-4 w-4 shrink-0" /> : <ChevronRight className="h-4 w-4 shrink-0" />}
+          <FolderOpen className="h-4 w-4 shrink-0 text-primary" />
+          <span className="min-w-0 flex-1 truncate">{folder.name}</span>
+          <span className="shrink-0 text-xs text-muted-foreground">{folder.files.length + folder.folders.length}</span>
+        </button>
+        {expanded && (
+          <>
+            {folder.folders.map((child) => renderFolder(child, depth + 1))}
+            {folder.files.map((file) => renderFile(file, depth + 1))}
+          </>
+        )}
+      </div>
+    );
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[min(92vw,720px)]">
@@ -594,18 +695,10 @@ function AddContextDialog({
             ) : files.length === 0 ? (
               <div className="p-4 text-sm text-muted-foreground">No files found.</div>
             ) : (
-              files.map((file) => (
-                <button
-                  key={file.path}
-                  type="button"
-                  className="flex w-full min-w-0 items-center gap-3 border-b border-border px-3 py-2 text-left text-sm last:border-b-0 hover:bg-accent"
-                  onClick={() => void addFile(file)}
-                >
-                  <FileText className="h-4 w-4 shrink-0 text-primary" />
-                  <span className="min-w-0 flex-1 truncate">{file.path}</span>
-                  <span className="shrink-0 text-xs text-muted-foreground">{formatFileSize(file.size)}</span>
-                </button>
-              ))
+              <div className="divide-y divide-border">
+                {tree.folders.map((folder) => renderFolder(folder, 0))}
+                {tree.files.map((file) => renderFile(file, 0))}
+              </div>
             )}
           </div>
         </div>
