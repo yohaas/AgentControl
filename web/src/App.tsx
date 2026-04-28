@@ -3,6 +3,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useCallback,
   type ClipboardEvent as ReactClipboardEvent,
   type PointerEvent as ReactPointerEvent,
   type UIEvent as ReactUIEvent
@@ -81,6 +82,7 @@ const EMPTY_TRANSCRIPT: TranscriptEvent[] = [];
 const EMPTY_QUEUE: { id: string; text: string; attachments: MessageAttachment[] }[] = [];
 const TERMINAL_DOCK_MESSAGE = "agent-control:dock-terminal";
 const TERMINAL_DOCK_STORAGE_KEY = "agent-control-terminal-dock-request";
+const TERMINAL_POPOUT_STORAGE_KEY = "agent-control-popped-out-terminals";
 const THINKING_PHRASES = [
   "Discombobulating",
   "Cogitating",
@@ -92,6 +94,36 @@ const THINKING_PHRASES = [
   "Mulling",
   "Connecting dots"
 ];
+
+function readPoppedOutTerminalIds() {
+  try {
+    return new Set(JSON.parse(window.localStorage.getItem(TERMINAL_POPOUT_STORAGE_KEY) || "[]") as string[]);
+  } catch {
+    return new Set<string>();
+  }
+}
+
+function writePoppedOutTerminalIds(ids: Set<string>) {
+  window.localStorage.setItem(TERMINAL_POPOUT_STORAGE_KEY, JSON.stringify([...ids]));
+}
+
+function readTerminalDockRequest(value: string | null) {
+  try {
+    return JSON.parse(value || "{}") as { terminalId?: string };
+  } catch {
+    return {};
+  }
+}
+
+function notifyTerminalDock(terminalId?: string, focusOpener = false) {
+  try {
+    window.opener?.postMessage({ type: TERMINAL_DOCK_MESSAGE, terminalId }, window.location.origin);
+    if (focusOpener) window.opener?.focus();
+  } catch {
+    // Fall back to a storage event for browsers that block opener access.
+  }
+  window.localStorage.setItem(TERMINAL_DOCK_STORAGE_KEY, JSON.stringify({ terminalId, at: Date.now() }));
+}
 
 function useThinkingPhrase(active = true) {
   const [index, setIndex] = useState(() => Math.floor(Date.now() / 1800) % THINKING_PHRASES.length);
@@ -2754,7 +2786,17 @@ function TerminalPane({
   );
 }
 
-function TerminalPanel({ popout = false }: { popout?: boolean } = {}) {
+function TerminalPanel({
+  popout = false,
+  popoutTerminalId,
+  poppedOutTerminalIds = new Set<string>(),
+  onPopoutTerminal
+}: {
+  popout?: boolean;
+  popoutTerminalId?: string;
+  poppedOutTerminalIds?: Set<string>;
+  onPopoutTerminal?: (id: string, remainingIds: string[]) => void;
+} = {}) {
   const projects = useAppStore((state) => state.projects);
   const selectedProjectId = useAppStore((state) => state.selectedProjectId);
   const sessionsById = useAppStore((state) => state.terminalSessions);
@@ -2767,12 +2809,17 @@ function TerminalPanel({ popout = false }: { popout?: boolean } = {}) {
   const [height, setHeight] = useState(320);
   const [detachedBounds, setDetachedBounds] = useState({ left: 96, top: 72, width: 960, height: 520 });
   const [visiblePaneIds, setVisiblePaneIds] = useState<string[]>([]);
+  const poppedOutKey = useMemo(() => [...poppedOutTerminalIds].sort().join("|"), [poppedOutTerminalIds]);
   const sessions = useMemo(
-    () =>
-      terminalsForProject(sessionsById, selectedProjectId).sort(
+    () => {
+      const projectSessions = terminalsForProject(sessionsById, selectedProjectId).sort(
         (left, right) => +new Date(left.startedAt) - +new Date(right.startedAt)
-      ),
-    [sessionsById, selectedProjectId]
+      );
+      if (popout && popoutTerminalId) return projectSessions.filter((item) => item.id === popoutTerminalId);
+      if (popout) return projectSessions;
+      return projectSessions.filter((item) => !poppedOutTerminalIds.has(item.id));
+    },
+    [poppedOutKey, poppedOutTerminalIds, popout, popoutTerminalId, sessionsById, selectedProjectId]
   );
   const activeSession = activeTerminalId ? sessions.find((item) => item.id === activeTerminalId) : undefined;
   const session = activeSession || sessions[sessions.length - 1];
@@ -2896,29 +2943,29 @@ function TerminalPanel({ popout = false }: { popout?: boolean } = {}) {
   }
 
   function openPopout() {
+    if (!session) return;
     const params = new URLSearchParams();
-    if (selectedProjectId) params.set("projectId", selectedProjectId);
+    if (session.projectId || selectedProjectId) params.set("projectId", session.projectId || selectedProjectId || "");
+    params.set("terminalId", session.id);
     const opened = window.open(
       `/terminal-popout${params.toString() ? `?${params.toString()}` : ""}`,
-      `agent-control-terminal-${selectedProjectId || "global"}`,
+      `agent-control-terminal-${session.id}`,
       "popup,width=1120,height=720,left=120,top=80,resizable=yes,scrollbars=no"
     );
     if (!opened) {
       addError("Pop-out terminal was blocked by the browser.");
       return;
     }
+    onPopoutTerminal?.(
+      session.id,
+      sessions.filter((item) => item.id !== session.id).map((item) => item.id)
+    );
     opened.focus();
   }
 
   function dockPopout() {
     if (!popout) return;
-    try {
-      window.opener?.postMessage({ type: TERMINAL_DOCK_MESSAGE }, window.location.origin);
-      window.opener?.focus();
-    } catch {
-      // Fall back to a storage event for browsers that block opener access.
-    }
-    window.localStorage.setItem(TERMINAL_DOCK_STORAGE_KEY, String(Date.now()));
+    notifyTerminalDock(popoutTerminalId || session?.id, true);
     window.close();
   }
 
@@ -3080,17 +3127,17 @@ function TerminalPanel({ popout = false }: { popout?: boolean } = {}) {
   );
 }
 
-function TerminalMinimizedDock() {
+function TerminalMinimizedDock({ poppedOutTerminalIds }: { poppedOutTerminalIds: Set<string> }) {
   const selectedProjectId = useAppStore((state) => state.selectedProjectId);
   const sessionsById = useAppStore((state) => state.terminalSessions);
   const setTerminalOpen = useAppStore((state) => state.setTerminalOpen);
   const setActiveTerminal = useAppStore((state) => state.setActiveTerminal);
   const sessions = useMemo(
     () =>
-      terminalsForProject(sessionsById, selectedProjectId).sort(
-        (left, right) => +new Date(left.startedAt) - +new Date(right.startedAt)
-      ),
-    [sessionsById, selectedProjectId]
+      terminalsForProject(sessionsById, selectedProjectId)
+        .filter((item) => !poppedOutTerminalIds.has(item.id))
+        .sort((left, right) => +new Date(left.startedAt) - +new Date(right.startedAt)),
+    [poppedOutTerminalIds, sessionsById, selectedProjectId]
   );
   const latest = sessions[sessions.length - 1];
   if (!latest) return null;
@@ -3147,8 +3194,46 @@ export function App() {
   const selectedProjectId = useAppStore((state) => state.selectedProjectId);
   const setSearchOpen = useAppStore((state) => state.setSearchOpen);
   const setSelectedAgent = useAppStore((state) => state.setSelectedAgent);
+  const setActiveTerminal = useAppStore((state) => state.setActiveTerminal);
   const setTerminalOpen = useAppStore((state) => state.setTerminalOpen);
   const terminalOpen = useAppStore((state) => state.terminalOpen);
+  const [poppedOutTerminalIds, setPoppedOutTerminalIds] = useState(readPoppedOutTerminalIds);
+
+  const updatePoppedOutTerminalIds = useCallback((updater: (ids: Set<string>) => Set<string>) => {
+    setPoppedOutTerminalIds((current) => {
+      const next = updater(new Set(current));
+      writePoppedOutTerminalIds(next);
+      return next;
+    });
+  }, []);
+
+  const dockTerminal = useCallback(
+    (terminalId?: string) => {
+      if (terminalId) {
+        updatePoppedOutTerminalIds((ids) => {
+          ids.delete(terminalId);
+          return ids;
+        });
+        setActiveTerminal(terminalId);
+      }
+      setTerminalOpen(true);
+      window.focus();
+    },
+    [setActiveTerminal, setTerminalOpen, updatePoppedOutTerminalIds]
+  );
+
+  function handlePopoutTerminal(id: string, remainingIds: string[]) {
+    updatePoppedOutTerminalIds((ids) => {
+      ids.add(id);
+      return ids;
+    });
+    const nextActive = remainingIds[remainingIds.length - 1];
+    if (nextActive) {
+      setActiveTerminal(nextActive);
+    } else {
+      setTerminalOpen(false);
+    }
+  }
 
   useEffect(() => {
     void Promise.all([api.projects(), api.capabilities(), api.settings()])
@@ -3163,16 +3248,14 @@ export function App() {
   }, [addError, setCapabilities, setProjects, setSettings]);
 
   useEffect(() => {
-    const dockTerminal = () => {
-      setTerminalOpen(true);
-      window.focus();
-    };
     const onMessage = (event: MessageEvent) => {
       if (event.origin !== window.location.origin) return;
-      if ((event.data as { type?: string } | undefined)?.type === TERMINAL_DOCK_MESSAGE) dockTerminal();
+      const data = event.data as { type?: string; terminalId?: string } | undefined;
+      if (data?.type === TERMINAL_DOCK_MESSAGE) dockTerminal(data.terminalId);
     };
     const onStorage = (event: StorageEvent) => {
-      if (event.key === TERMINAL_DOCK_STORAGE_KEY) dockTerminal();
+      if (event.key === TERMINAL_DOCK_STORAGE_KEY) dockTerminal(readTerminalDockRequest(event.newValue).terminalId);
+      if (event.key === TERMINAL_POPOUT_STORAGE_KEY) setPoppedOutTerminalIds(readPoppedOutTerminalIds());
     };
     window.addEventListener("message", onMessage);
     window.addEventListener("storage", onStorage);
@@ -3180,7 +3263,7 @@ export function App() {
       window.removeEventListener("message", onMessage);
       window.removeEventListener("storage", onStorage);
     };
-  }, [setTerminalOpen]);
+  }, [dockTerminal]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -3218,8 +3301,8 @@ export function App() {
         <Sidebar />
         <AgentPanel />
       </div>
-      {terminalOpen && <TerminalPanel />}
-      {!terminalOpen && <TerminalMinimizedDock />}
+      {terminalOpen && <TerminalPanel poppedOutTerminalIds={poppedOutTerminalIds} onPopoutTerminal={handlePopoutTerminal} />}
+      {!terminalOpen && <TerminalMinimizedDock poppedOutTerminalIds={poppedOutTerminalIds} />}
       <LaunchDialog />
       <SendDialog />
       <ErrorStack />
@@ -3232,10 +3315,13 @@ export function TerminalPopoutApp() {
   const setCapabilities = useAppStore((state) => state.setCapabilities);
   const setSettings = useAppStore((state) => state.setSettings);
   const setSelectedProject = useAppStore((state) => state.setSelectedProject);
+  const setActiveTerminal = useAppStore((state) => state.setActiveTerminal);
   const addError = useAppStore((state) => state.addError);
+  const params = new URLSearchParams(window.location.search);
+  const requestedProjectId = params.get("projectId") || undefined;
+  const requestedTerminalId = params.get("terminalId") || undefined;
 
   useEffect(() => {
-    const requestedProjectId = new URLSearchParams(window.location.search).get("projectId") || undefined;
     void Promise.all([api.projects(), api.capabilities(), api.settings()])
       .then(([projects, capabilities, settings]) => {
         setProjects(projects);
@@ -3244,15 +3330,23 @@ export function TerminalPopoutApp() {
         if (requestedProjectId && projects.some((project) => project.id === requestedProjectId)) {
           setSelectedProject(requestedProjectId);
         }
+        if (requestedTerminalId) setActiveTerminal(requestedTerminalId);
       })
       .catch((error: unknown) => addError(error instanceof Error ? error.message : String(error)));
     connectWebSocket();
     return () => disconnectWebSocket();
-  }, [addError, setCapabilities, setProjects, setSelectedProject, setSettings]);
+  }, [addError, requestedProjectId, requestedTerminalId, setActiveTerminal, setCapabilities, setProjects, setSelectedProject, setSettings]);
+
+  useEffect(() => {
+    if (!requestedTerminalId) return;
+    const onBeforeUnload = () => notifyTerminalDock(requestedTerminalId);
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [requestedTerminalId]);
 
   return (
     <div className="h-screen overflow-hidden bg-background text-foreground">
-      <TerminalPanel popout />
+      <TerminalPanel popout popoutTerminalId={requestedTerminalId} />
       <ErrorStack />
     </div>
   );
