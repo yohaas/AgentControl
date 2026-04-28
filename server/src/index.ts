@@ -1,5 +1,5 @@
 import http from "node:http";
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { access, cp, mkdir, readdir, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -697,17 +697,26 @@ async function removeProjectWorktree(project: Project, request: GitWorktreeRemov
   return { projects, worktrees: await projectWorktrees(project) };
 }
 
-function openWithDefaultApp(filePath: string): Promise<void> {
-  const command =
-    process.platform === "win32"
-      ? "cmd.exe"
-      : process.platform === "darwin"
-        ? "open"
-        : "xdg-open";
-  const args = process.platform === "win32" ? ["/c", "start", "", filePath] : [filePath];
+function openWithDefaultApp(filePath: string, isDirectory: boolean): Promise<void> {
+  if (process.platform === "win32") {
+    const args = isDirectory ? [filePath] : [`/select,${filePath}`];
+    return new Promise((resolve, reject) => {
+      const child = spawn("explorer.exe", args, {
+        detached: true,
+        stdio: "ignore",
+        windowsHide: true
+      });
+      child.once("error", (error) => reject(new Error(error.message || "Unable to open path in Explorer.")));
+      child.once("spawn", () => {
+        child.unref();
+        resolve();
+      });
+    });
+  }
 
+  const command = process.platform === "darwin" ? "open" : "xdg-open";
   return new Promise((resolve, reject) => {
-    execFile(command, args, { windowsHide: true }, (error) => {
+    execFile(command, [filePath], { windowsHide: true }, (error) => {
       if (error) {
         reject(new Error(error.message || "Unable to open file."));
         return;
@@ -1125,7 +1134,7 @@ app.post("/api/filesystem/open", async (request, response) => {
       response.status(400).json({ error: "Path must be a file or directory." });
       return;
     }
-    await openWithDefaultApp(filePath);
+    await openWithDefaultApp(filePath, info.isDirectory());
     response.json({ ok: true });
   } catch (error) {
     response.status(500).json({ error: error instanceof Error ? error.message : String(error) });
