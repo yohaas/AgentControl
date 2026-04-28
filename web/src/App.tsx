@@ -69,6 +69,7 @@ import type {
   MessageAttachment,
   ProjectFileEntry,
   RunningAgent,
+  SlashCommandInfo,
   TerminalSession,
   TranscriptEvent
 } from "@agent-control/shared";
@@ -130,6 +131,9 @@ interface SlashCommandSuggestion {
   value: string;
   label: string;
   description: string;
+  argumentHint?: string;
+  source?: SlashCommandInfo["source"];
+  interactive?: boolean;
 }
 
 type ToolUseEvent = Extract<TranscriptEvent, { kind: "tool_use" }>;
@@ -139,15 +143,15 @@ type ToolTranscriptItem =
   | { kind: "tool_pair"; event: ToolUseEvent; result?: ToolResultEvent };
 
 const BASE_SLASH_COMMANDS: SlashCommandSuggestion[] = [
-  { value: "/clear", label: "/clear", description: "Clear this chat history" },
-  { value: "/exit", label: "/exit", description: "Close this agent" },
-  { value: "/stop", label: "/stop", description: "Stop the active response" },
-  { value: "/interrupt", label: "/interrupt", description: "Stop the active response" },
-  { value: "/compact", label: "/compact", description: "Pass through to Claude" },
-  { value: "/memory", label: "/memory", description: "Pass through to Claude" },
-  { value: "/status", label: "/status", description: "Pass through to Claude" },
-  { value: "/resume", label: "/resume", description: "Pass through to Claude" },
-  { value: "/permissions", label: "/permissions", description: "Pass through to Claude" }
+  { value: "/clear", label: "/clear", description: "Clear this chat history", source: "agentcontrol" },
+  { value: "/exit", label: "/exit", description: "Close this agent", source: "agentcontrol" },
+  { value: "/stop", label: "/stop", description: "Stop the active response", source: "agentcontrol" },
+  { value: "/interrupt", label: "/interrupt", description: "Stop the active response", source: "agentcontrol" },
+  { value: "/compact", label: "/compact", description: "Compact conversation context", argumentHint: "[instructions]", source: "builtin" },
+  { value: "/memory", label: "/memory", description: "Edit or inspect memory files", source: "builtin", interactive: true },
+  { value: "/status", label: "/status", description: "Show account and system status", source: "builtin" },
+  { value: "/resume", label: "/resume", description: "Resume a previous conversation", source: "builtin", interactive: true },
+  { value: "/permissions", label: "/permissions", description: "Manage allow, ask, and deny rules", source: "builtin", interactive: true }
 ];
 
 function compareSlashCommands(left: string, right: string) {
@@ -159,6 +163,20 @@ function arraysEqual(left: string[], right: string[]) {
   const sortedLeft = [...left].sort(compareSlashCommands);
   const sortedRight = [...right].sort(compareSlashCommands);
   return sortedLeft.every((item, index) => item === sortedRight[index]);
+}
+
+function normalizeUiSlashCommand(command: SlashCommandInfo | string): SlashCommandInfo {
+  if (typeof command === "string") {
+    return { command: command.startsWith("/") ? command : `/${command}`, source: "session" };
+  }
+  return {
+    ...command,
+    command: command.command.startsWith("/") ? command.command : `/${command.command}`
+  };
+}
+
+function slashCommandInsertValue(command: SlashCommandInfo) {
+  return command.argumentHint ? `${command.command} ` : command.command;
 }
 
 const TERMINAL_DOCK_OPTIONS = [
@@ -347,7 +365,10 @@ function remoteControlLabel(agent: RunningAgent) {
 function SessionInfoPopover({ agent, compact = false }: { agent: RunningAgent; compact?: boolean }) {
   const tools = agent.sessionTools || [];
   const mcpServers = agent.mcpServers || [];
-  const slashCommands = useMemo(() => [...(agent.slashCommands || [])].sort(compareSlashCommands), [agent.slashCommands]);
+  const slashCommands = useMemo(
+    () => [...(agent.slashCommands || [])].map(normalizeUiSlashCommand).sort((left, right) => compareSlashCommands(left.command, right.command)),
+    [agent.slashCommands]
+  );
   const plugins = agent.activePlugins || [];
   const hasInfo = tools.length > 0 || mcpServers.length > 0 || slashCommands.length > 0 || plugins.length > 0;
 
@@ -362,7 +383,7 @@ function SessionInfoPopover({ agent, compact = false }: { agent: RunningAgent; c
         <div className="grid gap-3 text-sm">
           <div>
             <h3 className="font-medium">Session Capabilities</h3>
-            <p className="text-xs text-muted-foreground">{hasInfo ? "Reported by Claude for this launched session." : "No session capability metadata yet."}</p>
+            <p className="text-xs text-muted-foreground">{hasInfo ? "Scanned locally and merged with Claude session metadata." : "No session capability metadata yet."}</p>
           </div>
           {plugins.length > 0 && <SessionInfoList label="Plugins" items={plugins} />}
           {mcpServers.length > 0 && (
@@ -372,7 +393,7 @@ function SessionInfoPopover({ agent, compact = false }: { agent: RunningAgent; c
             />
           )}
           {tools.length > 0 && <SessionInfoList label="Tools" items={tools} max={18} />}
-          {slashCommands.length > 0 && <SessionInfoList label="Slash commands" items={slashCommands.map((command) => `/${command.replace(/^\//, "")}`)} max={18} />}
+          {slashCommands.length > 0 && <SessionInfoList label="Slash commands" items={slashCommands.map((command) => command.command)} max={18} />}
         </div>
       </PopoverContent>
     </Popover>
@@ -901,7 +922,7 @@ function handleNativeSlashCommand(agent: RunningAgent, text: string) {
   return false;
 }
 
-function slashCommandSuggestions(draft: string, models: string[], sessionCommands: string[] = []): SlashCommandSuggestion[] {
+function slashCommandSuggestions(draft: string, models: string[], sessionCommands: Array<SlashCommandInfo | string> = []): SlashCommandSuggestion[] {
   const trimmed = draft.trimStart();
   if (!trimmed.startsWith("/") || trimmed.includes("\n")) return [];
   const query = trimmed.slice(1).toLowerCase();
@@ -913,24 +934,33 @@ function slashCommandSuggestions(draft: string, models: string[], sessionCommand
       .map((model) => ({
         value: `/model ${model}`,
         label: `/model ${model}`,
-        description: "Switch this agent to this model"
+        description: "Switch this agent to this model",
+        source: "builtin"
       }));
   }
 
   const commands = [
     ...BASE_SLASH_COMMANDS,
     ...sessionCommands.map((command) => {
-      const normalized = `/${command.replace(/^\//, "")}`;
-      return { value: normalized, label: normalized, description: "Pass through to Claude" };
+      const normalized = normalizeUiSlashCommand(command);
+      return {
+        value: slashCommandInsertValue(normalized),
+        label: normalized.command,
+        description: normalized.description || "Pass through to Claude",
+        argumentHint: normalized.argumentHint,
+        source: normalized.source,
+        interactive: normalized.interactive
+      };
     }),
-    { value: "/model ", label: "/model", description: "Switch this agent to another model" }
+    { value: "/model ", label: "/model", description: "Switch this agent to another model", argumentHint: "[model]", source: "builtin" as const }
   ];
   const seen = new Set<string>();
   return commands
     .filter((command) => {
-      if (seen.has(command.value)) return false;
-      seen.add(command.value);
-      return command.value.slice(1).toLowerCase().startsWith(query);
+      const key = command.label.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return command.label.slice(1).toLowerCase().startsWith(query);
     })
     .sort((left, right) => compareSlashCommands(left.label, right.label))
     .slice(0, 10);
@@ -967,8 +997,13 @@ function SlashCommandAutocomplete({
             onSelect(suggestion.value);
           }}
         >
-          <span className="shrink-0 font-mono text-primary">{suggestion.label}</span>
-          <span className="min-w-0 truncate text-muted-foreground">{suggestion.description}</span>
+          <span className="shrink-0 font-mono text-primary">
+            {suggestion.label}
+            {suggestion.argumentHint && <span className="ml-1 text-muted-foreground">{suggestion.argumentHint}</span>}
+          </span>
+          <span className="min-w-0 flex-1 truncate text-muted-foreground">{suggestion.description}</span>
+          {suggestion.source && <Badge className="shrink-0 text-[10px] uppercase">{suggestion.source}</Badge>}
+          {suggestion.interactive && <Badge className="shrink-0 border-amber-400/40 text-[10px] uppercase text-amber-200">TUI</Badge>}
         </button>
       ))}
     </div>

@@ -99,8 +99,19 @@ export interface RunningAgent {
   restorable?: boolean;
   sessionTools?: string[];
   mcpServers?: ClaudeMcpServer[];
-  slashCommands?: string[];
+  slashCommands?: SlashCommandInfo[];
   activePlugins?: string[];
+}
+
+export type SlashCommandSource = "agentcontrol" | "builtin" | "project" | "user" | "plugin" | "session";
+
+export interface SlashCommandInfo {
+  command: string;
+  description?: string;
+  argumentHint?: string;
+  source: SlashCommandSource;
+  sourcePath?: string;
+  interactive?: boolean;
 }
 
 export interface SourceAgentRef {
@@ -321,7 +332,7 @@ export type WsServerEvent =
       id: string;
       tools: string[];
       mcpServers: ClaudeMcpServer[];
-      slashCommands: string[];
+      slashCommands: SlashCommandInfo[];
       activePlugins: string[];
       updatedAt: string;
     }

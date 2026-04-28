@@ -20,11 +20,14 @@ import type {
   RemoteControlState,
   RunningAgent,
   SendToCommand,
+  SlashCommandInfo,
   TranscriptEvent,
   WsServerEvent
 } from "@agent-control/shared";
 import { createStateWriter, readPersistedState, type PersistedState } from "./persistence.js";
 import { resolveClaudeCommand } from "./capabilities.js";
+import { listPlugins } from "./plugins.js";
+import { mergeSlashCommands, normalizeSlashCommandInfo, scanSlashCommands } from "./slash-commands.js";
 
 type Broadcast = (event: WsServerEvent) => void;
 type ProjectProvider = () => Project[];
@@ -208,6 +211,8 @@ export class AgentRuntimeManager {
     const displayName = this.uniqueDisplayName(request.displayName?.trim() || def.name);
     const timestamp = now();
     const permissionMode = this.initialPermissionMode(request);
+    const installedPlugins = await listPlugins().catch(() => []);
+    const slashCommands = await scanSlashCommands(project.path, installedPlugins, def.plugins || []).catch(() => []);
     const agent: RunningAgent = {
       id: nanoid(),
       projectId: project.id,
@@ -227,7 +232,8 @@ export class AgentRuntimeManager {
       permissionMode,
       effort: request.effort || "medium",
       thinking: request.thinking ?? true,
-      planMode: permissionMode === "plan"
+      planMode: permissionMode === "plan",
+      slashCommands
     };
 
     const state: AgentProcessState = {
@@ -1297,12 +1303,12 @@ export class AgentRuntimeManager {
 
   private updateSessionInfo(state: AgentProcessState, payload: Record<string, unknown>): void {
     const tools = this.stringArrayField(payload.tools);
-    const slashCommands = this.stringArrayField(payload.slash_commands) || this.stringArrayField(payload.slashCommands);
+    const slashCommands = this.slashCommandsField(payload.slash_commands) || this.slashCommandsField(payload.slashCommands);
     const mcpServers = this.mcpServersField(payload.mcp_servers ?? payload.mcpServers);
     if (!tools && !slashCommands && !mcpServers) return;
 
     state.agent.sessionTools = tools || state.agent.sessionTools || [];
-    state.agent.slashCommands = slashCommands || state.agent.slashCommands || [];
+    state.agent.slashCommands = slashCommands ? mergeSlashCommands(state.agent.slashCommands || [], slashCommands) : state.agent.slashCommands || [];
     state.agent.mcpServers = mcpServers || state.agent.mcpServers || [];
     state.agent.activePlugins = this.activePluginNames(state.agent.mcpServers);
     state.agent.updatedAt = now();
@@ -1321,6 +1327,14 @@ export class AgentRuntimeManager {
   private stringArrayField(value: unknown): string[] | undefined {
     if (!Array.isArray(value)) return undefined;
     return value.filter((item): item is string => typeof item === "string" && item.trim().length > 0).map((item) => item.trim());
+  }
+
+  private slashCommandsField(value: unknown): SlashCommandInfo[] | undefined {
+    if (!Array.isArray(value)) return undefined;
+    const commands = value
+      .map((item) => normalizeSlashCommandInfo(item, "session"))
+      .filter((item): item is SlashCommandInfo => Boolean(item));
+    return commands.length > 0 ? commands : undefined;
   }
 
   private mcpServersField(value: unknown): ClaudeMcpServer[] | undefined {
