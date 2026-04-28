@@ -17,6 +17,7 @@ import type {
   LaunchRequest,
   MessageAttachment,
   Project,
+  RemoteControlState,
   RunningAgent,
   SendToCommand,
   TranscriptEvent,
@@ -219,6 +220,8 @@ export class AgentRuntimeManager {
       launchedAt: timestamp,
       updatedAt: timestamp,
       remoteControl: Boolean(request.remoteControl),
+      rcState: request.remoteControl ? "starting" : undefined,
+      rcDiagnostics: request.remoteControl ? [] : undefined,
       permissionMode,
       effort: request.effort || "medium",
       planMode: permissionMode === "plan"
@@ -706,15 +709,21 @@ export class AgentRuntimeManager {
     state.agent.pid = child.pid;
     state.agent.updatedAt = now();
     this.persist();
+    this.updateRemoteControlState(state, "waiting-for-browser", "Waiting for Remote Control link...");
 
-    const parseRcLine = async (line: string) => {
+    const parseRcLine = async (line: string, stream: "stdout" | "stderr") => {
       console.log(`[${state.agent.displayName}:rc] ${line}`);
       this.storeRawLine(state, line);
+      this.addRemoteControlDiagnostic(state, stream, line);
+      if (/connected|joined|opened/i.test(line)) {
+        this.updateRemoteControlState(state, "connected", "Remote Control connected.");
+      }
       const url = line.match(RC_URL_PATTERN)?.[0];
       if (!url || state.agent.rcUrl) return;
       state.agent.rcUrl = url;
       state.agent.qr = await QRCode.toDataURL(url);
       state.agent.modelLastUpdated = state.agent.launchedAt;
+      state.agent.rcState = "waiting-for-browser";
       this.setStatus(state, "remote-controlled", "Remote Control connected.");
       this.broadcast({
         type: "agent.rc_url_ready",
@@ -728,16 +737,22 @@ export class AgentRuntimeManager {
 
     child.stdout.on("data", (chunk: Buffer) => {
       state.stdoutBuffer = this.consumeLines(`${state.stdoutBuffer}${chunk.toString("utf8")}`, (line) => {
-        void parseRcLine(line);
+        void parseRcLine(line, "stdout");
       });
     });
     child.stderr.on("data", (chunk: Buffer) => {
       state.stderrBuffer = this.consumeLines(`${state.stderrBuffer}${chunk.toString("utf8")}`, (line) => {
-        void parseRcLine(line);
+        void parseRcLine(line, "stderr");
       });
     });
-    child.on("error", (error) => this.setStatus(state, "error", error.message));
-    child.on("exit", (code, signal) => this.markTerminated(state, code, signal));
+    child.on("error", (error) => {
+      this.updateRemoteControlState(state, "error", error.message);
+      this.setStatus(state, "error", error.message);
+    });
+    child.on("exit", (code, signal) => {
+      this.updateRemoteControlState(state, "closed", code === 0 || code === null ? "Remote Control closed." : `Remote Control exited with code ${code}.`);
+      this.markTerminated(state, code, signal);
+    });
   }
 
   private fallbackModelSwitch(state: AgentProcessState, model: string): void {
@@ -1154,6 +1169,36 @@ export class AgentRuntimeManager {
       statusMessage,
       restorable: state.agent.restorable,
       pid: state.agent.pid,
+      updatedAt: state.agent.updatedAt
+    });
+    this.persist();
+  }
+
+  private addRemoteControlDiagnostic(state: AgentProcessState, stream: "stdout" | "stderr", line: string): void {
+    const diagnostics = [...(state.agent.rcDiagnostics || []), `[${stream}] ${line}`].slice(-120);
+    state.agent.rcDiagnostics = diagnostics;
+    state.agent.updatedAt = now();
+    this.broadcast({
+      type: "agent.remote_control_changed",
+      id: state.agent.id,
+      rcState: state.agent.rcState || "starting",
+      diagnostics,
+      statusMessage: state.agent.statusMessage,
+      updatedAt: state.agent.updatedAt
+    });
+    this.persist();
+  }
+
+  private updateRemoteControlState(state: AgentProcessState, rcState: RemoteControlState, statusMessage?: string): void {
+    state.agent.rcState = rcState;
+    state.agent.statusMessage = statusMessage;
+    state.agent.updatedAt = now();
+    this.broadcast({
+      type: "agent.remote_control_changed",
+      id: state.agent.id,
+      rcState,
+      diagnostics: state.agent.rcDiagnostics || [],
+      statusMessage,
       updatedAt: state.agent.updatedAt
     });
     this.persist();

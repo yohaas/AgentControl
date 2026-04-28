@@ -383,6 +383,19 @@ export const useAppStore = create<AppState>((set, get) => ({
               rcUrl: event.url,
               qr: event.qr,
               status: "remote-controlled",
+              rcState: agent.rcState || "waiting-for-browser",
+              updatedAt: event.updatedAt
+            })
+          )
+        }));
+        break;
+      case "agent.remote_control_changed":
+        set((state) => ({
+          agents: withAgent(state.agents, event.id, (agent) =>
+            mergeAgent(agent, {
+              rcState: event.rcState,
+              rcDiagnostics: event.diagnostics,
+              statusMessage: event.statusMessage,
               updatedAt: event.updatedAt
             })
           )

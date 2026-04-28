@@ -320,6 +320,14 @@ function StatusPill({ status }: { status: RunningAgent["status"] }) {
   return <Badge className={cn("capitalize", className)}>{label}</Badge>;
 }
 
+function remoteControlLabel(agent: RunningAgent) {
+  if (agent.rcState === "waiting-for-browser") return "Waiting for browser/mobile";
+  if (agent.rcState === "connected") return "Connected";
+  if (agent.rcState === "closed") return "Closed";
+  if (agent.rcState === "error") return "Error";
+  return "Starting";
+}
+
 function SessionInfoPopover({ agent, compact = false }: { agent: RunningAgent; compact?: boolean }) {
   const tools = agent.sessionTools || [];
   const mcpServers = agent.mcpServers || [];
@@ -3123,7 +3131,7 @@ function AgentTile({
               <div className="grid h-full place-items-center text-center">
                 <div className="grid max-w-sm gap-3">
                   <p className="text-sm text-muted-foreground">
-                    Remote Control is running in claude.ai/code. Use the maximized view for the QR code and connection link.
+                    {remoteControlLabel(agent)}. Use the maximized view for the QR code, link, and diagnostics.
                   </p>
                   <Button variant="outline" disabled={!agent.rcUrl} onClick={() => agent.rcUrl && window.open(agent.rcUrl, "_blank", "noopener")}>
                     <ExternalLink className="h-4 w-4" />
@@ -3391,8 +3399,14 @@ function RemoteControlPanel({ agent }: { agent: RunningAgent }) {
           </div>
           {showQr && agent.qr && <img className="mx-auto h-56 w-56 rounded-md bg-white p-3" src={agent.qr} alt="Remote Control QR code" />}
           <p className="text-sm text-muted-foreground">
-            Status: {agent.status} · Uptime: {formatDuration(agent.launchedAt)} · PID: {agent.pid || "n/a"}
+            Status: {remoteControlLabel(agent)} · Uptime: {formatDuration(agent.launchedAt)} · PID: {agent.pid || "n/a"}
           </p>
+          <div className="rounded-md border border-border bg-card text-left">
+            <div className="border-b border-border px-3 py-2 text-sm font-medium">Diagnostics</div>
+            <pre className="max-h-64 overflow-y-auto whitespace-pre-wrap break-words p-3 text-xs text-muted-foreground">
+              {(agent.rcDiagnostics || []).length > 0 ? (agent.rcDiagnostics || []).join("\n") : "Waiting for Remote Control output..."}
+            </pre>
+          </div>
         </div>
       </div>
     </main>

@@ -15,6 +15,7 @@ export type AuthMethod = "claude.ai" | "api-key" | "unknown";
 export type AutoApproveMode = "off" | "session" | "always";
 export type AgentPermissionMode = "default" | "acceptEdits" | "plan" | "bypassPermissions";
 export type AgentEffort = "low" | "medium" | "high" | "xhigh" | "max";
+export type RemoteControlState = "starting" | "waiting-for-browser" | "connected" | "closed" | "error";
 
 export interface AgentDef {
   name: string;
@@ -89,6 +90,8 @@ export interface RunningAgent {
   planMode?: boolean;
   rcUrl?: string;
   qr?: string;
+  rcState?: RemoteControlState;
+  rcDiagnostics?: string[];
   restorable?: boolean;
   sessionTools?: string[];
   mcpServers?: ClaudeMcpServer[];
@@ -335,6 +338,14 @@ export type WsServerEvent =
       id: string;
       url: string;
       qr?: string;
+      updatedAt: string;
+    }
+  | {
+      type: "agent.remote_control_changed";
+      id: string;
+      rcState: RemoteControlState;
+      diagnostics: string[];
+      statusMessage?: string;
       updatedAt: string;
     }
   | {
