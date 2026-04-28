@@ -2969,7 +2969,7 @@ function Sidebar() {
                   activeAgentId === agent.id && "bg-accent"
                 )}
                 onClick={() => focusRunningAgent(agent.id)}
-                title={`${agent.displayName}\n${fullLastActivity(agent.updatedAt || agent.launchedAt)}`}
+                title={`${agent.displayName}\n${agent.currentModel}\n${fullLastActivity(agent.updatedAt || agent.launchedAt)}`}
               >
                 <AgentDot color={agent.color} className={cn(isAgentBusy(agent) && "animate-pulse")} />
               </button>
