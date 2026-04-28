@@ -642,6 +642,7 @@ export class AgentRuntimeManager {
 
   private async runCodexTurn(state: AgentProcessState, prompt: string): Promise<void> {
     const args = ["exec", "--json", "-m", state.agent.currentModel];
+    args.push("-c", `model_reasoning_effort=${tomlBasicString(this.providerReasoningEffort(state))}`);
     const selectedPlugins = new Set(state.def?.plugins || []);
     const installedPlugins = await listPlugins("codex").catch(() => []);
     for (const plugin of installedPlugins) {
@@ -887,6 +888,13 @@ export class AgentRuntimeManager {
     }
 
     try {
+      const body: Record<string, unknown> = {
+        model: state.agent.currentModel,
+        instructions: state.def?.systemPrompt || undefined,
+        input: [{ role: "user", content }],
+        reasoning: { effort: this.providerReasoningEffort(state) },
+        stream: true
+      };
       const response = await fetch("https://api.openai.com/v1/responses", {
         method: "POST",
         signal: controller.signal,
@@ -894,12 +902,7 @@ export class AgentRuntimeManager {
           Authorization: `Bearer ${apiKey}`,
           "Content-Type": "application/json"
         },
-        body: JSON.stringify({
-          model: state.agent.currentModel,
-          instructions: state.def?.systemPrompt || undefined,
-          input: [{ role: "user", content }],
-          stream: true
-        })
+        body: JSON.stringify(body)
       });
       if (!response.ok || !response.body) throw new Error(await response.text());
 
@@ -1343,6 +1346,10 @@ export class AgentRuntimeManager {
     if (status === "remote-controlled") return "Remote controlled";
     if (status === "switching-model") return "Switching model";
     return status.charAt(0).toUpperCase() + status.slice(1);
+  }
+
+  private providerReasoningEffort(state: AgentProcessState): Exclude<AgentEffort, "max"> {
+    return state.agent.effort === "max" ? "xhigh" : state.agent.effort || "medium";
   }
 
   private writePermissionMcpConfig(state: AgentProcessState): string {

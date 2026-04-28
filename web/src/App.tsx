@@ -37,6 +37,7 @@ import {
   FolderTree,
   GitBranch,
   GripVertical,
+  Gauge,
   HardDrive,
   Hand,
   Home,
@@ -165,16 +166,39 @@ type ToolTranscriptItem =
   | { kind: "tool_pair"; event: ToolUseEvent; result?: ToolResultEvent };
 type ContextCopyTarget = { scope: "block" | "chat"; text: string };
 
-const BASE_SLASH_COMMANDS: SlashCommandSuggestion[] = [
+const COMMON_SLASH_COMMANDS: SlashCommandSuggestion[] = [
   { value: "/clear", label: "/clear", description: "Clear this chat history", source: "agentcontrol" },
   { value: "/exit", label: "/exit", description: "Close this agent", source: "agentcontrol" },
   { value: "/stop", label: "/stop", description: "Stop the active response", source: "agentcontrol" },
   { value: "/interrupt", label: "/interrupt", description: "Stop the active response", source: "agentcontrol" },
+  { value: "/status", label: "/status", description: "Show AgentControl session status", source: "agentcontrol" }
+];
+
+const CLAUDE_SLASH_COMMANDS: SlashCommandSuggestion[] = [
   { value: "/compact", label: "/compact", description: "Compact conversation context", argumentHint: "[instructions]", source: "builtin" },
   { value: "/memory", label: "/memory", description: "Edit or inspect memory files", source: "builtin", interactive: true },
-  { value: "/status", label: "/status", description: "Show AgentControl session status", source: "agentcontrol" },
   { value: "/resume", label: "/resume", description: "Resume a previous conversation", source: "builtin", interactive: true },
   { value: "/permissions", label: "/permissions", description: "Manage allow, ask, and deny rules", source: "builtin", interactive: true }
+];
+
+const CODEX_SLASH_COMMANDS: SlashCommandSuggestion[] = [
+  { value: "/intelligence", label: "/intelligence", description: "Use the most capable Codex model", source: "agentcontrol" },
+  { value: "/speed", label: "/speed", description: "Use the fastest Codex model available", source: "agentcontrol" },
+  { value: "/effort low", label: "/effort low", description: "Use low Codex reasoning effort", source: "agentcontrol" },
+  { value: "/effort medium", label: "/effort medium", description: "Use medium Codex reasoning effort", source: "agentcontrol" },
+  { value: "/effort high", label: "/effort high", description: "Use high Codex reasoning effort", source: "agentcontrol" },
+  { value: "/effort xhigh", label: "/effort xhigh", description: "Use extra-high Codex reasoning effort", source: "agentcontrol" }
+];
+
+const OPENAI_SLASH_COMMANDS: SlashCommandSuggestion[] = [
+  { value: "/chatgpt", label: "/chatgpt", description: "Use the standard ChatGPT/OpenAI model", source: "agentcontrol" },
+  { value: "/fast", label: "/fast", description: "Use a lower-latency OpenAI model", source: "agentcontrol" },
+  { value: "/deep-research", label: "/deep-research", description: "Use OpenAI deep research", source: "agentcontrol" },
+  { value: "/research-fast", label: "/research-fast", description: "Use faster OpenAI deep research", source: "agentcontrol" },
+  { value: "/effort low", label: "/effort low", description: "Use low OpenAI reasoning effort", source: "agentcontrol" },
+  { value: "/effort medium", label: "/effort medium", description: "Use medium OpenAI reasoning effort", source: "agentcontrol" },
+  { value: "/effort high", label: "/effort high", description: "Use high OpenAI reasoning effort", source: "agentcontrol" },
+  { value: "/effort xhigh", label: "/effort xhigh", description: "Use extra-high OpenAI reasoning effort", source: "agentcontrol" }
 ];
 
 function compareSlashCommands(left: string, right: string) {
@@ -1225,6 +1249,8 @@ function handleNativeSlashCommand(agent: RunningAgent, text: string) {
   if (!trimmed.startsWith("/")) return false;
   const [command, ...rest] = trimmed.slice(1).split(/\s+/);
   const arg = rest.join(" ").trim();
+  const provider = agent.provider || "claude";
+  const settings = useAppStore.getState().settings;
 
   if (command === "clear") {
     sendCommand({ type: "clear", id: agent.id });
@@ -1246,6 +1272,34 @@ function handleNativeSlashCommand(agent: RunningAgent, text: string) {
     sendCommand({ type: "setModel", id: agent.id, model: arg });
     return true;
   }
+  if (command === "effort" && isAgentEffort(arg)) {
+    sendCommand({ type: "setEffort", id: agent.id, effort: arg });
+    return true;
+  }
+  if (provider === "codex" && (command === "speed" || command === "fast")) {
+    sendCommand({ type: "setModel", id: agent.id, model: preferredProviderModeModel(settings, "codex", "speed") });
+    return true;
+  }
+  if (provider === "codex" && (command === "intelligence" || command === "smart")) {
+    sendCommand({ type: "setModel", id: agent.id, model: preferredProviderModeModel(settings, "codex", "intelligence") });
+    return true;
+  }
+  if (provider === "openai" && (command === "chatgpt" || command === "standard")) {
+    sendCommand({ type: "setModel", id: agent.id, model: preferredProviderModeModel(settings, "openai", "standard") });
+    return true;
+  }
+  if (provider === "openai" && command === "fast") {
+    sendCommand({ type: "setModel", id: agent.id, model: preferredProviderModeModel(settings, "openai", "fast") });
+    return true;
+  }
+  if (provider === "openai" && (command === "deep-research" || command === "research")) {
+    sendCommand({ type: "setModel", id: agent.id, model: preferredProviderModeModel(settings, "openai", "deepResearch") });
+    return true;
+  }
+  if (provider === "openai" && (command === "research-fast" || command === "fast-research")) {
+    sendCommand({ type: "setModel", id: agent.id, model: preferredProviderModeModel(settings, "openai", "fastResearch") });
+    return true;
+  }
   return false;
 }
 
@@ -1253,6 +1307,7 @@ function slashCommandSuggestions(
   draft: string,
   models: string[],
   sessionCommands: Array<SlashCommandInfo | string> = [],
+  provider: AgentProvider = "claude",
   forceOpen = false
 ): SlashCommandSuggestion[] {
   const trimmed = draft.trimStart();
@@ -1278,7 +1333,7 @@ function slashCommandSuggestions(
     source: "builtin"
   }));
   const commands = [
-    ...BASE_SLASH_COMMANDS,
+    ...baseSlashCommandsForProvider(provider),
     ...sessionCommands.map((command) => {
       const normalized = normalizeUiSlashCommand(command);
       return {
@@ -1304,6 +1359,12 @@ function slashCommandSuggestions(
     })
     .sort((left, right) => compareSlashCommands(left.label, right.label))
     .slice(0, 60);
+}
+
+function baseSlashCommandsForProvider(provider: AgentProvider): SlashCommandSuggestion[] {
+  if (provider === "codex") return [...COMMON_SLASH_COMMANDS, ...CODEX_SLASH_COMMANDS];
+  if (provider === "openai") return [...COMMON_SLASH_COMMANDS, ...OPENAI_SLASH_COMMANDS];
+  return [...COMMON_SLASH_COMMANDS, ...CLAUDE_SLASH_COMMANDS];
 }
 
 function SlashCommandAutocomplete({
@@ -1566,7 +1627,9 @@ const CURRENT_OPENAI_MODEL_PROFILES = [
   { id: "gpt-5.4", provider: "openai", supportedEfforts: ["low", "medium", "high", "xhigh"] },
   { id: "gpt-5.4-mini", provider: "openai", supportedEfforts: ["low", "medium", "high", "xhigh"] },
   { id: "gpt-5.4-nano", provider: "openai", supportedEfforts: ["low", "medium", "high", "xhigh"] },
-  { id: "gpt-5", provider: "openai", supportedEfforts: ["low", "medium", "high", "xhigh"] }
+  { id: "gpt-5", provider: "openai", supportedEfforts: ["low", "medium", "high", "xhigh"] },
+  { id: "o3-deep-research", provider: "openai", supportedEfforts: ["low", "medium", "high"] },
+  { id: "o4-mini-deep-research", provider: "openai", supportedEfforts: ["low", "medium", "high"] }
 ] satisfies ModelProfile[];
 
 const CURRENT_CODEX_MODEL_PROFILES = [
@@ -1615,6 +1678,49 @@ function modelIdsForProvider(settings: { models: string[]; modelProfiles?: Model
     .filter((profile) => profile.provider === provider)
     .map((profile) => profile.id);
   return models.length ? models : settings.models;
+}
+
+function isAgentEffort(value: string): value is AgentEffort {
+  return ["low", "medium", "high", "xhigh", "max"].includes(value);
+}
+
+function firstModelMatching(models: string[], fallback: string, predicate: (model: string) => boolean) {
+  return models.find(predicate) || fallback;
+}
+
+function preferredProviderModeModel(
+  settings: { models: string[]; modelProfiles?: ModelProfile[] },
+  provider: "codex",
+  mode: "intelligence" | "speed"
+): string;
+function preferredProviderModeModel(
+  settings: { models: string[]; modelProfiles?: ModelProfile[] },
+  provider: "openai",
+  mode: "standard" | "fast" | "deepResearch" | "fastResearch"
+): string;
+function preferredProviderModeModel(
+  settings: { models: string[]; modelProfiles?: ModelProfile[] },
+  provider: "codex" | "openai",
+  mode: "intelligence" | "speed" | "standard" | "fast" | "deepResearch" | "fastResearch"
+) {
+  const models = modelIdsForProvider(settings, provider);
+  const fallback = models[0] || (provider === "codex" ? "gpt-5.3-codex" : "gpt-5.5");
+  if (provider === "codex") {
+    if (mode === "speed") {
+      return firstModelMatching(models, "gpt-5.3-codex-spark", (model) => /spark|mini|codex-mini/i.test(model));
+    }
+    return firstModelMatching(models, "gpt-5.3-codex", (model) => /codex/i.test(model) && !/spark|mini|latest/i.test(model));
+  }
+  if (mode === "deepResearch") {
+    return firstModelMatching(models, "o3-deep-research", (model) => /deep-research/i.test(model) && !/mini/i.test(model));
+  }
+  if (mode === "fastResearch") {
+    return firstModelMatching(models, "o4-mini-deep-research", (model) => /deep-research/i.test(model) && /mini/i.test(model));
+  }
+  if (mode === "fast") {
+    return firstModelMatching(models, "gpt-5.4-mini", (model) => /mini|nano/i.test(model) && !/deep-research/i.test(model));
+  }
+  return firstModelMatching(models, fallback, (model) => !/mini|nano|deep-research/i.test(model));
 }
 
 function parseProviderModels(text: string, provider: AgentProvider): ModelProfile[] {
@@ -3476,6 +3582,115 @@ function currentThinking(agent: RunningAgent): boolean {
   return agent.thinking !== false;
 }
 
+interface ProviderComposerModeOption {
+  id: string;
+  label: string;
+  compactLabel: string;
+  description: string;
+  icon: ComponentType<{ className?: string }>;
+  model: string;
+}
+
+function providerComposerModeOptions(
+  agent: RunningAgent,
+  settings: { models: string[]; modelProfiles?: ModelProfile[] }
+): ProviderComposerModeOption[] {
+  if (agent.provider === "codex") {
+    return [
+      {
+        id: "intelligence",
+        label: "Intelligence",
+        compactLabel: "Smart",
+        description: "Use the most capable Codex model for agentic coding.",
+        icon: Brain,
+        model: preferredProviderModeModel(settings, "codex", "intelligence")
+      },
+      {
+        id: "speed",
+        label: "Speed",
+        compactLabel: "Speed",
+        description: "Use the fastest Codex model for focused iteration.",
+        icon: Gauge,
+        model: preferredProviderModeModel(settings, "codex", "speed")
+      }
+    ];
+  }
+  if (agent.provider === "openai") {
+    return [
+      {
+        id: "standard",
+        label: "ChatGPT",
+        compactLabel: "ChatGPT",
+        description: "Use the standard OpenAI model for general chat, coding, and analysis.",
+        icon: OpenAiLogo,
+        model: preferredProviderModeModel(settings, "openai", "standard")
+      },
+      {
+        id: "fast",
+        label: "Fast",
+        compactLabel: "Fast",
+        description: "Use a lower-latency OpenAI model.",
+        icon: Gauge,
+        model: preferredProviderModeModel(settings, "openai", "fast")
+      },
+      {
+        id: "deepResearch",
+        label: "Deep research",
+        compactLabel: "Research",
+        description: "Use OpenAI's deeper multi-step research model.",
+        icon: Search,
+        model: preferredProviderModeModel(settings, "openai", "deepResearch")
+      },
+      {
+        id: "fastResearch",
+        label: "Fast research",
+        compactLabel: "Fast R.",
+        description: "Use the faster, lower-cost deep research model.",
+        icon: Search,
+        model: preferredProviderModeModel(settings, "openai", "fastResearch")
+      }
+    ];
+  }
+  return [];
+}
+
+function activeProviderMode(agent: RunningAgent, options: ProviderComposerModeOption[]) {
+  if (agent.provider === "codex") {
+    const speedSelected = /spark|mini|codex-mini/i.test(agent.currentModel);
+    return options.find((option) => option.id === (speedSelected ? "speed" : "intelligence")) || options[0];
+  }
+  if (agent.provider === "openai") {
+    const model = agent.currentModel.toLowerCase();
+    const id = model.includes("deep-research")
+      ? model.includes("mini")
+        ? "fastResearch"
+        : "deepResearch"
+      : /mini|nano/.test(model)
+        ? "fast"
+        : "standard";
+    return options.find((option) => option.id === id) || options[0];
+  }
+  return options[0];
+}
+
+function effortOptionsForAgent(agent: RunningAgent) {
+  return agent.provider === "claude" || !agent.provider
+    ? EFFORT_OPTIONS
+    : EFFORT_OPTIONS.filter((option) => option.effort !== "max");
+}
+
+function sendNextComposerMode(agent: RunningAgent, settings: { models: string[]; modelProfiles?: ModelProfile[] }) {
+  if (agent.provider === "codex" || agent.provider === "openai") {
+    const options = providerComposerModeOptions(agent, settings);
+    const active = activeProviderMode(agent, options);
+    const activeIndex = Math.max(0, options.findIndex((option) => option.id === active?.id));
+    const next = options[(activeIndex + 1) % options.length];
+    if (next) sendCommand({ type: "setModel", id: agent.id, model: next.model });
+    return;
+  }
+  sendCommand({ type: "setPermissionMode", id: agent.id, permissionMode: nextPermissionMode(agent) });
+}
+
 function ComposerModeMenu({
   agent,
   compact = false,
@@ -3485,12 +3700,17 @@ function ComposerModeMenu({
   compact?: boolean;
   inline?: boolean;
 }) {
+  const settings = useAppStore((state) => state.settings);
+  const provider = agent.provider || "claude";
+  const providerModeOptions = providerComposerModeOptions(agent, settings);
+  const activeProviderOption = activeProviderMode(agent, providerModeOptions);
   const activeMode = currentPermissionMode(agent);
   const activeEffort = currentEffort(agent);
   const activeThinking = currentThinking(agent);
-  const activeEffortLabel = EFFORT_OPTIONS.find((option) => option.effort === activeEffort)?.label || "Medium";
+  const availableEffortOptions = effortOptionsForAgent(agent);
+  const activeEffortLabel = availableEffortOptions.find((option) => option.effort === activeEffort)?.label || "Medium";
   const activeOption = COMPOSER_MODE_OPTIONS.find((option) => option.mode === activeMode) || COMPOSER_MODE_OPTIONS[0];
-  const ActiveIcon = activeOption.icon;
+  const ActiveIcon = provider === "claude" ? activeOption.icon : activeProviderOption?.icon || Sparkles;
 
   function setPermissionMode(permissionMode: AgentPermissionMode) {
     if (activeMode === permissionMode) return;
@@ -3505,6 +3725,103 @@ function ComposerModeMenu({
   function setThinking(thinking: boolean) {
     if (activeThinking === thinking) return;
     sendCommand({ type: "setThinking", id: agent.id, thinking });
+  }
+
+  function setModelMode(option: ProviderComposerModeOption) {
+    if (agent.currentModel === option.model) return;
+    sendCommand({ type: "setModel", id: agent.id, model: option.model });
+  }
+
+  if (provider !== "claude") {
+    const buttonLabel = activeProviderOption || providerModeOptions[0];
+    return (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant={inline ? "ghost" : "outline"}
+            size="sm"
+            className={cn(
+              "h-7 justify-between gap-1 px-2",
+              compact ? "w-24 text-[11px]" : "w-full",
+              inline && "h-8 w-auto rounded-md border-0 bg-transparent px-2 text-xs"
+            )}
+            title={buttonLabel?.label}
+            disabled={agent.remoteControl}
+          >
+            <span className="flex min-w-0 items-center gap-1.5">
+              <ActiveIcon className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">{compact ? buttonLabel?.compactLabel : buttonLabel?.label}</span>
+            </span>
+            <ChevronDown className="h-3.5 w-3.5 shrink-0" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-80 p-2">
+          <div className="flex items-center justify-between px-2 pb-1 pt-1 text-xs text-muted-foreground">
+            <span>{provider === "codex" ? "Codex modes" : "ChatGPT modes"}</span>
+            <span className="inline-flex items-center gap-1">
+              <kbd className="rounded border border-border px-1 font-mono text-[10px]">Shift</kbd>
+              <span>+</span>
+              <kbd className="rounded border border-border px-1 font-mono text-[10px]">Tab</kbd>
+              <span>to switch</span>
+            </span>
+          </div>
+          <div className="grid gap-1">
+            {providerModeOptions.map((option) => {
+              const Icon = option.icon;
+              const selected = option.id === activeProviderOption?.id;
+              return (
+                <DropdownMenuItem
+                  key={option.id}
+                  onClick={() => setModelMode(option)}
+                  className={cn(
+                    "items-start gap-3 rounded-md px-2 py-2.5",
+                    selected && "bg-primary/20 text-foreground focus:bg-primary/25"
+                  )}
+                >
+                  <Icon className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-medium leading-none">{option.label}</span>
+                    <span className="mt-1 block text-xs leading-snug text-muted-foreground">{option.description}</span>
+                    <span className="mt-1 block truncate text-[11px] text-muted-foreground">{option.model}</span>
+                  </span>
+                  <Check className={cn("mt-1 h-4 w-4 shrink-0", selected ? "opacity-100" : "opacity-0")} />
+                </DropdownMenuItem>
+              );
+            })}
+          </div>
+          <div className="mt-2 flex items-center gap-3 border-t border-border px-2 pt-2 text-xs text-muted-foreground">
+            <Brain className="h-4 w-4" />
+            <span className="flex-1">
+              Reasoning <span className="text-foreground">({activeEffortLabel})</span>
+            </span>
+            <span className="inline-flex h-5 items-center gap-2 rounded-full bg-muted px-2">
+              {availableEffortOptions.map((option) => (
+                <button
+                  key={option.effort}
+                  type="button"
+                  className="grid h-4 w-4 place-items-center rounded-full"
+                  title={`Reasoning: ${option.label}`}
+                  aria-label={`Set reasoning to ${option.label}`}
+                  aria-pressed={activeEffort === option.effort}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    setEffort(option.effort);
+                  }}
+                >
+                  <span
+                    className={cn(
+                      "rounded-full bg-muted-foreground/45 transition-all",
+                      activeEffort === option.effort ? "h-3.5 w-3.5 bg-foreground/80" : "h-1 w-1"
+                    )}
+                  />
+                </button>
+              ))}
+            </span>
+          </div>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
   }
 
   return (
@@ -3601,7 +3918,7 @@ function ComposerModeMenu({
             Effort <span className="text-foreground">({activeEffortLabel})</span>
           </span>
           <span className="inline-flex h-5 items-center gap-2 rounded-full bg-muted px-2">
-            {EFFORT_OPTIONS.map((option) => (
+            {availableEffortOptions.map((option) => (
               <button
                 key={option.effort}
                 type="button"
@@ -5113,11 +5430,11 @@ function AgentTile({
   const pinnedMessage = latestUserMessage(transcript);
   const pinLastSentMessage = settings.pinLastSentMessage;
   const rawSlashSuggestions = useMemo(
-    () => slashCommandSuggestions(draft, modelIdsForProvider(settings, agent.provider || "claude"), agent.slashCommands),
+    () => slashCommandSuggestions(draft, modelIdsForProvider(settings, agent.provider || "claude"), agent.slashCommands, agent.provider || "claude"),
     [agent.provider, agent.slashCommands, draft, settings]
   );
   const pickerSlashSuggestions = useMemo(
-    () => slashCommandSuggestions("", modelIdsForProvider(settings, agent.provider || "claude"), agent.slashCommands, true),
+    () => slashCommandSuggestions("", modelIdsForProvider(settings, agent.provider || "claude"), agent.slashCommands, agent.provider || "claude", true),
     [agent.provider, agent.slashCommands, settings]
   );
   const slashSuggestions = slashMenuOpen ? pickerSlashSuggestions : slashMenuSuppressed ? [] : rawSlashSuggestions;
@@ -5255,7 +5572,7 @@ function AgentTile({
   function handleComposerKeyDown(event: ReactKeyboardEvent<HTMLTextAreaElement>) {
     if (event.key === "Tab" && event.shiftKey) {
       event.preventDefault();
-      sendCommand({ type: "setPermissionMode", id: agent.id, permissionMode: nextPermissionMode(agent) });
+      sendNextComposerMode(agent, settings);
       return;
     }
     if (slashSuggestions.length > 0) {
@@ -5926,11 +6243,11 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
   const pinnedMessage = latestUserMessage(transcript);
   const pinLastSentMessage = settings.pinLastSentMessage;
   const rawSlashSuggestions = useMemo(
-    () => slashCommandSuggestions(draft, modelIdsForProvider(settings, agent.provider || "claude"), agent.slashCommands),
+    () => slashCommandSuggestions(draft, modelIdsForProvider(settings, agent.provider || "claude"), agent.slashCommands, agent.provider || "claude"),
     [agent.provider, agent.slashCommands, draft, settings]
   );
   const pickerSlashSuggestions = useMemo(
-    () => slashCommandSuggestions("", modelIdsForProvider(settings, agent.provider || "claude"), agent.slashCommands, true),
+    () => slashCommandSuggestions("", modelIdsForProvider(settings, agent.provider || "claude"), agent.slashCommands, agent.provider || "claude", true),
     [agent.provider, agent.slashCommands, settings]
   );
   const slashSuggestions = slashMenuOpen ? pickerSlashSuggestions : slashMenuSuppressed ? [] : rawSlashSuggestions;
@@ -6040,7 +6357,7 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
   function handleComposerKeyDown(event: ReactKeyboardEvent<HTMLTextAreaElement>) {
     if (event.key === "Tab" && event.shiftKey) {
       event.preventDefault();
-      sendCommand({ type: "setPermissionMode", id: agent.id, permissionMode: nextPermissionMode(agent) });
+      sendNextComposerMode(agent, settings);
       return;
     }
     if (slashSuggestions.length > 0) {
