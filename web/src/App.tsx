@@ -3377,15 +3377,15 @@ function TerminalMinimizedDock({ poppedOutTerminalIds }: { poppedOutTerminalIds:
 
   return (
     <button
-      className="flex h-10 shrink-0 items-center gap-2 border-t border-border bg-card px-3 text-left hover:bg-accent"
+      className="flex h-10 shrink-0 items-center gap-2 border-t border-emerald-400/30 bg-zinc-950 px-3 text-left text-emerald-100 shadow-[0_-1px_0_rgba(52,211,153,0.18)] hover:bg-zinc-900"
       onClick={restore}
       title="Restore terminal"
     >
-      <ChevronUp className="h-4 w-4 text-primary" />
-      <SquareTerminal className="h-4 w-4 text-primary" />
+      <ChevronUp className="h-4 w-4 text-emerald-300" />
+      <SquareTerminal className="h-4 w-4 text-emerald-300" />
       <span className="text-sm font-medium">Terminal</span>
-      <Badge>{sessions.length}</Badge>
-      <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+      <Badge className="border-emerald-400/40 bg-emerald-500/15 text-emerald-100">{sessions.length}</Badge>
+      <span className="min-w-0 flex-1 truncate font-mono text-xs text-emerald-200/85">
         {line ? `${latest.title || latest.projectName || "Shell"}: ${line}` : latest.cwd}
       </span>
     </button>
