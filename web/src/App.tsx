@@ -3580,15 +3580,38 @@ function LaunchDialog() {
   const agentOptions = useMemo(() => agentDefsWithGeneric(project), [project]);
   const def = agentOptions.find((candidate) => candidate.name === defName);
   const modelProfiles = useMemo(() => modelProfilesForSettings(settings), [settings]);
+  function modelBelongsToProvider(modelId: string | undefined, targetProvider: AgentProvider) {
+    if (!modelId) return false;
+    return modelProfiles.some((item) => item.provider === targetProvider && item.id === modelId);
+  }
+
+  function agentDefaultModelForProvider(agentDef: AgentDef | undefined, targetProvider: AgentProvider) {
+    if (!agentDef?.defaultModel) return undefined;
+    const agentProvider = agentDef.provider || "claude";
+    if (agentProvider === targetProvider || modelBelongsToProvider(agentDef.defaultModel, targetProvider)) return agentDef.defaultModel;
+    return undefined;
+  }
+
+  function defaultModelForProvider(targetProvider: AgentProvider, agentDef: AgentDef | undefined = def) {
+    return (
+      agentDefaultModelForProvider(agentDef, targetProvider) ||
+      modelProfiles.find((item) => item.provider === targetProvider && item.default)?.id ||
+      modelProfiles.find((item) => item.provider === targetProvider)?.id ||
+      (targetProvider === "claude" ? settings.models[0] : undefined) ||
+      DEFAULT_MODEL
+    );
+  }
+
   const modelOptions = useMemo(
     () => {
       const options = modelProfiles.filter((item) => item.provider === provider);
-      if (def?.defaultModel && !options.some((item) => item.id === def.defaultModel)) {
-        return [{ id: def.defaultModel, provider }, ...options];
+      const agentDefaultModel = agentDefaultModelForProvider(def, provider);
+      if (agentDefaultModel && !options.some((item) => item.id === agentDefaultModel)) {
+        return [{ id: agentDefaultModel, provider }, ...options];
       }
-      return options.length ? options : [{ id: def?.defaultModel || settings.models[0] || DEFAULT_MODEL, provider }];
+      return options.length ? options : [{ id: agentDefaultModel || defaultModelForProvider(provider), provider }];
     },
-    [def?.defaultModel, modelProfiles, provider, settings.models]
+    [def, modelProfiles, provider, settings.models]
   );
   const restorableSessions = useMemo(
     () =>
@@ -3608,7 +3631,7 @@ function LaunchDialog() {
     setDefName(nextDefName);
     setDisplayName("");
     setProvider(nextProvider);
-    setModel(nextDef?.defaultModel || modelProfiles.find((item) => item.provider === nextProvider && item.default)?.id || modelProfiles.find((item) => item.provider === nextProvider)?.id || settings.models[0] || DEFAULT_MODEL);
+    setModel(defaultModelForProvider(nextProvider, nextDef));
     setInitialPrompt(modal.initialPrompt || "");
     setRemoteControl(false);
     setPluginIds(nextDef?.plugins || []);
@@ -3622,7 +3645,7 @@ function LaunchDialog() {
     if (!def) return;
     const nextProvider = def.provider || provider;
     setProvider(nextProvider);
-    setModel(def.defaultModel || modelProfiles.find((item) => item.provider === nextProvider && item.default)?.id || modelProfiles.find((item) => item.provider === nextProvider)?.id || settings.models[0] || DEFAULT_MODEL);
+    setModel(defaultModelForProvider(nextProvider, def));
     setPluginIds(def.plugins || []);
   }, [def, modelProfiles, settings.models]);
 
@@ -3631,7 +3654,7 @@ function LaunchDialog() {
     const nextProvider = nextDef?.provider || provider;
     setDefName(nextDefName);
     setProvider(nextProvider);
-    setModel(nextDef?.defaultModel || modelProfiles.find((item) => item.provider === nextProvider && item.default)?.id || modelProfiles.find((item) => item.provider === nextProvider)?.id || settings.models[0] || DEFAULT_MODEL);
+    setModel(defaultModelForProvider(nextProvider, nextDef));
     setPluginIds(nextDef?.plugins || []);
     setPluginQuery("");
     setPluginPickerExpanded(false);
@@ -3831,11 +3854,7 @@ function LaunchDialog() {
                 const nextProvider = value as AgentProvider;
                 setProvider(nextProvider);
                 setRemoteControl(false);
-                setModel(
-                  modelProfiles.find((item) => item.provider === nextProvider && item.default)?.id ||
-                    modelProfiles.find((item) => item.provider === nextProvider)?.id ||
-                    model
-                );
+                setModel(defaultModelForProvider(nextProvider));
               }}
             >
               <SelectTrigger>
