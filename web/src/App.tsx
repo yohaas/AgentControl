@@ -1645,7 +1645,7 @@ function GitStatusMenu({ projectId }: { projectId?: string }) {
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
-        <Button variant={hasWork ? "default" : "outline"} size="icon" disabled={!projectId} title="Git status" className="relative">
+        <Button variant="outline" size="icon" disabled={!projectId} title="Git status" className="relative">
           <GitBranch className="h-4 w-4" />
           {aheadCount > 0 && (
             <span className="absolute -right-1.5 -top-1.5 grid min-h-4 min-w-4 place-items-center rounded-full border border-background bg-red-500 px-1 text-[10px] font-semibold leading-none text-white">
