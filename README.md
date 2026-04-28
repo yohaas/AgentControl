@@ -299,6 +299,15 @@ The Git button shows:
 
 Git operations run in the selected project's folder.
 
+## Git Worktrees
+
+The Worktrees button next to the Git menu opens a tabbed worktree view for the selected repository:
+
+- List all worktrees for the repo and switch to any worktree already open as a project.
+- Create a new worktree from a branch/base ref; created worktrees are added to Agent Control as projects automatically.
+- Merge another worktree's branch into the current project when the current project is clean.
+- Remove non-current worktrees; related agents and terminals are closed if that worktree was open as a project.
+
 ## Settings And Stored Data
 
 Settings include:

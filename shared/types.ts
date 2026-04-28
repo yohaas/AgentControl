@@ -71,6 +71,42 @@ export interface GitStatus {
   message?: string;
 }
 
+export interface GitWorktree {
+  path: string;
+  head?: string;
+  branch?: string;
+  bare?: boolean;
+  detached?: boolean;
+  prunable?: boolean;
+  current?: boolean;
+  projectId?: string;
+}
+
+export interface GitWorktreeList {
+  isRepo: boolean;
+  projectId: string;
+  repoPath?: string;
+  currentPath?: string;
+  worktrees: GitWorktree[];
+  message?: string;
+}
+
+export interface GitWorktreeCreateRequest {
+  path?: string;
+  branch: string;
+  base?: string;
+  createBranch?: boolean;
+}
+
+export interface GitWorktreeMergeRequest {
+  sourcePath: string;
+}
+
+export interface GitWorktreeRemoveRequest {
+  path: string;
+  force?: boolean;
+}
+
 export interface RunningAgent {
   id: string;
   projectId: string;

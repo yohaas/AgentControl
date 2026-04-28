@@ -1,4 +1,17 @@
-import type { Capabilities, ClaudePlugin, ClaudePluginCatalog, DirectoryListing, GitStatus, MessageAttachment, Project, ProjectFileEntry } from "@agent-control/shared";
+import type {
+  Capabilities,
+  ClaudePlugin,
+  ClaudePluginCatalog,
+  DirectoryListing,
+  GitStatus,
+  GitWorktreeCreateRequest,
+  GitWorktreeList,
+  GitWorktreeMergeRequest,
+  GitWorktreeRemoveRequest,
+  MessageAttachment,
+  Project,
+  ProjectFileEntry
+} from "@agent-control/shared";
 import type { SettingsState } from "../store/app-store";
 
 let authToken: string | undefined;
@@ -63,6 +76,25 @@ export const api = {
   closeProject: (id: string) => json<Project[]>(`/api/projects/${encodeURIComponent(id)}`, { method: "DELETE" }),
   gitStatus: (id: string) => json<GitStatus>(`/api/projects/${encodeURIComponent(id)}/git/status`),
   gitPush: (id: string) => json<GitStatus>(`/api/projects/${encodeURIComponent(id)}/git/push`, { method: "POST" }),
+  gitWorktrees: (id: string) => json<GitWorktreeList>(`/api/projects/${encodeURIComponent(id)}/git/worktrees`),
+  createGitWorktree: (id: string, payload: GitWorktreeCreateRequest) =>
+    json<{ projects: Project[]; worktrees: GitWorktreeList }>(`/api/projects/${encodeURIComponent(id)}/git/worktrees`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    }),
+  mergeGitWorktree: (id: string, payload: GitWorktreeMergeRequest) =>
+    json<GitWorktreeList>(`/api/projects/${encodeURIComponent(id)}/git/worktrees/merge`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    }),
+  removeGitWorktree: (id: string, payload: GitWorktreeRemoveRequest) =>
+    json<{ projects: Project[]; worktrees: GitWorktreeList }>(`/api/projects/${encodeURIComponent(id)}/git/worktrees`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    }),
   projectFiles: (id: string, query?: string) =>
     json<ProjectFileEntry[]>(
       `/api/projects/${encodeURIComponent(id)}/files${query?.trim() ? `?query=${encodeURIComponent(query.trim())}` : ""}`

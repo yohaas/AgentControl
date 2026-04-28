@@ -1,6 +1,6 @@
 import http from "node:http";
 import { execFile } from "node:child_process";
-import { access, mkdir, readdir, stat, writeFile } from "node:fs/promises";
+import { access, mkdir, readdir, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -9,7 +9,23 @@ import express from "express";
 import { nanoid } from "nanoid";
 import { WebSocketServer, type WebSocket } from "ws";
 import type { DashboardConfig } from "./config.js";
-import type { Capabilities, DirectoryEntry, GitChangedFile, GitStatus, LaunchRequest, MessageAttachment, Project, ProjectFileEntry, WsClientCommand, WsServerEvent } from "@agent-control/shared";
+import type {
+  Capabilities,
+  DirectoryEntry,
+  GitChangedFile,
+  GitStatus,
+  GitWorktree,
+  GitWorktreeCreateRequest,
+  GitWorktreeList,
+  GitWorktreeMergeRequest,
+  GitWorktreeRemoveRequest,
+  LaunchRequest,
+  MessageAttachment,
+  Project,
+  ProjectFileEntry,
+  WsClientCommand,
+  WsServerEvent
+} from "@agent-control/shared";
 import { detectCapabilities } from "./capabilities.js";
 import {
   expandHome,
@@ -294,6 +310,43 @@ function parseGitStatus(output: string): GitStatus {
   };
 }
 
+function parseGitWorktrees(output: string, currentPath: string): GitWorktree[] {
+  const worktrees: GitWorktree[] = [];
+  let current: GitWorktree | undefined;
+
+  for (const line of output.split(/\r?\n/)) {
+    if (!line.trim()) {
+      if (current) worktrees.push(current);
+      current = undefined;
+      continue;
+    }
+    const [key, ...valueParts] = line.split(" ");
+    const value = valueParts.join(" ");
+    if (key === "worktree") {
+      if (current) worktrees.push(current);
+      current = { path: value };
+      continue;
+    }
+    if (!current) continue;
+    if (key === "HEAD") current.head = value;
+    else if (key === "branch") current.branch = value.replace(/^refs\/heads\//, "");
+    else if (key === "bare") current.bare = true;
+    else if (key === "detached") current.detached = true;
+    else if (key === "prunable") current.prunable = true;
+  }
+  if (current) worktrees.push(current);
+
+  const normalizedCurrent = normalizedProjectPath(currentPath);
+  return worktrees.map((worktree) => {
+    const project = projects.find((candidate) => normalizedProjectPath(candidate.path) === normalizedProjectPath(worktree.path));
+    return {
+      ...worktree,
+      current: normalizedProjectPath(worktree.path) === normalizedCurrent,
+      projectId: project?.id
+    };
+  });
+}
+
 function gitCommand(cwd: string, args: string[], timeout = 15000): Promise<string> {
   return new Promise((resolve, reject) => {
     execFile("git", args, { cwd, timeout, windowsHide: true }, (error, stdout, stderr) => {
@@ -304,6 +357,111 @@ function gitCommand(cwd: string, args: string[], timeout = 15000): Promise<strin
       resolve(stdout);
     });
   });
+}
+
+function safeWorktreeBranchName(branch: string): string {
+  return branch.trim().replace(/^refs\/heads\//, "");
+}
+
+function defaultWorktreePath(project: Project, branch: string): string {
+  const safeBranch = safeWorktreeBranchName(branch).replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "worktree";
+  return path.join(path.dirname(project.path), `${path.basename(project.path)}-${safeBranch}`);
+}
+
+async function refreshConfiguredProjects(): Promise<Project[]> {
+  projects = config.projectPaths?.length ? await scanConfiguredProjects(config.projectPaths) : [];
+  return projects;
+}
+
+async function ensureProjectPath(projectPath: string): Promise<Project | null> {
+  const project = await scanProject(projectPath);
+  if (!project) return null;
+  const projectPaths = Array.from(new Set([...(config.projectPaths || []), project.path]));
+  config = await writeConfig({ ...config, projectPaths });
+  await refreshConfiguredProjects();
+  return projects.find((candidate) => candidate.id === project.id) || project;
+}
+
+async function removeProjectPath(projectPath: string): Promise<void> {
+  const closePath = normalizedProjectPath(projectPath);
+  const project = projects.find((candidate) => normalizedProjectPath(candidate.path) === closePath);
+  if (project) {
+    runtime.clearAll(project.id);
+    terminals.closeProject(project.id);
+  }
+  const projectPaths = (config.projectPaths || []).filter((candidate) => normalizedProjectPath(candidate) !== closePath);
+  config = await writeConfig({ ...config, projectPaths });
+  await refreshConfiguredProjects();
+}
+
+async function projectWorktrees(project: Project): Promise<GitWorktreeList> {
+  try {
+    const repoPath = (await gitCommand(project.path, ["rev-parse", "--show-toplevel"])).trim();
+    const output = await gitCommand(project.path, ["worktree", "list", "--porcelain"]);
+    return {
+      isRepo: true,
+      projectId: project.id,
+      repoPath,
+      currentPath: project.path,
+      worktrees: parseGitWorktrees(output, project.path)
+    };
+  } catch (error) {
+    return {
+      isRepo: false,
+      projectId: project.id,
+      worktrees: [],
+      message: error instanceof Error ? error.message : String(error)
+    };
+  }
+}
+
+async function createProjectWorktree(project: Project, request: GitWorktreeCreateRequest): Promise<{ projects: Project[]; worktrees: GitWorktreeList }> {
+  const branch = safeWorktreeBranchName(request.branch);
+  if (!branch) throw new Error("Branch name is required.");
+  const targetPath = path.resolve(expandHome(request.path?.trim() || defaultWorktreePath(project, branch)));
+  if (projects.some((candidate) => normalizedProjectPath(candidate.path) === normalizedProjectPath(targetPath))) {
+    throw new Error("That worktree is already open as a project.");
+  }
+  const parentInfo = await stat(path.dirname(targetPath)).catch(() => undefined);
+  if (!parentInfo?.isDirectory()) throw new Error("Worktree parent folder does not exist.");
+  const existing = await stat(targetPath).catch(() => undefined);
+  if (existing) throw new Error("Worktree path already exists.");
+
+  const args = ["worktree", "add"];
+  if (request.createBranch !== false) args.push("-b", branch, targetPath, request.base?.trim() || "HEAD");
+  else args.push(targetPath, branch);
+  await gitCommand(project.path, args, 120000);
+  await ensureProjectPath(targetPath);
+  return { projects, worktrees: await projectWorktrees(project) };
+}
+
+async function mergeProjectWorktree(project: Project, request: GitWorktreeMergeRequest): Promise<GitWorktreeList> {
+  const sourcePath = path.resolve(expandHome(request.sourcePath));
+  const worktrees = await projectWorktrees(project);
+  const source = worktrees.worktrees.find((worktree) => normalizedProjectPath(worktree.path) === normalizedProjectPath(sourcePath));
+  if (!source) throw new Error("Worktree was not found for this repository.");
+  if (source.current) throw new Error("Choose a different worktree to merge into the current project.");
+  if (!source.branch) throw new Error("Detached worktrees cannot be merged from the dashboard.");
+  const dirty = (await gitCommand(project.path, ["status", "--porcelain"])).trim();
+  if (dirty) throw new Error("Current project has uncommitted changes. Commit, stash, or discard them before merging.");
+  await gitCommand(project.path, ["merge", source.branch], 120000);
+  return projectWorktrees(project);
+}
+
+async function removeProjectWorktree(project: Project, request: GitWorktreeRemoveRequest): Promise<{ projects: Project[]; worktrees: GitWorktreeList }> {
+  const targetPath = path.resolve(expandHome(request.path));
+  const worktrees = await projectWorktrees(project);
+  const target = worktrees.worktrees.find((worktree) => normalizedProjectPath(worktree.path) === normalizedProjectPath(targetPath));
+  if (!target) throw new Error("Worktree was not found for this repository.");
+  if (target.current) throw new Error("The current project worktree cannot be removed from this view.");
+
+  const args = ["worktree", "remove"];
+  if (request.force) args.push("--force");
+  args.push(target.path);
+  await gitCommand(project.path, args, 120000);
+  await removeProjectPath(target.path);
+  if (target.prunable) await rm(target.path, { recursive: true, force: true }).catch(() => undefined);
+  return { projects, worktrees: await projectWorktrees(project) };
 }
 
 function openWithDefaultApp(filePath: string): Promise<void> {
@@ -562,6 +720,57 @@ app.post("/api/projects/:id/git/push", async (request, response) => {
   try {
     await gitCommand(project.path, ["push"], 120000);
     response.json(await projectGitStatus(project));
+  } catch (error) {
+    response.status(500).json({ error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+app.get("/api/projects/:id/git/worktrees", async (request, response) => {
+  const project = projectById(request.params.id);
+  if (!project) {
+    response.status(404).json({ error: "Project not found." });
+    return;
+  }
+  response.json(await projectWorktrees(project));
+});
+
+app.post("/api/projects/:id/git/worktrees", async (request, response) => {
+  const project = projectById(request.params.id);
+  if (!project) {
+    response.status(404).json({ error: "Project not found." });
+    return;
+  }
+
+  try {
+    response.json(await createProjectWorktree(project, request.body as GitWorktreeCreateRequest));
+  } catch (error) {
+    response.status(500).json({ error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+app.post("/api/projects/:id/git/worktrees/merge", async (request, response) => {
+  const project = projectById(request.params.id);
+  if (!project) {
+    response.status(404).json({ error: "Project not found." });
+    return;
+  }
+
+  try {
+    response.json(await mergeProjectWorktree(project, request.body as GitWorktreeMergeRequest));
+  } catch (error) {
+    response.status(500).json({ error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+app.delete("/api/projects/:id/git/worktrees", async (request, response) => {
+  const project = projectById(request.params.id);
+  if (!project) {
+    response.status(404).json({ error: "Project not found." });
+    return;
+  }
+
+  try {
+    response.json(await removeProjectWorktree(project, request.body as GitWorktreeRemoveRequest));
   } catch (error) {
     response.status(500).json({ error: error instanceof Error ? error.message : String(error) });
   }

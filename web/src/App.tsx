@@ -66,7 +66,9 @@ import type {
   DirectoryEntry,
   DirectoryListing,
   GitStatus,
+  GitWorktreeList,
   MessageAttachment,
+  Project,
   ProjectFileEntry,
   RunningAgent,
   SlashCommandInfo,
@@ -1348,6 +1350,7 @@ function Header() {
           </DropdownMenu>
         </div>
         <GitStatusMenu projectId={selectedProjectId} />
+        <WorktreesDialog projectId={selectedProjectId} />
         <Button
           variant="outline"
           size="icon"
@@ -1503,6 +1506,219 @@ function GitStatusMenu({ projectId }: { projectId?: string }) {
         </div>
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+function WorktreesDialog({ projectId }: { projectId?: string }) {
+  const projects = useAppStore((state) => state.projects);
+  const setProjects = useAppStore((state) => state.setProjects);
+  const setSelectedProject = useAppStore((state) => state.setSelectedProject);
+  const addError = useAppStore((state) => state.addError);
+  const [open, setOpen] = useState(false);
+  const [tab, setTab] = useState<"worktrees" | "create">("worktrees");
+  const [worktrees, setWorktrees] = useState<GitWorktreeList | undefined>();
+  const [loading, setLoading] = useState(false);
+  const [busyPath, setBusyPath] = useState<string | undefined>();
+  const [branch, setBranch] = useState("");
+  const [base, setBase] = useState("HEAD");
+  const [pathText, setPathText] = useState("");
+  const [createBranch, setCreateBranch] = useState(true);
+  const [browserOpen, setBrowserOpen] = useState(false);
+  const selectedProject = projects.find((project) => project.id === projectId);
+
+  useEffect(() => {
+    if (!open || !projectId) return;
+    void refresh();
+  }, [open, projectId]);
+
+  async function refresh() {
+    if (!projectId) return;
+    setLoading(true);
+    try {
+      setWorktrees(await api.gitWorktrees(projectId));
+    } catch (error) {
+      addError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function selectProjectForPath(projectList: Project[], worktreePath: string) {
+    const normalized = worktreePath.toLowerCase();
+    const project = projectList.find((candidate) => candidate.path.toLowerCase() === normalized);
+    if (project) setSelectedProject(project.id);
+  }
+
+  async function createWorktree() {
+    if (!projectId || !branch.trim()) return;
+    setLoading(true);
+    try {
+      const result = await api.createGitWorktree(projectId, {
+        branch: branch.trim(),
+        base: base.trim() || "HEAD",
+        path: pathText.trim() || undefined,
+        createBranch
+      });
+      setProjects(result.projects);
+      setWorktrees(result.worktrees);
+      const created =
+        result.worktrees.worktrees.find((worktree) => pathText.trim() && worktree.path.toLowerCase() === pathText.trim().toLowerCase()) ||
+        result.worktrees.worktrees.find((worktree) => worktree.branch === branch.trim());
+      if (created) selectProjectForPath(result.projects, created.path);
+      setBranch("");
+      setPathText("");
+      setBase("HEAD");
+      setCreateBranch(true);
+      setTab("worktrees");
+    } catch (error) {
+      addError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function mergeWorktree(worktreePath: string, branchName?: string) {
+    if (!projectId) return;
+    if (!window.confirm(`Merge ${branchName || worktreePath} into ${selectedProject?.name || "the current project"}?`)) return;
+    setBusyPath(worktreePath);
+    try {
+      setWorktrees(await api.mergeGitWorktree(projectId, { sourcePath: worktreePath }));
+    } catch (error) {
+      addError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setBusyPath(undefined);
+    }
+  }
+
+  async function removeWorktree(worktreePath: string, force = false) {
+    if (!projectId) return;
+    if (!window.confirm(`Remove worktree at ${worktreePath}? This removes the worktree checkout from disk.`)) return;
+    setBusyPath(worktreePath);
+    try {
+      const result = await api.removeGitWorktree(projectId, { path: worktreePath, force });
+      setProjects(result.projects);
+      setWorktrees(result.worktrees);
+    } catch (error) {
+      addError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setBusyPath(undefined);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <Button variant="outline" size="icon" disabled={!projectId} onClick={() => setOpen(true)} title="Git worktrees">
+        <Columns2 className="h-4 w-4" />
+      </Button>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Git Worktrees</DialogTitle>
+        </DialogHeader>
+        <div className="grid gap-3">
+          <div className="flex gap-2">
+            <Button variant={tab === "worktrees" ? "default" : "outline"} size="sm" onClick={() => setTab("worktrees")}>
+              Worktrees
+            </Button>
+            <Button variant={tab === "create" ? "default" : "outline"} size="sm" onClick={() => setTab("create")}>
+              Create
+            </Button>
+            <Button variant="ghost" size="icon" className="ml-auto h-8 w-8" disabled={!projectId || loading} onClick={() => void refresh()}>
+              <RefreshCw className="h-4 w-4" />
+            </Button>
+          </div>
+
+          {!worktrees?.isRepo ? (
+            <div className="rounded-md border border-dashed border-border px-3 py-6 text-center text-sm text-muted-foreground">
+              {loading ? "Loading worktrees..." : worktrees?.message || "Current project is not a Git repository."}
+            </div>
+          ) : tab === "create" ? (
+            <div className="grid gap-3">
+              <label className="grid gap-1.5 text-sm">
+                Branch
+                <Input value={branch} onChange={(event) => setBranch(event.target.value)} placeholder="feature/my-worktree" />
+              </label>
+              <label className="grid gap-1.5 text-sm">
+                Base
+                <Input value={base} onChange={(event) => setBase(event.target.value)} placeholder="HEAD" />
+              </label>
+              <label className="grid gap-1.5 text-sm">
+                Worktree path
+                <div className="flex gap-2">
+                  <Input value={pathText} onChange={(event) => setPathText(event.target.value)} placeholder="Default: sibling folder" />
+                  <Button type="button" variant="outline" onClick={() => setBrowserOpen(true)}>
+                    <FolderOpen className="h-4 w-4" />
+                    Browse
+                  </Button>
+                </div>
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={createBranch} onChange={(event) => setCreateBranch(event.target.checked)} />
+                Create a new branch
+              </label>
+              <Button onClick={() => void createWorktree()} disabled={loading || !branch.trim()}>
+                <Plus className="h-4 w-4" />
+                {loading ? "Creating..." : "Create Worktree"}
+              </Button>
+            </div>
+          ) : (
+            <div className="grid max-h-[56vh] gap-2 overflow-auto">
+              {worktrees.worktrees.map((worktree) => (
+                <div key={worktree.path} className="grid gap-2 rounded-md border border-border p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="truncate text-sm font-medium">{worktree.branch || "Detached"}</span>
+                        {worktree.current && <Badge>Current</Badge>}
+                        {worktree.projectId && <Badge>Open</Badge>}
+                        {worktree.prunable && <Badge>Prunable</Badge>}
+                      </div>
+                      <div className="mt-1 break-all font-mono text-xs text-muted-foreground">{worktree.path}</div>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={!worktree.projectId || worktree.current}
+                      onClick={() => worktree.projectId && setSelectedProject(worktree.projectId)}
+                    >
+                      Switch
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={worktree.current || !worktree.branch || busyPath === worktree.path}
+                      onClick={() => void mergeWorktree(worktree.path, worktree.branch)}
+                    >
+                      <GitBranch className="h-4 w-4" />
+                      Merge
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={worktree.current || busyPath === worktree.path}
+                      onClick={() => void removeWorktree(worktree.path)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Remove
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </DialogContent>
+      <FolderBrowserDialog
+        open={browserOpen}
+        initialPath={pathText || selectedProject?.path || ""}
+        onOpenChange={setBrowserOpen}
+        onSelect={(selectedPath) => {
+          setPathText(selectedPath);
+          setBrowserOpen(false);
+        }}
+      />
+    </Dialog>
   );
 }
 
