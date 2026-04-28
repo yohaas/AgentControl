@@ -120,7 +120,7 @@ const THINKING_PHRASES = [
 const GENERIC_AGENT_DEF: AgentDef = {
   name: "Generic",
   description: "General-purpose Claude agent",
-  color: "hsl(210 65% 55%)",
+  color: "#000000",
   tools: [],
   systemPrompt: ""
 };
