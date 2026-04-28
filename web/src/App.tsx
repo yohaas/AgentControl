@@ -216,6 +216,17 @@ function AgentDot({ color, className }: { color: string; className?: string }) {
   return <span className={cn("h-3 w-3 shrink-0 rounded-full", className)} style={{ background: color }} />;
 }
 
+function LastActivityText({ agent, compact = false }: { agent: RunningAgent; compact?: boolean }) {
+  return (
+    <span
+      className={cn("shrink-0 whitespace-nowrap text-muted-foreground", compact ? "text-[11px]" : "text-xs")}
+      title={fullLastActivity(agent.updatedAt || agent.launchedAt)}
+    >
+      {formatLastActivity(agent.updatedAt || agent.launchedAt)}
+    </span>
+  );
+}
+
 function StatusPill({ status }: { status: RunningAgent["status"] }) {
   const busy = status === "running" || status === "starting" || status === "switching-model";
   const thinkingPhrase = useThinkingPhrase(busy);
@@ -579,6 +590,31 @@ function latestTerminalLine(output: string[]) {
   return lines.at(-1) || "";
 }
 
+function timestampValue(value?: string) {
+  const timestamp = value ? Date.parse(value) : NaN;
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function formatLastActivity(value?: string) {
+  const timestamp = timestampValue(value);
+  if (!timestamp) return "Last active n/a";
+  const date = new Date(timestamp);
+  const today = new Date();
+  const sameDay =
+    date.getFullYear() === today.getFullYear() &&
+    date.getMonth() === today.getMonth() &&
+    date.getDate() === today.getDate();
+  const time = date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  if (sameDay) return `Last active ${time}`;
+  return `Last active ${date.toLocaleDateString([], { month: "short", day: "numeric" })} ${time}`;
+}
+
+function fullLastActivity(value?: string) {
+  const timestamp = timestampValue(value);
+  if (!timestamp) return "Last activity unavailable";
+  return `Last activity: ${new Date(timestamp).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}`;
+}
+
 function agentHasProcess(agent: RunningAgent) {
   return Boolean(agent.pid) && agent.status !== "killed" && agent.status !== "error" && agent.status !== "paused" && !agent.restorable;
 }
@@ -641,6 +677,21 @@ function Header() {
       .sort(
         (left, right) =>
           left.agent.defName.localeCompare(right.agent.defName, undefined, { sensitivity: "base" }) ||
+          left.index - right.index
+      )
+      .map(({ agent }) => agent.id);
+    const sortedIds = new Set(sorted);
+    setTileOrder([...sorted, ...tileOrder.filter((id) => !sortedIds.has(id))]);
+    setSelectedAgent(undefined);
+  }
+
+  function sortChatsByLastActivity() {
+    const sorted = orderedAgentsForTiles(projectAgents, tileOrder)
+      .map((agent, index) => ({ agent, index }))
+      .sort(
+        (left, right) =>
+          timestampValue(right.agent.updatedAt || right.agent.launchedAt) -
+            timestampValue(left.agent.updatedAt || left.agent.launchedAt) ||
           left.index - right.index
       )
       .map(({ agent }) => agent.id);
@@ -741,15 +792,17 @@ function Header() {
         >
           <X className="h-4 w-4" />
         </Button>
-        <Button
-          variant="outline"
-          size="icon"
-          disabled={agentCount < 2}
-          onClick={sortChatsByAgentType}
-          title="Sort chats by agent type"
-        >
-          <ArrowDownAZ className="h-4 w-4" />
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="icon" disabled={agentCount < 2} title="Sort chats">
+              <ArrowDownAZ className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={sortChatsByAgentType}>Sort by agent type</DropdownMenuItem>
+            <DropdownMenuItem onClick={sortChatsByLastActivity}>Sort by last activity</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
         <AddProjectDialog />
         <Button disabled={!selectedProjectId} onClick={() => openLaunchModal({ projectId: selectedProjectId })}>
           <Plus className="h-4 w-4" />
@@ -1232,7 +1285,7 @@ function Sidebar() {
                 activeAgentId === agent.id && "bg-accent"
               )}
               onClick={() => focusRunningAgent(agent.id)}
-              title={agent.displayName}
+              title={`${agent.displayName}\n${fullLastActivity(agent.updatedAt || agent.launchedAt)}`}
             >
               <AgentDot color={agent.color} />
             </button>
@@ -1287,7 +1340,10 @@ function Sidebar() {
                     {agent.displayName}
                     {agent.remoteControl && <Badge className="px-1 py-0 text-[10px]">RC</Badge>}
                   </span>
-                  <ModelText agent={agent} />
+                  <span className="flex min-w-0 items-center gap-2">
+                    <ModelText agent={agent} />
+                    <LastActivityText agent={agent} compact />
+                  </span>
                 </span>
                 <StatusPill status={agent.status} />
               </button>
@@ -2069,7 +2125,10 @@ function AgentTile({
             <span className="truncate text-sm font-semibold">{agent.displayName}</span>
             {agent.remoteControl && <Badge className="px-1 py-0 text-[10px]">RC</Badge>}
           </div>
-          <ModelMenu agent={agent} compact />
+          <div className="flex min-w-0 items-center gap-2">
+            <ModelMenu agent={agent} compact />
+            <LastActivityText agent={agent} compact />
+          </div>
         </div>
         <StatusPill status={agent.status} />
         <DropdownMenu>
@@ -2326,7 +2385,10 @@ function AgentPanelHeader({ agent }: { agent: RunningAgent }) {
         <div className="truncate text-sm font-semibold">
           {agent.displayName} {agent.remoteControl && <Badge className="ml-1">RC</Badge>}
         </div>
-        <ModelMenu agent={agent} />
+        <div className="flex min-w-0 items-center gap-2">
+          <ModelMenu agent={agent} />
+          <LastActivityText agent={agent} />
+        </div>
       </div>
       {agent.restorable && (
         <Button variant="outline" onClick={() => sendCommand({ type: "resume", id: agent.id })}>
