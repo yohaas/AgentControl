@@ -398,7 +398,7 @@ function LastActivityText({
   );
 }
 
-function StatusPill({ status }: { status: RunningAgent["status"] }) {
+function StatusPill({ status, onResume }: { status: RunningAgent["status"]; onResume?: () => void }) {
   const label =
     status === "running"
       ? "Active"
@@ -437,7 +437,29 @@ function StatusPill({ status }: { status: RunningAgent["status"] }) {
               : status === "paused"
                 ? "border-purple-500/50 bg-purple-500/15 text-purple-700 dark:border-purple-400/40 dark:text-purple-200"
                 : "border-teal-500/50 bg-teal-500/15 text-teal-700 dark:border-teal-400/40 dark:text-teal-200";
-  return <Badge className={cn("capitalize", className)}>{label}</Badge>;
+  const canResume = status === "paused" && Boolean(onResume);
+  return (
+    <Badge
+      className={cn("capitalize", className, canResume && "cursor-pointer hover:bg-purple-500/25")}
+      role={canResume ? "button" : undefined}
+      tabIndex={canResume ? 0 : undefined}
+      title={canResume ? "Resume agent" : undefined}
+      onClick={(event) => {
+        if (!canResume) return;
+        event.preventDefault();
+        event.stopPropagation();
+        onResume?.();
+      }}
+      onKeyDown={(event) => {
+        if (!canResume || (event.key !== "Enter" && event.key !== " ")) return;
+        event.preventDefault();
+        event.stopPropagation();
+        onResume?.();
+      }}
+    >
+      {label}
+    </Badge>
+  );
 }
 
 function remoteControlLabel(agent: RunningAgent) {
@@ -3056,7 +3078,7 @@ function Sidebar() {
                     </span>
                   </span>
                   <span className="flex shrink-0 flex-col items-end gap-1">
-                    <StatusPill status={agent.status} />
+                    <StatusPill status={agent.status} onResume={() => sendCommand({ type: "resume", id: agent.id })} />
                     <LastActivityText agent={agent} compact timeOnly />
                   </span>
                 </button>
@@ -5289,7 +5311,7 @@ function AgentTile({
         </div>
         <span className="flex shrink-0 items-center gap-2">
           <LastActivityText agent={agent} compact timeOnly />
-          <StatusPill status={agent.status} />
+          <StatusPill status={agent.status} onResume={() => sendCommand({ type: "resume", id: agent.id })} />
         </span>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -5684,7 +5706,7 @@ function AgentPanelHeader({ agent }: { agent: RunningAgent }) {
       )}
       <span className="flex shrink-0 items-center gap-2">
         <LastActivityText agent={agent} compact timeOnly />
-        <StatusPill status={agent.status} />
+        <StatusPill status={agent.status} onResume={() => sendCommand({ type: "resume", id: agent.id })} />
       </span>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -7406,13 +7428,13 @@ function ErrorStack() {
   const dismissError = useAppStore((state) => state.dismissError);
   if (errors.length === 0) return null;
   return (
-    <div className="fixed bottom-4 right-4 z-50 grid max-h-[min(60vh,28rem)] w-[calc(100vw-2rem)] max-w-xl gap-2 overflow-y-auto overflow-x-hidden">
+    <div className="fixed bottom-4 right-4 z-50 grid max-h-[min(60vh,28rem)] max-w-[calc(100vw-2rem)] justify-items-end gap-2 overflow-y-auto overflow-x-hidden">
       {errors.map((error, index) => (
         <div
           key={`${error}-${index}`}
-          className="flex max-w-full items-start gap-2 overflow-x-hidden rounded-md border border-red-400/40 bg-red-500/15 px-3 py-2 text-sm text-red-100 shadow-lg backdrop-blur"
+          className="inline-flex w-fit max-w-[min(34rem,calc(100vw-2rem))] min-w-0 items-start gap-2 overflow-x-hidden rounded-md border border-red-400/40 bg-red-500/15 px-3 py-2 text-sm text-red-100 shadow-lg backdrop-blur"
         >
-          <span className="max-h-36 min-w-0 flex-1 overflow-y-auto overflow-x-hidden whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+          <span className="max-h-36 min-w-0 max-w-[min(28rem,calc(100vw-5rem))] overflow-y-auto overflow-x-hidden whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
             {error}
           </span>
           <button
