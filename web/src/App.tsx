@@ -107,6 +107,35 @@ function ThinkingText({ prefix }: { prefix?: string }) {
   );
 }
 
+function isAgentBusy(agent: RunningAgent) {
+  return (
+    agent.status === "running" ||
+    agent.status === "starting" ||
+    agent.status === "switching-model" ||
+    agent.status === "awaiting-permission"
+  );
+}
+
+function hasStreamingAssistantText(transcript: TranscriptEvent[]) {
+  return transcript.some((event) => event.kind === "assistant_text" && event.streaming);
+}
+
+function AgentActivityIndicator({ agent, compact = false }: { agent: RunningAgent; compact?: boolean }) {
+  return (
+    <div className="flex">
+      <div
+        className={cn(
+          "inline-flex min-w-0 items-center rounded-md border border-border bg-background/70 px-3 py-2",
+          compact ? "text-xs" : "text-sm"
+        )}
+        style={{ borderLeftColor: agent.color, borderLeftWidth: 4 }}
+      >
+        <ThinkingText />
+      </div>
+    </div>
+  );
+}
+
 function AgentDot({ color, className }: { color: string; className?: string }) {
   return <span className={cn("h-3 w-3 shrink-0 rounded-full", className)} style={{ background: color }} />;
 }
@@ -1479,8 +1508,9 @@ function AgentTile({
   const tileRef = useRef<HTMLElement | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
-  const isBusy = agent.status === "running" || agent.status === "switching-model" || agent.status === "awaiting-permission";
+  const isBusy = isAgentBusy(agent);
   const canType = !agent.remoteControl && agentHasProcess(agent);
+  const showActivityIndicator = isBusy && !hasStreamingAssistantText(transcript);
 
   useEffect(() => {
     const root = rootRef.current;
@@ -1645,14 +1675,19 @@ function AgentTile({
                 </div>
               </div>
             ) : transcript.length === 0 ? (
-              <p className="rounded-md border border-dashed border-border px-3 py-10 text-center text-sm text-muted-foreground">
-                No transcript yet.
-              </p>
+              showActivityIndicator ? (
+                <AgentActivityIndicator agent={agent} compact />
+              ) : (
+                <p className="rounded-md border border-dashed border-border px-3 py-10 text-center text-sm text-muted-foreground">
+                  No transcript yet.
+                </p>
+              )
             ) : (
               <div className="grid gap-2">
                 {transcript.map((event) => (
                   <TranscriptPreview key={event.id} event={event} agent={agent} />
                 ))}
+                {showActivityIndicator && <AgentActivityIndicator agent={agent} compact />}
               </div>
             )}
           </div>
@@ -1798,7 +1833,7 @@ function AgentPanelHeader({ agent }: { agent: RunningAgent }) {
   const transcripts = useAppStore((state) => state.transcripts[agent.id] || EMPTY_TRANSCRIPT);
   const setSelectedAgent = useAppStore((state) => state.setSelectedAgent);
   const addError = useAppStore((state) => state.addError);
-  const isBusy = agent.status === "running" || agent.status === "switching-model" || agent.status === "awaiting-permission";
+  const isBusy = isAgentBusy(agent);
 
   return (
     <div className="flex h-14 shrink-0 items-center gap-3 border-b border-border px-4">
@@ -1863,8 +1898,9 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
   const transcriptRootId = `transcript-root-${agent.id}`;
   const selection = useTextSelection(`#${transcriptRootId}`);
   const [attachments, setAttachments] = useState<MessageAttachment[]>([]);
-  const isBusy = agent.status === "running" || agent.status === "switching-model" || agent.status === "awaiting-permission";
+  const isBusy = isAgentBusy(agent);
   const canType = agentHasProcess(agent);
+  const showActivityIndicator = isBusy && !hasStreamingAssistantText(transcript);
 
   useEffect(() => {
     const root = rootRef.current;
@@ -1944,11 +1980,20 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
           >
             <div className="mx-auto grid w-full min-w-0 max-w-4xl gap-3">
               {transcript.length === 0 ? (
-                <p className="rounded-md border border-dashed border-border px-3 py-12 text-center text-sm text-muted-foreground">
-                  No transcript yet.
-                </p>
+                showActivityIndicator ? (
+                  <AgentActivityIndicator agent={agent} />
+                ) : (
+                  <p className="rounded-md border border-dashed border-border px-3 py-12 text-center text-sm text-muted-foreground">
+                    No transcript yet.
+                  </p>
+                )
               ) : (
-                transcript.map((event) => <TranscriptItem key={event.id} event={event} agent={agent} query={searchQuery} />)
+                <>
+                  {transcript.map((event) => (
+                    <TranscriptItem key={event.id} event={event} agent={agent} query={searchQuery} />
+                  ))}
+                  {showActivityIndicator && <AgentActivityIndicator agent={agent} />}
+                </>
               )}
             </div>
           </div>
