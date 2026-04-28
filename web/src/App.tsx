@@ -2348,7 +2348,7 @@ function ComposerModeMenu({
           <span className="min-w-0 flex-1">
             <span className="block text-sm font-medium leading-none">Thinking</span>
             <span className="mt-1 block text-xs leading-snug text-muted-foreground">
-              {activeThinking ? "Claude can use extended thinking for this session." : "Claude will skip extended thinking where supported."}
+              {activeThinking ? "Claude can use extended thinking for new messages." : "Claude will skip extended thinking for new messages where supported."}
             </span>
           </span>
           <span

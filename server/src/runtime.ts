@@ -41,6 +41,8 @@ interface AgentProcessState {
   pendingInitialPrompt?: string;
   autoApprove?: AutoApproveMode;
   restartModel?: string;
+  restartConfig?: boolean;
+  restartConfigAfterTurn?: boolean;
   restartTimer?: NodeJS.Timeout;
   interrupting?: boolean;
   exiting?: boolean;
@@ -385,21 +387,14 @@ export class AgentRuntimeManager {
     state.agent.permissionMode = permissionMode;
     state.agent.planMode = permissionMode === "plan";
     state.agent.updatedAt = now();
-    if (state.child && !state.child.killed) {
-      const mode = this.permissionMode(state);
-      state.child.stdin.write(
-        `${JSON.stringify({
-          type: "control",
-          subtype: "set_permission_mode",
-          mode,
-          permission_mode: mode
-        })}\n`
-      );
-    }
+    const deferredRestart = Boolean(state.activeTurn);
+    const restarted = this.requestConfigRestart(state);
     this.pushTranscript(state, {
       ...eventBase(state.agent.id, state.agent.currentModel),
       kind: "system",
-      text: `Mode changed to ${this.permissionModeLabel(permissionMode)}.`
+      text: restarted && deferredRestart
+        ? `Mode changed to ${this.permissionModeLabel(permissionMode)}. Claude will apply it after the current response.`
+        : `Mode changed to ${this.permissionModeLabel(permissionMode)}.`
     });
     this.broadcast({
       type: "agent.permission_mode_changed",
@@ -424,13 +419,7 @@ export class AgentRuntimeManager {
     state.agent.effort = effort;
     state.agent.updatedAt = now();
     if (state.child && !state.child.killed) {
-      state.child.stdin.write(
-        `${JSON.stringify({
-          type: "control",
-          subtype: "set_effort",
-          effort
-        })}\n`
-      );
+      this.sendCliSlashCommand(state, `/effort ${effort}`);
     }
     this.pushTranscript(state, {
       ...eventBase(state.agent.id, state.agent.currentModel),
@@ -452,21 +441,14 @@ export class AgentRuntimeManager {
 
     state.agent.thinking = thinking;
     state.agent.updatedAt = now();
-    if (state.child && !state.child.killed) {
-      state.child.stdin.write(
-        `${JSON.stringify({
-          type: "control",
-          subtype: "set_thinking",
-          thinking,
-          enabled: thinking,
-          alwaysThinkingEnabled: thinking
-        })}\n`
-      );
-    }
+    const deferredRestart = Boolean(state.activeTurn);
+    const restarted = this.requestConfigRestart(state);
     this.pushTranscript(state, {
       ...eventBase(state.agent.id, state.agent.currentModel),
       kind: "system",
-      text: `Thinking ${thinking ? "enabled" : "disabled"}.`
+      text: restarted && deferredRestart
+        ? `Thinking ${thinking ? "enabled" : "disabled"}. Claude will apply it after the current response.`
+        : `Thinking ${thinking ? "enabled" : "disabled"}.`
     });
     this.broadcast({
       type: "agent.thinking_changed",
@@ -722,6 +704,11 @@ export class AgentRuntimeManager {
         this.spawnStandard(state, state.agent.sessionId, nextModel);
         return;
       }
+      if (state.restartConfig) {
+        state.restartConfig = false;
+        this.spawnStandard(state, state.agent.sessionId, state.agent.currentModel);
+        return;
+      }
       this.markTerminated(state, code, signal);
     });
 
@@ -802,6 +789,40 @@ export class AgentRuntimeManager {
     }
     state.restartModel = model;
     this.stopProcessTree(state);
+  }
+
+  private requestConfigRestart(state: AgentProcessState): boolean {
+    const child = state.child;
+    if (!child || child.killed) return false;
+
+    if (state.activeTurn) {
+      state.restartConfigAfterTurn = true;
+      return true;
+    }
+
+    state.restartConfig = true;
+    this.setStatus(state, "starting", "Applying Claude session settings...");
+    this.stopProcessTree(state);
+    return true;
+  }
+
+  private applyDeferredConfigRestart(state: AgentProcessState): void {
+    if (!state.restartConfigAfterTurn) return;
+    state.restartConfigAfterTurn = false;
+    this.requestConfigRestart(state);
+  }
+
+  private sendCliSlashCommand(state: AgentProcessState, command: string): void {
+    if (!state.child || state.child.killed) return;
+    state.child.stdin.write(
+      `${JSON.stringify({
+        type: "user",
+        message: {
+          role: "user",
+          content: [{ type: "text", text: command }]
+        }
+      })}\n`
+    );
   }
 
   private initialPermissionMode(request: LaunchRequest): AgentPermissionMode {
@@ -979,6 +1000,7 @@ export class AgentRuntimeManager {
       this.finishAssistantStream(state, false);
       state.activeTurn = false;
       this.setStatus(state, "idle");
+      this.applyDeferredConfigRestart(state);
     } else if (type === "error") {
       state.activeTurn = false;
       this.setStatus(state, "error", stringifyUnknown(payload));
