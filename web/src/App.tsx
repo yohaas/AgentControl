@@ -6296,10 +6296,10 @@ function ChatBlockPopoutButton({
           </div>
           <ContextMenu>
             <ContextMenuTrigger asChild>
-              <pre
+              <div
                 id={selectionRootId}
                 tabIndex={0}
-                className="max-h-[65vh] overflow-auto whitespace-pre-wrap break-words rounded-md border border-border bg-background/70 p-3 text-sm leading-6 outline-none [overflow-wrap:anywhere] focus-visible:ring-2 focus-visible:ring-ring"
+                className="max-h-[65vh] overflow-auto rounded-md border border-border bg-background/70 p-3 text-sm leading-6 outline-none [overflow-wrap:anywhere] focus-visible:ring-2 focus-visible:ring-ring"
                 onPointerDown={(event) => {
                   if (event.button === 0) clearPopoutSelection();
                 }}
@@ -6307,8 +6307,8 @@ function ChatBlockPopoutButton({
                 onKeyUp={() => capturePopoutSelection()}
                 onContextMenuCapture={preparePopoutContextMenu}
               >
-                {text}
-              </pre>
+                <ChatMarkdown text={text} query="" />
+              </div>
             </ContextMenuTrigger>
             <ContextMenuContent>
               <ContextMenuItem
