@@ -6063,6 +6063,7 @@ function ChatBlockPopoutButton({
   );
   const selectedText = popoutSelectedText.trim();
   const actionScope = selectedText ? "selection" : "block";
+  const contextLabel = selectedText ? "selected text" : "text block";
 
   useEffect(() => {
     if (!open) clearPopoutSelection();
@@ -6070,6 +6071,14 @@ function ChatBlockPopoutButton({
 
   function actionText() {
     return capturePopoutSelection().trim() || getCachedPopoutSelection().trim() || text;
+  }
+
+  function preparePopoutContextMenu() {
+    if (getSelectionInRoot(`#${selectionRootId}`)) {
+      capturePopoutSelection();
+      return;
+    }
+    clearPopoutSelection();
   }
 
   function copyText() {
@@ -6158,18 +6167,100 @@ function ChatBlockPopoutButton({
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
-          <pre
-            id={selectionRootId}
-            tabIndex={0}
-            className="max-h-[65vh] overflow-auto whitespace-pre-wrap break-words rounded-md border border-border bg-background/70 p-3 text-sm leading-6 outline-none [overflow-wrap:anywhere] focus-visible:ring-2 focus-visible:ring-ring"
-            onPointerDown={(event) => {
-              if (event.button === 0) clearPopoutSelection();
-            }}
-            onMouseUp={() => capturePopoutSelection()}
-            onKeyUp={() => capturePopoutSelection()}
-          >
-            {text}
-          </pre>
+          <ContextMenu>
+            <ContextMenuTrigger asChild>
+              <pre
+                id={selectionRootId}
+                tabIndex={0}
+                className="max-h-[65vh] overflow-auto whitespace-pre-wrap break-words rounded-md border border-border bg-background/70 p-3 text-sm leading-6 outline-none [overflow-wrap:anywhere] focus-visible:ring-2 focus-visible:ring-ring"
+                onPointerDown={(event) => {
+                  if (event.button === 0) clearPopoutSelection();
+                }}
+                onMouseUp={() => capturePopoutSelection()}
+                onKeyUp={() => capturePopoutSelection()}
+                onContextMenuCapture={preparePopoutContextMenu}
+              >
+                {text}
+              </pre>
+            </ContextMenuTrigger>
+            <ContextMenuContent>
+              <ContextMenuItem
+                disabled={!text.trim()}
+                onClick={() => {
+                  void navigator.clipboard.writeText(actionText()).catch((error: unknown) => {
+                    addError(error instanceof Error ? error.message : String(error));
+                  });
+                }}
+              >
+                <Clipboard className="mr-2 h-4 w-4" />
+                Copy {contextLabel}
+              </ContextMenuItem>
+              <ContextMenuSub>
+                <ContextMenuSubTrigger
+                  className="flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none focus:bg-accent data-[disabled]:opacity-45"
+                  disabled={!text.trim()}
+                >
+                  <span className="flex-1">Send {contextLabel} to</span>
+                  <ChevronRight className="ml-4 h-4 w-4 text-muted-foreground" />
+                </ContextMenuSubTrigger>
+                <ContextMenuSubContent>
+                  <ContextMenuSub>
+                    <ContextMenuSubTrigger className="flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none focus:bg-accent">
+                      New agent
+                    </ContextMenuSubTrigger>
+                    <ContextMenuSubContent>
+                      {newAgentDefs.map((def) => (
+                        <ContextMenuItem
+                          key={`${def.provider || "claude"}:${def.name}`}
+                          onClick={() => {
+                            openLaunchModal({
+                              projectId: source.projectId,
+                              defName: def.name,
+                              initialPrompt: wrapForwardedText(source, actionText())
+                            });
+                            setOpen(false);
+                          }}
+                        >
+                          <AgentDot color={def.color} />
+                          <span className="ml-2">{def.name}</span>
+                        </ContextMenuItem>
+                      ))}
+                    </ContextMenuSubContent>
+                  </ContextMenuSub>
+                  <ContextMenuSub>
+                    <ContextMenuSubTrigger
+                      className="flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none focus:bg-accent data-[disabled]:opacity-45"
+                      disabled={targetAgents.length === 0}
+                    >
+                      Existing agent
+                    </ContextMenuSubTrigger>
+                    <ContextMenuSubContent>
+                      {targetAgents.map((agent) => (
+                        <ContextMenuItem
+                          key={agent.id}
+                          disabled={agent.remoteControl}
+                          onClick={() => {
+                            openSendDialog({
+                              sourceAgentId: source.id,
+                              targetAgentId: agent.id,
+                              selectedText: actionText(),
+                              framing: ""
+                            });
+                            setOpen(false);
+                          }}
+                          title={agent.remoteControl ? "Remote Control agents cannot receive dashboard messages." : undefined}
+                        >
+                          <AgentDot color={agent.color} />
+                          <span className="ml-2">{agent.displayName}</span>
+                          {agent.remoteControl && <Badge className="ml-2">RC</Badge>}
+                        </ContextMenuItem>
+                      ))}
+                    </ContextMenuSubContent>
+                  </ContextMenuSub>
+                </ContextMenuSubContent>
+              </ContextMenuSub>
+            </ContextMenuContent>
+          </ContextMenu>
         </DialogContent>
       </Dialog>
     </>
