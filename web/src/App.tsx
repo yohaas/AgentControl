@@ -108,7 +108,7 @@ import {
 } from "./components/ui/dropdown-menu";
 import { Input } from "./components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "./components/ui/popover";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./components/ui/select";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "./components/ui/select";
 import { Textarea } from "./components/ui/textarea";
 import { getSelectionInRoot, useTextSelection } from "./hooks/use-text-selection";
 import { api } from "./lib/api";
@@ -1293,6 +1293,16 @@ function agentsForProject(agentsById: Record<string, RunningAgent>, projectId?: 
 function agentDefsWithGeneric(project?: { agents: AgentDef[]; builtInAgents?: AgentDef[] }) {
   const agents = [...(project?.agents || []), ...(project?.builtInAgents || [])];
   return agents.some((agent) => agent.name.toLowerCase() === "generic") ? agents : [...agents, GENERIC_AGENT_DEF];
+}
+
+function groupedAgentDefsWithGeneric(project?: { agents: AgentDef[]; builtInAgents?: AgentDef[] }) {
+  const projectAgents = project?.agents || [];
+  const builtInAgents = project?.builtInAgents?.length ? project.builtInAgents : [];
+  const hasGeneric = [...projectAgents, ...builtInAgents].some((agent) => agent.name.toLowerCase() === "generic");
+  return {
+    projectAgents,
+    builtInAgents: hasGeneric ? builtInAgents : [...builtInAgents, GENERIC_AGENT_DEF]
+  };
 }
 
 function terminalsForProject(sessionsById: Record<string, TerminalSession>, projectId?: string) {
@@ -3595,7 +3605,11 @@ function LaunchDialog() {
 
   const projectId = selectedProjectId || "";
   const project = projects.find((candidate) => candidate.id === projectId);
-  const agentOptions = useMemo(() => agentDefsWithGeneric(project), [project]);
+  const agentOptionGroups = useMemo(() => groupedAgentDefsWithGeneric(project), [project]);
+  const agentOptions = useMemo(
+    () => [...agentOptionGroups.projectAgents, ...agentOptionGroups.builtInAgents],
+    [agentOptionGroups.builtInAgents, agentOptionGroups.projectAgents]
+  );
   const def = agentOptions.find((candidate) => candidate.name === defName);
   const modelProfiles = useMemo(() => modelProfilesForSettings(settings), [settings]);
   function modelBelongsToProvider(modelId: string | undefined, targetProvider: AgentProvider) {
@@ -3849,14 +3863,30 @@ function LaunchDialog() {
                 <SelectValue placeholder="Agent type" />
               </SelectTrigger>
               <SelectContent>
-                {agentOptions.map((agent) => (
-                  <SelectItem key={agent.name} value={agent.name}>
-                    <span className="inline-flex items-center gap-2">
-                      <AgentDot color={agent.color} />
-                      {agent.name}
-                    </span>
-                  </SelectItem>
-                ))}
+                {agentOptionGroups.projectAgents.length > 0 && (
+                  <SelectGroup>
+                    <SelectLabel>Project Agents</SelectLabel>
+                    {agentOptionGroups.projectAgents.map((agent) => (
+                      <SelectItem key={`project:${agent.name}`} value={agent.name}>
+                        <span className="inline-flex items-center gap-2">
+                          <AgentDot color={agent.color} />
+                          {agent.name}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                )}
+                <SelectGroup>
+                  <SelectLabel>Built-In Agents</SelectLabel>
+                  {agentOptionGroups.builtInAgents.map((agent) => (
+                    <SelectItem key={`built-in:${agent.name}`} value={agent.name}>
+                      <span className="inline-flex items-center gap-2">
+                        <AgentDot color={agent.color} />
+                        {agent.name}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
               </SelectContent>
             </Select>
           </label>
