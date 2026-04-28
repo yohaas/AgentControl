@@ -30,12 +30,15 @@ import { scanConfiguredProjects, scanProject, updateAgentPlugins } from "./scann
 import { TerminalManager } from "./terminal.js";
 
 const PORT = Number(process.env.PORT || 4317);
+const HOST = process.env.HOST || "127.0.0.1";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const attachmentsDir = path.join(os.homedir(), ".agent-dashboard", "attachments");
 const controlDir = path.join(os.homedir(), ".agent-dashboard");
 const controlPath = path.join(controlDir, "control.json");
 const supervised = process.env.AGENT_CONTROL_SUPERVISED === "1";
 const ignoredContextDirs = new Set([".git", "node_modules", "dist", "build", ".next", ".turbo", ".cache", "coverage"]);
+const appAuthToken = process.env.AGENTCONTROL_AUTH_TOKEN || nanoid(48);
+const authCookieName = "agent_control_token";
 
 let config = await readConfig();
 let projectsRoot = resolveProjectsRoot(config);
@@ -45,6 +48,89 @@ let capabilities: Capabilities = await detectCapabilities();
 const app = express();
 const server = http.createServer(app);
 const clients = new Set<WebSocket>();
+
+function isLoopbackHost(hostname: string): boolean {
+  const normalized = hostname.toLowerCase();
+  return normalized === "localhost" || normalized === "127.0.0.1" || normalized === "::1" || normalized === "[::1]";
+}
+
+function isLoopbackAddress(address: string | undefined): boolean {
+  if (!address) return false;
+  const normalized = address.toLowerCase();
+  return normalized === "127.0.0.1" || normalized === "::1" || normalized === "::ffff:127.0.0.1";
+}
+
+function isAllowedOrigin(origin: string | undefined): boolean {
+  if (!origin) return true;
+  try {
+    const parsed = new URL(origin);
+    if (process.env.AGENTCONTROL_ALLOWED_ORIGINS) {
+      return process.env.AGENTCONTROL_ALLOWED_ORIGINS.split(",")
+        .map((item) => item.trim())
+        .filter(Boolean)
+        .includes(parsed.origin);
+    }
+    return (parsed.protocol === "http:" || parsed.protocol === "https:") && isLoopbackHost(parsed.hostname);
+  } catch {
+    return false;
+  }
+}
+
+function parseCookies(cookieHeader: string | undefined): Record<string, string> {
+  if (!cookieHeader) return {};
+  return Object.fromEntries(
+    cookieHeader
+      .split(";")
+      .map((part) => {
+        const [name = "", ...valueParts] = part.trim().split("=");
+        return [decodeURIComponent(name), decodeURIComponent(valueParts.join("="))];
+      })
+      .filter(([name]) => Boolean(name))
+  );
+}
+
+function requestToken(request: express.Request): string | undefined {
+  const header = request.header("x-agent-control-token");
+  if (header) return header;
+  const authorization = request.header("authorization");
+  if (authorization?.toLowerCase().startsWith("bearer ")) return authorization.slice(7).trim();
+  return parseCookies(request.header("cookie"))[authCookieName];
+}
+
+function isAuthenticatedRequest(request: express.Request): boolean {
+  return isAllowedOrigin(request.header("origin")) && requestToken(request) === appAuthToken;
+}
+
+function canIssueToken(request: express.Request): boolean {
+  const origin = request.header("origin");
+  if (origin) return isAllowedOrigin(origin);
+  return isLoopbackAddress(request.socket.remoteAddress);
+}
+
+function webSocketToken(request: http.IncomingMessage): string | undefined {
+  const requestUrl = new URL(request.url || "/", `http://${request.headers.host || "localhost"}`);
+  const queryToken = requestUrl.searchParams.get("token");
+  if (queryToken) return queryToken;
+  const header = request.headers["x-agent-control-token"];
+  if (typeof header === "string") return header;
+  const authorization = request.headers.authorization;
+  if (authorization?.toLowerCase().startsWith("bearer ")) return authorization.slice(7).trim();
+  return parseCookies(request.headers.cookie)[authCookieName];
+}
+
+function isAuthenticatedWebSocket(request: http.IncomingMessage): boolean {
+  const origin = typeof request.headers.origin === "string" ? request.headers.origin : undefined;
+  return isAllowedOrigin(origin) && webSocketToken(request) === appAuthToken;
+}
+
+function setAuthCookie(response: express.Response): void {
+  response.cookie(authCookieName, appAuthToken, {
+    httpOnly: true,
+    sameSite: "strict",
+    secure: false,
+    path: "/"
+  });
+}
 
 function send(ws: WebSocket, event: WsServerEvent): void {
   if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(event));
@@ -221,8 +307,11 @@ function gitCommand(cwd: string, args: string[], timeout = 15000): Promise<strin
 }
 
 function openWithDefaultApp(filePath: string): Promise<void> {
-  const command = process.platform === "win32" ? "cmd.exe" : process.platform === "darwin" ? "open" : "xdg-open";
-  const args = process.platform === "win32" ? ["/c", "start", "", filePath] : [filePath];
+  const command = process.platform === "win32" ? "powershell.exe" : process.platform === "darwin" ? "open" : "xdg-open";
+  const args =
+    process.platform === "win32"
+      ? ["-NoProfile", "-NonInteractive", "-Command", "Start-Process -LiteralPath $args[0]", filePath]
+      : [filePath];
 
   return new Promise((resolve, reject) => {
     execFile(command, args, { windowsHide: true }, (error) => {
@@ -276,9 +365,42 @@ const terminals = new TerminalManager(() => projects, broadcast);
 app.use(express.json({ limit: "20mb" }));
 app.use(
   cors({
-    origin: process.env.NODE_ENV === "production" ? false : "http://localhost:4318"
+    credentials: true,
+    origin(origin, callback) {
+      callback(null, isAllowedOrigin(origin) ? origin || false : false);
+    }
   })
 );
+
+app.get("/api/health", (_request, response) => {
+  response.json({ ok: true });
+});
+
+app.get("/api/auth/token", (request, response) => {
+  if (!canIssueToken(request)) {
+    response.status(403).json({ error: "Origin is not allowed." });
+    return;
+  }
+  setAuthCookie(response);
+  response.json({ token: appAuthToken });
+});
+
+app.use((request, response, next) => {
+  if (request.path === "/api/health" || request.path === "/api/auth/token" || request.path === "/api/permissions/request") {
+    next();
+    return;
+  }
+  if (!request.path.startsWith("/api/")) {
+    setAuthCookie(response);
+    next();
+    return;
+  }
+  if (isAuthenticatedRequest(request)) {
+    next();
+    return;
+  }
+  response.status(401).json({ error: "AgentControl API authentication is required." });
+});
 
 app.get("/api/projects", (_request, response) => {
   response.json(projects);
@@ -714,7 +836,23 @@ app.get("*", (request, response, next) => {
   });
 });
 
-const wss = new WebSocketServer({ server, path: "/ws" });
+const wss = new WebSocketServer({ noServer: true });
+
+server.on("upgrade", (request, socket, head) => {
+  const requestUrl = new URL(request.url || "/", `http://${request.headers.host || "localhost"}`);
+  if (requestUrl.pathname !== "/ws") {
+    socket.destroy();
+    return;
+  }
+  if (!isAuthenticatedWebSocket(request)) {
+    socket.write("HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n");
+    socket.destroy();
+    return;
+  }
+  wss.handleUpgrade(request, socket, head, (ws) => {
+    wss.emit("connection", ws, request);
+  });
+});
 
 wss.on("connection", (ws) => {
   clients.add(ws);
@@ -826,7 +964,8 @@ wss.on("connection", (ws) => {
   });
 });
 
-server.listen(PORT, () => {
-  console.log(`Agent dashboard server listening on http://localhost:${PORT}`);
+server.listen(PORT, HOST, () => {
+  console.log(`Agent dashboard server listening on http://${HOST}:${PORT}`);
+  console.log("AgentControl API/WebSocket authentication is enabled.");
   console.log(`Configured projects=${config.projectPaths?.length || 0}`);
 });

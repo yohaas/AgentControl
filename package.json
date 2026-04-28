@@ -9,7 +9,7 @@
     "web"
   ],
   "scripts": {
-    "dev": "concurrently -k -n server,web -c cyan,magenta \"npm run dev -w server\" \"wait-on http://127.0.0.1:4317/api/projects && npm run dev -w web\"",
+    "dev": "concurrently -k -n server,web -c cyan,magenta \"npm run dev -w server\" \"wait-on http://127.0.0.1:4317/api/health && npm run dev -w web\"",
     "dev:supervised": "node scripts/supervisor.mjs",
     "build": "npm run build -w shared && npm run build -w server && npm run build -w web",
     "start": "npm run start -w server"

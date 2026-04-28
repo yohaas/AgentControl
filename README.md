@@ -108,7 +108,7 @@ This starts:
 - Server/API/WebSocket: http://localhost:4317
 - Vite web app: http://localhost:4318
 
-The Vite app proxies API and WebSocket traffic to the server.
+The Vite app proxies API and WebSocket traffic to the server. The server binds to `127.0.0.1` by default and protects API/WebSocket control traffic with a per-process local token. Use `HOST`, `PORT`, `AGENTCONTROL_AUTH_TOKEN`, and `AGENTCONTROL_ALLOWED_ORIGINS` only when you intentionally need a different local setup.
 
 For UI-controlled restart/shutdown, run supervised mode instead:
 

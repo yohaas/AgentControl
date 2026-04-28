@@ -1,24 +1,40 @@
 import type { WsClientCommand, WsServerEvent } from "@agent-control/shared";
 import { useAppStore } from "../store/app-store";
+import { agentControlToken } from "./api";
 
 let socket: WebSocket | undefined;
 let reconnectTimer: number | undefined;
 let attempt = 0;
+let connecting = false;
 
-function wsUrl() {
+function wsUrl(token: string) {
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  return `${protocol}//${window.location.host}/ws`;
+  return `${protocol}//${window.location.host}/ws?token=${encodeURIComponent(token)}`;
 }
 
-export function connectWebSocket() {
-  if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) return;
+export async function connectWebSocket() {
+  if (connecting || (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING))) return;
   if (reconnectTimer) {
     window.clearTimeout(reconnectTimer);
     reconnectTimer = undefined;
   }
 
-  const nextSocket = new WebSocket(wsUrl());
+  connecting = true;
+  let token: string;
+  try {
+    token = await agentControlToken();
+  } catch (error) {
+    connecting = false;
+    useAppStore.getState().addError(error instanceof Error ? error.message : String(error));
+    const delay = Math.min(10000, 500 * 2 ** attempt);
+    attempt += 1;
+    reconnectTimer = window.setTimeout(() => void connectWebSocket(), delay);
+    return;
+  }
+
+  const nextSocket = new WebSocket(wsUrl(token));
   socket = nextSocket;
+  connecting = false;
 
   nextSocket.addEventListener("open", () => {
     if (socket !== nextSocket) return;
@@ -40,13 +56,14 @@ export function connectWebSocket() {
     socket = undefined;
     const delay = Math.min(10000, 500 * 2 ** attempt);
     attempt += 1;
-    reconnectTimer = window.setTimeout(connectWebSocket, delay);
+    reconnectTimer = window.setTimeout(() => void connectWebSocket(), delay);
   });
 }
 
 export function disconnectWebSocket() {
   if (reconnectTimer) window.clearTimeout(reconnectTimer);
   reconnectTimer = undefined;
+  connecting = false;
   const currentSocket = socket;
   socket = undefined;
   useAppStore.getState().setWsConnected(false);
