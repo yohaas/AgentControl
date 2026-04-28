@@ -163,6 +163,31 @@ export interface ClaudePlugin {
   enabled: boolean;
 }
 
+export interface ClaudeAvailablePlugin {
+  pluginId: string;
+  name: string;
+  description?: string;
+  marketplaceName?: string;
+  version?: string;
+  installCount?: number;
+  installed?: boolean;
+}
+
+export interface ClaudeMarketplace {
+  name: string;
+  source?: string;
+  repo?: string;
+  url?: string;
+  path?: string;
+  installLocation?: string;
+}
+
+export interface ClaudePluginCatalog {
+  installed: ClaudePlugin[];
+  available: ClaudeAvailablePlugin[];
+  marketplaces: ClaudeMarketplace[];
+}
+
 export interface AgentSnapshot {
   agents: RunningAgent[];
   transcripts: Record<string, TranscriptEvent[]>;

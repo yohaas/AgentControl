@@ -1,4 +1,4 @@
-import type { Capabilities, ClaudePlugin, DirectoryListing, MessageAttachment, Project } from "@agent-control/shared";
+import type { Capabilities, ClaudePlugin, ClaudePluginCatalog, DirectoryListing, MessageAttachment, Project } from "@agent-control/shared";
 import type { SettingsState } from "../store/app-store";
 
 async function json<T>(input: RequestInfo, init?: RequestInit): Promise<T> {
@@ -30,7 +30,20 @@ export const api = {
   shutdownApp: () => json<{ ok: boolean }>("/api/admin/shutdown", { method: "POST" }),
   settings: () => json<SettingsState>("/api/settings"),
   plugins: () => json<ClaudePlugin[]>("/api/plugins"),
+  pluginCatalog: () => json<ClaudePluginCatalog>("/api/plugins/catalog"),
   enablePlugin: (plugin: string) => json<ClaudePlugin[]>(`/api/plugins/${encodeURIComponent(plugin)}/enable`, { method: "POST" }),
+  installPlugin: (plugin: string, scope: string) =>
+    json<ClaudePluginCatalog>("/api/plugins/install", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ plugin, scope })
+    }),
+  addPluginMarketplace: (source: string) =>
+    json<ClaudePluginCatalog>("/api/plugins/marketplaces", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ source })
+    }),
   uploadAttachment: (payload: { name: string; mimeType: string; dataUrl: string }) =>
     json<MessageAttachment>("/api/attachments", {
       method: "POST",

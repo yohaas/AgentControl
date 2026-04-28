@@ -11,7 +11,7 @@ import type { DashboardConfig } from "./config.js";
 import type { Capabilities, DirectoryEntry, MessageAttachment, Project, WsClientCommand, WsServerEvent } from "@agent-control/shared";
 import { detectCapabilities } from "./capabilities.js";
 import { expandHome, readConfig, resolveModels, resolveProjectsRoot, resolveTileColumns, resolveTileHeight, writeConfig } from "./config.js";
-import { enablePlugin, listPlugins } from "./plugins.js";
+import { addMarketplace, enablePlugin, installPlugin, listPlugins, pluginCatalog } from "./plugins.js";
 import { AgentRuntimeManager } from "./runtime.js";
 import { scanConfiguredProjects, scanProject } from "./scanner.js";
 import { TerminalManager } from "./terminal.js";
@@ -259,9 +259,43 @@ app.get("/api/plugins", async (_request, response) => {
   }
 });
 
+app.get("/api/plugins/catalog", async (_request, response) => {
+  try {
+    response.json(await pluginCatalog());
+  } catch (error) {
+    response.status(500).json({ error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
 app.post("/api/plugins/:plugin/enable", async (request, response) => {
   try {
     response.json(await enablePlugin(request.params.plugin));
+  } catch (error) {
+    response.status(500).json({ error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+app.post("/api/plugins/install", async (request, response) => {
+  const body = request.body as { plugin?: string; scope?: string };
+  if (!body.plugin?.trim()) {
+    response.status(400).json({ error: "Plugin is required." });
+    return;
+  }
+  try {
+    response.json(await installPlugin(body.plugin.trim(), body.scope));
+  } catch (error) {
+    response.status(500).json({ error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+app.post("/api/plugins/marketplaces", async (request, response) => {
+  const body = request.body as { source?: string };
+  if (!body.source?.trim()) {
+    response.status(400).json({ error: "Marketplace source is required." });
+    return;
+  }
+  try {
+    response.json(await addMarketplace(body.source.trim()));
   } catch (error) {
     response.status(500).json({ error: error instanceof Error ? error.message : String(error) });
   }
