@@ -1601,6 +1601,79 @@ function Header() {
   );
 }
 
+function WorktreeTabs() {
+  const projects = useAppStore((state) => state.projects);
+  const selectedProjectId = useAppStore((state) => state.selectedProjectId);
+  const setSelectedProject = useAppStore((state) => state.setSelectedProject);
+  const addError = useAppStore((state) => state.addError);
+  const [worktrees, setWorktrees] = useState<GitWorktreeList | undefined>();
+
+  useEffect(() => {
+    if (!selectedProjectId) {
+      setWorktrees(undefined);
+      return;
+    }
+    let cancelled = false;
+    api
+      .gitWorktrees(selectedProjectId)
+      .then((result) => {
+        if (!cancelled) setWorktrees(result);
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setWorktrees(undefined);
+          addError(error instanceof Error ? error.message : String(error));
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [addError, projects, selectedProjectId]);
+
+  const openWorktrees = useMemo(() => {
+    const byProjectId = new Map(projects.map((project) => [project.id, project]));
+    return (worktrees?.worktrees || [])
+      .filter((worktree) => worktree.projectId && byProjectId.has(worktree.projectId))
+      .map((worktree) => {
+        const project = byProjectId.get(worktree.projectId!);
+        return {
+          ...worktree,
+          projectName: project?.name || worktree.branch || "Worktree"
+        };
+      });
+  }, [projects, worktrees]);
+
+  if (openWorktrees.length <= 1) return null;
+
+  return (
+    <div className="flex h-10 shrink-0 items-center gap-2 overflow-x-auto border-b border-border bg-muted/30 px-4">
+      <FolderTree className="h-4 w-4 shrink-0 text-muted-foreground" />
+      <div className="flex min-w-0 items-center gap-1">
+        {openWorktrees.map((worktree) => {
+          const active = worktree.projectId === selectedProjectId;
+          return (
+            <button
+              key={worktree.projectId}
+              type="button"
+              className={cn(
+                "max-w-56 rounded-md border px-3 py-1.5 text-left text-xs transition-colors",
+                active
+                  ? "border-primary bg-background text-foreground shadow-sm"
+                  : "border-transparent text-muted-foreground hover:border-border hover:bg-background/70 hover:text-foreground"
+              )}
+              title={worktree.path}
+              onClick={() => worktree.projectId && setSelectedProject(worktree.projectId)}
+            >
+              <span className="block truncate font-medium">{worktree.projectName}</span>
+              <span className="block truncate font-mono text-[11px] opacity-80">{worktree.branch || "detached"}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function GitStatusMenu({ projectId }: { projectId?: string }) {
   const addError = useAppStore((state) => state.addError);
   const [open, setOpen] = useState(false);
@@ -6618,6 +6691,7 @@ export function App() {
   return (
     <div className="flex h-screen min-w-[900px] flex-col overflow-hidden bg-background text-foreground">
       <Header />
+      <WorktreeTabs />
       <div className="flex min-h-0 flex-1">
         {terminalSideDocked && terminalDock === "left" && (
           <TerminalPanel poppedOutTerminalIds={poppedOutTerminalIds} />
