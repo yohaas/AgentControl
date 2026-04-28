@@ -3566,7 +3566,6 @@ function AgentTile({
           <LastActivityText agent={agent} compact timeOnly />
           <StatusPill status={agent.status} />
         </span>
-        <SessionInfoPopover agent={agent} compact />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" title="Agent actions">
