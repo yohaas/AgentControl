@@ -70,6 +70,8 @@ import { useAppStore } from "./store/app-store";
 const DEFAULT_MODEL = "claude-sonnet-4-6";
 const EMPTY_TRANSCRIPT: TranscriptEvent[] = [];
 const EMPTY_QUEUE: { id: string; text: string; attachments: MessageAttachment[] }[] = [];
+const TERMINAL_DOCK_MESSAGE = "agent-control:dock-terminal";
+const TERMINAL_DOCK_STORAGE_KEY = "agent-control-terminal-dock-request";
 const THINKING_PHRASES = [
   "Discombobulating",
   "Cogitating",
@@ -2847,6 +2849,18 @@ function TerminalPanel({ popout = false }: { popout?: boolean } = {}) {
     opened.focus();
   }
 
+  function dockPopout() {
+    if (!popout) return;
+    try {
+      window.opener?.postMessage({ type: TERMINAL_DOCK_MESSAGE }, window.location.origin);
+      window.opener?.focus();
+    } catch {
+      // Fall back to a storage event for browsers that block opener access.
+    }
+    window.localStorage.setItem(TERMINAL_DOCK_STORAGE_KEY, String(Date.now()));
+    window.close();
+  }
+
   function startTerminal() {
     sendCommand({ type: "terminalStart", projectId: selectedProjectId });
   }
@@ -2960,6 +2974,12 @@ function TerminalPanel({ popout = false }: { popout?: boolean } = {}) {
             </Button>
           </>
         )}
+        {popout && (
+          <Button variant="outline" size="sm" onClick={dockPopout} title="Return terminal to the docked panel">
+            <Minimize2 className="h-4 w-4" />
+            Dock
+          </Button>
+        )}
         <Button variant="ghost" size="icon" onClick={() => (popout ? window.close() : setTerminalOpen(false))} title={popout ? "Close window" : "Close terminal"}>
           <X className="h-4 w-4" />
         </Button>
@@ -3025,6 +3045,7 @@ export function App() {
   const selectedProjectId = useAppStore((state) => state.selectedProjectId);
   const setSearchOpen = useAppStore((state) => state.setSearchOpen);
   const setSelectedAgent = useAppStore((state) => state.setSelectedAgent);
+  const setTerminalOpen = useAppStore((state) => state.setTerminalOpen);
   const terminalOpen = useAppStore((state) => state.terminalOpen);
 
   useEffect(() => {
@@ -3038,6 +3059,26 @@ export function App() {
     connectWebSocket();
     return () => disconnectWebSocket();
   }, [addError, setCapabilities, setProjects, setSettings]);
+
+  useEffect(() => {
+    const dockTerminal = () => {
+      setTerminalOpen(true);
+      window.focus();
+    };
+    const onMessage = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+      if ((event.data as { type?: string } | undefined)?.type === TERMINAL_DOCK_MESSAGE) dockTerminal();
+    };
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === TERMINAL_DOCK_STORAGE_KEY) dockTerminal();
+    };
+    window.addEventListener("message", onMessage);
+    window.addEventListener("storage", onStorage);
+    return () => {
+      window.removeEventListener("message", onMessage);
+      window.removeEventListener("storage", onStorage);
+    };
+  }, [setTerminalOpen]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
