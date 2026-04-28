@@ -1587,7 +1587,6 @@ function Header() {
         <Button variant={terminalOpen ? "default" : "outline"} size="icon" onClick={toggleTerminal} title="Terminal">
           <SquareTerminal className="h-4 w-4" />
         </Button>
-        <PluginsDialog />
         <SettingsDialog />
       </div>
     </header>
@@ -2117,9 +2116,8 @@ function FolderBrowserDialog({
   );
 }
 
-function PluginsDialog() {
+function PluginManagementPanel() {
   const addError = useAppStore((state) => state.addError);
-  const [open, setOpen] = useState(false);
   const [catalog, setCatalog] = useState<ClaudePluginCatalog>({ installed: [], available: [], marketplaces: [] });
   const [loading, setLoading] = useState(false);
   const [pluginQuery, setPluginQuery] = useState("");
@@ -2179,8 +2177,8 @@ function PluginsDialog() {
   }
 
   useEffect(() => {
-    if (open) void loadCatalog();
-  }, [open]);
+    void loadCatalog();
+  }, []);
 
   const installedIds = useMemo(() => new Set(catalog.installed.map((plugin) => plugin.name)), [catalog.installed]);
   const filteredAvailable = useMemo(() => {
@@ -2200,143 +2198,137 @@ function PluginsDialog() {
 
   return (
     <>
-      <Dialog open={open} onOpenChange={setOpen}>
-        <Button variant="outline" size="icon" onClick={() => setOpen(true)} title="Plugins">
-          <Puzzle className="h-4 w-4" />
-        </Button>
-        <DialogContent className="w-[min(94vw,920px)]">
-          <DialogHeader>
-            <DialogTitle>Plugins</DialogTitle>
-          </DialogHeader>
-          <div className="grid gap-4">
-            <section className="grid gap-2">
-              <div className="flex items-center justify-between gap-3">
-                <h3 className="text-sm font-semibold">Installed</h3>
-                <Button variant="outline" size="sm" onClick={loadCatalog} disabled={loading}>
-                  <RefreshCw className="h-4 w-4" />
-                  Refresh
-                </Button>
-              </div>
-              {loading ? (
-                <p className="rounded-md border border-dashed border-border px-3 py-5 text-center text-sm text-muted-foreground">
-                  Loading plugins...
-                </p>
-              ) : catalog.installed.length === 0 ? (
-                <p className="rounded-md border border-dashed border-border px-3 py-5 text-center text-sm text-muted-foreground">
-                  No installed plugins found.
-                </p>
-              ) : (
-                <div className="grid max-h-56 gap-2 overflow-auto pr-1">
-                  {catalog.installed.map((plugin) => (
-                    <div key={plugin.name} className="flex items-center gap-3 rounded-md border border-border px-3 py-2">
-                      <Puzzle className="h-4 w-4 text-muted-foreground" />
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-sm font-medium">{plugin.name}</div>
-                        <div className="truncate text-xs text-muted-foreground">
-                          {plugin.version || "unknown version"} · {plugin.scope || "unknown scope"}
-                        </div>
-                      </div>
-                      <Badge className={plugin.enabled ? "border-teal-400/40 text-teal-200" : "border-zinc-500/40 text-zinc-300"}>
-                        {plugin.enabled ? "Enabled" : "Disabled"}
-                      </Badge>
-                      <Button size="sm" variant="outline" disabled={plugin.enabled} onClick={() => enable(plugin.name)}>
-                        Enable
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
-
-            <section className="grid gap-2">
-              <h3 className="text-sm font-semibold">Add Marketplace</h3>
-              <div className="flex min-w-0 gap-2">
-                <Input
-                  value={marketplaceSource}
-                  onChange={(event) => setMarketplaceSource(event.target.value)}
-                  placeholder="GitHub repo, URL, or local marketplace path"
-                />
-                <Button variant="outline" onClick={() => setMarketplaceBrowserOpen(true)}>
-                  <FolderOpen className="h-4 w-4" />
-                  Browse
-                </Button>
-                <Button disabled={!marketplaceSource.trim() || addingMarketplace} onClick={addMarketplace}>
-                  <Plus className="h-4 w-4" />
-                  Add
-                </Button>
-              </div>
-              {catalog.marketplaces.length > 0 && (
-                <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-                  {catalog.marketplaces.map((marketplace) => (
-                    <span key={marketplace.name} className="rounded-md border border-border px-2 py-1">
-                      {marketplace.name}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </section>
-
-            <section className="grid gap-2">
-              <div className="grid gap-2 sm:grid-cols-[1fr_150px]">
-                <Input value={pluginQuery} onChange={(event) => setPluginQuery(event.target.value)} placeholder="Search available plugins" />
-                <Select value={pluginScope} onValueChange={setPluginScope}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="user">User scope</SelectItem>
-                    <SelectItem value="project">Project scope</SelectItem>
-                    <SelectItem value="local">Local scope</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex min-w-0 gap-2">
-                <Input value={manualPlugin} onChange={(event) => setManualPlugin(event.target.value)} placeholder="Install by exact plugin id" />
-                <Button disabled={!manualPlugin.trim() || Boolean(installingPlugin)} onClick={() => void install(manualPlugin)}>
-                  <Plus className="h-4 w-4" />
-                  Install
-                </Button>
-              </div>
-              <div className="grid max-h-[38vh] gap-2 overflow-auto pr-1">
-                {filteredAvailable.length === 0 ? (
-                  <p className="rounded-md border border-dashed border-border px-3 py-5 text-center text-sm text-muted-foreground">
-                    No available plugins match.
-                  </p>
-                ) : (
-                  filteredAvailable.map((plugin) => {
-                    const installed = installedIds.has(plugin.pluginId);
-                    return (
-                      <div key={plugin.pluginId} className="flex items-start gap-3 rounded-md border border-border px-3 py-2">
-                        <Puzzle className="mt-0.5 h-4 w-4 text-muted-foreground" />
-                        <div className="min-w-0 flex-1">
-                          <div className="flex min-w-0 flex-wrap items-center gap-2">
-                            <span className="truncate text-sm font-medium">{plugin.name}</span>
-                            {plugin.marketplaceName && <Badge>{plugin.marketplaceName}</Badge>}
-                            {plugin.installCount !== undefined && (
-                              <span className="text-xs text-muted-foreground">{plugin.installCount.toLocaleString()} installs</span>
-                            )}
-                          </div>
-                          {plugin.description && (
-                            <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">{plugin.description}</p>
-                          )}
-                        </div>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={installed || Boolean(installingPlugin)}
-                          onClick={() => void install(plugin.pluginId)}
-                        >
-                          {installed ? "Installed" : installingPlugin === plugin.pluginId ? "Installing" : "Install"}
-                        </Button>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </section>
+      <section className="grid gap-4 rounded-md border border-border p-3">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-medium">Claude plugins</h3>
+            <p className="text-xs text-muted-foreground">Manage installed plugins, marketplaces, and install scope for Claude sessions.</p>
           </div>
-        </DialogContent>
-      </Dialog>
+          <Button variant="outline" size="sm" onClick={loadCatalog} disabled={loading}>
+            <RefreshCw className="h-4 w-4" />
+            Refresh
+          </Button>
+        </div>
+        <section className="grid gap-2">
+          <h4 className="text-sm font-semibold">Installed</h4>
+          {loading ? (
+            <p className="rounded-md border border-dashed border-border px-3 py-5 text-center text-sm text-muted-foreground">
+              Loading plugins...
+            </p>
+          ) : catalog.installed.length === 0 ? (
+            <p className="rounded-md border border-dashed border-border px-3 py-5 text-center text-sm text-muted-foreground">
+              No installed plugins found.
+            </p>
+          ) : (
+            <div className="grid max-h-56 gap-2 overflow-auto pr-1">
+              {catalog.installed.map((plugin) => (
+                <div key={plugin.name} className="flex items-center gap-3 rounded-md border border-border px-3 py-2">
+                  <Puzzle className="h-4 w-4 text-muted-foreground" />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-medium">{plugin.name}</div>
+                    <div className="truncate text-xs text-muted-foreground">
+                      {plugin.version || "unknown version"} · {plugin.scope || "unknown scope"}
+                    </div>
+                  </div>
+                  <Badge className={plugin.enabled ? "border-teal-400/40 text-teal-200" : "border-zinc-500/40 text-zinc-300"}>
+                    {plugin.enabled ? "Enabled" : "Disabled"}
+                  </Badge>
+                  <Button size="sm" variant="outline" disabled={plugin.enabled} onClick={() => enable(plugin.name)}>
+                    Enable
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="grid gap-2">
+          <h4 className="text-sm font-semibold">Add marketplace</h4>
+          <div className="flex min-w-0 gap-2">
+            <Input
+              value={marketplaceSource}
+              onChange={(event) => setMarketplaceSource(event.target.value)}
+              placeholder="GitHub repo, URL, or local marketplace path"
+            />
+            <Button variant="outline" onClick={() => setMarketplaceBrowserOpen(true)}>
+              <FolderOpen className="h-4 w-4" />
+              Browse
+            </Button>
+            <Button disabled={!marketplaceSource.trim() || addingMarketplace} onClick={addMarketplace}>
+              <Plus className="h-4 w-4" />
+              Add
+            </Button>
+          </div>
+          {catalog.marketplaces.length > 0 && (
+            <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+              {catalog.marketplaces.map((marketplace) => (
+                <span key={marketplace.name} className="rounded-md border border-border px-2 py-1">
+                  {marketplace.name}
+                </span>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="grid gap-2">
+          <div className="grid gap-2 sm:grid-cols-[1fr_150px]">
+            <Input value={pluginQuery} onChange={(event) => setPluginQuery(event.target.value)} placeholder="Search available plugins" />
+            <Select value={pluginScope} onValueChange={setPluginScope}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="user">User scope</SelectItem>
+                <SelectItem value="project">Project scope</SelectItem>
+                <SelectItem value="local">Local scope</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex min-w-0 gap-2">
+            <Input value={manualPlugin} onChange={(event) => setManualPlugin(event.target.value)} placeholder="Install by exact plugin id" />
+            <Button disabled={!manualPlugin.trim() || Boolean(installingPlugin)} onClick={() => void install(manualPlugin)}>
+              <Plus className="h-4 w-4" />
+              Install
+            </Button>
+          </div>
+          <div className="grid max-h-[38vh] gap-2 overflow-auto pr-1">
+            {filteredAvailable.length === 0 ? (
+              <p className="rounded-md border border-dashed border-border px-3 py-5 text-center text-sm text-muted-foreground">
+                No available plugins match.
+              </p>
+            ) : (
+              filteredAvailable.map((plugin) => {
+                const installed = installedIds.has(plugin.pluginId);
+                return (
+                  <div key={plugin.pluginId} className="flex items-start gap-3 rounded-md border border-border px-3 py-2">
+                    <Puzzle className="mt-0.5 h-4 w-4 text-muted-foreground" />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex min-w-0 flex-wrap items-center gap-2">
+                        <span className="truncate text-sm font-medium">{plugin.name}</span>
+                        {plugin.marketplaceName && <Badge>{plugin.marketplaceName}</Badge>}
+                        {plugin.installCount !== undefined && (
+                          <span className="text-xs text-muted-foreground">{plugin.installCount.toLocaleString()} installs</span>
+                        )}
+                      </div>
+                      {plugin.description && (
+                        <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">{plugin.description}</p>
+                      )}
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={installed || Boolean(installingPlugin)}
+                      onClick={() => void install(plugin.pluginId)}
+                    >
+                      {installed ? "Installed" : installingPlugin === plugin.pluginId ? "Installing" : "Install"}
+                    </Button>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </section>
+      </section>
       <FolderBrowserDialog
         open={marketplaceBrowserOpen}
         initialPath={marketplaceSource}
@@ -4057,6 +4049,7 @@ function SettingsDialog() {
                   Always passes --dangerously-skip-permissions when launching Claude agents.
                 </p>
               )}
+              <PluginManagementPanel />
             </>
           )}
           {settingsTab === "codex" && (
