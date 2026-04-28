@@ -335,7 +335,7 @@ function AgentActivityIndicator({ agent, compact = false }: { agent: RunningAgen
         )}
         style={{ borderLeftColor: agent.color, borderLeftWidth: 4 }}
       >
-        <ThinkingText prefix="Working" />
+        <ThinkingText />
       </div>
     </div>
   );
