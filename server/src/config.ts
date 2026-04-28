@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import type { AutoApproveMode } from "@agent-control/shared";
+import type { AgentPermissionMode, AutoApproveMode } from "@agent-control/shared";
 
 export const DEFAULT_MODELS = [
   "claude-opus-4-7",
@@ -15,6 +15,7 @@ export interface DashboardConfig {
   projectPaths?: string[];
   models?: string[];
   autoApprove?: AutoApproveMode;
+  defaultAgentMode?: AgentPermissionMode;
   tileHeight?: number;
   tileColumns?: number;
   pinLastSentMessage?: boolean;
@@ -74,6 +75,15 @@ export function resolveTileColumns(config: DashboardConfig): number {
 
 export function resolvePinLastSentMessage(config: DashboardConfig): boolean {
   return config.pinLastSentMessage !== false;
+}
+
+export function resolveDefaultAgentMode(config: DashboardConfig): AgentPermissionMode {
+  return config.defaultAgentMode === "default" ||
+    config.defaultAgentMode === "acceptEdits" ||
+    config.defaultAgentMode === "plan" ||
+    config.defaultAgentMode === "bypassPermissions"
+    ? config.defaultAgentMode
+    : "acceptEdits";
 }
 
 export function resolveTerminalDock(config: DashboardConfig): TerminalDockPosition {

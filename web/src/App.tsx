@@ -1316,6 +1316,7 @@ function Sidebar() {
           projectId: project.id,
           defName: agent.name,
           model: agent.defaultModel || settings.models[0] || DEFAULT_MODEL,
+          permissionMode: settings.defaultAgentMode,
           autoApprove: settings.autoApprove
         }
       });
@@ -1729,6 +1730,7 @@ function LaunchDialog() {
         model,
         initialPrompt: remoteControl ? undefined : initialPrompt,
         remoteControl,
+        permissionMode: settings.defaultAgentMode,
         autoApprove: settings.autoApprove
       }
     });
@@ -1850,6 +1852,7 @@ function SettingsDialog() {
   const [projectPathsText, setProjectPathsText] = useState((settings.projectPaths || []).join("\n"));
   const [modelsText, setModelsText] = useState(settings.models.join("\n"));
   const [autoApprove, setAutoApprove] = useState(settings.autoApprove);
+  const [defaultAgentMode, setDefaultAgentMode] = useState<AgentPermissionMode>(settings.defaultAgentMode);
   const [tileHeight, setTileHeight] = useState(settings.tileHeight);
   const [tileColumns, setTileColumns] = useState(settings.tileColumns);
   const [pinLastSentMessage, setPinLastSentMessage] = useState(settings.pinLastSentMessage);
@@ -1861,6 +1864,7 @@ function SettingsDialog() {
     setProjectPathsText((settings.projectPaths || []).join("\n"));
     setModelsText(settings.models.join("\n"));
     setAutoApprove(settings.autoApprove);
+    setDefaultAgentMode(settings.defaultAgentMode);
     setTileHeight(settings.tileHeight);
     setTileColumns(settings.tileColumns);
     setPinLastSentMessage(settings.pinLastSentMessage);
@@ -1884,6 +1888,7 @@ function SettingsDialog() {
         projectPaths: projectPathsText.split(/\r?\n/).map((line) => line.trim()).filter(Boolean),
         models: modelsText.split(/\r?\n/).map((line) => line.trim()).filter(Boolean),
         autoApprove,
+        defaultAgentMode,
         tileHeight,
         tileColumns,
         pinLastSentMessage,
@@ -1906,6 +1911,7 @@ function SettingsDialog() {
         projectPaths: projectPathsText.split(/\r?\n/).map((line) => line.trim()).filter(Boolean),
         models: modelsText.split(/\r?\n/).map((line) => line.trim()).filter(Boolean),
         autoApprove,
+        defaultAgentMode,
         tileHeight,
         tileColumns,
         pinLastSentMessage,
@@ -1926,6 +1932,7 @@ function SettingsDialog() {
       setProjectPathsText((next.projectPaths || []).join("\n"));
       setModelsText(next.models.join("\n"));
       setAutoApprove(next.autoApprove);
+      setDefaultAgentMode(next.defaultAgentMode);
       setTileHeight(next.tileHeight);
       setTileColumns(next.tileColumns);
       setPinLastSentMessage(next.pinLastSentMessage);
@@ -1972,6 +1979,21 @@ function SettingsDialog() {
           <label className="grid gap-1.5 text-sm">
             Models
             <Textarea value={modelsText} onChange={(event) => setModelsText(event.target.value)} />
+          </label>
+          <label className="grid gap-1.5 text-sm">
+            Default mode for new agents
+            <Select value={defaultAgentMode} onValueChange={(value) => setDefaultAgentMode(value as AgentPermissionMode)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {COMPOSER_MODE_OPTIONS.map((option) => (
+                  <SelectItem key={option.mode} value={option.mode}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </label>
           <label className="grid gap-1.5 text-sm">
             Auto-approve tool use

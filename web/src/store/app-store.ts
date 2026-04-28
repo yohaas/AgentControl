@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type {
   AgentSnapshot,
+  AgentPermissionMode,
   AutoApproveMode,
   Capabilities,
   MessageAttachment,
@@ -16,6 +17,7 @@ export interface SettingsState {
   projectPaths?: string[];
   models: string[];
   autoApprove: AutoApproveMode;
+  defaultAgentMode: AgentPermissionMode;
   tileHeight: number;
   tileColumns: number;
   pinLastSentMessage: boolean;
@@ -105,6 +107,7 @@ const defaultSettings: SettingsState = {
   projectsRoot: "",
   models: ["claude-opus-4-7", "claude-opus-4-6", "claude-sonnet-4-6", "claude-haiku-4-5"],
   autoApprove: "off",
+  defaultAgentMode: "acceptEdits",
   tileHeight: 460,
   tileColumns: 2,
   pinLastSentMessage: true,
@@ -121,9 +124,13 @@ function normalizeSettings(settings: SettingsState): SettingsState {
   const terminalDock = ["float", "left", "bottom", "right"].includes(settings.terminalDock)
     ? settings.terminalDock
     : defaultSettings.terminalDock;
+  const defaultAgentMode = ["default", "acceptEdits", "plan", "bypassPermissions"].includes(settings.defaultAgentMode)
+    ? settings.defaultAgentMode
+    : defaultSettings.defaultAgentMode;
   return {
     ...defaultSettings,
     ...settings,
+    defaultAgentMode,
     tileHeight: clampNumber(settings.tileHeight, defaultSettings.tileHeight, 320, 760),
     tileColumns: clampNumber(settings.tileColumns, defaultSettings.tileColumns, 1, 6),
     terminalDock

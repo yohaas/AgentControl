@@ -539,7 +539,7 @@ export class AgentRuntimeManager {
       "--name",
       state.agent.displayName
     ];
-    if (state.autoApprove === "always") args.push("--permission-mode", "bypassPermissions");
+    if (this.permissionMode(state) === "bypassPermissions") args.push("--permission-mode", "bypassPermissions");
 
     const child = spawn(resolveClaudeCommand(), args, {
       cwd: state.agent.projectPath,
