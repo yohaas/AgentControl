@@ -2950,6 +2950,15 @@ function Sidebar() {
         <Button variant="ghost" size="icon" onClick={() => setCollapsed(false)} title="Expand sidebar">
           <PanelLeftOpen className="h-4 w-4" />
         </Button>
+        <Button
+          size="icon"
+          className="h-9 w-9"
+          disabled={!selectedProjectId}
+          onClick={() => selectedProjectId && openLaunchModal({ projectId: selectedProjectId })}
+          title="Launch agent"
+        >
+          <Plus className="h-4 w-4" />
+        </Button>
         <div className="h-px w-8 bg-border" />
         <div className="flex min-h-0 flex-1 flex-col items-center gap-2 overflow-y-auto overflow-x-hidden px-1">
           {running.map((agent) => (
