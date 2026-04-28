@@ -260,6 +260,7 @@ function transcriptToPlainText(agent: RunningAgent, transcripts: TranscriptEvent
 }
 
 function toolValueText(value: unknown): string {
+  if (value === undefined || value === null) return "";
   if (typeof value === "string") return value;
   if (Array.isArray(value)) {
     return value
