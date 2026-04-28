@@ -234,6 +234,8 @@ function latestTerminalForProject(terminals: Record<string, TerminalSession>, pr
     .at(-1)?.id;
 }
 
+const TRANSIENT_WS_NOT_CONNECTED_ERROR = "WebSocket is not connected yet.";
+
 export const useAppStore = create<AppState>((set, get) => ({
   projects: [],
   agents: {},
@@ -292,7 +294,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   setFocusedAgent: (id) => set({ focusedAgentId: id }),
   setCapabilities: (capabilities) => set({ capabilities }),
   setSettings: (settings) => set({ settings: normalizeSettings(settings) }),
-  setWsConnected: (connected) => set({ wsConnected: connected }),
+  setWsConnected: (connected) =>
+    set((state) => ({
+      wsConnected: connected,
+      errors: connected ? state.errors.filter((error) => error !== TRANSIENT_WS_NOT_CONNECTED_ERROR) : state.errors
+    })),
   addError: (message) =>
     set((state) => {
       const normalized = message.trim();
