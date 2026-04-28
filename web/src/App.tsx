@@ -30,6 +30,10 @@ import {
   MoreHorizontal,
   PanelLeftClose,
   PanelLeftOpen,
+  PanelBottom,
+  PanelLeft,
+  PanelRight,
+  PictureInPicture2,
   Plus,
   Puzzle,
   RefreshCw,
@@ -110,10 +114,10 @@ const BASE_SLASH_COMMANDS: SlashCommandSuggestion[] = [
 ];
 
 const TERMINAL_DOCK_OPTIONS = [
-  { value: "float", label: "Float" },
-  { value: "left", label: "Left" },
-  { value: "bottom", label: "Bottom" },
-  { value: "right", label: "Right" }
+  { value: "float", label: "Float", icon: PictureInPicture2 },
+  { value: "left", label: "Dock left", icon: PanelLeft },
+  { value: "bottom", label: "Dock bottom", icon: PanelBottom },
+  { value: "right", label: "Dock right", icon: PanelRight }
 ] as const;
 
 function readPoppedOutTerminalIds() {
@@ -3287,7 +3291,8 @@ function TerminalPanel({
   const visibleSessions = visiblePaneIds
     .map((id) => sessions.find((item) => item.id === id))
     .filter((item): item is TerminalSession => Boolean(item));
-  const terminalDockLabel = TERMINAL_DOCK_OPTIONS.find((option) => option.value === terminalDock)?.label || "Bottom";
+  const terminalDockOption = TERMINAL_DOCK_OPTIONS.find((option) => option.value === terminalDock) || TERMINAL_DOCK_OPTIONS[2];
+  const CurrentDockIcon = terminalDockOption.icon;
 
   return (
     <section
@@ -3385,18 +3390,22 @@ function TerminalPanel({
         {!popout && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" title="Dock terminal">
-                Dock: {terminalDockLabel}
+              <Button variant="outline" size="sm" className="gap-1 px-2" title={`Terminal: ${terminalDockOption.label}`}>
+                <CurrentDockIcon className="h-4 w-4" />
                 <ChevronDown className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              {TERMINAL_DOCK_OPTIONS.map((option) => (
-                <DropdownMenuItem key={option.value} onClick={() => void changeTerminalDock(option.value)}>
-                  <Check className={cn("mr-2 h-4 w-4", option.value === terminalDock ? "opacity-100" : "opacity-0")} />
-                  {option.label}
-                </DropdownMenuItem>
-              ))}
+              {TERMINAL_DOCK_OPTIONS.map((option) => {
+                const DockIcon = option.icon;
+                return (
+                  <DropdownMenuItem key={option.value} onClick={() => void changeTerminalDock(option.value)}>
+                    <DockIcon className="mr-2 h-4 w-4" />
+                    <span className="min-w-24">{option.label}</span>
+                    <Check className={cn("ml-auto h-4 w-4", option.value === terminalDock ? "opacity-100" : "opacity-0")} />
+                  </DropdownMenuItem>
+                );
+              })}
             </DropdownMenuContent>
           </DropdownMenu>
         )}
