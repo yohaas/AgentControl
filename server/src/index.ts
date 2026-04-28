@@ -68,6 +68,7 @@ const anthropicModelsDocUrl = "https://docs.anthropic.com/en/docs/about-claude/m
 const anthropicOpus47NewsUrl = "https://www.anthropic.com/news/claude-opus-4-7";
 const openAiModelsDocUrl = "https://developers.openai.com/api/docs/models";
 const codexModelsDocUrl = "https://developers.openai.com/codex/models";
+const fallbackClaudeModelIds = ["claude-opus-4-7", "claude-opus-4-6", "claude-sonnet-4-6", "claude-haiku-4-5"];
 
 let config = await readConfig();
 let secrets = await readSecrets();
@@ -171,13 +172,10 @@ function sortClaudeModels(ids: string[]): string[] {
 }
 
 function parsePublishedClaudeModels(html: string): ModelProfile[] {
-  const ids = uniqueModelIds(
-    [
-      ...html.matchAll(
-        /\b(?:claude-(?:opus|sonnet|haiku)-\d(?:-\d+)?(?:-\d{8})?|claude-\d(?:-\d+)?-(?:opus|sonnet|haiku)(?:-\d{8}|-latest)?)\b/gi
-      )
-    ].map((match) => match[0])
-  );
+  const explicitApiIds = [...html.matchAll(/Developers can use\s+[`"“]([^`"”]+)[`"”]/gi)].map((match) => match[1]);
+  const ids = uniqueModelIds([...explicitApiIds, ...fallbackClaudeModelIds])
+    .filter((id) => /^claude-(?:opus|sonnet|haiku)-\d-\d$/.test(id))
+    .filter((id) => !id.endsWith("-v1"));
   return claudeModelProfiles(sortClaudeModels(ids));
 }
 
