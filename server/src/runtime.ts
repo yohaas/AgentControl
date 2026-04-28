@@ -26,7 +26,7 @@ import type {
   WsServerEvent
 } from "@agent-control/shared";
 import { createStateWriter, readPersistedState, type PersistedState } from "./persistence.js";
-import { resolveClaudeCommand, resolveCodexCommand } from "./capabilities.js";
+import { resolveClaudeCommand, resolveCodexInvocation } from "./capabilities.js";
 import { listPlugins, supportsPluginProvider } from "./plugins.js";
 import { mergeSlashCommands, normalizeSlashCommandInfo, scanSlashCommands } from "./slash-commands.js";
 
@@ -651,7 +651,8 @@ export class AgentRuntimeManager {
       if (!installedPlugins.some((installed) => installed.name === plugin)) args.push("-c", `plugins.${tomlBasicString(plugin)}.enabled=true`);
     }
     args.push(prompt);
-    const child = spawn(resolveCodexCommand(), args, {
+    const codexInvocation = resolveCodexInvocation();
+    const child = spawn(codexInvocation.command, [...codexInvocation.args, ...args], {
       cwd: state.agent.projectPath,
       env: { ...process.env },
       windowsHide: true

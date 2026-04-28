@@ -54,6 +54,32 @@ export function resolveCodexCommand(): string {
   return "codex.cmd";
 }
 
+export interface CommandInvocation {
+  command: string;
+  args: string[];
+}
+
+function nodeCommandForNpmShim(shimPath: string): string {
+  const nodePath = path.join(path.dirname(shimPath), "node.exe");
+  return existsSync(nodePath) ? nodePath : process.platform === "win32" ? "node.exe" : "node";
+}
+
+function codexScriptForShim(shimPath: string): string | undefined {
+  const scriptPath = path.join(path.dirname(shimPath), "node_modules", "@openai", "codex", "bin", "codex.js");
+  return existsSync(scriptPath) ? scriptPath : undefined;
+}
+
+export function resolveCodexInvocation(): CommandInvocation {
+  const command = resolveCodexCommand();
+  const lower = command.toLowerCase();
+  if (lower.endsWith(".js")) return { command: process.execPath, args: [command] };
+  if (process.platform === "win32" && (lower.endsWith(".cmd") || lower.endsWith(".ps1"))) {
+    const scriptPath = codexScriptForShim(command);
+    if (scriptPath) return { command: nodeCommandForNpmShim(command), args: [scriptPath] };
+  }
+  return { command, args: [] };
+}
+
 function compareVersions(left: string, right: string): number {
   const leftParts = left.split(".").map((part) => Number.parseInt(part, 10) || 0);
   const rightParts = right.split(".").map((part) => Number.parseInt(part, 10) || 0);
@@ -166,9 +192,10 @@ export async function detectCapabilities(): Promise<Capabilities> {
 
 async function detectCodexCapability(): Promise<ProviderCapability> {
   const codexCommand = resolveCodexCommand();
+  const codexInvocation = resolveCodexInvocation();
   try {
-    const { stdout, stderr } = await execFileAsync(codexCommand, ["--version"], { timeout: 4000 });
-    const supportsPlugins = await execFileAsync(codexCommand, ["plugin", "--help"], { timeout: 4000 })
+    const { stdout, stderr } = await execFileAsync(codexInvocation.command, [...codexInvocation.args, "--version"], { timeout: 4000 });
+    const supportsPlugins = await execFileAsync(codexInvocation.command, [...codexInvocation.args, "plugin", "--help"], { timeout: 4000 })
       .then(() => true)
       .catch(() => false);
     return {

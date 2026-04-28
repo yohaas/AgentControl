@@ -4,13 +4,14 @@ import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import type { AgentProvider, ClaudeAvailablePlugin, ClaudeMarketplace, ClaudePlugin, ClaudePluginCatalog } from "@agent-control/shared";
-import { resolveClaudeCommand, resolveCodexCommand } from "./capabilities.js";
+import { resolveClaudeCommand, resolveCodexInvocation, type CommandInvocation } from "./capabilities.js";
 
 const execFileAsync = promisify(execFile);
 export type PluginProvider = Extract<AgentProvider, "claude" | "codex">;
 
-function providerCommand(provider: PluginProvider): string {
-  return provider === "codex" ? resolveCodexCommand() : resolveClaudeCommand();
+function providerCommand(provider: PluginProvider): CommandInvocation {
+  if (provider === "codex") return resolveCodexInvocation();
+  return { command: resolveClaudeCommand(), args: [] };
 }
 
 export function normalizePluginProvider(value: unknown): PluginProvider {
@@ -146,7 +147,8 @@ export async function installPlugin(plugin: string, scope = "user", provider: Pl
 
 export async function addMarketplace(source: string, provider: PluginProvider = "claude"): Promise<ClaudePluginCatalog> {
   const args = provider === "codex" ? ["plugin", "marketplace", "add", source] : ["plugin", "marketplace", "add", source];
-  await execFileAsync(providerCommand(provider), args, { timeout: 120000 });
+  const invocation = providerCommand(provider);
+  await execFileAsync(invocation.command, [...invocation.args, ...args], { timeout: 120000 });
   return pluginCatalog(provider);
 }
 
