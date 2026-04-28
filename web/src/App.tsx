@@ -2744,13 +2744,32 @@ function CollapsibleText({ text, query = "", compact = false }: { text: string; 
 
   if (!shouldCollapse) return <HighlightedText text={text} query={query} />;
 
+  function toggleExpanded() {
+    setExpanded((value) => !value);
+  }
+
+  function toggleFromText() {
+    if (window.getSelection()?.toString()) return;
+    toggleExpanded();
+  }
+
   return (
     <div className="grid gap-2">
       <div
+        role="button"
+        tabIndex={0}
         className={cn(
-          "min-w-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere]",
+          "min-w-0 cursor-pointer rounded-sm whitespace-pre-wrap break-words outline-none [overflow-wrap:anywhere] hover:bg-accent/40 focus-visible:ring-2 focus-visible:ring-ring",
           !expanded && (compact ? "max-h-32 overflow-hidden" : "max-h-48 overflow-hidden")
         )}
+        title={expanded ? "Collapse response" : "Expand response"}
+        onClick={toggleFromText}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            toggleExpanded();
+          }
+        }}
       >
         <HighlightedText text={text} query={query} />
       </div>
@@ -2760,7 +2779,7 @@ function CollapsibleText({ text, query = "", compact = false }: { text: string; 
           "inline-flex w-fit items-center gap-1 rounded-sm text-xs font-medium opacity-80 hover:opacity-100",
           compact ? "text-muted-foreground" : "text-current"
         )}
-        onClick={() => setExpanded((value) => !value)}
+        onClick={toggleExpanded}
       >
         {expanded ? "Show less" : "Show more"}
         <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", expanded && "rotate-180")} />
