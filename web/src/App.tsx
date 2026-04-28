@@ -1665,12 +1665,12 @@ function Sidebar() {
 
   if (collapsed) {
     return (
-      <aside className="flex w-14 shrink-0 flex-col items-center gap-2 border-r border-border bg-card/45 py-3">
+      <aside className="flex w-14 shrink-0 flex-col items-center gap-2 overflow-x-hidden border-r border-border bg-card/45 py-3">
         <Button variant="ghost" size="icon" onClick={() => setCollapsed(false)} title="Expand sidebar">
           <PanelLeftOpen className="h-4 w-4" />
         </Button>
         <div className="h-px w-8 bg-border" />
-        <div className="flex min-h-0 flex-1 flex-col items-center gap-2 overflow-auto">
+        <div className="flex min-h-0 flex-1 flex-col items-center gap-2 overflow-y-auto overflow-x-hidden px-1">
           {running.map((agent) => (
             <div key={agent.id} className="relative h-9 w-9">
               <button
@@ -1681,12 +1681,12 @@ function Sidebar() {
                 onClick={() => focusRunningAgent(agent.id)}
                 title={`${agent.displayName}\n${fullLastActivity(agent.updatedAt || agent.launchedAt)}`}
               >
-                <AgentDot color={agent.color} />
+                <AgentDot color={agent.color} className={cn(isAgentBusy(agent) && "animate-pulse")} />
               </button>
               <Button
                 variant="ghost"
                 size="icon"
-                className="absolute -right-1 -top-1 h-4 w-4 rounded-full bg-background/90 p-0 text-muted-foreground shadow-sm hover:text-foreground"
+                className="absolute right-0 top-0 h-4 w-4 rounded-full bg-background/90 p-0 text-muted-foreground shadow-sm hover:text-foreground"
                 title={`Close ${agent.displayName}`}
                 onClick={() => sendCommand({ type: "kill", id: agent.id })}
               >
@@ -1700,7 +1700,7 @@ function Sidebar() {
   }
 
   return (
-    <aside className="flex w-[280px] shrink-0 flex-col border-r border-border bg-card/45">
+    <aside className="flex w-[280px] shrink-0 flex-col overflow-x-hidden border-r border-border bg-card/45">
       <section className="flex min-h-0 flex-1 flex-col p-3">
         <div className="mb-2 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -1749,7 +1749,7 @@ function Sidebar() {
             </Button>
           )}
         </div>
-        <div className="min-h-0 flex-1 space-y-1 overflow-auto pr-1">
+        <div className="min-h-0 flex-1 space-y-1 overflow-y-auto overflow-x-hidden pr-1">
           {running.length === 0 ? (
             <p className="rounded-md border border-dashed border-border px-3 py-5 text-center text-sm text-muted-foreground">
               No agents running.
@@ -1810,7 +1810,7 @@ function Sidebar() {
             Launch All
           </Button>
         </div>
-        <div className="max-h-[38vh] space-y-1 overflow-auto pr-1">
+        <div className="max-h-[38vh] space-y-1 overflow-y-auto overflow-x-hidden pr-1">
           {!project ? (
             <p className="rounded-md border border-dashed border-border px-3 py-5 text-center text-sm text-muted-foreground">
               Add a project to get started.
