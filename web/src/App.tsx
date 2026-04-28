@@ -7655,6 +7655,41 @@ function TerminalPane({
     const resizeObserver = new ResizeObserver(resize);
     resizeObserver.observe(host);
     const dataDisposable = terminal.onData((input) => sendCommand({ type: "terminalInput", id: session.id, input }));
+    const copySelection = () => {
+      const text = terminal.getSelection();
+      if (!text) return;
+      void navigator.clipboard?.writeText(text).catch((error: unknown) => {
+        console.warn("Failed to copy terminal selection", error);
+      });
+    };
+    const pasteClipboard = () => {
+      void navigator.clipboard?.readText().then((text) => {
+        if (text) sendCommand({ type: "terminalInput", id: session.id, input: text });
+      }).catch((error: unknown) => {
+        console.warn("Failed to paste into terminal", error);
+      });
+    };
+    terminal.attachCustomKeyEventHandler((event) => {
+      const key = event.key.toLowerCase();
+      if ((event.ctrlKey || event.metaKey) && key === "c" && terminal.hasSelection()) {
+        event.preventDefault();
+        copySelection();
+        return false;
+      }
+      if ((event.ctrlKey || event.metaKey) && key === "v") {
+        event.preventDefault();
+        pasteClipboard();
+        return false;
+      }
+      return true;
+    });
+    const handleMouseUp = () => copySelection();
+    const handleClick = () => {
+      if (terminal.hasSelection()) return;
+      pasteClipboard();
+    };
+    host.addEventListener("mouseup", handleMouseUp);
+    host.addEventListener("click", handleClick);
     const frame = window.requestAnimationFrame(() => {
       resize();
       terminal.focus();
@@ -7663,6 +7698,8 @@ function TerminalPane({
     return () => {
       window.cancelAnimationFrame(frame);
       dataDisposable.dispose();
+      host.removeEventListener("mouseup", handleMouseUp);
+      host.removeEventListener("click", handleClick);
       resizeObserver.disconnect();
       terminal.dispose();
       terminalRef.current = null;
