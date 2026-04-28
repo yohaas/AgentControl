@@ -3624,10 +3624,16 @@ function AgentTile({
             )}
             {agent.remoteControl ? (
               <div className="grid h-full place-items-center text-center">
-                <div className="grid max-w-sm gap-3">
-                  <p className="text-sm text-muted-foreground">
-                    {remoteControlLabel(agent)}. Use the maximized view for the QR code, link, and diagnostics.
-                  </p>
+                <div className="grid max-w-sm justify-items-center gap-3">
+                  {agent.qr ? (
+                    <img className="h-36 w-36 rounded-md bg-white p-2" src={agent.qr} alt="Remote Control QR code" />
+                  ) : (
+                    <div className="grid h-36 w-36 place-items-center rounded-md border border-dashed border-border text-xs text-muted-foreground">
+                      Waiting for QR
+                    </div>
+                  )}
+                  <p className="text-sm text-muted-foreground">{remoteControlLabel(agent)}</p>
+                  {agent.rcUrl && <p className="max-w-full break-all text-xs text-muted-foreground">{agent.rcUrl}</p>}
                   <Button variant="outline" disabled={!agent.rcUrl} onClick={() => agent.rcUrl && window.open(agent.rcUrl, "_blank", "noopener")}>
                     <ExternalLink className="h-4 w-4" />
                     Open
