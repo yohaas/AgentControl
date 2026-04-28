@@ -109,6 +109,13 @@ const BASE_SLASH_COMMANDS: SlashCommandSuggestion[] = [
   { value: "/interrupt", label: "/interrupt", description: "Stop the active response" }
 ];
 
+const TERMINAL_DOCK_OPTIONS = [
+  { value: "float", label: "Float" },
+  { value: "left", label: "Left" },
+  { value: "bottom", label: "Bottom" },
+  { value: "right", label: "Right" }
+] as const;
+
 function readPoppedOutTerminalIds() {
   try {
     return new Set(JSON.parse(window.localStorage.getItem(TERMINAL_POPOUT_STORAGE_KEY) || "[]") as string[]);
@@ -3087,7 +3094,10 @@ function TerminalPanel({
   const activeTerminalId = useAppStore((state) => state.activeTerminalId);
   const setActiveTerminal = useAppStore((state) => state.setActiveTerminal);
   const setTerminalOpen = useAppStore((state) => state.setTerminalOpen);
-  const terminalDock = useAppStore((state) => state.settings.terminalDock);
+  const settings = useAppStore((state) => state.settings);
+  const setSettings = useAppStore((state) => state.setSettings);
+  const addError = useAppStore((state) => state.addError);
+  const terminalDock = settings.terminalDock;
   const [height, setHeight] = useState(320);
   const [width, setWidth] = useState(420);
   const [detachedBounds, setDetachedBounds] = useState({ left: 96, top: 72, width: 960, height: 520 });
@@ -3264,9 +3274,20 @@ function TerminalPanel({
     });
   }
 
+  async function changeTerminalDock(nextDock: typeof TERMINAL_DOCK_OPTIONS[number]["value"]) {
+    if (nextDock === terminalDock) return;
+    try {
+      const next = await api.saveSettings({ ...settings, terminalDock: nextDock });
+      setSettings(next);
+    } catch (error) {
+      addError(error instanceof Error ? error.message : String(error));
+    }
+  }
+
   const visibleSessions = visiblePaneIds
     .map((id) => sessions.find((item) => item.id === id))
     .filter((item): item is TerminalSession => Boolean(item));
+  const terminalDockLabel = TERMINAL_DOCK_OPTIONS.find((option) => option.value === terminalDock)?.label || "Bottom";
 
   return (
     <section
@@ -3361,6 +3382,24 @@ function TerminalPanel({
           <GripVertical className="h-4 w-4" />
           Split
         </Button>
+        {!popout && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" title="Dock terminal">
+                Dock: {terminalDockLabel}
+                <ChevronDown className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {TERMINAL_DOCK_OPTIONS.map((option) => (
+                <DropdownMenuItem key={option.value} onClick={() => void changeTerminalDock(option.value)}>
+                  <Check className={cn("mr-2 h-4 w-4", option.value === terminalDock ? "opacity-100" : "opacity-0")} />
+                  {option.label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
         {popout && (
           <Button variant="outline" size="sm" onClick={dockPopout} title="Return terminal to the docked panel">
             <Minimize2 className="h-4 w-4" />
