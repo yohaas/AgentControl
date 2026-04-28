@@ -1381,29 +1381,42 @@ function Sidebar() {
             </p>
           ) : (
             running.map((agent) => (
-              <button
+              <div
                 key={agent.id}
                 className={cn(
-                  "flex w-full items-center gap-2 rounded-md px-2 py-2 text-left hover:bg-accent",
+                  "flex w-full items-center gap-1 rounded-md px-1 py-1 hover:bg-accent",
                   activeAgentId === agent.id && "bg-accent"
                 )}
-                onClick={() => focusRunningAgent(agent.id)}
               >
-                <AgentDot color={agent.color} />
-                <span className="min-w-0 flex-1">
-                  <span className="flex items-center gap-1 truncate text-sm">
-                    {agent.displayName}
-                    {agent.remoteControl && <Badge className="px-1 py-0 text-[10px]">RC</Badge>}
+                <button
+                  className="flex min-w-0 flex-1 items-center gap-2 rounded-sm px-1 py-1 text-left"
+                  onClick={() => focusRunningAgent(agent.id)}
+                >
+                  <AgentDot color={agent.color} />
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-center gap-1 truncate text-sm">
+                      {agent.displayName}
+                      {agent.remoteControl && <Badge className="px-1 py-0 text-[10px]">RC</Badge>}
+                    </span>
+                    <span className="flex min-w-0 items-center gap-2">
+                      <ModelText agent={agent} />
+                    </span>
                   </span>
-                  <span className="flex min-w-0 items-center gap-2">
-                    <ModelText agent={agent} />
+                  <span className="flex shrink-0 flex-col items-end gap-1">
+                    <StatusPill status={agent.status} />
+                    <LastActivityText agent={agent} compact timeOnly />
                   </span>
-                </span>
-                <span className="flex shrink-0 flex-col items-end gap-1">
-                  <StatusPill status={agent.status} />
-                  <LastActivityText agent={agent} compact timeOnly />
-                </span>
-              </button>
+                </button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 shrink-0 text-muted-foreground hover:text-foreground"
+                  title={`Close ${agent.displayName}`}
+                  onClick={() => sendCommand({ type: "kill", id: agent.id })}
+                >
+                  <X className="h-3.5 w-3.5" />
+                </Button>
+              </div>
             ))
           )}
         </div>
