@@ -1,5 +1,5 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -54,6 +54,7 @@ interface AgentProcessState {
   exiting?: boolean;
   activeTurn?: boolean;
   permissionToken?: string;
+  permissionMcpConfigPath?: string;
   pendingPermissions?: Map<string, PendingPermissionRequest>;
   rcLastDiagnostic?: string;
   apiAbort?: AbortController;
@@ -170,6 +171,7 @@ export class AgentRuntimeManager {
     private readonly getCapabilities: () => Capabilities,
     private readonly getClaudeRuntime: () => ClaudeRuntime = () => "cli"
   ) {
+    this.cleanupStalePermissionMcpConfigs();
     this.persist = createStateWriter(() => this.persistedState());
   }
 
@@ -1377,8 +1379,14 @@ export class AgentRuntimeManager {
   private writePermissionMcpConfig(state: AgentProcessState): string {
     state.permissionToken ??= nanoid(32);
     state.pendingPermissions ??= new Map();
+    this.cleanupPermissionMcpConfig(state);
     const configDir = path.join(os.homedir(), ".agent-dashboard", "mcp");
-    mkdirSync(configDir, { recursive: true });
+    mkdirSync(configDir, { recursive: true, mode: 0o700 });
+    try {
+      chmodSync(configDir, 0o700);
+    } catch {
+      // Best effort on Windows, where POSIX modes may not map cleanly to ACLs.
+    }
     const script = this.permissionMcpScriptPath();
     const configPath = path.join(configDir, `${state.agent.id}-permissions.json`);
     const config = {
@@ -1394,8 +1402,37 @@ export class AgentRuntimeManager {
         }
       }
     };
-    writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`, "utf8");
+    writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
+    try {
+      chmodSync(configPath, 0o600);
+    } catch {
+      // Best effort on Windows, where POSIX modes may not map cleanly to ACLs.
+    }
+    state.permissionMcpConfigPath = configPath;
     return configPath;
+  }
+
+  private cleanupPermissionMcpConfig(state: AgentProcessState): void {
+    if (!state.permissionMcpConfigPath) return;
+    try {
+      rmSync(state.permissionMcpConfigPath, { force: true });
+    } catch {
+      // Cleanup is best effort; a missing stale file should not affect agent shutdown.
+    }
+    state.permissionMcpConfigPath = undefined;
+  }
+
+  private cleanupStalePermissionMcpConfigs(): void {
+    const configDir = path.join(os.homedir(), ".agent-dashboard", "mcp");
+    try {
+      for (const entry of readdirSync(configDir, { withFileTypes: true })) {
+        if (entry.isFile() && entry.name.endsWith("-permissions.json")) {
+          rmSync(path.join(configDir, entry.name), { force: true });
+        }
+      }
+    } catch {
+      // The directory may not exist yet; stale cleanup is best effort.
+    }
   }
 
   private claudeEnv(state: AgentProcessState): NodeJS.ProcessEnv {
@@ -1933,6 +1970,7 @@ export class AgentRuntimeManager {
   }
 
   private removeExitedAgent(state: AgentProcessState): void {
+    this.cleanupPermissionMcpConfig(state);
     this.states.delete(state.agent.id);
     this.broadcast({ type: "agent.snapshot", snapshot: this.snapshot() });
     this.persist();
@@ -1940,6 +1978,7 @@ export class AgentRuntimeManager {
 
   private markTerminated(state: AgentProcessState, exitCode: number | null, signal: NodeJS.Signals | null): void {
     this.denyPendingPermissions(state);
+    this.cleanupPermissionMcpConfig(state);
     if (state.exiting) {
       this.removeExitedAgent(state);
       return;

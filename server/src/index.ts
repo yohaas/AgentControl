@@ -1,6 +1,6 @@
 import http from "node:http";
 import { execFile } from "node:child_process";
-import { access, cp, mkdir, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { chmod, cp, mkdir, readdir, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -80,6 +80,7 @@ let agentDirs = resolveAgentDirs(config);
 let projectsRoot = resolveProjectsRoot(config);
 let projects: Project[] = config.projectPaths?.length ? await scanConfiguredProjects(config.projectPaths, agentDirs) : [];
 let capabilities: Capabilities = await detectCapabilities();
+await ensurePrivateAttachmentsDir();
 
 const app = express();
 const server = http.createServer(app);
@@ -88,6 +89,21 @@ const clients = new Set<WebSocket>();
 function isLoopbackHost(hostname: string): boolean {
   const normalized = hostname.toLowerCase();
   return normalized === "localhost" || normalized === "127.0.0.1" || normalized === "::1" || normalized === "[::1]";
+}
+
+function configuredAllowedOrigins(): string[] {
+  return (process.env.AGENTCONTROL_ALLOWED_ORIGINS || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function trustedDefaultOrigins(): string[] {
+  const serverPort = String(PORT);
+  const devPort = process.env.AGENTCONTROL_WEB_PORT || "4318";
+  const hosts = new Set(["127.0.0.1", "localhost"]);
+  if (HOST && HOST !== "0.0.0.0" && HOST !== "::") hosts.add(HOST);
+  return [...hosts].flatMap((host) => [`http://${host}:${serverPort}`, `http://${host}:${devPort}`]);
 }
 
 function uniqueModelIds(ids: string[]): string[] {
@@ -287,13 +303,9 @@ function isAllowedOrigin(origin: string | undefined): boolean {
   if (!origin) return true;
   try {
     const parsed = new URL(origin);
-    if (process.env.AGENTCONTROL_ALLOWED_ORIGINS) {
-      return process.env.AGENTCONTROL_ALLOWED_ORIGINS.split(",")
-        .map((item) => item.trim())
-        .filter(Boolean)
-        .includes(parsed.origin);
-    }
-    return (parsed.protocol === "http:" || parsed.protocol === "https:") && isLoopbackHost(parsed.hostname);
+    const configured = configuredAllowedOrigins();
+    if (configured.length) return configured.includes(parsed.origin);
+    return isLoopbackHost(parsed.hostname) && trustedDefaultOrigins().includes(parsed.origin);
   } catch {
     return false;
   }
@@ -363,21 +375,15 @@ function broadcast(event: WsServerEvent): void {
   for (const client of clients) send(client, event);
 }
 
-async function filesystemRoots(): Promise<DirectoryEntry[]> {
-  if (process.platform !== "win32") return [{ name: "/", path: "/" }];
-  const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
-  const roots = await Promise.all(
-    letters.map(async (letter) => {
-      const root = `${letter}:\\`;
-      try {
-        await access(root);
-        return { name: root, path: root };
-      } catch {
-        return undefined;
-      }
-    })
+async function ensurePrivateAttachmentsDir(): Promise<void> {
+  await mkdir(attachmentsDir, { recursive: true, mode: 0o700 });
+  await chmod(attachmentsDir, 0o700).catch(() => undefined);
+  const entries = await readdir(attachmentsDir, { withFileTypes: true }).catch(() => []);
+  await Promise.all(
+    entries
+      .filter((entry) => entry.isFile())
+      .map((entry) => chmod(path.join(attachmentsDir, entry.name), 0o600).catch(() => undefined))
   );
-  return roots.filter((root): root is DirectoryEntry => Boolean(root));
 }
 
 function normalizedProjectPath(projectPath: string): string {
@@ -399,6 +405,33 @@ function pathInsideOrEqual(parent: string, child: string): boolean {
   const normalizedChild = normalizedProjectPath(child);
   const relative = path.relative(normalizedParent, normalizedChild);
   return !relative || (!relative.startsWith("..") && !path.isAbsolute(relative));
+}
+
+async function allowedDirectoryRoots(): Promise<DirectoryEntry[]> {
+  await mkdir(projectsRoot, { recursive: true, mode: 0o700 }).catch(() => undefined);
+  const candidates: DirectoryEntry[] = [
+    { name: "Projects", path: projectsRoot },
+    ...projects.map((project) => ({ name: project.name, path: project.path })),
+    { name: "Claude agents", path: agentDirs.claude },
+    { name: "Codex agents", path: agentDirs.codex },
+    { name: "OpenAI agents", path: agentDirs.openai },
+    { name: "Built-in agents", path: agentDirs.builtIn }
+  ];
+  const seen = new Set<string>();
+  const roots: DirectoryEntry[] = [];
+  for (const candidate of candidates) {
+    const rootPath = path.resolve(expandHome(candidate.path));
+    const key = normalizedProjectPath(rootPath);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const info = await stat(rootPath).catch(() => undefined);
+    if (info?.isDirectory()) roots.push({ name: candidate.name, path: rootPath });
+  }
+  return roots;
+}
+
+function isAllowedDirectoryPath(directoryPath: string, roots: DirectoryEntry[]): boolean {
+  return roots.some((root) => pathInsideOrEqual(root.path, directoryPath));
 }
 
 function mimeTypeForPath(filePath: string): string {
@@ -1093,8 +1126,13 @@ app.delete("/api/projects/:id/git/worktrees", async (request, response) => {
 });
 
 app.get("/api/filesystem/directories", async (request, response) => {
-  const requestedPath = typeof request.query.path === "string" && request.query.path.trim() ? request.query.path.trim() : os.homedir();
+  const roots = await allowedDirectoryRoots();
+  const requestedPath = typeof request.query.path === "string" && request.query.path.trim() ? request.query.path.trim() : roots[0]?.path || projectsRoot;
   const directoryPath = path.resolve(expandHome(requestedPath));
+  if (!isAllowedDirectoryPath(directoryPath, roots)) {
+    response.status(403).json({ error: "Folder browsing is limited to configured project and agent directories." });
+    return;
+  }
 
   try {
     const info = await stat(directoryPath);
@@ -1115,9 +1153,9 @@ app.get("/api/filesystem/directories", async (request, response) => {
 
     response.json({
       path: directoryPath,
-      parentPath: parentPath !== directoryPath ? parentPath : undefined,
+      parentPath: parentPath !== directoryPath && isAllowedDirectoryPath(parentPath, roots) ? parentPath : undefined,
       homePath: os.homedir(),
-      roots: await filesystemRoots(),
+      roots,
       entries: directories
     });
   } catch (error) {
@@ -1180,8 +1218,10 @@ app.post("/api/attachments", async (request, response) => {
   const id = nanoid(12);
   const fileName = `${id}.${ext}`;
   const filePath = path.join(attachmentsDir, fileName);
-  await mkdir(attachmentsDir, { recursive: true });
-  await writeFile(filePath, data);
+  await mkdir(attachmentsDir, { recursive: true, mode: 0o700 });
+  await chmod(attachmentsDir, 0o700).catch(() => undefined);
+  await writeFile(filePath, data, { mode: 0o600 });
+  await chmod(filePath, 0o600).catch(() => undefined);
 
   const attachment: MessageAttachment = {
     id,

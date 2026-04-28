@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -80,8 +80,14 @@ export function expandHome(input: string): string {
   return input;
 }
 
+async function ensurePrivateConfigDir(): Promise<void> {
+  await mkdir(configDir, { recursive: true, mode: 0o700 });
+  await chmod(configDir, 0o700).catch(() => undefined);
+}
+
 export async function readConfig(): Promise<DashboardConfig> {
   try {
+    await ensurePrivateConfigDir();
     const raw = await readFile(configPath, "utf8");
     return JSON.parse(raw) as DashboardConfig;
   } catch {
@@ -90,13 +96,15 @@ export async function readConfig(): Promise<DashboardConfig> {
 }
 
 export async function writeConfig(config: DashboardConfig): Promise<DashboardConfig> {
-  await mkdir(configDir, { recursive: true });
-  await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`, "utf8");
+  await ensurePrivateConfigDir();
+  await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
+  await chmod(configPath, 0o600).catch(() => undefined);
   return config;
 }
 
 export async function readSecrets(): Promise<DashboardSecrets> {
   try {
+    await ensurePrivateConfigDir();
     const raw = await readFile(secretsPath, "utf8");
     return JSON.parse(raw) as DashboardSecrets;
   } catch {
@@ -105,8 +113,9 @@ export async function readSecrets(): Promise<DashboardSecrets> {
 }
 
 export async function writeSecrets(secrets: DashboardSecrets): Promise<DashboardSecrets> {
-  await mkdir(configDir, { recursive: true });
+  await ensurePrivateConfigDir();
   await writeFile(secretsPath, `${JSON.stringify(secrets, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
+  await chmod(secretsPath, 0o600).catch(() => undefined);
   return secrets;
 }
 
