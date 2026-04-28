@@ -1683,6 +1683,9 @@ wss.on("connection", (ws) => {
         case "permission":
           runtime.permission(command.id, command.toolUseId, command.decision);
           break;
+        case "answerQuestions":
+          runtime.answerQuestions(command.id, command.eventId, command.answers);
+          break;
         case "clear":
           runtime.clear(command.id);
           break;

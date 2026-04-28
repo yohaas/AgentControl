@@ -3,6 +3,7 @@ export type AgentStatus =
   | "running"
   | "idle"
   | "awaiting-permission"
+  | "awaiting-input"
   | "switching-model"
   | "remote-controlled"
   | "error"
@@ -17,6 +18,23 @@ export type AutoApproveMode = "off" | "session" | "always";
 export type AgentPermissionMode = "default" | "acceptEdits" | "plan" | "bypassPermissions";
 export type AgentEffort = "low" | "medium" | "high" | "xhigh" | "max";
 export type RemoteControlState = "starting" | "waiting-for-browser" | "connected" | "closed" | "error";
+
+export interface AgentQuestionOption {
+  label: string;
+  description?: string;
+}
+
+export interface AgentQuestion {
+  question: string;
+  header?: string;
+  options: AgentQuestionOption[];
+  multiSelect?: boolean;
+}
+
+export interface AgentQuestionAnswer {
+  questionIndex: number;
+  labels: string[];
+}
 
 export interface AgentDef {
   name: string;
@@ -208,6 +226,12 @@ export type TranscriptEvent =
       toolUseId: string;
       output: unknown;
       isError?: boolean;
+    })
+  | (TranscriptBase & {
+      kind: "questions";
+      questions: AgentQuestion[];
+      answered?: boolean;
+      answers?: AgentQuestionAnswer[];
     })
   | (TranscriptBase & {
       kind: "model_switch";
@@ -550,6 +574,12 @@ export type WsClientCommand =
       id: string;
       toolUseId: string;
       decision: "approve" | "deny";
+    }
+  | {
+      type: "answerQuestions";
+      id: string;
+      eventId: string;
+      answers: AgentQuestionAnswer[];
     }
   | {
       type: "clear";

@@ -14,6 +14,7 @@ The app is built for local development workflows. It starts an Express/WebSocket
 - Stream Claude responses from `--output-format stream-json`, including live assistant text, tool activity, tool results, and raw stream export.
 - Stream OpenAI Responses API sessions and run Codex CLI sessions through the provider selector.
 - Show prominent permission prompts for gated Claude tools, then send Approve/Deny back to the running Claude process.
+- Show Claude clarification questions with selectable answers, then send the chosen answers back to the session.
 - Control mode per agent: Ask before edits, Edit automatically, Plan mode, or Bypass permissions.
 - Control effort per agent: low, medium, high, xhigh, or max.
 - Toggle Claude thinking for a session.
@@ -303,6 +304,7 @@ This is used for gated write/edit/tool calls in modes that require approval.
 - Long questions, responses, and tool output can collapse/expand.
 - Streaming output auto-scrolls.
 - Last sent message can pin while scrolling; this is enabled by default in Settings.
+- Claude clarification questions render as selectable answer cards in the transcript.
 - Right-click selected text to copy or send it to another agent. If nothing is selected, the current message/tool card under the pointer is used; outside a block, the whole chat is used.
 - Long chat blocks include a popout button. The popout supports Markdown view, raw-text view, copy, and send-to-agent, including selected text.
 - Clear Chat clears only the transcript. Close Chat exits the agent and removes the tile.

@@ -8,6 +8,8 @@ import QRCode from "qrcode";
 import type {
   AgentDef,
   AgentEffort,
+  AgentQuestion,
+  AgentQuestionAnswer,
   AgentProvider,
   ClaudeMcpServer,
   AgentSnapshot,
@@ -683,6 +685,21 @@ export class AgentRuntimeManager {
     this.resolveToolPermission(state, toolUseId);
     state.activeTurn = true;
     this.setStatus(state, "running");
+  }
+
+  answerQuestions(id: string, eventId: string, answers: AgentQuestionAnswer[]): void {
+    const state = this.requiredState(id);
+    const event = state.transcript.find((candidate) => candidate.id === eventId);
+    if (event?.kind !== "questions") throw new Error("Question request not found.");
+    if (event.answered) throw new Error("Question request was already answered.");
+    const normalizedAnswers = this.normalizeQuestionAnswers(event.questions, answers);
+    this.updateTranscript(state, {
+      ...event,
+      answered: true,
+      answers: normalizedAnswers,
+      timestamp: now()
+    });
+    this.userMessage(id, this.formatQuestionAnswers(event.questions, normalizedAnswers));
   }
 
   private async providerUserMessage(
@@ -1455,6 +1472,7 @@ export class AgentRuntimeManager {
 
   private statusLabel(status: AgentStatus): string {
     if (status === "awaiting-permission") return "Awaiting permission";
+    if (status === "awaiting-input") return "Awaiting answer";
     if (status === "remote-controlled") return "Remote controlled";
     if (status === "switching-model") return "Switching model";
     return status.charAt(0).toUpperCase() + status.slice(1);
@@ -1601,6 +1619,12 @@ export class AgentRuntimeManager {
     const type = String(payload.type || "");
     const subtype = String(payload.subtype || "");
 
+    const questionRequest = this.extractQuestionRequest(payload);
+    if (questionRequest) {
+      this.pushQuestionRequest(state, questionRequest);
+      return;
+    }
+
     if ((type === "system" && subtype === "init") || type === "system.init") {
       const model = this.modelOrDefault(state, this.trimmedStringField(payload.model) || this.trimmedStringField(payload.current_model));
       const sessionId = this.trimmedStringField(payload.session_id) || this.trimmedStringField(payload.sessionId);
@@ -1703,6 +1727,74 @@ export class AgentRuntimeManager {
       });
       this.setStatus(state, "running");
     }
+  }
+
+  private extractQuestionRequest(payload: Record<string, unknown>): AgentQuestion[] | undefined {
+    const source = Array.isArray(payload.questions)
+      ? payload.questions
+      : payload.question_request && typeof payload.question_request === "object" && Array.isArray((payload.question_request as Record<string, unknown>).questions)
+        ? ((payload.question_request as Record<string, unknown>).questions as unknown[])
+        : undefined;
+    if (!source?.length) return undefined;
+    const questions: AgentQuestion[] = [];
+    for (const item of source) {
+      if (!item || typeof item !== "object") continue;
+      const record = item as Record<string, unknown>;
+      const question = this.trimmedStringField(record.question);
+      if (!question || !Array.isArray(record.options)) continue;
+      const options: AgentQuestion["options"] = [];
+      for (const option of record.options) {
+        if (!option || typeof option !== "object") continue;
+        const optionRecord = option as Record<string, unknown>;
+        const label = this.trimmedStringField(optionRecord.label);
+        if (!label) continue;
+        const description = this.textField(optionRecord.description);
+        options.push(description ? { label, description } : { label });
+      }
+      if (options.length === 0) continue;
+      const header = this.trimmedStringField(record.header);
+      questions.push({
+        question,
+        ...(header ? { header } : {}),
+        options,
+        multiSelect: Boolean(record.multiSelect)
+      });
+    }
+    return questions.length ? questions : undefined;
+  }
+
+  private pushQuestionRequest(state: AgentProcessState, questions: AgentQuestion[]): void {
+    state.activeTurn = false;
+    this.finishAssistantStream(state, false);
+    this.pushTranscript(state, {
+      ...eventBase(state.agent.id, state.agent.currentModel),
+      kind: "questions",
+      questions
+    });
+    this.setStatus(state, "awaiting-input");
+  }
+
+  private normalizeQuestionAnswers(questions: AgentQuestion[], answers: AgentQuestionAnswer[]): AgentQuestionAnswer[] {
+    return questions.map((question, questionIndex) => {
+      const requested = answers.find((answer) => answer.questionIndex === questionIndex);
+      const allowed = new Set(question.options.map((option) => option.label));
+      const labels = (requested?.labels || []).filter((label) => allowed.has(label));
+      return {
+        questionIndex,
+        labels: question.multiSelect ? labels : labels.slice(0, 1)
+      };
+    });
+  }
+
+  private formatQuestionAnswers(questions: AgentQuestion[], answers: AgentQuestionAnswer[]): string {
+    const byIndex = new Map(answers.map((answer) => [answer.questionIndex, answer.labels]));
+    return [
+      "Answers to your questions:",
+      ...questions.map((question, index) => {
+        const labels = byIndex.get(index) || [];
+        return [`${index + 1}. ${question.header || question.question}`, `Answer: ${labels.length ? labels.join(", ") : "No selection"}`].join("\n");
+      })
+    ].join("\n\n");
   }
 
   private isAwaitingPermissionToolUse(value: Record<string, unknown>): boolean {

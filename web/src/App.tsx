@@ -162,6 +162,7 @@ interface SlashCommandSuggestion {
 
 type ToolUseEvent = Extract<TranscriptEvent, { kind: "tool_use" }>;
 type ToolResultEvent = Extract<TranscriptEvent, { kind: "tool_result" }>;
+type QuestionsEvent = Extract<TranscriptEvent, { kind: "questions" }>;
 type ToolTranscriptItem =
   | { kind: "single"; event: TranscriptEvent }
   | { kind: "tool_pair"; event: ToolUseEvent; result?: ToolResultEvent };
@@ -337,7 +338,8 @@ function isAgentBusy(agent: RunningAgent) {
     agent.status === "running" ||
     agent.status === "starting" ||
     agent.status === "switching-model" ||
-    agent.status === "awaiting-permission"
+    agent.status === "awaiting-permission" ||
+    agent.status === "awaiting-input"
   );
 }
 
@@ -512,25 +514,27 @@ function StatusPill({ status, onResume }: { status: RunningAgent["status"]; onRe
           ? "Switching"
           : status === "awaiting-permission"
             ? "Needs approval"
-            : status === "remote-controlled"
-              ? "Remote"
-              : status === "killed"
-                ? "Exited"
-                : status === "interrupted"
-                  ? "Interrupted"
-                  : status === "idle"
-                    ? "Idle"
-                    : status === "paused"
-                      ? "Paused"
-                      : status === "error"
-                        ? "Error"
-                        : status;
+            : status === "awaiting-input"
+              ? "Needs answer"
+              : status === "remote-controlled"
+                ? "Remote"
+                : status === "killed"
+                  ? "Exited"
+                  : status === "interrupted"
+                    ? "Interrupted"
+                    : status === "idle"
+                      ? "Idle"
+                      : status === "paused"
+                        ? "Paused"
+                        : status === "error"
+                          ? "Error"
+                          : status;
   const className =
     status === "running"
       ? "border-blue-500/40 bg-blue-500/10 text-blue-700 dark:border-blue-400/40 dark:bg-blue-500/15 dark:text-blue-200 animate-pulse"
       : status === "idle"
         ? "border-zinc-500/40 bg-zinc-500/10 text-zinc-700 dark:text-zinc-300"
-        : status === "awaiting-permission"
+        : status === "awaiting-permission" || status === "awaiting-input"
           ? "border-amber-500/50 bg-amber-500/15 text-amber-800 dark:border-amber-400/40 dark:text-amber-200"
           : status === "error"
             ? "border-red-500/50 bg-red-500/15 text-red-700 dark:border-red-400/40 dark:text-red-200"
@@ -653,6 +657,7 @@ function transcriptToPlainText(agent: RunningAgent, transcripts: TranscriptEvent
       if (event.kind === "user") return `User:\n${event.text}`;
       if (event.kind === "tool_use") return `Tool Use: ${event.name}\n${prettyJson(event.input)}`;
       if (event.kind === "tool_result") return `Tool Result:\n${prettyJson(event.output)}`;
+      if (event.kind === "questions") return questionEventPlainText(event);
       if (event.kind === "model_switch") return `System: switched to ${event.to}`;
       return `System:\n${event.text}`;
     })
@@ -668,8 +673,26 @@ function transcriptEventToPlainText(agent: RunningAgent, event: TranscriptEvent,
     return result ? toolPairDetail(event, result) : `Tool Use: ${event.name}\n${prettyJson(event.input)}`;
   }
   if (event.kind === "tool_result") return `Tool Result:\n${prettyJson(event.output)}`;
+  if (event.kind === "questions") return questionEventPlainText(event);
   if (event.kind === "model_switch") return `System: switched to ${event.to}`;
   return `System:\n${event.text}`;
+}
+
+function questionEventPlainText(event: QuestionsEvent) {
+  return [
+    "Questions:",
+    ...event.questions.map((question, index) => {
+      const answer = event.answers?.find((item) => item.questionIndex === index);
+      return [
+        `${index + 1}. ${question.header || question.question}`,
+        question.question,
+        ...question.options.map((option) => `- ${option.label}${option.description ? `: ${option.description}` : ""}`),
+        answer?.labels.length ? `Selected: ${answer.labels.join(", ")}` : undefined
+      ]
+        .filter(Boolean)
+        .join("\n");
+    })
+  ].join("\n\n");
 }
 
 function contextCopyTargetFromEvent(
@@ -1260,6 +1283,7 @@ function exportAgentMarkdown(agent: RunningAgent, transcripts: TranscriptEvent[]
           if (event.kind === "user") return `### User · ${time}\n\n${event.text}`;
           if (event.kind === "tool_use") return `### Tool Use: ${event.name} · ${time}\n\n\`\`\`json\n${prettyJson(event.input)}\n\`\`\``;
           if (event.kind === "tool_result") return `### Tool Result · ${time}\n\n\`\`\`\n${prettyJson(event.output)}\n\`\`\``;
+          if (event.kind === "questions") return `### Questions · ${time}\n\n${questionEventPlainText(event)}`;
           if (event.kind === "model_switch") return `---\n\nswitched to ${event.to}`;
           return `### System · ${time}\n\n${event.text}`;
         })
@@ -5582,7 +5606,7 @@ function AgentTile({
   const isBusy = isAgentBusy(agent);
   const canType = agentHasProcess(agent);
   const canAttach = !agent.remoteControl;
-  const showActivityIndicator = isBusy && !hasStreamingAssistantText(transcript);
+  const showActivityIndicator = isBusy && agent.status !== "awaiting-input" && !hasStreamingAssistantText(transcript);
   const pinnedMessage = latestUserMessage(transcript);
   const pinLastSentMessage = settings.pinLastSentMessage;
   const rawSlashSuggestions = useMemo(
@@ -6232,6 +6256,9 @@ function TranscriptPreview({
   if (event.kind === "tool_use" || event.kind === "tool_result") {
     return <ToolCard event={event} agent={agent} compact />;
   }
+  if (event.kind === "questions") {
+    return <QuestionCard event={event} agent={agent} compact />;
+  }
   if (event.kind === "system") {
     return (
       <p className="text-center text-xs text-muted-foreground" data-copy-block="true" data-copy-event-id={event.id}>
@@ -6301,6 +6328,109 @@ function PinnedUserMessage({
           <div className="mt-1 text-[11px] opacity-80">{event.attachments.length} attachment(s)</div>
         )}
       </div>
+    </div>
+  );
+}
+
+function QuestionCard({ event, agent, compact = false }: { event: QuestionsEvent; agent: RunningAgent; compact?: boolean }) {
+  const initialSelections = useMemo(
+    () =>
+      event.questions.map((question) => {
+        const answered = event.answers?.find((answer) => answer.questionIndex === event.questions.indexOf(question));
+        if (answered) return answered.labels;
+        const recommended = question.options.find((option) => /\brecommended\b/i.test(option.label));
+        return recommended ? [recommended.label] : [];
+      }),
+    [event]
+  );
+  const [selections, setSelections] = useState<string[][]>(initialSelections);
+
+  useEffect(() => {
+    setSelections(initialSelections);
+  }, [initialSelections]);
+
+  function toggle(questionIndex: number, label: string, multiSelect?: boolean) {
+    if (event.answered) return;
+    setSelections((current) =>
+      current.map((labels, index) => {
+        if (index !== questionIndex) return labels;
+        if (!multiSelect) return [label];
+        return labels.includes(label) ? labels.filter((item) => item !== label) : [...labels, label];
+      })
+    );
+  }
+
+  function submit() {
+    sendCommand({
+      type: "answerQuestions",
+      id: agent.id,
+      eventId: event.id,
+      answers: selections.map((labels, questionIndex) => ({ questionIndex, labels }))
+    });
+  }
+
+  const missingAnswer = event.questions.some((question, index) => !question.multiSelect && selections[index].length === 0);
+
+  return (
+    <div
+      className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm"
+      data-copy-block="true"
+      data-copy-event-id={event.id}
+      style={{ borderLeftColor: agentAccentColor(agent.color), borderLeftWidth: 4 }}
+    >
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <div>
+          <h3 className={cn("font-semibold", compact ? "text-sm" : "text-base")}>Claude has questions</h3>
+          <p className="text-xs text-muted-foreground">{event.answered ? "Answered" : "Choose answers to continue this agent."}</p>
+        </div>
+        {event.answered && <Badge>Answered</Badge>}
+      </div>
+      <div className="grid gap-3">
+        {event.questions.map((question, questionIndex) => (
+          <section key={`${event.id}:${questionIndex}`} className="grid gap-2 rounded-md border border-border bg-background/60 p-3">
+            <div>
+              {question.header && <div className="text-xs font-medium uppercase text-muted-foreground">{question.header}</div>}
+              <div className="font-medium">{question.question}</div>
+            </div>
+            <div className="grid gap-2">
+              {question.options.map((option) => {
+                const selected = selections[questionIndex]?.includes(option.label);
+                return (
+                  <label
+                    key={option.label}
+                    className={cn(
+                      "flex cursor-pointer items-start gap-2 rounded-md border border-border px-3 py-2",
+                      selected && "border-primary/60 bg-primary/10",
+                      event.answered && "cursor-default opacity-80"
+                    )}
+                  >
+                    <input
+                      className="mt-1"
+                      type={question.multiSelect ? "checkbox" : "radio"}
+                      name={`${event.id}:${questionIndex}`}
+                      checked={selected}
+                      disabled={event.answered}
+                      onChange={() => toggle(questionIndex, option.label, question.multiSelect)}
+                    />
+                    <span className="min-w-0">
+                      <span className="block font-medium">{option.label}</span>
+                      {option.description && <span className="mt-1 block text-xs leading-5 text-muted-foreground">{option.description}</span>}
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          </section>
+        ))}
+      </div>
+      {!event.answered && (
+        <div className="mt-3 flex justify-end">
+          <Button size="sm" onClick={submit} disabled={missingAnswer}>
+            <Check className="h-4 w-4" />
+            Send Answers
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
@@ -7048,6 +7178,9 @@ function TranscriptItem({
   }
   if (event.kind === "tool_use" || event.kind === "tool_result") {
     return <ToolCard event={event} agent={agent} />;
+  }
+  if (event.kind === "questions") {
+    return <QuestionCard event={event} agent={agent} />;
   }
   if (event.kind === "system") {
     return (
