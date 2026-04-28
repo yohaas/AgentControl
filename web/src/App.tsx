@@ -2199,8 +2199,11 @@ function AgentPanel() {
 function AgentTileGrid({ agents }: { agents: RunningAgent[] }) {
   const tileOrder = useAppStore((state) => state.tileOrder);
   const setTileOrder = useAppStore((state) => state.setTileOrder);
-  const tileHeight = useAppStore((state) => state.settings.tileHeight);
-  const tileColumns = useAppStore((state) => state.settings.tileColumns);
+  const settings = useAppStore((state) => state.settings);
+  const setSettings = useAppStore((state) => state.setSettings);
+  const addError = useAppStore((state) => state.addError);
+  const tileHeight = settings.tileHeight;
+  const tileColumns = settings.tileColumns;
   const tileWidths = useAppStore((state) => state.tileWidths);
   const orderedAgents = useMemo(() => {
     const byId = new Map(agents.map((agent) => [agent.id, agent]));
@@ -2221,6 +2224,19 @@ function AgentTileGrid({ agents }: { agents: RunningAgent[] }) {
     setTileOrder(ids);
   }
 
+  function setTileHeight(nextHeight: number) {
+    setSettings({ ...useAppStore.getState().settings, tileHeight: nextHeight });
+  }
+
+  async function persistTileHeight(nextHeight: number) {
+    try {
+      const next = await api.saveSettings({ ...useAppStore.getState().settings, tileHeight: nextHeight });
+      setSettings(next);
+    } catch (error) {
+      addError(error instanceof Error ? error.message : String(error));
+    }
+  }
+
   if (agents.length === 0) {
     return <div className="grid flex-1 place-items-center text-sm text-muted-foreground">No agents open.</div>;
   }
@@ -2236,6 +2252,8 @@ function AgentTileGrid({ agents }: { agents: RunningAgent[] }) {
             width={tileWidths[agent.id]}
             defaultWidth={`calc((100% - ${(tileColumns - 1) * 1}rem) / ${tileColumns})`}
             onMove={moveTile}
+            onHeightChange={setTileHeight}
+            onHeightCommit={(nextHeight) => void persistTileHeight(nextHeight)}
           />
         ))}
       </div>
@@ -2248,13 +2266,17 @@ function AgentTile({
   height,
   width,
   defaultWidth,
-  onMove
+  onMove,
+  onHeightChange,
+  onHeightCommit
 }: {
   agent: RunningAgent;
   height: number;
   width?: number;
   defaultWidth: string;
   onMove: (sourceId: string, targetId: string) => void;
+  onHeightChange: (height: number) => void;
+  onHeightCommit: (height: number) => void;
 }) {
   const transcript = useAppStore((state) => state.transcripts[agent.id] || EMPTY_TRANSCRIPT);
   const draft = useAppStore((state) => state.drafts[agent.id] || "");
@@ -2447,6 +2469,29 @@ function AgentTile({
     const onUp = () => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
+    };
+
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp, { once: true });
+  }
+
+  function startHeightResize(event: ReactPointerEvent<HTMLDivElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    const startY = event.clientY;
+    const startHeight = height;
+    let nextHeight = height;
+    const pointerId = event.pointerId;
+    event.currentTarget.setPointerCapture(pointerId);
+
+    const onMove = (moveEvent: PointerEvent) => {
+      nextHeight = Math.min(760, Math.max(320, startHeight + moveEvent.clientY - startY));
+      onHeightChange(Math.round(nextHeight));
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      onHeightCommit(Math.round(nextHeight));
     };
 
     window.addEventListener("pointermove", onMove);
@@ -2669,6 +2714,11 @@ function AgentTile({
         className="absolute bottom-0 right-0 top-0 w-2 cursor-ew-resize rounded-r-md hover:bg-primary/20"
         onPointerDown={startResize}
         title="Drag to resize chat width"
+      />
+      <div
+        className="absolute bottom-0 left-0 right-0 h-2 cursor-ns-resize rounded-b-md hover:bg-primary/20"
+        onPointerDown={startHeightResize}
+        title="Drag to resize tile height"
       />
     </section>
   );
