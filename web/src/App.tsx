@@ -349,11 +349,11 @@ function AgentDot({ color, className }: { color: string; className?: string }) {
   return <span className={cn("h-3 w-3 shrink-0 rounded-full", className)} style={{ background: color }} />;
 }
 
-function CollapsedAgentDot({ agent }: { agent: RunningAgent }) {
+function ActiveAgentDot({ agent, className }: { agent: RunningAgent; className?: string }) {
   const busy = isAgentBusy(agent);
   return (
     <span
-      className={cn("relative h-3 w-3 shrink-0 overflow-hidden rounded-full", busy && "animate-pulse")}
+      className={cn("relative h-3 w-3 shrink-0 overflow-hidden rounded-full", busy && "animate-pulse", className)}
       style={{ background: agent.color }}
     >
       {busy && (
@@ -2985,7 +2985,7 @@ function Sidebar() {
                 onClick={() => focusRunningAgent(agent.id)}
                 title={`${agent.displayName}\n${agent.currentModel}\n${fullLastActivity(agent.updatedAt || agent.launchedAt)}`}
               >
-                <CollapsedAgentDot agent={agent} />
+                <ActiveAgentDot agent={agent} />
               </button>
               <Button
                 variant="ghost"
@@ -3077,7 +3077,7 @@ function Sidebar() {
                   className="flex min-w-0 flex-1 items-center gap-2 rounded-sm px-1 py-1 text-left"
                   onClick={() => focusRunningAgent(agent.id)}
                 >
-                  <AgentDot color={agent.color} />
+                  <ActiveAgentDot agent={agent} />
                   <ProviderIcon provider={agent.provider} className="h-5 w-5 border-0 bg-transparent" iconClassName="h-4 w-4" />
                   <span className="min-w-0 flex-1">
                     <span className="flex items-center gap-1 truncate text-sm">
@@ -5364,7 +5364,7 @@ function AgentTile({
         >
           <GripVertical className="h-4 w-4 shrink-0" />
         </span>
-        <AgentDot color={agent.color} />
+        <ActiveAgentDot agent={agent} />
         <ProviderIcon provider={agent.provider} className="h-5 w-5 border-0 bg-transparent" iconClassName="h-4 w-4" />
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-1">
@@ -5713,7 +5713,7 @@ function RemoteControlPanel({ agent }: { agent: RunningAgent }) {
       <div className="grid flex-1 place-items-center p-6">
         <div className="grid max-w-xl gap-4 text-center">
           <div className="mx-auto flex items-center gap-2 text-lg font-semibold">
-            <AgentDot color={agent.color} />
+            <ActiveAgentDot agent={agent} />
             {agent.displayName} <Badge>RC</Badge> <span className="text-muted-foreground">({agent.currentModel})</span>
           </div>
           <p className="text-muted-foreground">
@@ -5754,7 +5754,7 @@ function AgentPanelHeader({ agent }: { agent: RunningAgent }) {
 
   return (
     <div className="flex h-14 shrink-0 items-center gap-3 border-b border-border px-4">
-      <AgentDot color={agent.color} />
+      <ActiveAgentDot agent={agent} />
       <ProviderIcon provider={agent.provider} className="h-5 w-5 border-0 bg-transparent" iconClassName="h-4 w-4" />
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-center gap-2">
