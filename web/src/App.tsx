@@ -2505,7 +2505,17 @@ function LaunchDialog() {
           </DialogHeader>
           <div className="grid gap-3">
           <label className="grid gap-1.5 text-sm">
-            Agent type
+            <span className="flex items-baseline justify-between gap-2">
+              <span>Agent type</span>
+              <button
+                type="button"
+                className="text-xs text-primary hover:underline disabled:text-muted-foreground disabled:no-underline"
+                disabled={!def?.sourceContent && !def?.systemPrompt}
+                onClick={() => setAgentFileOpen(true)}
+              >
+                View agent file
+              </button>
+            </span>
             <Select value={defName} onValueChange={selectDef}>
               <SelectTrigger>
                 <SelectValue placeholder="Agent type" />
@@ -2582,26 +2592,6 @@ function LaunchDialog() {
               onChange={(event) => setPluginText(event.target.value)}
               className="min-h-16 resize-y text-xs leading-5"
               placeholder="One plugin id per line"
-            />
-          </label>
-          <label className="grid gap-1.5 text-sm">
-            <span className="flex items-baseline gap-2">
-              <span>Agent file prompt</span>
-              <span className="text-xs text-muted-foreground">Edit the agent file to change this.</span>
-              <button
-                type="button"
-                className="ml-auto text-xs text-primary hover:underline disabled:text-muted-foreground disabled:no-underline"
-                disabled={!def?.sourceContent && !def?.systemPrompt}
-                onClick={() => setAgentFileOpen(true)}
-              >
-                View agent file
-              </button>
-            </span>
-            <Textarea
-              value={def?.systemPrompt || ""}
-              readOnly
-              className="max-h-44 min-h-24 resize-y overflow-y-auto text-xs leading-5"
-              placeholder="No prompt in agent file"
             />
           </label>
           <label className="flex items-start gap-2 rounded-md border border-border p-3 text-sm" title={rcDisabled ? capabilities?.remoteControlReason : undefined}>
