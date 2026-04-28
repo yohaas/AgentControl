@@ -7,7 +7,7 @@ export type AgentStatus =
   | "remote-controlled"
   | "error"
   | "killed"
-  | "restorable";
+  | "paused";
 
 export type AuthMethod = "claude.ai" | "api-key" | "unknown";
 
@@ -58,6 +58,15 @@ export interface SourceAgentRef {
   color: string;
 }
 
+export interface MessageAttachment {
+  id: string;
+  name: string;
+  mimeType: string;
+  size: number;
+  path?: string;
+  url?: string;
+}
+
 export interface TranscriptBase {
   id: string;
   agentId: string;
@@ -70,6 +79,7 @@ export type TranscriptEvent =
   | (TranscriptBase & {
       kind: "user";
       text: string;
+      attachments?: MessageAttachment[];
     })
   | (TranscriptBase & {
       kind: "assistant_text";
@@ -131,10 +141,40 @@ export interface Capabilities {
   remoteControlReason?: string;
 }
 
+export interface ClaudePlugin {
+  name: string;
+  version?: string;
+  scope?: string;
+  enabled: boolean;
+}
+
 export interface AgentSnapshot {
   agents: RunningAgent[];
   transcripts: Record<string, TranscriptEvent[]>;
   capabilities?: Capabilities;
+}
+
+export type TerminalStatus = "running" | "exited";
+
+export interface TerminalSession {
+  id: string;
+  title?: string;
+  projectId?: string;
+  projectName?: string;
+  cwd: string;
+  shell: string;
+  cols: number;
+  rows: number;
+  status: TerminalStatus;
+  startedAt: string;
+  updatedAt: string;
+  exitCode?: number | null;
+  signal?: string | number | null;
+}
+
+export interface TerminalSnapshot {
+  sessions: TerminalSession[];
+  output: Record<string, string[]>;
 }
 
 export type WsServerEvent =
@@ -151,6 +191,7 @@ export type WsServerEvent =
       id: string;
       status: AgentStatus;
       statusMessage?: string;
+      restorable?: boolean;
       updatedAt: string;
     }
   | {
@@ -166,9 +207,15 @@ export type WsServerEvent =
       event: TranscriptEvent;
     }
   | {
+      type: "agent.transcript_updated";
+      id: string;
+      event: TranscriptEvent;
+    }
+  | {
       type: "agent.terminated";
       id: string;
       status: AgentStatus;
+      statusMessage?: string;
       exitCode?: number | null;
       signal?: string | null;
       updatedAt: string;
@@ -184,6 +231,41 @@ export type WsServerEvent =
       type: "agent.error";
       id?: string;
       message: string;
+    }
+  | {
+      type: "terminal.snapshot";
+      snapshot: TerminalSnapshot;
+    }
+  | {
+      type: "terminal.started";
+      session: TerminalSession;
+      output: string[];
+    }
+  | {
+      type: "terminal.output";
+      id: string;
+      chunk: string;
+    }
+  | {
+      type: "terminal.exited";
+      id: string;
+      exitCode?: number | null;
+      signal?: string | number | null;
+      updatedAt: string;
+    }
+  | {
+      type: "terminal.cleared";
+      id: string;
+    }
+  | {
+      type: "terminal.closed";
+      id: string;
+    }
+  | {
+      type: "terminal.renamed";
+      id: string;
+      title?: string;
+      updatedAt: string;
     };
 
 export type WsClientCommand =
@@ -198,6 +280,7 @@ export type WsClientCommand =
       type: "userMessage";
       id: string;
       text: string;
+      attachments?: MessageAttachment[];
     }
   | {
       type: "kill";
@@ -207,6 +290,10 @@ export type WsClientCommand =
       type: "setModel";
       id: string;
       model: string;
+    }
+  | {
+      type: "enablePlugin";
+      plugin: string;
     }
   | {
       type: "sendTo";
@@ -228,4 +315,36 @@ export type WsClientCommand =
   | {
       type: "resume";
       id: string;
+    }
+  | {
+      type: "terminalStart";
+      projectId?: string;
+    }
+  | {
+      type: "terminalInput";
+      id: string;
+      input: string;
+    }
+  | {
+      type: "terminalResize";
+      id: string;
+      cols: number;
+      rows: number;
+    }
+  | {
+      type: "terminalKill";
+      id: string;
+    }
+  | {
+      type: "terminalClear";
+      id: string;
+    }
+  | {
+      type: "terminalClose";
+      id: string;
+    }
+  | {
+      type: "terminalRename";
+      id: string;
+      title?: string;
     };

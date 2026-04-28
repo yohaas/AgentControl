@@ -1,6 +1,6 @@
 # Agent Control
 
-Multi-agent dashboard for discovering Claude Code agent definitions, launching standard or Remote Control agents, and routing transcript context between them.
+Multi-agent dashboard for adding Claude Code projects, discovering their agent definitions, launching standard or Remote Control agents, and routing transcript context between them.
 
 ## Requirements
 
@@ -16,11 +16,13 @@ npm install
 
 ## Environment
 
-- `PROJECTS_ROOT`: directory scanned one level deep for projects. Defaults to `~/projects`.
 - `PORT`: server port. Defaults to `4317`.
+- `CLAUDE_CODE_CLI`: optional path to the Claude Code CLI executable. Useful when the CLI shim is not on `PATH`.
 - `FORCE_FALLBACK_MODEL_SWITCH=1`: forces the resume-based model-switch strategy for testing.
 
-A project is any direct child of `PROJECTS_ROOT` that contains `.claude/agents/`. Each markdown file in that folder becomes an agent definition. YAML frontmatter supports:
+Projects are added from the dashboard with the **Add Project** button. The server persists those folders in `~/.agent-dashboard/config.json`; they can also be edited from Settings as one path per line.
+
+Each markdown file in a project's `.claude/agents/` folder becomes an agent definition. YAML frontmatter supports:
 
 ```yaml
 name: Reviewer

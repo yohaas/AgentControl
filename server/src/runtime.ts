@@ -1,4 +1,5 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { nanoid } from "nanoid";
 import QRCode from "qrcode";
 import type {
@@ -8,6 +9,7 @@ import type {
   AutoApproveMode,
   Capabilities,
   LaunchRequest,
+  MessageAttachment,
   Project,
   RunningAgent,
   SendToCommand,
@@ -15,6 +17,7 @@ import type {
   WsServerEvent
 } from "@agent-control/shared";
 import { createStateWriter, readPersistedState, type PersistedState } from "./persistence.js";
+import { resolveClaudeCommand } from "./capabilities.js";
 
 type Broadcast = (event: WsServerEvent) => void;
 type ProjectProvider = () => Project[];
@@ -24,6 +27,7 @@ interface AgentProcessState {
   def?: AgentDef;
   child?: ChildProcessWithoutNullStreams;
   transcript: TranscriptEvent[];
+  streamingAssistantId?: string;
   rawLines: string[];
   stdoutBuffer: string;
   stderrBuffer: string;
@@ -78,9 +82,10 @@ export class AgentRuntimeManager {
   async loadPersistedState(): Promise<void> {
     const persisted = await readPersistedState();
     for (const agent of persisted.agents) {
+      const persistedStatus = agent.status as AgentStatus | "restorable";
       const restored: RunningAgent = {
         ...agent,
-        status: agent.sessionId ? "restorable" : agent.status,
+        status: agent.sessionId ? "paused" : persistedStatus === "restorable" ? "paused" : persistedStatus,
         restorable: Boolean(agent.sessionId),
         updatedAt: now()
       };
@@ -169,28 +174,61 @@ export class AgentRuntimeManager {
     this.spawnStandard(state, state.agent.sessionId, state.agent.currentModel);
   }
 
-  userMessage(id: string, text: string, sourceAgent?: TranscriptEvent["sourceAgent"]): void {
+  userMessage(id: string, text: string, sourceAgent?: TranscriptEvent["sourceAgent"], attachments: MessageAttachment[] = []): void {
     const state = this.requiredState(id);
     if (state.agent.remoteControl) throw new Error("Remote Control agents do not accept dashboard messages.");
     if (!state.child || state.child.killed) throw new Error("Agent process is not running.");
 
     const trimmed = text.trim();
-    if (!trimmed) return;
+    const imageAttachments = attachments.filter((attachment) => attachment.mimeType.startsWith("image/"));
+    if (!trimmed && imageAttachments.length === 0) return;
+
+    const attachmentNote = imageAttachments.length
+      ? [
+          "Attached image file(s):",
+          ...imageAttachments.map((attachment) => `- ${attachment.name}: ${attachment.path || attachment.url || attachment.id}`)
+        ].join("\n")
+      : "";
+    const displayText = [trimmed || (imageAttachments.length ? "Please inspect the attached image(s)." : ""), attachmentNote]
+      .filter(Boolean)
+      .join("\n\n");
 
     const event: TranscriptEvent = {
       ...eventBase(id, state.agent.currentModel),
       kind: "user",
-      text: trimmed,
-      sourceAgent
+      text: displayText,
+      sourceAgent,
+      attachments: imageAttachments
     };
     this.pushTranscript(state, event);
     this.setStatus(state, "running");
+
+    const content: Record<string, unknown>[] = [{ type: "text", text: displayText }];
+    for (const attachment of imageAttachments) {
+      if (!attachment.path) continue;
+      try {
+        content.push({
+          type: "image",
+          source: {
+            type: "base64",
+            media_type: attachment.mimeType,
+            data: readFileSync(attachment.path).toString("base64")
+          }
+        });
+      } catch (error) {
+        this.pushTranscript(state, {
+          ...eventBase(id, state.agent.currentModel),
+          kind: "system",
+          text: `Could not attach image ${attachment.name}: ${error instanceof Error ? error.message : String(error)}`
+        });
+      }
+    }
 
     const payload = {
       type: "user",
       message: {
         role: "user",
-        content: [{ type: "text", text: trimmed }]
+        content
       }
     };
     state.child.stdin.write(`${JSON.stringify(payload)}\n`);
@@ -199,10 +237,7 @@ export class AgentRuntimeManager {
   kill(id: string): void {
     const state = this.requiredState(id);
     if (state.child && !state.child.killed) {
-      state.child.kill("SIGTERM");
-      setTimeout(() => {
-        if (state.child && !state.child.killed) state.child.kill("SIGKILL");
-      }, 3000);
+      this.stopProcessTree(state);
     } else {
       this.markTerminated(state, null, null);
     }
@@ -267,7 +302,7 @@ export class AgentRuntimeManager {
   clear(id: string): void {
     const state = this.states.get(id);
     if (!state) return;
-    if (state.child && !state.child.killed) state.child.kill("SIGTERM");
+    this.stopProcessTree(state);
     this.states.delete(id);
     this.broadcast({ type: "agent.snapshot", snapshot: this.snapshot() });
     this.persist();
@@ -275,7 +310,7 @@ export class AgentRuntimeManager {
 
   clearAll(): void {
     for (const state of this.states.values()) {
-      if (state.child && !state.child.killed) state.child.kill("SIGTERM");
+      this.stopProcessTree(state);
     }
     this.states.clear();
     this.broadcast({ type: "agent.snapshot", snapshot: this.snapshot() });
@@ -309,6 +344,8 @@ export class AgentRuntimeManager {
     const model = modelOverride || state.agent.currentModel;
     const args = resumeSessionId
       ? [
+          "--print",
+          "--verbose",
           "--output-format",
           "stream-json",
           "--input-format",
@@ -318,11 +355,11 @@ export class AgentRuntimeManager {
           "--model",
           model,
           "--append-system-prompt",
-          state.def?.systemPrompt || "",
-          "--cwd",
-          state.agent.projectPath
+          state.def?.systemPrompt || ""
         ]
       : [
+          "--print",
+          "--verbose",
           "--output-format",
           "stream-json",
           "--input-format",
@@ -330,14 +367,12 @@ export class AgentRuntimeManager {
           "--append-system-prompt",
           state.def?.systemPrompt || "",
           "--model",
-          model,
-          "--cwd",
-          state.agent.projectPath
+          model
         ];
 
     if (state.autoApprove === "always") args.push("--dangerously-skip-permissions");
 
-    const child = spawn("claude", args, {
+    const child = spawn(resolveClaudeCommand(), args, {
       cwd: state.agent.projectPath,
       windowsHide: true
     });
@@ -373,21 +408,24 @@ export class AgentRuntimeManager {
       }
       this.markTerminated(state, code, signal);
     });
+
+    this.setStatus(state, "idle");
+    if (state.pendingInitialPrompt) {
+      const initial = state.pendingInitialPrompt;
+      state.pendingInitialPrompt = undefined;
+      this.userMessage(state.agent.id, initial);
+    }
   }
 
   private async spawnRemoteControl(state: AgentProcessState): Promise<void> {
     const args = [
       "remote-control",
-      "--append-system-prompt",
-      state.def?.systemPrompt || "",
-      "--model",
-      state.agent.currentModel,
-      "--cwd",
-      state.agent.projectPath
+      "--name",
+      state.agent.displayName
     ];
-    if (state.autoApprove === "always") args.push("--dangerously-skip-permissions");
+    if (state.autoApprove === "always") args.push("--permission-mode", "bypassPermissions");
 
-    const child = spawn("claude", args, {
+    const child = spawn(resolveClaudeCommand(), args, {
       cwd: state.agent.projectPath,
       windowsHide: true
     });
@@ -398,6 +436,7 @@ export class AgentRuntimeManager {
 
     const parseRcLine = async (line: string) => {
       console.log(`[${state.agent.displayName}:rc] ${line}`);
+      this.storeRawLine(state, line);
       const url = line.match(RC_URL_PATTERN)?.[0];
       if (!url || state.agent.rcUrl) return;
       state.agent.rcUrl = url;
@@ -434,10 +473,27 @@ export class AgentRuntimeManager {
       return;
     }
     state.restartModel = model;
-    state.restartTimer = setTimeout(() => {
+    this.stopProcessTree(state);
+  }
+
+  private stopProcessTree(state: AgentProcessState): void {
+    const child = state.child;
+    if (!child || child.killed) return;
+
+    if (process.platform === "win32" && child.pid) {
+      const killer = spawn("taskkill.exe", ["/pid", String(child.pid), "/t", "/f"], {
+        windowsHide: true
+      });
+      killer.on("error", () => {
+        child.kill("SIGTERM");
+      });
+      return;
+    }
+
+    child.kill("SIGTERM");
+    setTimeout(() => {
       if (state.child && !state.child.killed) state.child.kill("SIGKILL");
     }, 3000);
-    state.child?.kill("SIGTERM");
   }
 
   private consumeLines(buffer: string, onLine: (line: string) => void): string {
@@ -470,21 +526,34 @@ export class AgentRuntimeManager {
     const subtype = String(payload.subtype || "");
 
     if ((type === "system" && subtype === "init") || type === "system.init") {
-      const model = this.stringField(payload.model) || this.stringField(payload.current_model);
-      const sessionId = this.stringField(payload.session_id) || this.stringField(payload.sessionId);
+      const model = this.trimmedStringField(payload.model) || this.trimmedStringField(payload.current_model);
+      const sessionId = this.trimmedStringField(payload.session_id) || this.trimmedStringField(payload.sessionId);
       if (sessionId) state.agent.sessionId = sessionId;
       if (model) this.updateModel(state, model);
       this.setStatus(state, "idle");
-      if (state.pendingInitialPrompt) {
-        const initial = state.pendingInitialPrompt;
-        state.pendingInitialPrompt = undefined;
-        this.userMessage(state.agent.id, initial);
-      }
+      return;
+    }
+
+    if (type === "content_block_start") {
+      const block = (payload.content_block || payload.block) as Record<string, unknown> | undefined;
+      if (block?.type === "text") this.appendAssistantText(state, this.textField(block.text) || "");
+      return;
+    }
+
+    if (type === "content_block_delta") {
+      const delta = (payload.delta || payload) as Record<string, unknown>;
+      const text = this.textField(delta.text) || this.textField(delta.partial_json);
+      if (text) this.appendAssistantText(state, text);
+      return;
+    }
+
+    if (type === "content_block_stop") {
+      state.streamingAssistantId = undefined;
       return;
     }
 
     const message = (payload.message || payload) as Record<string, unknown>;
-    const messageModel = this.stringField(message.model) || this.stringField(payload.model);
+    const messageModel = this.trimmedStringField(message.model) || this.trimmedStringField(payload.model);
     if (messageModel && messageModel !== state.agent.currentModel) {
       this.updateModel(state, messageModel);
     }
@@ -495,6 +564,7 @@ export class AgentRuntimeManager {
     }
 
     if (type === "result") {
+      state.streamingAssistantId = undefined;
       this.setStatus(state, "idle");
     } else if (type === "error") {
       this.setStatus(state, "error", stringifyUnknown(payload));
@@ -509,11 +579,7 @@ export class AgentRuntimeManager {
     const type = String(value.type || "");
 
     if (type === "text" && typeof value.text === "string" && value.text.length > 0) {
-      this.pushTranscript(state, {
-        ...eventBase(state.agent.id, state.agent.currentModel),
-        kind: "assistant_text",
-        text: value.text
-      });
+      this.appendAssistantText(state, value.text, true);
       return;
     }
 
@@ -521,8 +587,8 @@ export class AgentRuntimeManager {
       this.pushTranscript(state, {
         ...eventBase(state.agent.id, state.agent.currentModel),
         kind: "tool_use",
-        toolUseId: this.stringField(value.id) || transcriptId(),
-        name: this.stringField(value.name) || "tool",
+        toolUseId: this.trimmedStringField(value.id) || transcriptId(),
+        name: this.trimmedStringField(value.name) || "tool",
         input: value.input ?? {},
         awaitingPermission: Boolean(value.awaitingPermission || value.needs_permission)
       });
@@ -534,21 +600,64 @@ export class AgentRuntimeManager {
       this.pushTranscript(state, {
         ...eventBase(state.agent.id, state.agent.currentModel),
         kind: "tool_result",
-        toolUseId: this.stringField(value.tool_use_id) || this.stringField(value.toolUseId) || transcriptId(),
+        toolUseId: this.trimmedStringField(value.tool_use_id) || this.trimmedStringField(value.toolUseId) || transcriptId(),
         output: value.content ?? value.output ?? "",
         isError: Boolean(value.is_error || value.isError)
       });
     }
   }
 
-  private stringField(value: unknown): string | undefined {
+  private trimmedStringField(value: unknown): string | undefined {
     return typeof value === "string" && value.trim() ? value.trim() : undefined;
+  }
+
+  private textField(value: unknown): string | undefined {
+    return typeof value === "string" && value.length > 0 ? value : undefined;
   }
 
   private pushTranscript(state: AgentProcessState, event: TranscriptEvent): void {
     state.transcript.push(event);
     this.broadcast({ type: "agent.transcript", id: state.agent.id, event });
     this.persist();
+  }
+
+  private updateTranscript(state: AgentProcessState, event: TranscriptEvent): void {
+    const index = state.transcript.findIndex((candidate) => candidate.id === event.id);
+    if (index >= 0) state.transcript[index] = event;
+    this.broadcast({ type: "agent.transcript_updated", id: state.agent.id, event });
+    this.persist();
+  }
+
+  private appendAssistantText(state: AgentProcessState, text: string, forceNew = false): void {
+    if (!text && !forceNew) return;
+    const existing = state.streamingAssistantId
+      ? state.transcript.find((event) => event.id === state.streamingAssistantId && event.kind === "assistant_text")
+      : undefined;
+
+    if (forceNew && existing?.kind === "assistant_text" && existing.text === text) {
+      state.streamingAssistantId = undefined;
+      return;
+    }
+
+    if (!existing || existing.kind !== "assistant_text" || forceNew) {
+      const event: TranscriptEvent = {
+        ...eventBase(state.agent.id, state.agent.currentModel),
+        kind: "assistant_text",
+        text
+      };
+      state.streamingAssistantId = event.id;
+      this.pushTranscript(state, event);
+      this.setStatus(state, "running");
+      return;
+    }
+
+    const updated: TranscriptEvent = {
+      ...existing,
+      text: `${existing.text}${text}`,
+      timestamp: now()
+    };
+    this.updateTranscript(state, updated);
+    this.setStatus(state, "running");
   }
 
   private setStatus(state: AgentProcessState, status: AgentStatus, statusMessage?: string): void {
@@ -560,6 +669,7 @@ export class AgentRuntimeManager {
       id: state.agent.id,
       status,
       statusMessage,
+      restorable: state.agent.restorable,
       updatedAt: state.agent.updatedAt
     });
     this.persist();
@@ -588,13 +698,21 @@ export class AgentRuntimeManager {
   }
 
   private markTerminated(state: AgentProcessState, exitCode: number | null, signal: NodeJS.Signals | null): void {
-    state.agent.status = "killed";
+    const failed = typeof exitCode === "number" && exitCode !== 0;
+    const status: AgentStatus = failed ? "error" : "killed";
+    const statusMessage = failed
+      ? state.rawLines.at(-1) || `Agent process exited with code ${exitCode}.`
+      : undefined;
+
+    state.agent.status = status;
+    state.agent.statusMessage = statusMessage;
     state.agent.updatedAt = now();
     state.agent.pid = undefined;
     this.broadcast({
       type: "agent.terminated",
       id: state.agent.id,
-      status: "killed",
+      status,
+      statusMessage,
       exitCode,
       signal,
       updatedAt: state.agent.updatedAt

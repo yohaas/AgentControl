@@ -12,8 +12,11 @@ export const DEFAULT_MODELS = [
 
 export interface DashboardConfig {
   projectsRoot?: string;
+  projectPaths?: string[];
   models?: string[];
   autoApprove?: AutoApproveMode;
+  tileHeight?: number;
+  tileColumns?: number;
 }
 
 const configDir = path.join(os.homedir(), ".agent-dashboard");
@@ -49,4 +52,18 @@ export function resolveProjectsRoot(config: DashboardConfig): string {
 export function resolveModels(config: DashboardConfig): string[] {
   const models = config.models?.map((model) => model.trim()).filter(Boolean);
   return models?.length ? models : DEFAULT_MODELS;
+}
+
+function clampNumber(value: unknown, fallback: number, min: number, max: number): number {
+  const parsed = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(max, Math.max(min, Math.round(parsed)));
+}
+
+export function resolveTileHeight(config: DashboardConfig): number {
+  return clampNumber(config.tileHeight, 460, 320, 760);
+}
+
+export function resolveTileColumns(config: DashboardConfig): number {
+  return clampNumber(config.tileColumns, 2, 1, 6);
 }

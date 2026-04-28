@@ -12,22 +12,32 @@ function wsUrl() {
 
 export function connectWebSocket() {
   if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) return;
+  if (reconnectTimer) {
+    window.clearTimeout(reconnectTimer);
+    reconnectTimer = undefined;
+  }
 
-  socket = new WebSocket(wsUrl());
-  socket.addEventListener("open", () => {
+  const nextSocket = new WebSocket(wsUrl());
+  socket = nextSocket;
+
+  nextSocket.addEventListener("open", () => {
+    if (socket !== nextSocket) return;
     attempt = 0;
     useAppStore.getState().setWsConnected(true);
     sendCommand({ type: "snapshot" });
   });
-  socket.addEventListener("message", (message) => {
+  nextSocket.addEventListener("message", (message) => {
+    if (socket !== nextSocket) return;
     try {
       useAppStore.getState().handleServerEvent(JSON.parse(message.data) as WsServerEvent);
     } catch {
       useAppStore.getState().addError("Received an invalid WebSocket event.");
     }
   });
-  socket.addEventListener("close", () => {
+  nextSocket.addEventListener("close", () => {
+    if (socket !== nextSocket) return;
     useAppStore.getState().setWsConnected(false);
+    socket = undefined;
     const delay = Math.min(10000, 500 * 2 ** attempt);
     attempt += 1;
     reconnectTimer = window.setTimeout(connectWebSocket, delay);
@@ -36,8 +46,11 @@ export function connectWebSocket() {
 
 export function disconnectWebSocket() {
   if (reconnectTimer) window.clearTimeout(reconnectTimer);
-  socket?.close();
+  reconnectTimer = undefined;
+  const currentSocket = socket;
   socket = undefined;
+  useAppStore.getState().setWsConnected(false);
+  currentSocket?.close();
 }
 
 export function sendCommand(command: WsClientCommand) {
