@@ -19,6 +19,7 @@ import {
   Brain,
   Check,
   ChevronDown,
+  ChevronRight,
   ChevronUp,
   Clipboard,
   ClipboardList,
@@ -3431,7 +3432,8 @@ function SendToMenu({
       </ContextMenuItem>
       <ContextMenuSub>
         <ContextMenuSubTrigger className="flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none focus:bg-accent data-[disabled]:opacity-45" disabled={!activeText}>
-          Send to
+          <span className="flex-1">Send to</span>
+          <ChevronRight className="ml-4 h-4 w-4 text-muted-foreground" />
         </ContextMenuSubTrigger>
         <ContextMenuSubContent>
           <ContextMenuSub>
