@@ -34,7 +34,6 @@ import {
   Home,
   Image as ImageIcon,
   Maximize2,
-  Mic,
   Minimize2,
   MoreHorizontal,
   PanelLeftClose,
@@ -2180,12 +2179,14 @@ function AgentTile({
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [showPinnedMessage, setShowPinnedMessage] = useState(false);
+  const [slashMenuSuppressed, setSlashMenuSuppressed] = useState(false);
   const isBusy = isAgentBusy(agent);
   const canType = !agent.remoteControl && agentHasProcess(agent);
   const showActivityIndicator = isBusy && !hasStreamingAssistantText(transcript);
   const pinnedMessage = latestUserMessage(transcript);
   const pinLastSentMessage = settings.pinLastSentMessage;
-  const slashSuggestions = useMemo(() => slashCommandSuggestions(draft, settings.models), [draft, settings.models]);
+  const rawSlashSuggestions = useMemo(() => slashCommandSuggestions(draft, settings.models), [draft, settings.models]);
+  const slashSuggestions = slashMenuSuppressed ? [] : rawSlashSuggestions;
   const selectedLines = selectedLineCount(selection.selectedText);
 
   useEffect(() => {
@@ -2246,6 +2247,17 @@ function AgentTile({
 
   function selectSlashCommand(value: string) {
     setDraft(agent.id, value);
+    setSlashMenuSuppressed(false);
+    window.requestAnimationFrame(() => inputRef.current?.focus());
+  }
+
+  function toggleSlashMenu() {
+    if (rawSlashSuggestions.length > 0 && !slashMenuSuppressed) {
+      setSlashMenuSuppressed(true);
+    } else {
+      setSlashMenuSuppressed(false);
+      setDraft(agent.id, draft.startsWith("/") ? draft : `/${draft}`);
+    }
     window.requestAnimationFrame(() => inputRef.current?.focus());
   }
 
@@ -2469,15 +2481,17 @@ function AgentTile({
             <div className="relative">
               <Textarea
                 ref={inputRef}
-                className="min-h-14 resize-none border-0 bg-transparent pb-2 pr-9 pt-3 text-sm focus-visible:ring-0"
+                className="min-h-14 resize-none border-0 bg-transparent pb-2 pt-3 text-sm focus-visible:ring-0"
                 value={draft}
                 disabled={!canType}
-                onChange={(event) => setDraft(agent.id, event.target.value)}
+                onChange={(event) => {
+                  setSlashMenuSuppressed(false);
+                  setDraft(agent.id, event.target.value);
+                }}
                 onPaste={handlePaste}
                 placeholder={isBusy ? "Queue a message..." : "ctrl esc to focus or unfocus Claude"}
                 onKeyDown={handleComposerKeyDown}
               />
-              <Mic className="pointer-events-none absolute right-3 top-3 h-4 w-4 text-muted-foreground" />
             </div>
             <div className="flex items-center justify-between border-t border-border px-2 py-1.5">
               <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
@@ -2500,10 +2514,7 @@ function AgentTile({
                   size="icon"
                   className="h-7 w-7"
                   title="Slash commands"
-                  onClick={() => {
-                    setDraft(agent.id, draft.startsWith("/") ? draft : `/${draft}`);
-                    window.requestAnimationFrame(() => inputRef.current?.focus());
-                  }}
+                  onClick={toggleSlashMenu}
                 >
                   <SquareSlash className="h-4 w-4" />
                 </Button>
@@ -2742,12 +2753,14 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
   const [attachments, setAttachments] = useState<MessageAttachment[]>([]);
   const [showPinnedMessage, setShowPinnedMessage] = useState(false);
   const [activeSlashIndex, setActiveSlashIndex] = useState(0);
+  const [slashMenuSuppressed, setSlashMenuSuppressed] = useState(false);
   const isBusy = isAgentBusy(agent);
   const canType = agentHasProcess(agent);
   const showActivityIndicator = isBusy && !hasStreamingAssistantText(transcript);
   const pinnedMessage = latestUserMessage(transcript);
   const pinLastSentMessage = settings.pinLastSentMessage;
-  const slashSuggestions = useMemo(() => slashCommandSuggestions(draft, settings.models), [draft, settings.models]);
+  const rawSlashSuggestions = useMemo(() => slashCommandSuggestions(draft, settings.models), [draft, settings.models]);
+  const slashSuggestions = slashMenuSuppressed ? [] : rawSlashSuggestions;
   const selectedLines = selectedLineCount(selection.selectedText);
 
   useEffect(() => {
@@ -2802,6 +2815,17 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
 
   function selectSlashCommand(value: string) {
     setDraft(agent.id, value);
+    setSlashMenuSuppressed(false);
+    window.requestAnimationFrame(() => inputRef.current?.focus());
+  }
+
+  function toggleSlashMenu() {
+    if (rawSlashSuggestions.length > 0 && !slashMenuSuppressed) {
+      setSlashMenuSuppressed(true);
+    } else {
+      setSlashMenuSuppressed(false);
+      setDraft(agent.id, draft.startsWith("/") ? draft : `/${draft}`);
+    }
     window.requestAnimationFrame(() => inputRef.current?.focus());
   }
 
@@ -2945,15 +2969,17 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
           <div className="relative">
             <Textarea
               ref={inputRef}
-              className="min-h-16 resize-none border-0 bg-transparent pb-2 pr-10 pt-3 focus-visible:ring-0"
+              className="min-h-16 resize-none border-0 bg-transparent pb-2 pt-3 focus-visible:ring-0"
               value={draft}
               disabled={!canType}
-              onChange={(event) => setDraft(agent.id, event.target.value)}
+              onChange={(event) => {
+                setSlashMenuSuppressed(false);
+                setDraft(agent.id, event.target.value);
+              }}
               onPaste={handlePaste}
               placeholder={isBusy ? "Queue a message..." : "ctrl esc to focus or unfocus Claude"}
               onKeyDown={handleComposerKeyDown}
             />
-            <Mic className="pointer-events-none absolute right-3 top-3 h-4 w-4 text-muted-foreground" />
           </div>
           <div className="flex items-center justify-between border-t border-border px-2 py-1.5">
             <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
@@ -2976,10 +3002,7 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
                 size="icon"
                 className="h-7 w-7"
                 title="Slash commands"
-                onClick={() => {
-                  setDraft(agent.id, draft.startsWith("/") ? draft : `/${draft}`);
-                  window.requestAnimationFrame(() => inputRef.current?.focus());
-                }}
+                onClick={toggleSlashMenu}
               >
                 <SquareSlash className="h-4 w-4" />
               </Button>
