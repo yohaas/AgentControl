@@ -1870,7 +1870,10 @@ function LaunchDialog() {
             </Select>
           </label>
           <label className="grid gap-1.5 text-sm">
-            Agent file prompt
+            <span className="flex items-baseline gap-2">
+              <span>Agent file prompt</span>
+              <span className="text-xs text-muted-foreground">Edit the agent file to change this.</span>
+            </span>
             <Textarea
               value={def?.systemPrompt || ""}
               readOnly
