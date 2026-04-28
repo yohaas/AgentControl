@@ -1690,6 +1690,7 @@ function Header() {
 function WorktreeTabs() {
   const projects = useAppStore((state) => state.projects);
   const selectedProjectId = useAppStore((state) => state.selectedProjectId);
+  const setProjects = useAppStore((state) => state.setProjects);
   const setSelectedProject = useAppStore((state) => state.setSelectedProject);
   const addError = useAppStore((state) => state.addError);
   const [worktrees, setWorktrees] = useState<GitWorktreeList | undefined>();
@@ -1731,28 +1732,48 @@ function WorktreeTabs() {
 
   if (openWorktrees.length <= 1) return null;
 
+  async function closeWorktreeProject(projectIdToClose: string) {
+    try {
+      setProjects(await api.closeProject(projectIdToClose));
+    } catch (error) {
+      addError(error instanceof Error ? error.message : String(error));
+    }
+  }
+
   return (
-    <div className="flex h-10 shrink-0 items-center gap-2 overflow-x-auto border-b border-border bg-muted/30 px-4">
-      <FolderTree className="h-4 w-4 shrink-0 text-muted-foreground" />
-      <div className="flex min-w-0 items-center gap-1">
+    <div className="flex h-11 shrink-0 items-end gap-2 overflow-x-auto border-b border-border bg-muted/25 px-4 pt-1">
+      <FolderTree className="mb-2.5 h-4 w-4 shrink-0 text-muted-foreground" />
+      <div className="flex min-w-0 items-end gap-0.5">
         {openWorktrees.map((worktree) => {
           const active = worktree.projectId === selectedProjectId;
+          const projectIdForTab = worktree.projectId!;
           return (
-            <button
-              key={worktree.projectId}
-              type="button"
+            <div
+              key={projectIdForTab}
               className={cn(
-                "max-w-56 rounded-md border px-3 py-1.5 text-left text-xs transition-colors",
+                "flex h-9 max-w-64 items-center gap-2 rounded-t-md border px-3 text-xs transition-colors",
                 active
-                  ? "border-primary bg-background text-foreground shadow-sm"
-                  : "border-transparent text-muted-foreground hover:border-border hover:bg-background/70 hover:text-foreground"
+                  ? "border-border border-b-background bg-background text-foreground shadow-sm"
+                  : "border-border/70 bg-muted/45 text-muted-foreground hover:bg-background/70 hover:text-foreground"
               )}
               title={worktree.path}
-              onClick={() => worktree.projectId && setSelectedProject(worktree.projectId)}
             >
-              <span className="block truncate font-medium">{worktree.projectName}</span>
-              <span className="block truncate font-mono text-[11px] opacity-80">{worktree.branch || "detached"}</span>
-            </button>
+              <button type="button" className="min-w-0 flex-1 text-left" onClick={() => setSelectedProject(projectIdForTab)}>
+                <span className="block truncate font-medium leading-4">{worktree.projectName}</span>
+                <span className="block truncate font-mono text-[11px] leading-3 opacity-80">{worktree.branch || "detached"}</span>
+              </button>
+              <button
+                type="button"
+                className="grid h-5 w-5 shrink-0 place-items-center rounded-sm text-muted-foreground hover:bg-accent hover:text-foreground"
+                title={`Close ${worktree.projectName}`}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  void closeWorktreeProject(projectIdForTab);
+                }}
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
           );
         })}
       </div>
