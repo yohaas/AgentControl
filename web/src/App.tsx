@@ -42,6 +42,7 @@ import {
   PanelLeft,
   PanelRight,
   PictureInPicture2,
+  Play,
   Plus,
   Puzzle,
   RefreshCw,
@@ -826,22 +827,38 @@ function Header() {
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" disabled={!selectedProjectId} title={`Dev command: ${devCommand}`}>
-              <SquareTerminal className="h-4 w-4" />
-              Dev
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={runProjectDev}>Run {devCommand}</DropdownMenuItem>
-            <DropdownMenuItem onClick={restartProjectDev}>Restart {devCommand}</DropdownMenuItem>
-            <DropdownMenuItem disabled={projectDevTerminals.length === 0} onClick={stopProjectDev}>
-              Stop dev command
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={customizeProjectDev}>Customize...</DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <div className="flex items-center">
+          <Button
+            variant="outline"
+            size="icon"
+            className="rounded-r-none"
+            disabled={!selectedProjectId}
+            onClick={runProjectDev}
+            title={`Run ${devCommand}`}
+          >
+            <Play className="h-4 w-4" />
+          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                size="icon"
+                className="-ml-px w-7 rounded-l-none"
+                disabled={!selectedProjectId}
+                title={`Dev command options: ${devCommand}`}
+              >
+                <ChevronDown className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={restartProjectDev}>Restart {devCommand}</DropdownMenuItem>
+              <DropdownMenuItem disabled={projectDevTerminals.length === 0} onClick={stopProjectDev}>
+                Stop dev command
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={customizeProjectDev}>Customize...</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
         <Button variant="outline" size="icon" onClick={refresh} title="Refresh projects">
           <RefreshCw className="h-4 w-4" />
         </Button>
@@ -1377,12 +1394,12 @@ function Sidebar() {
             <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Running</h2>
             <Button
               size="icon"
-              className="h-7 w-7"
+              className="h-6 w-6"
               disabled={!selectedProjectId}
               onClick={() => selectedProjectId && openLaunchModal({ projectId: selectedProjectId })}
               title="Launch agent"
             >
-              <Plus className="h-4 w-4" />
+              <Plus className="h-3.5 w-3.5" />
             </Button>
           </div>
           {running.length > 0 && (
