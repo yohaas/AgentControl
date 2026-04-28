@@ -1553,6 +1553,11 @@ function AgentTile({
     window.requestAnimationFrame(() => inputRef.current?.focus());
   }
 
+  function stopCurrentResponse() {
+    sendCommand({ type: "interrupt", id: agent.id });
+    window.requestAnimationFrame(() => inputRef.current?.focus());
+  }
+
   async function handlePaste(event: ReactClipboardEvent<HTMLTextAreaElement>) {
     const files = pastedImageFiles(event);
     if (files.length === 0) return;
@@ -1725,8 +1730,14 @@ function AgentTile({
                 }}
               />
             </div>
-            <Button className="self-end" size="icon" disabled={!canType || (!draft.trim() && attachments.length === 0)} onClick={send} title={isBusy ? "Queue" : "Send"}>
-              <Send className="h-4 w-4" />
+            <Button
+              className="self-end"
+              size="icon"
+              disabled={isBusy ? !agentHasProcess(agent) : !canType || (!draft.trim() && attachments.length === 0)}
+              onClick={isBusy ? stopCurrentResponse : send}
+              title={isBusy ? "Stop response" : "Send"}
+            >
+              {isBusy ? <X className="h-4 w-4" /> : <Send className="h-4 w-4" />}
             </Button>
           </div>
           {queue.length > 0 && (
@@ -1941,6 +1952,11 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
     window.requestAnimationFrame(() => inputRef.current?.focus());
   }
 
+  function stopCurrentResponse() {
+    sendCommand({ type: "interrupt", id: agent.id });
+    window.requestAnimationFrame(() => inputRef.current?.focus());
+  }
+
   async function handlePaste(event: ReactClipboardEvent<HTMLTextAreaElement>) {
     const files = pastedImageFiles(event);
     if (files.length === 0) return;
@@ -2030,9 +2046,13 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
               }}
             />
           </div>
-          <Button className="self-end" disabled={!canType || (!draft.trim() && attachments.length === 0)} onClick={send}>
-            <Send className="h-4 w-4" />
-            {isBusy ? "Queue" : "Send"}
+          <Button
+            className="self-end"
+            disabled={isBusy ? !agentHasProcess(agent) : !canType || (!draft.trim() && attachments.length === 0)}
+            onClick={isBusy ? stopCurrentResponse : send}
+          >
+            {isBusy ? <X className="h-4 w-4" /> : <Send className="h-4 w-4" />}
+            {isBusy ? "Stop" : "Send"}
           </Button>
         </div>
         {queue.length > 0 && (
