@@ -1452,20 +1452,35 @@ function ModelMenu({ agent, compact = false }: { agent: RunningAgent; compact?: 
   );
 }
 
-function PlanModeToggle({ agent, compact = false }: { agent: RunningAgent; compact?: boolean }) {
-  const disabled = agent.remoteControl;
+function ComposerModeMenu({ agent, compact = false }: { agent: RunningAgent; compact?: boolean }) {
+  function setPlanMode(planMode: boolean) {
+    if (agent.planMode === planMode) return;
+    sendCommand({ type: "setPlanMode", id: agent.id, planMode });
+  }
+
   return (
-    <Button
-      variant={agent.planMode ? "default" : "outline"}
-      size="sm"
-      className={cn("h-7", compact && "px-2 text-xs")}
-      disabled={disabled}
-      aria-pressed={Boolean(agent.planMode)}
-      title={disabled ? "Remote Control agents manage plan mode in Claude." : "Toggle plan mode"}
-      onClick={() => sendCommand({ type: "setPlanMode", id: agent.id, planMode: !agent.planMode })}
-    >
-      Plan
-    </Button>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant={agent.planMode ? "default" : "outline"}
+          size="sm"
+          className={cn("h-7 px-2", compact ? "w-10" : "w-full")}
+          title={agent.planMode ? "Plan mode" : "Default mode"}
+        >
+          <ChevronUp className="h-4 w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onClick={() => setPlanMode(false)}>
+          <Check className={cn("mr-2 h-4 w-4", !agent.planMode ? "opacity-100" : "opacity-0")} />
+          Default mode
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => setPlanMode(true)}>
+          <Check className={cn("mr-2 h-4 w-4", agent.planMode ? "opacity-100" : "opacity-0")} />
+          Plan mode
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -2159,7 +2174,6 @@ function AgentTile({
             <LastActivityText agent={agent} compact />
           </div>
         </div>
-        <PlanModeToggle agent={agent} compact />
         <StatusPill status={agent.status} />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -2272,15 +2286,17 @@ function AgentTile({
                 onKeyDown={handleComposerKeyDown}
               />
             </div>
-            <Button
-              className="self-end"
-              size="icon"
-              disabled={isBusy ? !agentHasProcess(agent) : !canType || (!draft.trim() && attachments.length === 0)}
-              onClick={isBusy ? stopCurrentResponse : send}
-              title={isBusy ? "Stop response" : "Send"}
-            >
-              {isBusy ? <X className="h-4 w-4" /> : <Send className="h-4 w-4" />}
-            </Button>
+            <div className="flex self-end flex-col gap-1">
+              <Button
+                size="icon"
+                disabled={isBusy ? !agentHasProcess(agent) : !canType || (!draft.trim() && attachments.length === 0)}
+                onClick={isBusy ? stopCurrentResponse : send}
+                title={isBusy ? "Stop response" : "Send"}
+              >
+                {isBusy ? <X className="h-4 w-4" /> : <Send className="h-4 w-4" />}
+              </Button>
+              <ComposerModeMenu agent={agent} compact />
+            </div>
           </div>
           {queue.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted-foreground">
@@ -2437,7 +2453,6 @@ function AgentPanelHeader({ agent }: { agent: RunningAgent }) {
           <LastActivityText agent={agent} />
         </div>
       </div>
-      <PlanModeToggle agent={agent} />
       {agent.restorable && (
         <Button variant="outline" onClick={() => sendCommand({ type: "resume", id: agent.id })}>
           Resume
@@ -2693,14 +2708,16 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
               onKeyDown={handleComposerKeyDown}
             />
           </div>
-          <Button
-            className="self-end"
-            disabled={isBusy ? !agentHasProcess(agent) : !canType || (!draft.trim() && attachments.length === 0)}
-            onClick={isBusy ? stopCurrentResponse : send}
-          >
-            {isBusy ? <X className="h-4 w-4" /> : <Send className="h-4 w-4" />}
-            {isBusy ? "Stop" : "Send"}
-          </Button>
+          <div className="flex min-w-24 self-end flex-col gap-1">
+            <Button
+              disabled={isBusy ? !agentHasProcess(agent) : !canType || (!draft.trim() && attachments.length === 0)}
+              onClick={isBusy ? stopCurrentResponse : send}
+            >
+              {isBusy ? <X className="h-4 w-4" /> : <Send className="h-4 w-4" />}
+              {isBusy ? "Stop" : "Send"}
+            </Button>
+            <ComposerModeMenu agent={agent} />
+          </div>
         </div>
         {queue.length > 0 && (
           <div className="mx-auto mt-2 flex w-full max-w-4xl flex-wrap gap-2 text-xs text-muted-foreground">
