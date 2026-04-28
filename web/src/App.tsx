@@ -4153,6 +4153,7 @@ function LaunchDialog() {
       const saved = await saveAgentPlugins();
       if (!saved) return;
     }
+    const launchRemoteControl = provider === "claude" && remoteControl;
     sendCommand({
       type: "launch",
       request: {
@@ -4162,8 +4163,8 @@ function LaunchDialog() {
         displayName,
         provider,
         model,
-        initialPrompt: remoteControl ? undefined : initialPrompt,
-        remoteControl,
+        initialPrompt: launchRemoteControl ? undefined : initialPrompt,
+        remoteControl: launchRemoteControl,
         permissionMode: settings.defaultAgentMode,
         autoApprove: settings.autoApprove
       }
@@ -4507,22 +4508,24 @@ function LaunchDialog() {
               <p className="text-xs text-muted-foreground">This agent needs an agent file before plugin selections can be saved.</p>
             )}
           </section>}
-          <label className="flex items-start gap-2 rounded-md border border-border p-3 text-sm" title={rcDisabled ? capabilities?.remoteControlReason : undefined}>
-            <input
-              type="checkbox"
-              className="mt-1"
-              checked={remoteControl}
-              disabled={rcDisabled}
-              onChange={(event) => setRemoteControl(event.target.checked)}
-            />
-            <span>
-              <span className="block font-medium">Remote Control</span>
-              <span className="block text-xs text-muted-foreground">
-                Live transcript and interaction happen in claude.ai/code or the Claude mobile app. The dashboard tracks status,
-                model, and uptime.
+          {provider === "claude" && (
+            <label className="flex items-start gap-2 rounded-md border border-border p-3 text-sm" title={rcDisabled ? capabilities?.remoteControlReason : undefined}>
+              <input
+                type="checkbox"
+                className="mt-1"
+                checked={remoteControl}
+                disabled={rcDisabled}
+                onChange={(event) => setRemoteControl(event.target.checked)}
+              />
+              <span>
+                <span className="block font-medium">Remote Control</span>
+                <span className="block text-xs text-muted-foreground">
+                  Live transcript and interaction happen in claude.ai/code or the Claude mobile app. The dashboard tracks status,
+                  model, and uptime.
+                </span>
               </span>
-            </span>
-          </label>
+            </label>
+          )}
           <label className="grid gap-1.5 text-sm">
             Initial prompt
             <Textarea
