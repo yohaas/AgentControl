@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import matter from "gray-matter";
 import type { AgentDef, AgentProvider, Project } from "@agent-control/shared";
+import { APP_ROOT, DEFAULT_BUILT_IN_AGENT_DIR } from "./config.js";
 
 function colorForName(name: string): string {
   let hash = 5381;
@@ -24,7 +25,7 @@ export const DEFAULT_AGENT_DIRS: AgentDirectoryConfig = {
   claude: ".claude/agents",
   codex: ".codex/agents",
   openai: ".agent-control/openai-agents",
-  builtIn: ".agent-control/built-in-agents"
+  builtIn: DEFAULT_BUILT_IN_AGENT_DIR
 };
 
 function genericAgentDef(): AgentDef {
@@ -124,7 +125,7 @@ function resolveProjectSubdir(projectPath: string, subdir: string): string {
 function resolveBuiltInAgentDir(builtInDir: string): string {
   const expanded = expandHome(builtInDir);
   if (path.isAbsolute(expanded)) return path.resolve(expanded);
-  return path.resolve(process.cwd(), expanded);
+  return path.resolve(APP_ROOT, expanded);
 }
 
 export async function updateAgentPluginsFile(filePath: string, plugins: string[]): Promise<void> {

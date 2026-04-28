@@ -1,6 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import type { AgentPermissionMode, AutoApproveMode, ModelProfile } from "@agent-control/shared";
 
 export const DEFAULT_MODELS = [
@@ -59,8 +60,10 @@ export type ClaudeRuntime = "cli" | "api";
 const configDir = path.join(os.homedir(), ".agent-dashboard");
 const configPath = path.join(configDir, "config.json");
 const secretsPath = path.join(configDir, "secrets.json");
-export const DEFAULT_BUILT_IN_AGENT_DIR = ".agent-control/built-in-agents";
+export const APP_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+export const DEFAULT_BUILT_IN_AGENT_DIR = path.join(APP_ROOT, ".agent-control", "built-in-agents");
 const LEGACY_BUILT_IN_AGENT_DIR = "~/.agent-control/built-in-agents";
+const LEGACY_REPO_RELATIVE_BUILT_IN_AGENT_DIR = ".agent-control/built-in-agents";
 
 export interface DashboardSecrets {
   anthropicApiKey?: string;
@@ -138,11 +141,15 @@ export function resolveModelProfiles(config: DashboardConfig): ModelProfile[] {
 
 export function resolveAgentDirs(config: DashboardConfig): Record<"claude" | "codex" | "openai" | "builtIn", string> {
   const builtInAgentDir = config.builtInAgentDir?.trim();
+  const useDefaultBuiltInDir =
+    !builtInAgentDir ||
+    builtInAgentDir === LEGACY_BUILT_IN_AGENT_DIR ||
+    builtInAgentDir === LEGACY_REPO_RELATIVE_BUILT_IN_AGENT_DIR;
   return {
     claude: config.claudeAgentDir?.trim() || ".claude/agents",
     codex: config.codexAgentDir?.trim() || ".codex/agents",
     openai: config.openaiAgentDir?.trim() || ".agent-control/openai-agents",
-    builtIn: !builtInAgentDir || builtInAgentDir === LEGACY_BUILT_IN_AGENT_DIR ? DEFAULT_BUILT_IN_AGENT_DIR : builtInAgentDir
+    builtIn: useDefaultBuiltInDir ? DEFAULT_BUILT_IN_AGENT_DIR : builtInAgentDir
   };
 }
 
