@@ -52,11 +52,12 @@ interface AgentProcessState {
   activeTurn?: boolean;
   permissionToken?: string;
   pendingPermissions?: Map<string, PendingPermissionRequest>;
+  rcLastDiagnostic?: string;
 }
 
 const RAW_LINE_LIMIT = 5000;
 const TRANSCRIPT_PERSIST_LIMIT = 1000;
-const RC_URL_PATTERN = /https:\/\/claude\.ai\/code\/[\w-]+/;
+const RC_URL_PATTERN = /https:\/\/claude\.ai\/code(?:[/?#][^\s\u0007\u001b)]*)?/g;
 const PERMISSION_MCP_SERVER_NAME = "agentcontrol_permissions";
 const PERMISSION_MCP_TOOL_NAME = `mcp__${PERMISSION_MCP_SERVER_NAME}__approval_prompt`;
 const PERMISSION_REQUEST_TIMEOUT_MS = 10 * 60 * 1000;
@@ -770,19 +771,21 @@ export class AgentRuntimeManager {
     this.updateRemoteControlState(state, "waiting-for-browser", "Waiting for Remote Control link...");
 
     const parseRcLine = async (line: string, stream: "stdout" | "stderr") => {
-      console.log(`[${state.agent.displayName}:rc] ${line}`);
+      const url = this.remoteControlUrl(line);
+      const diagnosticLine = this.remoteControlDiagnosticLine(line);
+      console.log(`[${state.agent.displayName}:rc] ${diagnosticLine || line}`);
       this.storeRawLine(state, line);
-      this.addRemoteControlDiagnostic(state, stream, line);
-      if (/connected|joined|opened/i.test(line)) {
+      if (diagnosticLine) this.addRemoteControlDiagnostic(state, stream, diagnosticLine);
+      if (/connected|joined|opened/i.test(diagnosticLine || line)) {
         this.updateRemoteControlState(state, "connected", "Remote Control connected.");
       }
-      const url = line.match(RC_URL_PATTERN)?.[0];
       if (!url || state.agent.rcUrl) return;
       state.agent.rcUrl = url;
       state.agent.qr = await QRCode.toDataURL(url);
       state.agent.modelLastUpdated = state.agent.launchedAt;
       state.agent.rcState = "waiting-for-browser";
       this.setStatus(state, "remote-controlled", "Remote Control connected.");
+      this.updateRemoteControlState(state, "waiting-for-browser", "Remote Control link ready.");
       this.broadcast({
         type: "agent.rc_url_ready",
         id: state.agent.id,
@@ -1281,8 +1284,31 @@ export class AgentRuntimeManager {
     this.persist();
   }
 
+  private remoteControlUrl(line: string): string | undefined {
+    RC_URL_PATTERN.lastIndex = 0;
+    const urls = [...line.matchAll(RC_URL_PATTERN)].map((match) => match[0]);
+    return urls.find((url) => url.includes("?environment=")) || urls[0];
+  }
+
+  private remoteControlDiagnosticLine(line: string): string | undefined {
+    const withLinks = line.replace(/\u001B]8;;([^\u0007]*)\u0007([^\u001B\u0007]*)\u001B]8;;\u0007/g, (_match, url: string, label: string) =>
+      label && url ? `${label} (${url})` : label || url
+    );
+    const stripped = withLinks
+      .replace(/\u001B\[[0-?]*[ -/]*[@-~]/g, "")
+      .replace(/\u001B[=>]/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!stripped) return undefined;
+    if (/^\d+[A-Z]?$/.test(stripped)) return undefined;
+    return stripped;
+  }
+
   private addRemoteControlDiagnostic(state: AgentProcessState, stream: "stdout" | "stderr", line: string): void {
-    const diagnostics = [...(state.agent.rcDiagnostics || []), `[${stream}] ${line}`].slice(-120);
+    const formatted = `[${stream}] ${line}`;
+    if (state.rcLastDiagnostic === formatted || (state.agent.rcDiagnostics || []).includes(formatted)) return;
+    state.rcLastDiagnostic = formatted;
+    const diagnostics = [...(state.agent.rcDiagnostics || []), formatted].slice(-80);
     state.agent.rcDiagnostics = diagnostics;
     state.agent.updatedAt = now();
     this.broadcast({

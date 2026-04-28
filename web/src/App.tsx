@@ -3877,6 +3877,9 @@ function RemoteControlPanel({ agent }: { agent: RunningAgent }) {
     return () => window.clearInterval(timer);
   }, []);
   const [showQr, setShowQr] = useState(false);
+  useEffect(() => {
+    if (agent.qr) setShowQr(true);
+  }, [agent.qr]);
 
   return (
     <main className="flex flex-1 flex-col">
@@ -3901,6 +3904,7 @@ function RemoteControlPanel({ agent }: { agent: RunningAgent }) {
             </Button>
           </div>
           {showQr && agent.qr && <img className="mx-auto h-56 w-56 rounded-md bg-white p-3" src={agent.qr} alt="Remote Control QR code" />}
+          {agent.rcUrl && <p className="break-all text-xs text-muted-foreground">{agent.rcUrl}</p>}
           <p className="text-sm text-muted-foreground">
             Status: {remoteControlLabel(agent)} · Uptime: {formatDuration(agent.launchedAt)} · PID: {agent.pid || "n/a"}
           </p>
