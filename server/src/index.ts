@@ -473,6 +473,30 @@ app.get("/api/agents/:id/raw-stream", (request, response) => {
   response.type("text/plain").send(runtime.rawLines(request.params.id).join("\n"));
 });
 
+app.post("/api/permissions/request", async (request, response) => {
+  const agentId = typeof request.body?.agentId === "string" ? request.body.agentId : "";
+  const toolName = typeof request.body?.toolName === "string" ? request.body.toolName : "tool";
+  const toolUseId = typeof request.body?.toolUseId === "string" ? request.body.toolUseId : "";
+  const token = typeof request.body?.token === "string" ? request.body.token : undefined;
+  if (!agentId || !toolUseId) {
+    response.status(400).json({ error: "Permission request is missing an agent or tool use id." });
+    return;
+  }
+
+  try {
+    response.json(
+      await runtime.requestPermission(agentId, {
+        token,
+        toolName,
+        toolUseId,
+        input: request.body?.input ?? {}
+      })
+    );
+  } catch (error) {
+    response.status(500).json({ error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
 app.get("/api/capabilities", (_request, response) => {
   response.json(capabilities);
 });

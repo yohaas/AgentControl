@@ -3936,6 +3936,11 @@ function ToolCard({
   const detail = toolDetail(event);
   const pathText = isUse ? toolPath(event.input) : "";
   const commandText = isUse ? fieldText(event.input, ["command"]) : "";
+  const awaitingPermission = isUse && event.awaitingPermission;
+
+  useEffect(() => {
+    if (awaitingPermission) setOpen(true);
+  }, [awaitingPermission]);
 
   function copyText(text: string) {
     if (!text) return;
@@ -3948,7 +3953,7 @@ function ToolCard({
     <div
       className={cn(
         "min-w-0 max-w-full rounded-md border bg-card",
-        event.kind === "tool_use" && event.awaitingPermission ? "border-amber-400/50" : event.kind === "tool_result" && event.isError ? "border-red-400/50" : "border-border",
+        awaitingPermission ? "border-amber-300/70 bg-amber-500/10 shadow-[0_0_0_1px_rgba(251,191,36,0.18)]" : event.kind === "tool_result" && event.isError ? "border-red-400/50" : "border-border",
         compact ? "text-xs" : "text-sm"
       )}
     >
@@ -3956,7 +3961,7 @@ function ToolCard({
         <span className="min-w-0 flex-1">
           <span className="block truncate">
             {isUse ? `Tool: ${event.name}` : `Tool result: ${event.toolUseId}`}
-            {isUse && event.awaitingPermission && <Badge className="ml-2 border-amber-400/40 text-amber-200">awaiting permission</Badge>}
+            {awaitingPermission && <Badge className="ml-2 border-amber-300/60 bg-amber-500/15 text-amber-100">permission required</Badge>}
             {!isUse && event.isError && <Badge className="ml-2 border-red-400/40 text-red-200">error</Badge>}
           </span>
           {summary && <span className="mt-1 block truncate text-xs text-muted-foreground">{summary}</span>}
@@ -3966,19 +3971,22 @@ function ToolCard({
           <ChevronDown className={cn("h-3 w-3 transition-transform", open && "rotate-180")} />
         </Badge>
       </button>
-      {isUse && event.awaitingPermission && (
-        <div className="grid gap-2 border-t border-border px-3 py-2">
-          <p className="text-xs text-amber-100">
-            Claude wants to run {event.name}
+      {awaitingPermission && (
+        <div className="grid gap-3 border-t border-amber-300/30 bg-amber-500/10 px-3 py-3">
+          <div className="grid gap-1">
+            <p className="font-medium text-amber-50">Permission required</p>
+            <p className="text-xs text-amber-100">
+              Claude wants to run {event.name}
             {commandText ? `: ${commandText}` : pathText ? ` on ${pathText}` : ""}.
-          </p>
+            </p>
+          </div>
           <div className="flex gap-2">
-          <Button size="sm" disabled={!agentHasProcess(agent)} onClick={() => sendCommand({ type: "permission", id: agent.id, toolUseId: event.toolUseId, decision: "approve" })}>
-            Approve
-          </Button>
-          <Button size="sm" variant="outline" disabled={!agentHasProcess(agent)} onClick={() => sendCommand({ type: "permission", id: agent.id, toolUseId: event.toolUseId, decision: "deny" })}>
-            Deny
-          </Button>
+            <Button size="sm" disabled={!agentHasProcess(agent)} onClick={() => sendCommand({ type: "permission", id: agent.id, toolUseId: event.toolUseId, decision: "approve" })}>
+              Approve
+            </Button>
+            <Button size="sm" variant="outline" disabled={!agentHasProcess(agent)} onClick={() => sendCommand({ type: "permission", id: agent.id, toolUseId: event.toolUseId, decision: "deny" })}>
+              Deny
+            </Button>
           </div>
         </div>
       )}

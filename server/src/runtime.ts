@@ -1,5 +1,8 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { nanoid } from "nanoid";
 import QRCode from "qrcode";
 import type {
@@ -40,11 +43,17 @@ interface AgentProcessState {
   interrupting?: boolean;
   exiting?: boolean;
   activeTurn?: boolean;
+  permissionToken?: string;
+  pendingPermissions?: Map<string, PendingPermissionRequest>;
 }
 
 const RAW_LINE_LIMIT = 5000;
 const TRANSCRIPT_PERSIST_LIMIT = 1000;
 const RC_URL_PATTERN = /https:\/\/claude\.ai\/code\/[\w-]+/;
+const PERMISSION_MCP_SERVER_NAME = "agentcontrol_permissions";
+const PERMISSION_MCP_TOOL_NAME = `mcp__${PERMISSION_MCP_SERVER_NAME}__approval_prompt`;
+const PERMISSION_REQUEST_TIMEOUT_MS = 10 * 60 * 1000;
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const GENERIC_AGENT_DEF: AgentDef = {
   name: "Generic",
   description: "General-purpose Claude agent",
@@ -52,6 +61,27 @@ const GENERIC_AGENT_DEF: AgentDef = {
   tools: [],
   systemPrompt: ""
 };
+
+interface PendingPermissionRequest {
+  toolUseId: string;
+  toolName: string;
+  input: unknown;
+  resolve: (decision: "approve" | "deny") => void;
+  timeout: NodeJS.Timeout;
+}
+
+export interface PermissionPromptRequest {
+  token?: string;
+  toolName: string;
+  input: unknown;
+  toolUseId: string;
+}
+
+export interface PermissionPromptResult {
+  behavior: "allow" | "deny";
+  updatedInput?: unknown;
+  message?: string;
+}
 
 function now(): string {
   return new Date().toISOString();
@@ -200,6 +230,8 @@ export class AgentRuntimeManager {
       rawLines: [],
       stdoutBuffer: "",
       stderrBuffer: "",
+      permissionToken: nanoid(32),
+      pendingPermissions: new Map(),
       pendingInitialPrompt: request.initialPrompt?.trim() || undefined,
       autoApprove: request.autoApprove
     };
@@ -309,6 +341,7 @@ export class AgentRuntimeManager {
   kill(id: string): void {
     const state = this.requiredState(id);
     state.exiting = true;
+    this.denyPendingPermissions(state);
     if (state.child && !state.child.killed) {
       this.stopProcessTree(state);
     } else {
@@ -440,9 +473,60 @@ export class AgentRuntimeManager {
   permission(id: string, toolUseId: string, decision: "approve" | "deny"): void {
     const state = this.requiredState(id);
     if (!state.child || state.child.killed) throw new Error("Agent process is not running.");
-    state.child.stdin.write(`${JSON.stringify({ type: "control", subtype: "tool_permission", tool_use_id: toolUseId, decision })}\n`);
+    const pending = state.pendingPermissions?.get(toolUseId);
+    if (pending) {
+      clearTimeout(pending.timeout);
+      state.pendingPermissions?.delete(toolUseId);
+      pending.resolve(decision);
+    } else {
+      state.child.stdin.write(`${JSON.stringify({ type: "control", subtype: "tool_permission", tool_use_id: toolUseId, decision })}\n`);
+    }
+    this.resolveToolPermission(state, toolUseId);
     state.activeTurn = true;
     this.setStatus(state, "running");
+  }
+
+  async requestPermission(id: string, request: PermissionPromptRequest): Promise<PermissionPromptResult> {
+    const state = this.requiredState(id);
+    if (!state.permissionToken || request.token !== state.permissionToken) {
+      throw new Error("Permission request token is invalid.");
+    }
+    const toolUseId = request.toolUseId.trim();
+    if (!toolUseId) throw new Error("Permission request is missing a tool use id.");
+
+    this.markToolAwaitingPermission(state, {
+      toolUseId,
+      name: request.toolName || "tool",
+      input: request.input ?? {}
+    });
+
+    const decision = await new Promise<"approve" | "deny">((resolve) => {
+      const timeout = setTimeout(() => {
+        state.pendingPermissions?.delete(toolUseId);
+        this.resolveToolPermission(state, toolUseId);
+        resolve("deny");
+      }, PERMISSION_REQUEST_TIMEOUT_MS);
+      state.pendingPermissions ??= new Map();
+      state.pendingPermissions.set(toolUseId, {
+        toolUseId,
+        toolName: request.toolName || "tool",
+        input: request.input ?? {},
+        resolve,
+        timeout
+      });
+    });
+
+    if (decision === "approve") {
+      return {
+        behavior: "allow",
+        updatedInput: request.input ?? {}
+      };
+    }
+
+    return {
+      behavior: "deny",
+      message: "Denied in AgentControl."
+    };
   }
 
   clear(id: string): void {
@@ -461,6 +545,7 @@ export class AgentRuntimeManager {
     if (!state.child || state.child.killed) return;
     state.interrupting = true;
     state.activeTurn = false;
+    this.denyPendingPermissions(state);
     this.finishAssistantStream(state, false);
     this.pushTranscript(state, {
       ...eventBase(state.agent.id, state.agent.currentModel),
@@ -538,6 +623,15 @@ export class AgentRuntimeManager {
         ];
 
     args.push("--permission-mode", this.permissionMode(state), "--effort", state.agent.effort || "medium");
+    const permissionMcpConfig = this.writePermissionMcpConfig(state);
+    args.push(
+      "--mcp-config",
+      permissionMcpConfig,
+      "--permission-prompt-tool",
+      PERMISSION_MCP_TOOL_NAME,
+      "--allowedTools",
+      PERMISSION_MCP_TOOL_NAME
+    );
 
     const child = spawn(resolveClaudeCommand(), args, {
       cwd: state.agent.projectPath,
@@ -675,6 +769,49 @@ export class AgentRuntimeManager {
     return "Ask before edits";
   }
 
+  private writePermissionMcpConfig(state: AgentProcessState): string {
+    state.permissionToken ??= nanoid(32);
+    state.pendingPermissions ??= new Map();
+    const configDir = path.join(os.homedir(), ".agent-dashboard", "mcp");
+    mkdirSync(configDir, { recursive: true });
+    const script = this.permissionMcpScriptPath();
+    const configPath = path.join(configDir, `${state.agent.id}-permissions.json`);
+    const config = {
+      mcpServers: {
+        [PERMISSION_MCP_SERVER_NAME]: {
+          command: script.command,
+          args: script.args,
+          env: {
+            AGENTCONTROL_AGENT_ID: state.agent.id,
+            AGENTCONTROL_PERMISSION_TOKEN: state.permissionToken,
+            AGENTCONTROL_PERMISSION_URL: this.permissionRequestUrl()
+          }
+        }
+      }
+    };
+    writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`, "utf8");
+    return configPath;
+  }
+
+  private permissionMcpScriptPath(): { command: string; args: string[] } {
+    const compiledScript = path.join(__dirname, "permission-mcp.js");
+    if (existsSync(compiledScript)) {
+      return { command: process.execPath, args: [compiledScript] };
+    }
+
+    const sourceScript = path.resolve(__dirname, "permission-mcp.ts");
+    const tsxCommand = path.resolve(__dirname, "../../node_modules/.bin/tsx.cmd");
+    if (process.platform === "win32" && existsSync(tsxCommand)) {
+      return { command: tsxCommand, args: [sourceScript] };
+    }
+
+    return { command: "npx", args: ["tsx", sourceScript] };
+  }
+
+  private permissionRequestUrl(): string {
+    return process.env.AGENTCONTROL_PERMISSION_URL || `http://127.0.0.1:${process.env.PORT || 4317}/api/permissions/request`;
+  }
+
   private stopProcessTree(state: AgentProcessState): void {
     const child = state.child;
     if (!child || child.killed) return;
@@ -768,6 +905,12 @@ export class AgentRuntimeManager {
       for (const block of content) this.handleContentBlock(state, block);
     }
 
+    const permissionRequest = this.extractPermissionToolRequest(payload);
+    if (permissionRequest) {
+      this.markToolAwaitingPermission(state, permissionRequest);
+      return;
+    }
+
     if (type === "result") {
       this.finishAssistantStream(state, false);
       state.activeTurn = false;
@@ -792,15 +935,17 @@ export class AgentRuntimeManager {
 
     if (type === "tool_use") {
       state.activeTurn = true;
+      const toolUseId = this.trimmedStringField(value.id) || this.trimmedStringField(value.tool_use_id) || this.trimmedStringField(value.toolUseId) || transcriptId();
+      const awaitingPermission = this.isAwaitingPermissionToolUse(value);
       this.pushTranscript(state, {
         ...eventBase(state.agent.id, state.agent.currentModel),
         kind: "tool_use",
-        toolUseId: this.trimmedStringField(value.id) || transcriptId(),
+        toolUseId,
         name: this.trimmedStringField(value.name) || "tool",
         input: value.input ?? {},
-        awaitingPermission: Boolean(value.awaitingPermission || value.needs_permission)
+        awaitingPermission
       });
-      if (value.awaitingPermission || value.needs_permission) this.setStatus(state, "awaiting-permission");
+      if (awaitingPermission) this.setStatus(state, "awaiting-permission");
       else this.setStatus(state, "running");
       return;
     }
@@ -816,6 +961,92 @@ export class AgentRuntimeManager {
       });
       this.setStatus(state, "running");
     }
+  }
+
+  private isAwaitingPermissionToolUse(value: Record<string, unknown>): boolean {
+    return Boolean(
+      value.awaitingPermission ||
+        value.awaiting_permission ||
+        value.needs_permission ||
+        value.requires_permission ||
+        value.requiresPermission ||
+        value.permission_required ||
+        value.permissionRequired
+    );
+  }
+
+  private extractPermissionToolRequest(payload: Record<string, unknown>): { toolUseId: string; name: string; input: unknown } | undefined {
+    const type = String(payload.type || "").toLowerCase();
+    const subtype = String(payload.subtype || "").toLowerCase();
+    const looksLikePermission = type.includes("permission") || subtype.includes("permission");
+    if (!looksLikePermission) return undefined;
+
+    const toolUse =
+      payload.tool_use && typeof payload.tool_use === "object"
+        ? (payload.tool_use as Record<string, unknown>)
+        : payload.toolUse && typeof payload.toolUse === "object"
+          ? (payload.toolUse as Record<string, unknown>)
+          : payload.tool && typeof payload.tool === "object"
+            ? (payload.tool as Record<string, unknown>)
+            : undefined;
+    const toolUseId =
+      this.trimmedStringField(payload.tool_use_id) ||
+      this.trimmedStringField(payload.toolUseId) ||
+      this.trimmedStringField(toolUse?.id) ||
+      this.trimmedStringField(toolUse?.tool_use_id) ||
+      this.trimmedStringField(payload.id);
+    if (!toolUseId) return undefined;
+
+    return {
+      toolUseId,
+      name: this.trimmedStringField(payload.tool_name) || this.trimmedStringField(payload.toolName) || this.trimmedStringField(toolUse?.name) || "tool",
+      input: payload.input ?? toolUse?.input ?? {}
+    };
+  }
+
+  private markToolAwaitingPermission(state: AgentProcessState, request: { toolUseId: string; name: string; input: unknown }): void {
+    state.activeTurn = true;
+    const existing = state.transcript.find(
+      (event) => event.kind === "tool_use" && event.toolUseId === request.toolUseId
+    );
+    if (existing?.kind === "tool_use") {
+      this.updateTranscript(state, {
+        ...existing,
+        name: request.name || existing.name,
+        input: request.input ?? existing.input,
+        awaitingPermission: true,
+        timestamp: now()
+      });
+    } else {
+      this.pushTranscript(state, {
+        ...eventBase(state.agent.id, state.agent.currentModel),
+        kind: "tool_use",
+        toolUseId: request.toolUseId,
+        name: request.name || "tool",
+        input: request.input ?? {},
+        awaitingPermission: true
+      });
+    }
+    this.setStatus(state, "awaiting-permission");
+  }
+
+  private resolveToolPermission(state: AgentProcessState, toolUseId: string): void {
+    const existing = state.transcript.find((event) => event.kind === "tool_use" && event.toolUseId === toolUseId);
+    if (existing?.kind !== "tool_use" || !existing.awaitingPermission) return;
+    this.updateTranscript(state, {
+      ...existing,
+      awaitingPermission: false,
+      timestamp: now()
+    });
+  }
+
+  private denyPendingPermissions(state: AgentProcessState): void {
+    for (const pending of state.pendingPermissions?.values() || []) {
+      clearTimeout(pending.timeout);
+      this.resolveToolPermission(state, pending.toolUseId);
+      pending.resolve("deny");
+    }
+    state.pendingPermissions?.clear();
   }
 
   private trimmedStringField(value: unknown): string | undefined {
@@ -955,6 +1186,7 @@ export class AgentRuntimeManager {
   }
 
   private markTerminated(state: AgentProcessState, exitCode: number | null, signal: NodeJS.Signals | null): void {
+    this.denyPendingPermissions(state);
     if (state.exiting) {
       this.removeExitedAgent(state);
       return;

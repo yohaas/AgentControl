@@ -25,13 +25,25 @@ Next steps:
 Current state:
 - The shared protocol has a `permission` command.
 - Tool use events can mark `awaitingPermission`.
-- The UI has approve/deny controls in the maximized tool card.
+- Standard agents register an AgentControl MCP `approval_prompt` tool with Claude's `--permission-prompt-tool` option.
+- Permission prompt requests include the Claude `tool_use_id`, mark the transcript tool event as `awaitingPermission`, and set agent status to `awaiting-permission`.
+- The UI has prominent approve/deny controls in maximized and tile tool cards.
+
+Observed Claude 2.1.121 stream shape:
+- Permission-gated writes first appear as a normal assistant `tool_use` block with `id`, `name`, and `input`.
+- Without a permission prompt tool decision, Claude emits a user `tool_result` error for that same `tool_use_id` and reports `permission_denials` in the final `result`.
+- With `--permission-prompt-tool`, Claude calls the configured MCP tool with `tool_name`, `input`, and `tool_use_id`; AgentControl maps that call to the visible Approve/Deny prompt.
 
 Next steps:
-- Make permission requests prominent in tile mode.
 - Show tool name, command/path, risk context, and approve/deny buttons.
-- Add a clear status distinction between "running" and "waiting for permission".
 - Preserve permission request history in exports.
+
+Manual verification:
+1. Launch AgentControl and start an agent in Ask before edits mode.
+2. Ask it to create or edit a file in the current project.
+3. Confirm the agent status changes to `awaiting-permission` and the tool card shows a visible Permission required prompt.
+4. Click Deny and confirm Claude receives a denial and the file is not changed.
+5. Repeat the request, click Approve, and confirm the tool result succeeds and the file is changed.
 
 ## Tool Activity Detail
 
@@ -131,4 +143,3 @@ Next steps:
 - Show available tools per session.
 - Expose plugin enablement failures clearly.
 - Persist plugin choices per agent definition when appropriate.
-
