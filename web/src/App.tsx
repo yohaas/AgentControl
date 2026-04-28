@@ -40,6 +40,7 @@ import {
   Search,
   Send,
   Settings,
+  Split,
   SquareTerminal,
   Trash2,
   X
@@ -3494,7 +3495,7 @@ function TerminalPanel({
           New
         </Button>
         <Button variant="outline" size="sm" onClick={splitTerminal} disabled={!projects.length && !selectedProjectId}>
-          <GripVertical className="h-4 w-4" />
+          <Split className="h-4 w-4" />
           Split
         </Button>
         {!popout && (
