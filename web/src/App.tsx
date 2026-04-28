@@ -2469,6 +2469,7 @@ function LaunchDialog() {
   const [pluginScope, setPluginScope] = useState("user");
   const [installingPlugin, setInstallingPlugin] = useState<string | undefined>();
   const [enablingPlugin, setEnablingPlugin] = useState<string | undefined>();
+  const [pluginPickerExpanded, setPluginPickerExpanded] = useState(false);
   const [agentFileOpen, setAgentFileOpen] = useState(false);
 
   const projectId = selectedProjectId || "";
@@ -2500,8 +2501,9 @@ function LaunchDialog() {
     setRemoteControl(false);
     setPluginIds(nextDef?.plugins || []);
     setPluginQuery("");
+    setPluginCatalog({ installed: [], available: [], marketplaces: [] });
+    setPluginPickerExpanded(false);
     setAgentFileOpen(false);
-    void loadPluginCatalog();
   }, [modal, projectId, projects, settings.models]);
 
   useEffect(() => {
@@ -2514,6 +2516,9 @@ function LaunchDialog() {
     const nextDef = agentOptions.find((candidate) => candidate.name === nextDefName);
     setDefName(nextDefName);
     setModel(nextDef?.defaultModel || settings.models[0] || DEFAULT_MODEL);
+    setPluginIds(nextDef?.plugins || []);
+    setPluginQuery("");
+    setPluginPickerExpanded(false);
     setAgentFileOpen(false);
   }
 
@@ -2557,6 +2562,13 @@ function LaunchDialog() {
       addError(error instanceof Error ? error.message : String(error));
     } finally {
       setEnablingPlugin(undefined);
+    }
+  }
+
+  async function expandPluginPicker() {
+    setPluginPickerExpanded(true);
+    if (pluginCatalog.installed.length === 0 && pluginCatalog.available.length === 0) {
+      await loadPluginCatalog();
     }
   }
 
@@ -2625,16 +2637,18 @@ function LaunchDialog() {
       { id: string; name: string; description?: string; marketplaceName?: string; selectedOnly?: boolean }
     >();
     for (const row of selectedPluginRows) rowsById.set(row.id, row);
-    for (const plugin of pluginCatalog.installed) {
-      rowsById.set(plugin.name, { id: plugin.name, name: plugin.name });
-    }
-    for (const plugin of pluginCatalog.available) {
-      rowsById.set(plugin.pluginId, {
-        id: plugin.pluginId,
-        name: plugin.name,
-        description: plugin.description,
-        marketplaceName: plugin.marketplaceName
-      });
+    if (pluginPickerExpanded) {
+      for (const plugin of pluginCatalog.installed) {
+        rowsById.set(plugin.name, { id: plugin.name, name: plugin.name });
+      }
+      for (const plugin of pluginCatalog.available) {
+        rowsById.set(plugin.pluginId, {
+          id: plugin.pluginId,
+          name: plugin.name,
+          description: plugin.description,
+          marketplaceName: plugin.marketplaceName
+        });
+      }
     }
     const query = pluginQuery.trim().toLowerCase();
     return [...rowsById.values()]
@@ -2649,7 +2663,7 @@ function LaunchDialog() {
       })
       .sort((left, right) => compareSlashCommands(left.name, right.name))
       .slice(0, 120);
-  }, [pluginCatalog.available, pluginCatalog.installed, pluginQuery, selectedPluginRows]);
+  }, [pluginCatalog.available, pluginCatalog.installed, pluginPickerExpanded, pluginQuery, selectedPluginRows]);
   const pluginsChanged = !arraysEqual(pluginIds, def?.plugins || []);
 
   return (
@@ -2743,10 +2757,17 @@ function LaunchDialog() {
                 <p className="text-xs text-muted-foreground">Selections are saved to this agent definition.</p>
               </div>
               <div className="flex items-center gap-2">
-                <Button type="button" variant="outline" size="sm" onClick={() => void loadPluginCatalog()} disabled={pluginsLoading}>
-                  <RefreshCw className="h-4 w-4" />
-                  Refresh
-                </Button>
+                {pluginPickerExpanded ? (
+                  <Button type="button" variant="outline" size="sm" onClick={() => void loadPluginCatalog()} disabled={pluginsLoading}>
+                    <RefreshCw className="h-4 w-4" />
+                    Refresh
+                  </Button>
+                ) : (
+                  <Button type="button" variant="outline" size="sm" onClick={() => void expandPluginPicker()} disabled={pluginsLoading}>
+                    <Plus className="h-4 w-4" />
+                    Add Plugins
+                  </Button>
+                )}
                 <Button
                   type="button"
                   variant="outline"
@@ -2758,19 +2779,21 @@ function LaunchDialog() {
                 </Button>
               </div>
             </div>
-            <div className="grid gap-2 sm:grid-cols-[1fr_140px]">
-              <Input value={pluginQuery} onChange={(event) => setPluginQuery(event.target.value)} placeholder="Search plugins" />
-              <Select value={pluginScope} onValueChange={setPluginScope}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="user">User scope</SelectItem>
-                  <SelectItem value="project">Project scope</SelectItem>
-                  <SelectItem value="local">Local scope</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            {pluginPickerExpanded && (
+              <div className="grid gap-2 sm:grid-cols-[1fr_140px]">
+                <Input value={pluginQuery} onChange={(event) => setPluginQuery(event.target.value)} placeholder="Search plugins" />
+                <Select value={pluginScope} onValueChange={setPluginScope}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="user">User scope</SelectItem>
+                    <SelectItem value="project">Project scope</SelectItem>
+                    <SelectItem value="local">Local scope</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div className="grid max-h-56 gap-2 overflow-auto pr-1">
               {pluginsLoading ? (
                 <p className="rounded-md border border-dashed border-border px-3 py-5 text-center text-sm text-muted-foreground">
@@ -2778,7 +2801,7 @@ function LaunchDialog() {
                 </p>
               ) : pluginRows.length === 0 ? (
                 <p className="rounded-md border border-dashed border-border px-3 py-5 text-center text-sm text-muted-foreground">
-                  No plugins match.
+                  {pluginPickerExpanded ? "No plugins match." : "No plugins selected."}
                 </p>
               ) : (
                 pluginRows.map((plugin) => {
