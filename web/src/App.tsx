@@ -54,6 +54,7 @@ import {
   RefreshCw,
   Search,
   Settings,
+  Square,
   SquareSlash,
   SquareTerminal,
   Trash2,
@@ -4779,7 +4780,7 @@ function AgentTile({
                   onClick={isBusy ? stopCurrentResponse : send}
                   title={isBusy ? "Stop response" : "Send"}
                 >
-                  {isBusy ? <X className="h-4 w-4" /> : <ArrowUp className="h-4 w-4" />}
+                  {isBusy ? <Square className="h-4 w-4" /> : <ArrowUp className="h-4 w-4" />}
                 </Button>
               </div>
             </div>
@@ -4989,7 +4990,7 @@ function AgentPanelHeader({ agent }: { agent: RunningAgent }) {
       </DropdownMenu>
       {isBusy && (
         <Button variant="outline" onClick={() => sendCommand({ type: "interrupt", id: agent.id })}>
-          <X className="h-4 w-4" />
+          <Square className="h-4 w-4" />
           Stop
         </Button>
       )}
@@ -5397,7 +5398,7 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
                 onClick={isBusy ? stopCurrentResponse : send}
                 title={isBusy ? "Stop response" : "Send"}
               >
-                {isBusy ? <X className="h-4 w-4" /> : <ArrowUp className="h-4 w-4" />}
+                {isBusy ? <Square className="h-4 w-4" /> : <ArrowUp className="h-4 w-4" />}
               </Button>
             </div>
           </div>
