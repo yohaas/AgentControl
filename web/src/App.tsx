@@ -104,7 +104,7 @@ import { getSelectionInRoot, useTextSelection } from "./hooks/use-text-selection
 import { api } from "./lib/api";
 import { cn, downloadText, formatDuration, prettyJson } from "./lib/utils";
 import { connectWebSocket, disconnectWebSocket, sendCommand } from "./lib/ws-client";
-import { useAppStore } from "./store/app-store";
+import { useAppStore, type ThemeMode } from "./store/app-store";
 
 const DEFAULT_MODEL = "claude-sonnet-4-6";
 const EMPTY_TRANSCRIPT: TranscriptEvent[] = [];
@@ -199,6 +199,30 @@ const TERMINAL_DOCK_OPTIONS = [
   { value: "bottom", label: "Dock bottom", icon: PanelBottom },
   { value: "right", label: "Dock right", icon: PanelRight }
 ] as const;
+
+function applyThemeMode(themeMode: ThemeMode) {
+  const root = document.documentElement;
+  root.classList.toggle("light", themeMode === "light");
+  root.classList.toggle("dark", themeMode === "dark");
+  root.style.colorScheme = themeMode === "auto" ? "light dark" : themeMode;
+}
+
+function useThemeMode(themeMode: ThemeMode) {
+  useEffect(() => {
+    applyThemeMode(themeMode);
+  }, [themeMode]);
+}
+
+function terminalThemeFromCss() {
+  const style = window.getComputedStyle(document.documentElement);
+  const color = (name: string, alpha?: number) => `hsl(${style.getPropertyValue(name).trim()}${alpha === undefined ? "" : ` / ${alpha}`})`;
+  return {
+    background: color("--background"),
+    foreground: color("--foreground"),
+    cursor: color("--primary"),
+    selectionBackground: color("--primary", 0.35)
+  };
+}
 
 function readPoppedOutTerminalIds() {
   try {
@@ -3533,6 +3557,7 @@ function SettingsDialog() {
   const [clearOpenaiApiKey, setClearOpenaiApiKey] = useState(false);
   const [autoApprove, setAutoApprove] = useState(settings.autoApprove);
   const [defaultAgentMode, setDefaultAgentMode] = useState<AgentPermissionMode>(settings.defaultAgentMode);
+  const [themeMode, setThemeMode] = useState<ThemeMode>(settings.themeMode);
   const [tileHeight, setTileHeight] = useState(settings.tileHeight);
   const [tileColumns, setTileColumns] = useState(settings.tileColumns);
   const [pinLastSentMessage, setPinLastSentMessage] = useState(settings.pinLastSentMessage);
@@ -3555,6 +3580,7 @@ function SettingsDialog() {
     setClearOpenaiApiKey(false);
     setAutoApprove(settings.autoApprove);
     setDefaultAgentMode(settings.defaultAgentMode);
+    setThemeMode(settings.themeMode);
     setTileHeight(settings.tileHeight);
     setTileColumns(settings.tileColumns);
     setPinLastSentMessage(settings.pinLastSentMessage);
@@ -3580,6 +3606,7 @@ function SettingsDialog() {
         clearOpenaiApiKey,
         autoApprove,
         defaultAgentMode,
+        themeMode,
         tileHeight,
         tileColumns,
         pinLastSentMessage
@@ -3610,6 +3637,7 @@ function SettingsDialog() {
         builtInAgentDir,
         autoApprove,
         defaultAgentMode,
+        themeMode,
         tileHeight,
         tileColumns,
         pinLastSentMessage
@@ -3638,6 +3666,7 @@ function SettingsDialog() {
       setBuiltInAgentDir(next.builtInAgentDir || ".agent-control/built-in-agents");
       setAutoApprove(next.autoApprove);
       setDefaultAgentMode(next.defaultAgentMode);
+      setThemeMode(next.themeMode);
       setTileHeight(next.tileHeight);
       setTileColumns(next.tileColumns);
       setPinLastSentMessage(next.pinLastSentMessage);
@@ -3781,6 +3810,19 @@ function SettingsDialog() {
                     {option.label}
                   </SelectItem>
                 ))}
+              </SelectContent>
+            </Select>
+          </label>
+          <label className="grid gap-1.5 text-sm">
+            Appearance
+            <Select value={themeMode} onValueChange={(value) => setThemeMode(value as ThemeMode)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="auto">Auto</SelectItem>
+                <SelectItem value="light">Light</SelectItem>
+                <SelectItem value="dark">Dark</SelectItem>
               </SelectContent>
             </Select>
           </label>
@@ -5588,6 +5630,7 @@ function TerminalPane({
   const fitRef = useRef<FitAddon | null>(null);
   const writtenRef = useRef(0);
   const sizeRef = useRef({ cols: session.cols, rows: session.rows });
+  const themeMode = useAppStore((state) => state.settings.themeMode);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -5600,12 +5643,7 @@ function TerminalPane({
       fontSize: 13,
       lineHeight: 1.15,
       scrollback: 5000,
-      theme: {
-        background: "#09090b",
-        foreground: "#f4f4f5",
-        cursor: "#2dd4bf",
-        selectionBackground: "#2dd4bf55"
-      }
+      theme: terminalThemeFromCss()
     });
     const fit = new FitAddon();
     terminal.loadAddon(fit);
@@ -5642,6 +5680,10 @@ function TerminalPane({
       writtenRef.current = 0;
     };
   }, [session.id]);
+
+  useEffect(() => {
+    terminalRef.current?.options && (terminalRef.current.options.theme = terminalThemeFromCss());
+  }, [themeMode]);
 
   useEffect(() => {
     const terminal = terminalRef.current;
@@ -6142,9 +6184,11 @@ export function App() {
   const setTerminalOpen = useAppStore((state) => state.setTerminalOpen);
   const terminalOpen = useAppStore((state) => state.terminalOpen);
   const terminalDock = useAppStore((state) => state.settings.terminalDock);
+  const themeMode = useAppStore((state) => state.settings.themeMode);
   const [poppedOutTerminalIds, setPoppedOutTerminalIds] = useState(readPoppedOutTerminalIds);
   const terminalSideDocked = terminalOpen && (terminalDock === "left" || terminalDock === "right");
   const terminalBottomOrFloating = terminalOpen && !terminalSideDocked;
+  useThemeMode(themeMode);
 
   const updatePoppedOutTerminalIds = useCallback((updater: (ids: Set<string>) => Set<string>) => {
     setPoppedOutTerminalIds((current) => {
@@ -6257,9 +6301,11 @@ export function TerminalPopoutApp() {
   const setSelectedProject = useAppStore((state) => state.setSelectedProject);
   const setActiveTerminal = useAppStore((state) => state.setActiveTerminal);
   const addError = useAppStore((state) => state.addError);
+  const themeMode = useAppStore((state) => state.settings.themeMode);
   const params = new URLSearchParams(window.location.search);
   const requestedProjectId = params.get("projectId") || undefined;
   const requestedTerminalId = params.get("terminalId") || undefined;
+  useThemeMode(themeMode);
 
   useEffect(() => {
     void Promise.all([api.projects(), api.capabilities(), api.settings()])

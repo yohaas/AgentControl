@@ -40,9 +40,11 @@ export interface SettingsState {
   sidebarWidth: number;
   pinLastSentMessage: boolean;
   terminalDock: TerminalDockPosition;
+  themeMode: ThemeMode;
 }
 
 export type TerminalDockPosition = "float" | "left" | "bottom" | "right";
+export type ThemeMode = "auto" | "light" | "dark";
 
 interface SendDialogState {
   open: boolean;
@@ -141,6 +143,7 @@ const defaultSettings: SettingsState = {
   sidebarWidth: 280,
   pinLastSentMessage: true,
   terminalDock: "bottom",
+  themeMode: "auto",
   claudeAgentDir: ".claude/agents",
   codexAgentDir: ".codex/agents",
   openaiAgentDir: ".agent-control/openai-agents",
@@ -160,6 +163,7 @@ function normalizeSettings(settings: SettingsState): SettingsState {
   const defaultAgentMode = ["default", "acceptEdits", "plan", "bypassPermissions"].includes(settings.defaultAgentMode)
     ? settings.defaultAgentMode
     : defaultSettings.defaultAgentMode;
+  const themeMode = ["auto", "light", "dark"].includes(settings.themeMode) ? settings.themeMode : defaultSettings.themeMode;
   return {
     ...defaultSettings,
     ...settings,
@@ -168,7 +172,8 @@ function normalizeSettings(settings: SettingsState): SettingsState {
     tileHeight: clampNumber(settings.tileHeight, defaultSettings.tileHeight, 320, 760),
     tileColumns: clampNumber(settings.tileColumns, defaultSettings.tileColumns, 1, 6),
     sidebarWidth: clampNumber(settings.sidebarWidth, defaultSettings.sidebarWidth, 240, 420),
-    terminalDock
+    terminalDock,
+    themeMode
   };
 }
 

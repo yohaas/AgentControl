@@ -39,9 +39,11 @@ export interface DashboardConfig {
   sidebarWidth?: number;
   pinLastSentMessage?: boolean;
   terminalDock?: TerminalDockPosition;
+  themeMode?: ThemeMode;
 }
 
 export type TerminalDockPosition = "float" | "left" | "bottom" | "right";
+export type ThemeMode = "auto" | "light" | "dark";
 
 const configDir = path.join(os.homedir(), ".agent-dashboard");
 const configPath = path.join(configDir, "config.json");
@@ -167,4 +169,8 @@ export function resolveTerminalDock(config: DashboardConfig): TerminalDockPositi
     config.terminalDock === "bottom"
     ? config.terminalDock
     : "bottom";
+}
+
+export function resolveThemeMode(config: DashboardConfig): ThemeMode {
+  return config.themeMode === "light" || config.themeMode === "dark" || config.themeMode === "auto" ? config.themeMode : "auto";
 }

@@ -40,6 +40,7 @@ import {
   resolveProjectsRoot,
   resolveSidebarWidth,
   resolveTerminalDock,
+  resolveThemeMode,
   resolveTileColumns,
   resolveTileHeight,
   writeConfig,
@@ -1018,6 +1019,7 @@ app.get("/api/settings", (_request, response) => {
     sidebarWidth: resolveSidebarWidth(config),
     pinLastSentMessage: resolvePinLastSentMessage(config),
     terminalDock: resolveTerminalDock(config),
+    themeMode: resolveThemeMode(config),
     capabilities
   });
 });
@@ -1100,7 +1102,8 @@ app.put("/api/settings", async (request, response) => {
     tileColumns: typeof body.tileColumns === "number" ? resolveTileColumns(body) : resolveTileColumns(config),
     sidebarWidth: typeof body.sidebarWidth === "number" ? resolveSidebarWidth(body) : resolveSidebarWidth(config),
     pinLastSentMessage: typeof body.pinLastSentMessage === "boolean" ? body.pinLastSentMessage : resolvePinLastSentMessage(config),
-    terminalDock: resolveTerminalDock(body.terminalDock ? body : config)
+    terminalDock: resolveTerminalDock(body.terminalDock ? body : config),
+    themeMode: resolveThemeMode(body.themeMode ? body : config)
   });
   if (config.claudePath) process.env.AGENTCONTROL_CLAUDE_PATH = config.claudePath;
   else delete process.env.AGENTCONTROL_CLAUDE_PATH;
@@ -1142,6 +1145,7 @@ app.put("/api/settings", async (request, response) => {
     sidebarWidth: resolveSidebarWidth(config),
     pinLastSentMessage: resolvePinLastSentMessage(config),
     terminalDock: resolveTerminalDock(config),
+    themeMode: resolveThemeMode(config),
     capabilities
   });
 });
