@@ -555,6 +555,19 @@ function isDevTerminal(session: TerminalSession) {
   return session.title?.startsWith("Dev: ") || session.title === "npm run dev";
 }
 
+function stripAnsi(value: string) {
+  return value.replace(/\u001b\[[0-?]*[ -/]*[@-~]/g, "");
+}
+
+function latestTerminalLine(output: string[]) {
+  const text = stripAnsi(output.slice(-40).join(""));
+  const lines = text
+    .split(/\r?\n|\r/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  return lines.at(-1) || "";
+}
+
 function agentHasProcess(agent: RunningAgent) {
   return Boolean(agent.pid) && agent.status !== "killed" && agent.status !== "error" && agent.status !== "paused" && !agent.restorable;
 }
@@ -3343,6 +3356,7 @@ function TerminalPanel({
 function TerminalMinimizedDock({ poppedOutTerminalIds }: { poppedOutTerminalIds: Set<string> }) {
   const selectedProjectId = useAppStore((state) => state.selectedProjectId);
   const sessionsById = useAppStore((state) => state.terminalSessions);
+  const outputById = useAppStore((state) => state.terminalOutput);
   const setTerminalOpen = useAppStore((state) => state.setTerminalOpen);
   const setActiveTerminal = useAppStore((state) => state.setActiveTerminal);
   const sessions = useMemo(
@@ -3353,6 +3367,7 @@ function TerminalMinimizedDock({ poppedOutTerminalIds }: { poppedOutTerminalIds:
     [poppedOutTerminalIds, sessionsById, selectedProjectId]
   );
   const latest = sessions[sessions.length - 1];
+  const line = latest ? latestTerminalLine(outputById[latest.id] || []) : "";
   if (!latest) return null;
 
   function restore() {
@@ -3370,7 +3385,9 @@ function TerminalMinimizedDock({ poppedOutTerminalIds }: { poppedOutTerminalIds:
       <SquareTerminal className="h-4 w-4 text-primary" />
       <span className="text-sm font-medium">Terminal</span>
       <Badge>{sessions.length}</Badge>
-      <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{latest.cwd}</span>
+      <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+        {line ? `${latest.title || latest.projectName || "Shell"}: ${line}` : latest.cwd}
+      </span>
     </button>
   );
 }
