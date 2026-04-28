@@ -78,7 +78,7 @@ export function disconnectWebSocket() {
 
 export function sendCommand(command: WsClientCommand) {
   if (!socket || socket.readyState !== WebSocket.OPEN) {
-    useAppStore.getState().addError("WebSocket is not connected yet.");
+    useAppStore.getState().addError("Backend server not running.");
     return;
   }
   socket.send(JSON.stringify(command));

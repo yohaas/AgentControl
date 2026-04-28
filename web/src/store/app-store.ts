@@ -234,7 +234,7 @@ function latestTerminalForProject(terminals: Record<string, TerminalSession>, pr
     .at(-1)?.id;
 }
 
-const TRANSIENT_WS_NOT_CONNECTED_ERROR = "WebSocket is not connected yet.";
+const TRANSIENT_WS_NOT_CONNECTED_ERROR = "Backend server not running.";
 
 export const useAppStore = create<AppState>((set, get) => ({
   projects: [],
