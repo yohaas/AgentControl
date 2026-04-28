@@ -9,6 +9,7 @@ import type {
   GitWorktreeMergeRequest,
   GitWorktreeRemoveRequest,
   MessageAttachment,
+  ModelProfile,
   Project,
   ProjectFileEntry
 } from "@agent-control/shared";
@@ -129,6 +130,12 @@ export const api = {
     }),
   refresh: () => json<Project[]>("/api/refresh", { method: "POST" }),
   capabilities: () => json<Capabilities>("/api/capabilities"),
+  latestModels: () =>
+    json<{
+      fetchedAt: string;
+      sourceUrls: { openai: string; codex: string };
+      providers: { openai: ModelProfile[]; codex: ModelProfile[] };
+    }>("/api/models/latest"),
   adminStatus: () => json<{ supervised: boolean; pid: number }>("/api/admin/status"),
   restartApp: () => json<{ ok: boolean }>("/api/admin/restart", { method: "POST" }),
   shutdownApp: () => json<{ ok: boolean }>("/api/admin/shutdown", { method: "POST" }),

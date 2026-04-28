@@ -22,6 +22,7 @@ import type {
   GitWorktreeRemoveRequest,
   LaunchRequest,
   MessageAttachment,
+  ModelProfile,
   Project,
   ProjectFileEntry,
   WsClientCommand,
@@ -61,6 +62,8 @@ const supervised = process.env.AGENT_CONTROL_SUPERVISED === "1";
 const ignoredContextDirs = new Set([".git", "node_modules", "dist", "build", ".next", ".turbo", ".cache", "coverage"]);
 const appAuthToken = process.env.AGENTCONTROL_AUTH_TOKEN || nanoid(48);
 const authCookieName = "agent_control_token";
+const openAiModelsDocUrl = "https://developers.openai.com/api/docs/models";
+const codexModelsDocUrl = "https://developers.openai.com/codex/models";
 
 let config = await readConfig();
 let secrets = await readSecrets();
@@ -80,6 +83,95 @@ const clients = new Set<WebSocket>();
 function isLoopbackHost(hostname: string): boolean {
   const normalized = hostname.toLowerCase();
   return normalized === "localhost" || normalized === "127.0.0.1" || normalized === "::1" || normalized === "[::1]";
+}
+
+function uniqueModelIds(ids: string[]): string[] {
+  return [...new Set(ids.map((id) => id.toLowerCase()).filter(Boolean))];
+}
+
+function openAiModelRank(id: string): [number, number, number] {
+  const match = id.match(/^gpt-(\d+)(?:\.(\d+))?(?:-(mini|nano|pro))?$/);
+  if (!match) return [0, 0, 99];
+  const family = Number(match[1]);
+  const minor = Number(match[2] || 0);
+  const variantRank = match[3] === "pro" ? 1 : match[3] === "mini" ? 2 : match[3] === "nano" ? 3 : 0;
+  return [family, minor, variantRank];
+}
+
+function sortOpenAiModels(ids: string[]): string[] {
+  return [...ids].sort((left, right) => {
+    const [leftFamily, leftMinor, leftVariant] = openAiModelRank(left);
+    const [rightFamily, rightMinor, rightVariant] = openAiModelRank(right);
+    if (leftFamily !== rightFamily) return rightFamily - leftFamily;
+    if (leftMinor !== rightMinor) return rightMinor - leftMinor;
+    return leftVariant - rightVariant;
+  });
+}
+
+function codexModelRank(id: string): [number, number, number] {
+  const match = id.match(/^gpt-(\d+)(?:\.(\d+))?-codex(?:-(spark|mini|max))?$/);
+  if (!match) return [0, 0, 99];
+  const family = Number(match[1]);
+  const minor = Number(match[2] || 0);
+  const variantRank = match[3] === "spark" ? 1 : match[3] === "max" ? 2 : match[3] === "mini" ? 3 : 0;
+  return [family, minor, variantRank];
+}
+
+function sortCodexModels(ids: string[]): string[] {
+  return [...ids].sort((left, right) => {
+    const [leftFamily, leftMinor, leftVariant] = codexModelRank(left);
+    const [rightFamily, rightMinor, rightVariant] = codexModelRank(right);
+    if (leftFamily !== rightFamily) return rightFamily - leftFamily;
+    if (leftMinor !== rightMinor) return rightMinor - leftMinor;
+    return leftVariant - rightVariant;
+  });
+}
+
+function modelProfiles(ids: string[], provider: "codex" | "openai"): ModelProfile[] {
+  return ids.map((id, index) => ({
+    id,
+    provider,
+    default: index === 0,
+    supportedEfforts: ["low", "medium", "high", "xhigh"]
+  }));
+}
+
+function parsePublishedOpenAiModels(html: string): ModelProfile[] {
+  const ids = uniqueModelIds([...html.matchAll(/\bgpt-\d+(?:\.\d+)?(?:-(?:mini|nano|pro))?\b/gi)].map((match) => match[0]));
+  return modelProfiles(sortOpenAiModels(ids), "openai");
+}
+
+function parsePublishedCodexModels(html: string): ModelProfile[] {
+  const commandIds = [...html.matchAll(/\bcodex\s+-m\s+([a-z0-9.-]+)/gi)]
+    .map((match) => match[1])
+    .filter((id) => /-codex\b/.test(id));
+  const fallbackIds = [...html.matchAll(/\bgpt-\d+(?:\.\d+)?-codex(?:-[a-z0-9]+)?\b/gi)].map((match) => match[0]);
+  return modelProfiles(sortCodexModels(uniqueModelIds(commandIds.length ? commandIds : fallbackIds)), "codex");
+}
+
+async function fetchText(url: string): Promise<string> {
+  const response = await fetch(url, {
+    headers: {
+      "User-Agent": "AgentControl model updater"
+    }
+  });
+  if (!response.ok) throw new Error(`${url} returned ${response.status}`);
+  return response.text();
+}
+
+async function fetchPublishedModels() {
+  const [openAiHtml, codexHtml] = await Promise.all([fetchText(openAiModelsDocUrl), fetchText(codexModelsDocUrl)]);
+  return {
+    fetchedAt: new Date().toISOString(),
+    sourceUrls: {
+      openai: openAiModelsDocUrl,
+      codex: codexModelsDocUrl
+    },
+    providers: {
+      openai: parsePublishedOpenAiModels(openAiHtml),
+      codex: parsePublishedCodexModels(codexHtml)
+    }
+  };
 }
 
 function isLoopbackAddress(address: string | undefined): boolean {
@@ -976,6 +1068,14 @@ app.post("/api/permissions/request", async (request, response) => {
 
 app.get("/api/capabilities", (_request, response) => {
   response.json(capabilities);
+});
+
+app.get("/api/models/latest", async (_request, response) => {
+  try {
+    response.json(await fetchPublishedModels());
+  } catch (error) {
+    response.status(502).json({ error: error instanceof Error ? error.message : String(error) });
+  }
 });
 
 app.get("/api/admin/status", (_request, response) => {

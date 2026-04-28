@@ -1417,11 +1417,13 @@ const CURRENT_OPENAI_MODEL_PROFILES = [
   { id: "gpt-5.5", provider: "openai", default: true, supportedEfforts: ["low", "medium", "high", "xhigh"] },
   { id: "gpt-5.4", provider: "openai", supportedEfforts: ["low", "medium", "high", "xhigh"] },
   { id: "gpt-5.4-mini", provider: "openai", supportedEfforts: ["low", "medium", "high", "xhigh"] },
-  { id: "gpt-5.4-nano", provider: "openai", supportedEfforts: ["low", "medium", "high", "xhigh"] }
+  { id: "gpt-5.4-nano", provider: "openai", supportedEfforts: ["low", "medium", "high", "xhigh"] },
+  { id: "gpt-5", provider: "openai", supportedEfforts: ["low", "medium", "high", "xhigh"] }
 ] satisfies ModelProfile[];
 
 const CURRENT_CODEX_MODEL_PROFILES = [
   { id: "gpt-5.3-codex", provider: "codex", default: true, supportedEfforts: ["low", "medium", "high", "xhigh"] },
+  { id: "gpt-5.3-codex-spark", provider: "codex", supportedEfforts: ["low", "medium", "high", "xhigh"] },
   { id: "gpt-5.2-codex", provider: "codex", supportedEfforts: ["low", "medium", "high", "xhigh"] },
   { id: "gpt-5.1-codex", provider: "codex", supportedEfforts: ["low", "medium", "high", "xhigh"] },
   { id: "gpt-5.1-codex-max", provider: "codex", supportedEfforts: ["low", "medium", "high", "xhigh"] },
@@ -4024,6 +4026,8 @@ function SettingsDialog() {
   const [openaiApiKey, setOpenaiApiKey] = useState("");
   const [clearAnthropicApiKey, setClearAnthropicApiKey] = useState(false);
   const [clearOpenaiApiKey, setClearOpenaiApiKey] = useState(false);
+  const [updatingModels, setUpdatingModels] = useState(false);
+  const [modelUpdateNote, setModelUpdateNote] = useState("");
   const [autoApprove, setAutoApprove] = useState(settings.autoApprove);
   const [defaultAgentMode, setDefaultAgentMode] = useState<AgentPermissionMode>(settings.defaultAgentMode);
   const [themeMode, setThemeMode] = useState<ThemeMode>(settings.themeMode);
@@ -4048,6 +4052,7 @@ function SettingsDialog() {
     setOpenaiApiKey("");
     setClearAnthropicApiKey(false);
     setClearOpenaiApiKey(false);
+    setModelUpdateNote("");
     setAutoApprove(settings.autoApprove);
     setDefaultAgentMode(settings.defaultAgentMode);
     setThemeMode(settings.themeMode);
@@ -4089,6 +4094,21 @@ function SettingsDialog() {
       setOpen(false);
     } catch (error) {
       addError(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  async function updatePublishedModels() {
+    setUpdatingModels(true);
+    setModelUpdateNote("");
+    try {
+      const latest = await api.latestModels();
+      if (latest.providers.codex.length > 0) setCodexModelsText(latest.providers.codex.map((profile) => profile.id).join("\n"));
+      if (latest.providers.openai.length > 0) setOpenaiModelsText(latest.providers.openai.map((profile) => profile.id).join("\n"));
+      setModelUpdateNote(`Updated from OpenAI docs at ${new Date(latest.fetchedAt).toLocaleString()}. Save settings to keep these lists.`);
+    } catch (error) {
+      addError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setUpdatingModels(false);
     }
   }
 
@@ -4210,6 +4230,16 @@ function SettingsDialog() {
               {label}
             </button>
           ))}
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-background/50 p-3">
+          <p className="text-xs text-muted-foreground">
+            Fetch the latest published OpenAI and Codex model IDs from the public OpenAI docs.
+          </p>
+          <Button type="button" variant="outline" size="sm" onClick={() => void updatePublishedModels()} disabled={updatingModels}>
+            <RefreshCw className={cn("h-4 w-4", updatingModels && "animate-spin")} />
+            {updatingModels ? "Updating..." : "Update Models"}
+          </Button>
+          {modelUpdateNote && <p className="basis-full text-xs text-muted-foreground">{modelUpdateNote}</p>}
         </div>
         <div className="grid gap-3">
           {settingsTab === "general" && (
