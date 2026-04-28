@@ -4747,9 +4747,10 @@ function AgentTile({
 
   async function handlePaste(event: ReactClipboardEvent<HTMLTextAreaElement>) {
     const files = pastedImageFiles(event);
+    const pastedText = event.clipboardData.getData("text/plain");
+    if (pastedText.includes("\n")) setComposerCollapsed(false);
     if (files.length === 0) return;
     event.preventDefault();
-    const pastedText = event.clipboardData.getData("text/plain");
     if (pastedText) setDraft(agent.id, insertPastedText(event.currentTarget, draft, pastedText));
     try {
       const uploaded = await uploadFiles(files);
@@ -5025,9 +5026,9 @@ function AgentTile({
               <Textarea
                 ref={inputRef}
                 className={cn(
-                  "min-h-9 resize-none overflow-y-auto border-0 bg-transparent py-2 text-sm leading-5 focus-visible:ring-0",
+                  "min-h-9 resize-none border-0 bg-transparent py-2 text-sm leading-5 focus-visible:ring-0",
                   hasMultilineDraft && "pr-10",
-                  composerExpanded ? "h-24 max-h-40" : "h-9"
+                  composerExpanded ? "h-24 max-h-40 overflow-y-auto" : "h-9 overflow-hidden"
                 )}
                 value={draft}
                 disabled={!canType}
@@ -5509,9 +5510,10 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
 
   async function handlePaste(event: ReactClipboardEvent<HTMLTextAreaElement>) {
     const files = pastedImageFiles(event);
+    const pastedText = event.clipboardData.getData("text/plain");
+    if (pastedText.includes("\n")) setComposerCollapsed(false);
     if (files.length === 0) return;
     event.preventDefault();
-    const pastedText = event.clipboardData.getData("text/plain");
     if (pastedText) setDraft(agent.id, insertPastedText(event.currentTarget, draft, pastedText));
     try {
       const uploaded = await uploadFiles(files);
@@ -5670,9 +5672,9 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
             <Textarea
               ref={inputRef}
               className={cn(
-                "min-h-9 resize-none overflow-y-auto border-0 bg-transparent py-2 leading-5 focus-visible:ring-0",
+                "min-h-9 resize-none border-0 bg-transparent py-2 leading-5 focus-visible:ring-0",
                 hasMultilineDraft && "pr-10",
-                composerExpanded ? "h-28 max-h-48" : "h-9"
+                composerExpanded ? "h-28 max-h-48 overflow-y-auto" : "h-9 overflow-hidden"
               )}
               value={draft}
               disabled={!canType}
