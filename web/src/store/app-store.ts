@@ -139,10 +139,6 @@ function normalizeSettings(settings: SettingsState): SettingsState {
   };
 }
 
-function isProcessNotRunningError(message: string): boolean {
-  return message.includes("Agent process is not running.");
-}
-
 function mergeAgent(agent: RunningAgent, patch: Partial<RunningAgent>): RunningAgent {
   return { ...agent, ...patch };
 }
@@ -237,11 +233,13 @@ export const useAppStore = create<AppState>((set, get) => ({
   setSettings: (settings) => set({ settings: normalizeSettings(settings) }),
   setWsConnected: (connected) => set({ wsConnected: connected }),
   addError: (message) =>
-    set((state) => ({
-      errors: isProcessNotRunningError(message)
-        ? state.errors.filter((error) => !isProcessNotRunningError(error))
-        : [message, ...state.errors].slice(0, 5)
-    })),
+    set((state) => {
+      const normalized = message.trim();
+      if (!normalized) return state;
+      return {
+        errors: [normalized, ...state.errors.filter((error) => error !== normalized)].slice(0, 5)
+      };
+    }),
   dismissError: (index) => set((state) => ({ errors: state.errors.filter((_, candidateIndex) => candidateIndex !== index) })),
   hydrateSnapshot: (snapshot) =>
     set((state) => ({
