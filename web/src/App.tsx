@@ -233,13 +233,22 @@ function AgentDot({ color, className }: { color: string; className?: string }) {
   return <span className={cn("h-3 w-3 shrink-0 rounded-full", className)} style={{ background: color }} />;
 }
 
-function LastActivityText({ agent, compact = false }: { agent: RunningAgent; compact?: boolean }) {
+function LastActivityText({
+  agent,
+  compact = false,
+  timeOnly = false
+}: {
+  agent: RunningAgent;
+  compact?: boolean;
+  timeOnly?: boolean;
+}) {
+  const timestamp = agent.updatedAt || agent.launchedAt;
   return (
     <span
       className={cn("shrink-0 whitespace-nowrap text-muted-foreground", compact ? "text-[11px]" : "text-xs")}
-      title={fullLastActivity(agent.updatedAt || agent.launchedAt)}
+      title={fullLastActivity(timestamp)}
     >
-      {formatLastActivity(agent.updatedAt || agent.launchedAt)}
+      {timeOnly ? formatLastActivityTime(timestamp) : formatLastActivity(timestamp)}
     </span>
   );
 }
@@ -624,6 +633,20 @@ function formatLastActivity(value?: string) {
   const time = date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
   if (sameDay) return `Last active ${time}`;
   return `Last active ${date.toLocaleDateString([], { month: "short", day: "numeric" })} ${time}`;
+}
+
+function formatLastActivityTime(value?: string) {
+  const timestamp = timestampValue(value);
+  if (!timestamp) return "n/a";
+  const date = new Date(timestamp);
+  const today = new Date();
+  const sameDay =
+    date.getFullYear() === today.getFullYear() &&
+    date.getMonth() === today.getMonth() &&
+    date.getDate() === today.getDate();
+  const time = date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  if (sameDay) return time;
+  return `${date.toLocaleDateString([], { month: "short", day: "numeric" })} ${time}`;
 }
 
 function fullLastActivity(value?: string) {
@@ -1359,10 +1382,12 @@ function Sidebar() {
                   </span>
                   <span className="flex min-w-0 items-center gap-2">
                     <ModelText agent={agent} />
-                    <LastActivityText agent={agent} compact />
                   </span>
                 </span>
-                <StatusPill status={agent.status} />
+                <span className="flex shrink-0 flex-col items-end gap-1">
+                  <StatusPill status={agent.status} />
+                  <LastActivityText agent={agent} compact timeOnly />
+                </span>
               </button>
             ))
           )}
@@ -2259,10 +2284,10 @@ function AgentTile({
           <div className="flex min-w-0 items-center gap-1">
             <span className="truncate text-sm font-semibold">{agent.displayName}</span>
             {agent.remoteControl && <Badge className="px-1 py-0 text-[10px]">RC</Badge>}
+            <LastActivityText agent={agent} compact timeOnly />
           </div>
           <div className="flex min-w-0 items-center gap-2">
             <ModelMenu agent={agent} compact />
-            <LastActivityText agent={agent} compact />
           </div>
         </div>
         <StatusPill status={agent.status} />
@@ -2536,12 +2561,13 @@ function AgentPanelHeader({ agent }: { agent: RunningAgent }) {
     <div className="flex h-14 shrink-0 items-center gap-3 border-b border-border px-4">
       <AgentDot color={agent.color} />
       <div className="min-w-0 flex-1">
-        <div className="truncate text-sm font-semibold">
-          {agent.displayName} {agent.remoteControl && <Badge className="ml-1">RC</Badge>}
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="truncate text-sm font-semibold">{agent.displayName}</span>
+          {agent.remoteControl && <Badge>RC</Badge>}
+          <LastActivityText agent={agent} timeOnly />
         </div>
         <div className="flex min-w-0 items-center gap-2">
           <ModelMenu agent={agent} />
-          <LastActivityText agent={agent} />
         </div>
       </div>
       {agent.restorable && (
