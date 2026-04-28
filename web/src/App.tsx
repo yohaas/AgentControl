@@ -2448,14 +2448,12 @@ function AgentTile({
             {agent.restorable && (
               <DropdownMenuItem onClick={() => sendCommand({ type: "resume", id: agent.id })}>Resume</DropdownMenuItem>
             )}
-            <DropdownMenuItem onClick={() => sendCommand({ type: "kill", id: agent.id })}>
-              Close
-            </DropdownMenuItem>
             {isBusy && <DropdownMenuItem onClick={() => sendCommand({ type: "interrupt", id: agent.id })}>Stop response</DropdownMenuItem>}
             <DropdownMenuItem onClick={() => exportAgentMarkdown(agent, transcript)}>Export Markdown</DropdownMenuItem>
             <DropdownMenuItem onClick={() => exportAgentJson(agent, transcript)}>Export JSON</DropdownMenuItem>
             <DropdownMenuItem onClick={() => void exportAgentRawStream(agent, addError)}>Export Raw Stream</DropdownMenuItem>
             <DropdownMenuItem onClick={() => sendCommand({ type: "clear", id: agent.id })}>Clear Chat</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => sendCommand({ type: "kill", id: agent.id })}>Close</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
         <Button variant="ghost" size="icon" onClick={() => setSelectedAgent(agent.id)} title="Maximize">
@@ -2776,6 +2774,7 @@ function AgentPanelHeader({ agent }: { agent: RunningAgent }) {
           <DropdownMenuItem onClick={() => exportAgentJson(agent, transcripts)}>Export JSON</DropdownMenuItem>
           <DropdownMenuItem onClick={() => void exportAgentRawStream(agent, addError)}>Export Raw Stream</DropdownMenuItem>
           <DropdownMenuItem onClick={() => sendCommand({ type: "clear", id: agent.id })}>Clear Chat</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => sendCommand({ type: "kill", id: agent.id })}>Close</DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
       {isBusy && (
@@ -2784,10 +2783,6 @@ function AgentPanelHeader({ agent }: { agent: RunningAgent }) {
           Stop
         </Button>
       )}
-      <Button variant="outline" onClick={() => sendCommand({ type: "kill", id: agent.id })}>
-        <X className="h-4 w-4" />
-        Close
-      </Button>
       <Button variant="ghost" size="icon" onClick={() => setSelectedAgent(undefined)} title="Show tiles">
         <Minimize2 className="h-4 w-4" />
       </Button>
