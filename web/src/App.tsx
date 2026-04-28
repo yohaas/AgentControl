@@ -117,6 +117,14 @@ const THINKING_PHRASES = [
   "Connecting dots"
 ];
 
+const GENERIC_AGENT_DEF: AgentDef = {
+  name: "Generic",
+  description: "General-purpose Claude agent",
+  color: "hsl(210 65% 55%)",
+  tools: [],
+  systemPrompt: ""
+};
+
 interface SlashCommandSuggestion {
   value: string;
   label: string;
@@ -828,6 +836,11 @@ function SlashCommandAutocomplete({
 
 function agentsForProject(agentsById: Record<string, RunningAgent>, projectId?: string) {
   return Object.values(agentsById).filter((agent) => !projectId || agent.projectId === projectId);
+}
+
+function agentDefsWithGeneric(project?: { agents: AgentDef[] }) {
+  const agents = project?.agents || [];
+  return agents.some((agent) => agent.name.toLowerCase() === "generic") ? agents : [...agents, GENERIC_AGENT_DEF];
 }
 
 function terminalsForProject(sessionsById: Record<string, TerminalSession>, projectId?: string) {
@@ -2206,7 +2219,8 @@ function LaunchDialog() {
   const [remoteControl, setRemoteControl] = useState(false);
 
   const project = projects.find((candidate) => candidate.id === projectId);
-  const def = project?.agents.find((candidate) => candidate.name === defName);
+  const agentOptions = useMemo(() => agentDefsWithGeneric(project), [project]);
+  const def = agentOptions.find((candidate) => candidate.name === defName);
   const modelOptions = useMemo(
     () => Array.from(new Set([def?.defaultModel, ...settings.models].filter((item): item is string => Boolean(item)))),
     [def?.defaultModel, settings.models]
@@ -2216,8 +2230,9 @@ function LaunchDialog() {
     if (!modal.open) return;
     const nextProjectId = modal.projectId || useAppStore.getState().selectedProjectId || projects[0]?.id || "";
     const nextProject = projects.find((candidate) => candidate.id === nextProjectId);
-    const nextDefName = modal.defName || nextProject?.agents[0]?.name || "";
-    const nextDef = nextProject?.agents.find((candidate) => candidate.name === nextDefName);
+    const nextAgentOptions = agentDefsWithGeneric(nextProject);
+    const nextDefName = modal.defName || nextAgentOptions[0]?.name || "";
+    const nextDef = nextAgentOptions.find((candidate) => candidate.name === nextDefName);
     setProjectId(nextProjectId);
     setDefName(nextDefName);
     setDisplayName("");
@@ -2233,15 +2248,16 @@ function LaunchDialog() {
 
   function selectProject(nextProjectId: string) {
     const nextProject = projects.find((candidate) => candidate.id === nextProjectId);
-    const nextDefName = nextProject?.agents[0]?.name || "";
-    const nextDef = nextProject?.agents.find((candidate) => candidate.name === nextDefName);
+    const nextAgentOptions = agentDefsWithGeneric(nextProject);
+    const nextDefName = nextAgentOptions[0]?.name || "";
+    const nextDef = nextAgentOptions.find((candidate) => candidate.name === nextDefName);
     setProjectId(nextProjectId);
     setDefName(nextDefName);
     setModel(nextDef?.defaultModel || settings.models[0] || DEFAULT_MODEL);
   }
 
   function selectDef(nextDefName: string) {
-    const nextDef = project?.agents.find((candidate) => candidate.name === nextDefName);
+    const nextDef = agentOptions.find((candidate) => candidate.name === nextDefName);
     setDefName(nextDefName);
     setModel(nextDef?.defaultModel || settings.models[0] || DEFAULT_MODEL);
   }
@@ -2295,7 +2311,7 @@ function LaunchDialog() {
                 <SelectValue placeholder="Agent type" />
               </SelectTrigger>
               <SelectContent>
-                {project?.agents.map((agent) => (
+                {agentOptions.map((agent) => (
                   <SelectItem key={agent.name} value={agent.name}>
                     <span className="inline-flex items-center gap-2">
                       <AgentDot color={agent.color} />

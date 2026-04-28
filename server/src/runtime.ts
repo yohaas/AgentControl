@@ -45,6 +45,13 @@ interface AgentProcessState {
 const RAW_LINE_LIMIT = 5000;
 const TRANSCRIPT_PERSIST_LIMIT = 1000;
 const RC_URL_PATTERN = /https:\/\/claude\.ai\/code\/[\w-]+/;
+const GENERIC_AGENT_DEF: AgentDef = {
+  name: "Generic",
+  description: "General-purpose Claude agent",
+  color: "hsl(210 65% 55%)",
+  tools: [],
+  systemPrompt: ""
+};
 
 function now(): string {
   return new Date().toISOString();
@@ -155,7 +162,9 @@ export class AgentRuntimeManager {
   async launch(request: LaunchRequest): Promise<RunningAgent> {
     const project = this.getProjects().find((candidate) => candidate.id === request.projectId);
     if (!project) throw new Error("Project not found.");
-    const def = project.agents.find((candidate) => candidate.name === request.defName);
+    const def =
+      project.agents.find((candidate) => candidate.name === request.defName) ||
+      (request.defName.toLowerCase() === "generic" ? GENERIC_AGENT_DEF : undefined);
     if (!def) throw new Error("Agent definition not found.");
 
     if (request.remoteControl && !this.getCapabilities().supportsRemoteControl) {
