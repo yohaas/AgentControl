@@ -4279,6 +4279,56 @@ function SettingsDialog() {
       ? `${selectedProject.path}\\${currentAgentDir(agentDirBrowser)}`
       : currentAgentDir(agentDirBrowser)
     : "";
+  const settingsDirty = useMemo(
+    () =>
+      projectPaths.join("\n") !== (settings.projectPaths || []).join("\n") ||
+      claudeModelsText !== providerModelsText(settings, "claude") ||
+      codexModelsText !== providerModelsText(settings, "codex") ||
+      openaiModelsText !== providerModelsText(settings, "openai") ||
+      gitPath !== (settings.gitPath || "") ||
+      claudePath !== (settings.claudePath || "") ||
+      codexPath !== (settings.codexPath || "") ||
+      claudeAgentDir !== (settings.claudeAgentDir || ".claude/agents") ||
+      codexAgentDir !== (settings.codexAgentDir || ".codex/agents") ||
+      openaiAgentDir !== (settings.openaiAgentDir || ".agent-control/openai-agents") ||
+      builtInAgentDir !== (settings.builtInAgentDir || DEFAULT_BUILT_IN_AGENT_DIR) ||
+      Boolean(anthropicApiKey.trim()) ||
+      Boolean(openaiApiKey.trim()) ||
+      clearAnthropicApiKey ||
+      clearOpenaiApiKey ||
+      autoApprove !== settings.autoApprove ||
+      defaultAgentMode !== settings.defaultAgentMode ||
+      themeMode !== settings.themeMode ||
+      claudeRuntime !== (settings.claudeRuntime || "cli") ||
+      tileHeight !== settings.tileHeight ||
+      tileColumns !== settings.tileColumns ||
+      pinLastSentMessage !== settings.pinLastSentMessage,
+    [
+      anthropicApiKey,
+      autoApprove,
+      builtInAgentDir,
+      claudeAgentDir,
+      claudeModelsText,
+      claudePath,
+      claudeRuntime,
+      clearAnthropicApiKey,
+      clearOpenaiApiKey,
+      codexAgentDir,
+      codexModelsText,
+      codexPath,
+      defaultAgentMode,
+      gitPath,
+      openaiAgentDir,
+      openaiApiKey,
+      openaiModelsText,
+      pinLastSentMessage,
+      projectPaths,
+      settings,
+      themeMode,
+      tileColumns,
+      tileHeight
+    ]
+  );
   const settingsTabs = [
     ["general", "General"],
     ["claude", "Claude"],
@@ -4611,8 +4661,7 @@ function SettingsDialog() {
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            <Button type="button" onClick={save}>
-              <Check className="h-4 w-4" />
+            <Button type="button" onClick={save} disabled={!settingsDirty}>
               Save
             </Button>
           </div>
