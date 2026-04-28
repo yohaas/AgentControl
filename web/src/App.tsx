@@ -6048,15 +6048,32 @@ function ChatBlockPopoutButton({
   const openLaunchModal = useAppStore((state) => state.openLaunchModal);
   const openSendDialog = useAppStore((state) => state.openSendDialog);
   const addError = useAppStore((state) => state.addError);
+  const selectionRootId = useRef(`text-block-popout-${Math.random().toString(36).slice(2)}`).current;
+  const {
+    selectedText: popoutSelectedText,
+    captureSelection: capturePopoutSelection,
+    clearSelection: clearPopoutSelection,
+    getCachedSelection: getCachedPopoutSelection
+  } = useTextSelection(`#${selectionRootId}`);
   const project = projects.find((candidate) => candidate.id === source.projectId);
   const newAgentDefs = useMemo(() => agentDefsWithGeneric(project), [project]);
   const targetAgents = useMemo(
     () => Object.values(agentsById).filter((agent) => agent.projectId === source.projectId && agent.id !== source.id),
     [agentsById, source.id, source.projectId]
   );
+  const selectedText = popoutSelectedText.trim();
+  const actionScope = selectedText ? "selection" : "block";
+
+  useEffect(() => {
+    if (!open) clearPopoutSelection();
+  }, [clearPopoutSelection, open]);
+
+  function actionText() {
+    return capturePopoutSelection().trim() || getCachedPopoutSelection().trim() || text;
+  }
 
   function copyText() {
-    void navigator.clipboard.writeText(text).catch((error: unknown) => {
+    void navigator.clipboard.writeText(actionText()).catch((error: unknown) => {
       addError(error instanceof Error ? error.message : String(error));
     });
   }
@@ -6083,12 +6100,12 @@ function ChatBlockPopoutButton({
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" size="sm" onClick={copyText}>
               <Clipboard className="h-4 w-4" />
-              Copy
+              Copy {actionScope}
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm" disabled={!text.trim()}>
-                  Send to new agent
+                  Send {actionScope} to new agent
                   <ChevronDown className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
@@ -6100,7 +6117,7 @@ function ChatBlockPopoutButton({
                       openLaunchModal({
                         projectId: source.projectId,
                         defName: def.name,
-                        initialPrompt: wrapForwardedText(source, text)
+                        initialPrompt: wrapForwardedText(source, actionText())
                       });
                       setOpen(false);
                     }}
@@ -6114,7 +6131,7 @@ function ChatBlockPopoutButton({
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm" disabled={targetAgents.length === 0 || !text.trim()}>
-                  Send to existing agent
+                  Send {actionScope} to existing agent
                   <ChevronDown className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
@@ -6127,7 +6144,7 @@ function ChatBlockPopoutButton({
                       openSendDialog({
                         sourceAgentId: source.id,
                         targetAgentId: agent.id,
-                        selectedText: text,
+                        selectedText: actionText(),
                         framing: ""
                       });
                       setOpen(false);
@@ -6141,7 +6158,16 @@ function ChatBlockPopoutButton({
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
-          <pre className="max-h-[65vh] overflow-auto whitespace-pre-wrap break-words rounded-md border border-border bg-background/70 p-3 text-sm leading-6 [overflow-wrap:anywhere]">
+          <pre
+            id={selectionRootId}
+            tabIndex={0}
+            className="max-h-[65vh] overflow-auto whitespace-pre-wrap break-words rounded-md border border-border bg-background/70 p-3 text-sm leading-6 outline-none [overflow-wrap:anywhere] focus-visible:ring-2 focus-visible:ring-ring"
+            onPointerDown={(event) => {
+              if (event.button === 0) clearPopoutSelection();
+            }}
+            onMouseUp={() => capturePopoutSelection()}
+            onKeyUp={() => capturePopoutSelection()}
+          >
             {text}
           </pre>
         </DialogContent>
