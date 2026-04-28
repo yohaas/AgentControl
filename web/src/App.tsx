@@ -5559,7 +5559,7 @@ function AgentPanelHeader({ agent }: { agent: RunningAgent }) {
       </span>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="outline" size="icon">
+          <Button variant="ghost" size="icon" title="Agent actions">
             <MoreHorizontal className="h-4 w-4" />
           </Button>
         </DropdownMenuTrigger>
