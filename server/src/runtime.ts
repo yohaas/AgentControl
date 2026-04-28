@@ -35,6 +35,7 @@ interface AgentProcessState {
   autoApprove?: AutoApproveMode;
   restartModel?: string;
   restartTimer?: NodeJS.Timeout;
+  interrupting?: boolean;
 }
 
 const RAW_LINE_LIMIT = 5000;
@@ -309,6 +310,23 @@ export class AgentRuntimeManager {
     this.persist();
   }
 
+  interrupt(id: string): void {
+    const state = this.requiredState(id);
+    if (!state.child || state.child.killed) return;
+    state.interrupting = true;
+    this.finishAssistantStream(state, false);
+    this.pushTranscript(state, {
+      ...eventBase(state.agent.id, state.agent.currentModel),
+      kind: "system",
+      text: "Interrupted current response."
+    });
+    state.child.kill();
+  }
+
+  rawLines(id: string): string[] {
+    return this.states.get(id)?.rawLines.slice() || [];
+  }
+
   clearAll(projectId?: string): void {
     for (const state of this.states.values()) {
       if (projectId && state.agent.projectId !== projectId) continue;
@@ -401,6 +419,17 @@ export class AgentRuntimeManager {
     });
 
     child.on("exit", (code, signal) => {
+      if (state.interrupting) {
+        state.interrupting = false;
+        state.child = undefined;
+        state.agent.pid = undefined;
+        state.agent.restorable = Boolean(state.agent.sessionId);
+        this.setStatus(state, state.agent.sessionId ? "paused" : "interrupted");
+        if (!state.agent.sessionId) {
+          setTimeout(() => this.spawnStandard(state), 250);
+        }
+        return;
+      }
       if (state.restartModel) {
         const nextModel = state.restartModel;
         state.restartModel = undefined;
@@ -536,21 +565,27 @@ export class AgentRuntimeManager {
       return;
     }
 
+    const directText = this.extractTextDelta(payload);
+    if (directText) {
+      this.appendAssistantText(state, directText);
+      return;
+    }
+
     if (type === "content_block_start") {
       const block = (payload.content_block || payload.block) as Record<string, unknown> | undefined;
-      if (block?.type === "text") this.appendAssistantText(state, this.textField(block.text) || "");
+      if (block) this.handleContentBlock(state, block);
       return;
     }
 
     if (type === "content_block_delta") {
       const delta = (payload.delta || payload) as Record<string, unknown>;
-      const text = this.textField(delta.text) || this.textField(delta.partial_json);
+      const text = this.extractTextDelta(delta);
       if (text) this.appendAssistantText(state, text);
       return;
     }
 
     if (type === "content_block_stop") {
-      state.streamingAssistantId = undefined;
+      this.finishAssistantStream(state, false);
       return;
     }
 
@@ -566,7 +601,7 @@ export class AgentRuntimeManager {
     }
 
     if (type === "result") {
-      state.streamingAssistantId = undefined;
+      this.finishAssistantStream(state, false);
       this.setStatus(state, "idle");
     } else if (type === "error") {
       this.setStatus(state, "error", stringifyUnknown(payload));
@@ -581,7 +616,7 @@ export class AgentRuntimeManager {
     const type = String(value.type || "");
 
     if (type === "text" && typeof value.text === "string" && value.text.length > 0) {
-      this.appendAssistantText(state, value.text, true);
+      this.appendAssistantText(state, value.text, true, false);
       return;
     }
 
@@ -617,6 +652,19 @@ export class AgentRuntimeManager {
     return typeof value === "string" && value.length > 0 ? value : undefined;
   }
 
+  private extractTextDelta(payload: Record<string, unknown>): string | undefined {
+    const delta = payload.delta && typeof payload.delta === "object" ? (payload.delta as Record<string, unknown>) : undefined;
+    const message = payload.message && typeof payload.message === "object" ? (payload.message as Record<string, unknown>) : undefined;
+    const candidate =
+      this.textField(payload.text) ||
+      this.textField(payload.completion) ||
+      this.textField(payload.response) ||
+      this.textField(delta?.text) ||
+      this.textField(delta?.completion) ||
+      this.textField(message?.text);
+    return candidate;
+  }
+
   private pushTranscript(state: AgentProcessState, event: TranscriptEvent): void {
     state.transcript.push(event);
     this.broadcast({ type: "agent.transcript", id: state.agent.id, event });
@@ -630,14 +678,20 @@ export class AgentRuntimeManager {
     this.persist();
   }
 
-  private appendAssistantText(state: AgentProcessState, text: string, forceNew = false): void {
+  private appendAssistantText(state: AgentProcessState, text: string, forceNew = false, streaming = true): void {
     if (!text && !forceNew) return;
     const existing = state.streamingAssistantId
       ? state.transcript.find((event) => event.id === state.streamingAssistantId && event.kind === "assistant_text")
       : undefined;
 
-    if (forceNew && existing?.kind === "assistant_text" && existing.text === text) {
-      state.streamingAssistantId = undefined;
+    if (forceNew && existing?.kind === "assistant_text" && (existing.text === text || text.startsWith(existing.text))) {
+      this.updateTranscript(state, {
+        ...existing,
+        text,
+        streaming,
+        timestamp: now()
+      });
+      state.streamingAssistantId = streaming ? existing.id : undefined;
       return;
     }
 
@@ -645,9 +699,10 @@ export class AgentRuntimeManager {
       const event: TranscriptEvent = {
         ...eventBase(state.agent.id, state.agent.currentModel),
         kind: "assistant_text",
-        text
+        text,
+        streaming
       };
-      state.streamingAssistantId = event.id;
+      state.streamingAssistantId = streaming ? event.id : undefined;
       this.pushTranscript(state, event);
       this.setStatus(state, "running");
       return;
@@ -656,10 +711,25 @@ export class AgentRuntimeManager {
     const updated: TranscriptEvent = {
       ...existing,
       text: `${existing.text}${text}`,
+      streaming,
       timestamp: now()
     };
     this.updateTranscript(state, updated);
     this.setStatus(state, "running");
+  }
+
+  private finishAssistantStream(state: AgentProcessState, streaming: boolean): void {
+    const existing = state.streamingAssistantId
+      ? state.transcript.find((event) => event.id === state.streamingAssistantId && event.kind === "assistant_text")
+      : undefined;
+    if (existing?.kind === "assistant_text") {
+      this.updateTranscript(state, {
+        ...existing,
+        streaming,
+        timestamp: now()
+      });
+    }
+    state.streamingAssistantId = undefined;
   }
 
   private setStatus(state: AgentProcessState, status: AgentStatus, statusMessage?: string): void {

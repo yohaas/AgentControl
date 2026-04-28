@@ -7,7 +7,8 @@ export type AgentStatus =
   | "remote-controlled"
   | "error"
   | "killed"
-  | "paused";
+  | "paused"
+  | "interrupted";
 
 export type AuthMethod = "claude.ai" | "api-key" | "unknown";
 
@@ -97,6 +98,7 @@ export type TranscriptEvent =
   | (TranscriptBase & {
       kind: "assistant_text";
       text: string;
+      streaming?: boolean;
     })
   | (TranscriptBase & {
       kind: "tool_use";
@@ -297,6 +299,10 @@ export type WsClientCommand =
     }
   | {
       type: "kill";
+      id: string;
+    }
+  | {
+      type: "interrupt";
       id: string;
     }
   | {

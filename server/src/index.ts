@@ -203,6 +203,10 @@ app.get("/api/agents", (_request, response) => {
   response.json(runtime.listAgents());
 });
 
+app.get("/api/agents/:id/raw-stream", (request, response) => {
+  response.type("text/plain").send(runtime.rawLines(request.params.id).join("\n"));
+});
+
 app.get("/api/capabilities", (_request, response) => {
   response.json(capabilities);
 });
@@ -302,6 +306,9 @@ wss.on("connection", (ws) => {
           break;
         case "kill":
           runtime.kill(command.id);
+          break;
+        case "interrupt":
+          runtime.interrupt(command.id);
           break;
         case "setModel":
           runtime.setModel(command.id, command.model);

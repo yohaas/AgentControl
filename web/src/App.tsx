@@ -88,7 +88,9 @@ function StatusPill({ status }: { status: RunningAgent["status"] }) {
               ? "Remote"
               : status === "killed"
                 ? "Exited"
-                : status;
+                : status === "interrupted"
+                  ? "Interrupted"
+                  : status;
   const className =
     status === "running"
       ? "border-blue-400/40 bg-blue-500/15 text-blue-200 animate-pulse"
@@ -100,6 +102,8 @@ function StatusPill({ status }: { status: RunningAgent["status"] }) {
             ? "border-red-400/40 bg-red-500/15 text-red-200"
             : status === "killed"
               ? "border-zinc-700 bg-zinc-800 text-zinc-500"
+              : status === "interrupted"
+                ? "border-amber-400/40 bg-amber-500/15 text-amber-200"
               : status === "paused"
                 ? "border-purple-400/40 bg-purple-500/15 text-purple-200"
                 : "border-teal-400/40 bg-teal-500/15 text-teal-200";
@@ -174,6 +178,55 @@ function toolUseSummary(event: Extract<TranscriptEvent, { kind: "tool_use" }>) {
   return compactToolText(event.input);
 }
 
+function fieldText(value: unknown, keys: string[]) {
+  if (!value || typeof value !== "object") return "";
+  const record = value as Record<string, unknown>;
+  for (const key of keys) {
+    const text = toolValueText(record[key]).trim();
+    if (text) return text;
+  }
+  return "";
+}
+
+function toolPath(value: unknown) {
+  return fieldText(value, ["file_path", "path", "notebook_path", "url"]);
+}
+
+function toolSummary(event: Extract<TranscriptEvent, { kind: "tool_use" | "tool_result" }>) {
+  if (event.kind === "tool_use") {
+    const name = event.name.toLowerCase();
+    if (name.includes("bash")) return fieldText(event.input, ["command"]) || toolUseSummary(event);
+    if (name.includes("read") || name.includes("edit") || name.includes("write")) return toolPath(event.input) || toolUseSummary(event);
+    if (name.includes("grep") || name.includes("glob") || name.includes("search")) return fieldText(event.input, ["pattern", "query"]) || toolUseSummary(event);
+    return toolUseSummary(event);
+  }
+
+  const output = event.output;
+  const stdout = fieldText(output, ["stdout"]);
+  const stderr = fieldText(output, ["stderr"]);
+  const exit = fieldText(output, ["exit_code", "exitCode", "code"]);
+  if (stdout || stderr || exit) {
+    return [exit ? `exit ${exit}` : "", stdout || stderr].filter(Boolean).join(" · ");
+  }
+  return compactToolText(output, 320);
+}
+
+function toolDetail(event: Extract<TranscriptEvent, { kind: "tool_use" | "tool_result" }>) {
+  if (event.kind === "tool_use") {
+    const command = fieldText(event.input, ["command"]);
+    const pathText = toolPath(event.input);
+    const body = prettyJson(event.input);
+    return [command ? `$ ${command}` : "", pathText ? `Path: ${pathText}` : "", body].filter(Boolean).join("\n\n");
+  }
+
+  const stdout = fieldText(event.output, ["stdout"]);
+  const stderr = fieldText(event.output, ["stderr"]);
+  if (stdout || stderr) {
+    return [stdout ? `stdout\n${stdout}` : "", stderr ? `stderr\n${stderr}` : ""].filter(Boolean).join("\n\n");
+  }
+  return toolValueText(event.output);
+}
+
 function readFileAsDataUrl(file: File) {
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
@@ -237,6 +290,15 @@ function exportAgentJson(agent: RunningAgent, transcripts: TranscriptEvent[]) {
   downloadText(`${agent.displayName}.json`, JSON.stringify({ agent, transcript: transcripts }, null, 2), "application/json");
 }
 
+async function exportAgentRawStream(agent: RunningAgent, addError: (message: string) => void) {
+  try {
+    const raw = await api.rawAgentStream(agent.id);
+    downloadText(`${agent.displayName}-raw-stream.jsonl`, raw, "application/jsonl");
+  } catch (error) {
+    addError(error instanceof Error ? error.message : String(error));
+  }
+}
+
 function exportAgentMarkdown(agent: RunningAgent, transcripts: TranscriptEvent[]) {
   const lines = agent.remoteControl
     ? [`# ${agent.displayName}`, "", "Remote Control agent. Live transcript lives in claude.ai/code.", "", `Model: ${agent.currentModel}`]
@@ -254,6 +316,31 @@ function exportAgentMarkdown(agent: RunningAgent, transcripts: TranscriptEvent[]
         })
       ];
   downloadText(`${agent.displayName}.md`, lines.join("\n\n"), "text/markdown");
+}
+
+function handleNativeSlashCommand(agent: RunningAgent, text: string) {
+  const trimmed = text.trim();
+  if (!trimmed.startsWith("/")) return false;
+  const [command, ...rest] = trimmed.slice(1).split(/\s+/);
+  const arg = rest.join(" ").trim();
+
+  if (command === "clear") {
+    sendCommand({ type: "clear", id: agent.id });
+    return true;
+  }
+  if (command === "exit" || command === "quit") {
+    sendCommand({ type: "kill", id: agent.id });
+    return true;
+  }
+  if (command === "stop" || command === "interrupt") {
+    sendCommand({ type: "interrupt", id: agent.id });
+    return true;
+  }
+  if (command === "model" && arg) {
+    sendCommand({ type: "setModel", id: agent.id, model: arg });
+    return true;
+  }
+  return false;
 }
 
 function agentsForProject(agentsById: Record<string, RunningAgent>, projectId?: string) {
@@ -1213,6 +1300,10 @@ function AgentTile({
   const transcript = useAppStore((state) => state.transcripts[agent.id] || EMPTY_TRANSCRIPT);
   const draft = useAppStore((state) => state.drafts[agent.id] || "");
   const setDraft = useAppStore((state) => state.setDraft);
+  const queue = useAppStore((state) => state.messageQueues[agent.id] || []);
+  const enqueueMessage = useAppStore((state) => state.enqueueMessage);
+  const removeQueuedMessage = useAppStore((state) => state.removeQueuedMessage);
+  const popNextQueuedMessage = useAppStore((state) => state.popNextQueuedMessage);
   const addError = useAppStore((state) => state.addError);
   const setSelectedAgent = useAppStore((state) => state.setSelectedAgent);
   const setTileWidth = useAppStore((state) => state.setTileWidth);
@@ -1223,7 +1314,8 @@ function AgentTile({
   const tileRef = useRef<HTMLElement | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
-  const isBusy = agent.status === "running" || agent.status === "switching-model";
+  const isBusy = agent.status === "running" || agent.status === "switching-model" || agent.status === "awaiting-permission";
+  const canType = !agent.remoteControl && agent.status !== "killed" && agent.status !== "error" && !agent.restorable;
 
   useEffect(() => {
     const root = rootRef.current;
@@ -1235,13 +1327,31 @@ function AgentTile({
   useEffect(() => {
     if (focusedAgentId !== agent.id) return;
     tileRef.current?.scrollIntoView({ block: "nearest", inline: "nearest" });
-    if (!agent.remoteControl && !isBusy && agent.status !== "killed" && agent.status !== "error" && !agent.restorable) {
+    if (canType) {
       window.requestAnimationFrame(() => inputRef.current?.focus());
     }
-  }, [agent.id, agent.remoteControl, agent.restorable, agent.status, focusedAgentId, isBusy]);
+  }, [agent.id, canType, focusedAgentId]);
+
+  useEffect(() => {
+    if (isBusy || !canType || queue.length === 0) return;
+    const next = popNextQueuedMessage(agent.id);
+    if (!next) return;
+    sendCommand({ type: "userMessage", id: agent.id, text: next.text, attachments: next.attachments });
+  }, [agent.id, canType, isBusy, popNextQueuedMessage, queue.length]);
 
   function send() {
     if ((!draft.trim() && attachments.length === 0) || agent.remoteControl) return;
+    if (handleNativeSlashCommand(agent, draft)) {
+      setDraft(agent.id, "");
+      return;
+    }
+    if (isBusy) {
+      enqueueMessage(agent.id, { text: draft, attachments });
+      setDraft(agent.id, "");
+      setAttachments([]);
+      window.requestAnimationFrame(() => inputRef.current?.focus());
+      return;
+    }
     sendCommand({ type: "userMessage", id: agent.id, text: draft, attachments });
     setDraft(agent.id, "");
     setAttachments([]);
@@ -1331,8 +1441,10 @@ function AgentTile({
             <DropdownMenuItem onClick={() => sendCommand({ type: "kill", id: agent.id })}>
               Exit
             </DropdownMenuItem>
+            {isBusy && <DropdownMenuItem onClick={() => sendCommand({ type: "interrupt", id: agent.id })}>Stop response</DropdownMenuItem>}
             <DropdownMenuItem onClick={() => exportAgentMarkdown(agent, transcript)}>Export Markdown</DropdownMenuItem>
             <DropdownMenuItem onClick={() => exportAgentJson(agent, transcript)}>Export JSON</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => void exportAgentRawStream(agent, addError)}>Export Raw Stream</DropdownMenuItem>
             <DropdownMenuItem onClick={() => sendCommand({ type: "clear", id: agent.id })}>Clear</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -1401,10 +1513,10 @@ function AgentTile({
                 ref={inputRef}
                 className="min-h-12 resize-none text-sm"
                 value={draft}
-                disabled={isBusy || agent.status === "killed" || agent.status === "error" || agent.restorable}
+                disabled={!canType}
                 onChange={(event) => setDraft(agent.id, event.target.value)}
                 onPaste={handlePaste}
-                placeholder={isBusy ? "Agent is busy..." : "Message this agent"}
+                placeholder={isBusy ? "Queue a message..." : "Message this agent"}
                 onKeyDown={(event) => {
                   if (event.key === "Enter" && !event.shiftKey) {
                     event.preventDefault();
@@ -1413,10 +1525,19 @@ function AgentTile({
                 }}
               />
             </div>
-            <Button className="self-end" size="icon" disabled={isBusy || (!draft.trim() && attachments.length === 0)} onClick={send} title="Send">
+            <Button className="self-end" size="icon" disabled={!canType || (!draft.trim() && attachments.length === 0)} onClick={send} title={isBusy ? "Queue" : "Send"}>
               <Send className="h-4 w-4" />
             </Button>
           </div>
+          {queue.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted-foreground">
+              {queue.map((message, index) => (
+                <button key={message.id} className="rounded-md border border-border px-2 py-1 hover:bg-accent" onClick={() => removeQueuedMessage(agent.id, message.id)} title="Cancel queued message">
+                  queued {index + 1}: {message.text.slice(0, 36) || `${message.attachments.length} attachment(s)`}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
       <div
@@ -1458,6 +1579,9 @@ function TranscriptPreview({ event, agent }: { event: TranscriptEvent; agent: Ru
               ) : null
             )}
           </span>
+        )}
+        {event.kind === "assistant_text" && event.streaming && (
+          <span className="mt-2 inline-flex text-xs text-primary">streaming...</span>
         )}
       </div>
     </div>
@@ -1506,6 +1630,8 @@ function RemoteControlPanel({ agent }: { agent: RunningAgent }) {
 function AgentPanelHeader({ agent }: { agent: RunningAgent }) {
   const transcripts = useAppStore((state) => state.transcripts[agent.id] || EMPTY_TRANSCRIPT);
   const setSelectedAgent = useAppStore((state) => state.setSelectedAgent);
+  const addError = useAppStore((state) => state.addError);
+  const isBusy = agent.status === "running" || agent.status === "switching-model" || agent.status === "awaiting-permission";
 
   return (
     <div className="flex h-14 shrink-0 items-center gap-3 border-b border-border px-4">
@@ -1530,9 +1656,16 @@ function AgentPanelHeader({ agent }: { agent: RunningAgent }) {
         <DropdownMenuContent align="end">
           <DropdownMenuItem onClick={() => exportAgentMarkdown(agent, transcripts)}>Export Markdown</DropdownMenuItem>
           <DropdownMenuItem onClick={() => exportAgentJson(agent, transcripts)}>Export JSON</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => void exportAgentRawStream(agent, addError)}>Export Raw Stream</DropdownMenuItem>
           <DropdownMenuItem onClick={() => sendCommand({ type: "clear", id: agent.id })}>Clear</DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+      {isBusy && (
+        <Button variant="outline" onClick={() => sendCommand({ type: "interrupt", id: agent.id })}>
+          <X className="h-4 w-4" />
+          Stop
+        </Button>
+      )}
       <Button variant="outline" onClick={() => sendCommand({ type: "kill", id: agent.id })}>
         <X className="h-4 w-4" />
         Exit
@@ -1548,6 +1681,10 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
   const transcript = useAppStore((state) => state.transcripts[agent.id] || EMPTY_TRANSCRIPT);
   const draft = useAppStore((state) => state.drafts[agent.id] || "");
   const setDraft = useAppStore((state) => state.setDraft);
+  const queue = useAppStore((state) => state.messageQueues[agent.id] || []);
+  const enqueueMessage = useAppStore((state) => state.enqueueMessage);
+  const removeQueuedMessage = useAppStore((state) => state.removeQueuedMessage);
+  const popNextQueuedMessage = useAppStore((state) => state.popNextQueuedMessage);
   const addError = useAppStore((state) => state.addError);
   const scrollTop = useAppStore((state) => state.scrollPositions[agent.id] || 0);
   const setScrollPosition = useAppStore((state) => state.setScrollPosition);
@@ -1559,7 +1696,8 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
   const transcriptRootId = `transcript-root-${agent.id}`;
   const selection = useTextSelection(`#${transcriptRootId}`);
   const [attachments, setAttachments] = useState<MessageAttachment[]>([]);
-  const isBusy = agent.status === "running" || agent.status === "switching-model";
+  const isBusy = agent.status === "running" || agent.status === "switching-model" || agent.status === "awaiting-permission";
+  const canType = agent.status !== "killed" && agent.status !== "error" && !agent.restorable;
 
   useEffect(() => {
     const root = rootRef.current;
@@ -1574,8 +1712,26 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
     if (nearBottom) root.scrollTop = root.scrollHeight;
   }, [transcript, agent.id]);
 
+  useEffect(() => {
+    if (isBusy || !canType || queue.length === 0) return;
+    const next = popNextQueuedMessage(agent.id);
+    if (!next) return;
+    sendCommand({ type: "userMessage", id: agent.id, text: next.text, attachments: next.attachments });
+  }, [agent.id, canType, isBusy, popNextQueuedMessage, queue.length]);
+
   function send() {
     if (!draft.trim() && attachments.length === 0) return;
+    if (handleNativeSlashCommand(agent, draft)) {
+      setDraft(agent.id, "");
+      return;
+    }
+    if (isBusy) {
+      enqueueMessage(agent.id, { text: draft, attachments });
+      setDraft(agent.id, "");
+      setAttachments([]);
+      window.requestAnimationFrame(() => inputRef.current?.focus());
+      return;
+    }
     sendCommand({ type: "userMessage", id: agent.id, text: draft, attachments });
     setDraft(agent.id, "");
     setAttachments([]);
@@ -1650,10 +1806,10 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
               ref={inputRef}
               className="min-h-16 resize-none"
               value={draft}
-              disabled={isBusy || agent.status === "killed" || agent.restorable}
+              disabled={!canType}
               onChange={(event) => setDraft(agent.id, event.target.value)}
               onPaste={handlePaste}
-              placeholder={isBusy ? "Agent is busy..." : "Message this agent"}
+              placeholder={isBusy ? "Queue a message..." : "Message this agent"}
               onKeyDown={(event) => {
                 if (event.key === "Enter" && !event.shiftKey) {
                   event.preventDefault();
@@ -1662,11 +1818,20 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
               }}
             />
           </div>
-          <Button className="self-end" disabled={isBusy || (!draft.trim() && attachments.length === 0)} onClick={send}>
+          <Button className="self-end" disabled={!canType || (!draft.trim() && attachments.length === 0)} onClick={send}>
             <Send className="h-4 w-4" />
-            Send
+            {isBusy ? "Queue" : "Send"}
           </Button>
         </div>
+        {queue.length > 0 && (
+          <div className="mx-auto mt-2 flex w-full max-w-4xl flex-wrap gap-2 text-xs text-muted-foreground">
+            {queue.map((message, index) => (
+              <button key={message.id} className="rounded-md border border-border px-2 py-1 hover:bg-accent" onClick={() => removeQueuedMessage(agent.id, message.id)} title="Cancel queued message">
+                queued {index + 1}: {message.text.slice(0, 48) || `${message.attachments.length} attachment(s)`}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     </main>
   );
@@ -1817,6 +1982,9 @@ function TranscriptItem({ event, agent, query }: { event: TranscriptEvent; agent
           </Badge>
         )}
         <CollapsibleText text={event.text} query={query} />
+        {event.kind === "assistant_text" && event.streaming && (
+          <span className="mt-2 inline-flex text-xs text-primary">streaming...</span>
+        )}
         {event.kind === "user" && event.attachments && event.attachments.length > 0 && (
           <div className="mt-3 flex flex-wrap gap-2">
             {event.attachments.map((attachment) =>
@@ -1896,12 +2064,29 @@ function ToolCard({
   agent: RunningAgent;
   compact?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  const addError = useAppStore((state) => state.addError);
   const isUse = event.kind === "tool_use";
-  const summary = isUse ? toolUseSummary(event) : compactToolText(event.output, 320);
-  const detail = isUse ? prettyJson(event.input) : toolValueText(event.output);
+  const [open, setOpen] = useState((isUse && event.awaitingPermission) || (!isUse && event.isError));
+  const summary = toolSummary(event);
+  const detail = toolDetail(event);
+  const pathText = isUse ? toolPath(event.input) : "";
+  const commandText = isUse ? fieldText(event.input, ["command"]) : "";
+
+  function copyText(text: string) {
+    if (!text) return;
+    void navigator.clipboard.writeText(text).catch((error: unknown) => {
+      addError(error instanceof Error ? error.message : String(error));
+    });
+  }
+
   return (
-    <div className={cn("min-w-0 max-w-full rounded-md border border-border bg-card", compact ? "text-xs" : "text-sm")}>
+    <div
+      className={cn(
+        "min-w-0 max-w-full rounded-md border bg-card",
+        event.kind === "tool_use" && event.awaitingPermission ? "border-amber-400/50" : event.kind === "tool_result" && event.isError ? "border-red-400/50" : "border-border",
+        compact ? "text-xs" : "text-sm"
+      )}
+    >
       <button className={cn("flex w-full min-w-0 items-center justify-between gap-3 text-left", compact ? "px-2 py-2" : "px-3 py-2")} onClick={() => setOpen((value) => !value)}>
         <span className="min-w-0 flex-1">
           <span className="block truncate">
@@ -1917,17 +2102,43 @@ function ToolCard({
         </Badge>
       </button>
       {isUse && event.awaitingPermission && (
-        <div className="flex gap-2 border-t border-border px-3 py-2">
+        <div className="grid gap-2 border-t border-border px-3 py-2">
+          <p className="text-xs text-amber-100">
+            Claude wants to run {event.name}
+            {commandText ? `: ${commandText}` : pathText ? ` on ${pathText}` : ""}.
+          </p>
+          <div className="flex gap-2">
           <Button size="sm" onClick={() => sendCommand({ type: "permission", id: agent.id, toolUseId: event.toolUseId, decision: "approve" })}>
             Approve
           </Button>
           <Button size="sm" variant="outline" onClick={() => sendCommand({ type: "permission", id: agent.id, toolUseId: event.toolUseId, decision: "deny" })}>
             Deny
           </Button>
+          </div>
         </div>
       )}
       {open && (
-        <pre className="max-h-80 overflow-y-auto overflow-x-hidden whitespace-pre-wrap break-words [overflow-wrap:anywhere] border-t border-border p-3 text-xs text-muted-foreground">{detail}</pre>
+        <div className="border-t border-border">
+          <div className="flex flex-wrap gap-2 px-3 py-2">
+            {commandText && (
+              <Button size="sm" variant="outline" onClick={() => copyText(commandText)}>
+                <Clipboard className="h-3.5 w-3.5" />
+                Command
+              </Button>
+            )}
+            {pathText && (
+              <Button size="sm" variant="outline" onClick={() => copyText(pathText)}>
+                <Clipboard className="h-3.5 w-3.5" />
+                Path
+              </Button>
+            )}
+            <Button size="sm" variant="outline" onClick={() => copyText(detail)}>
+              <Clipboard className="h-3.5 w-3.5" />
+              Output
+            </Button>
+          </div>
+          <pre className="max-h-80 overflow-y-auto overflow-x-hidden whitespace-pre-wrap break-words [overflow-wrap:anywhere] border-t border-border p-3 text-xs text-muted-foreground">{detail}</pre>
+        </div>
       )}
     </div>
   );

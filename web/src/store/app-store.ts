@@ -3,6 +3,7 @@ import type {
   AgentSnapshot,
   AutoApproveMode,
   Capabilities,
+  MessageAttachment,
   Project,
   RunningAgent,
   TerminalSession,
@@ -34,6 +35,12 @@ interface LaunchModalState {
   initialPrompt?: string;
 }
 
+interface QueuedMessage {
+  id: string;
+  text: string;
+  attachments: MessageAttachment[];
+}
+
 interface AppState {
   projects: Project[];
   selectedProjectId?: string;
@@ -46,6 +53,7 @@ interface AppState {
   wsConnected: boolean;
   errors: string[];
   drafts: Record<string, string>;
+  messageQueues: Record<string, QueuedMessage[]>;
   scrollPositions: Record<string, number>;
   flashModels: Record<string, boolean>;
   tileOrder: string[];
@@ -70,6 +78,9 @@ interface AppState {
   hydrateSnapshot: (snapshot: AgentSnapshot) => void;
   handleServerEvent: (event: WsServerEvent) => void;
   setDraft: (id: string, text: string) => void;
+  enqueueMessage: (id: string, message: Omit<QueuedMessage, "id">) => void;
+  removeQueuedMessage: (id: string, messageId: string) => void;
+  popNextQueuedMessage: (id: string) => QueuedMessage | undefined;
   setScrollPosition: (id: string, top: number) => void;
   setTileOrder: (ids: string[]) => void;
   setTileWidth: (id: string, width: number) => void;
@@ -152,6 +163,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   wsConnected: false,
   errors: [],
   drafts: {},
+  messageQueues: {},
   scrollPositions: {},
   flashModels: {},
   tileOrder: [],
@@ -375,6 +387,31 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
   setDraft: (id, text) => set((state) => ({ drafts: { ...state.drafts, [id]: text } })),
+  enqueueMessage: (id, message) =>
+    set((state) => ({
+      messageQueues: {
+        ...state.messageQueues,
+        [id]: [...(state.messageQueues[id] || []), { ...message, id: `${Date.now()}-${Math.random().toString(36).slice(2)}` }]
+      }
+    })),
+  removeQueuedMessage: (id, messageId) =>
+    set((state) => ({
+      messageQueues: {
+        ...state.messageQueues,
+        [id]: (state.messageQueues[id] || []).filter((message) => message.id !== messageId)
+      }
+    })),
+  popNextQueuedMessage: (id) => {
+    const queue = get().messageQueues[id] || [];
+    const [next, ...rest] = queue;
+    set((state) => ({
+      messageQueues: {
+        ...state.messageQueues,
+        [id]: rest
+      }
+    }));
+    return next;
+  },
   setScrollPosition: (id, top) => set((state) => ({ scrollPositions: { ...state.scrollPositions, [id]: top } })),
   setTileOrder: (ids) => set({ tileOrder: ids }),
   setTileWidth: (id, width) => set((state) => ({ tileWidths: { ...state.tileWidths, [id]: width } })),

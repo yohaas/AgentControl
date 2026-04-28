@@ -9,6 +9,11 @@ async function json<T>(input: RequestInfo, init?: RequestInit): Promise<T> {
 
 export const api = {
   projects: () => json<Project[]>("/api/projects"),
+  rawAgentStream: async (id: string) => {
+    const response = await fetch(`/api/agents/${encodeURIComponent(id)}/raw-stream`);
+    if (!response.ok) throw new Error(await response.text());
+    return response.text();
+  },
   addProject: (path: string) =>
     json<Project[]>("/api/projects", {
       method: "POST",
