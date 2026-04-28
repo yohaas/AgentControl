@@ -1612,6 +1612,12 @@ function currentPermissionMode(agent: RunningAgent): AgentPermissionMode {
   return agent.permissionMode || (agent.planMode ? "plan" : "default");
 }
 
+function nextPermissionMode(agent: RunningAgent): AgentPermissionMode {
+  const activeMode = currentPermissionMode(agent);
+  const activeIndex = COMPOSER_MODE_OPTIONS.findIndex((option) => option.mode === activeMode);
+  return COMPOSER_MODE_OPTIONS[(activeIndex + 1) % COMPOSER_MODE_OPTIONS.length].mode;
+}
+
 function currentEffort(agent: RunningAgent): AgentEffort {
   return agent.effort || "medium";
 }
@@ -2373,6 +2379,11 @@ function AgentTile({
   }
 
   function handleComposerKeyDown(event: ReactKeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key === "Tab" && event.shiftKey) {
+      event.preventDefault();
+      sendCommand({ type: "setPermissionMode", id: agent.id, permissionMode: nextPermissionMode(agent) });
+      return;
+    }
     if (slashSuggestions.length > 0) {
       if (event.key === "ArrowDown") {
         event.preventDefault();
@@ -2953,6 +2964,11 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
   }
 
   function handleComposerKeyDown(event: ReactKeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key === "Tab" && event.shiftKey) {
+      event.preventDefault();
+      sendCommand({ type: "setPermissionMode", id: agent.id, permissionMode: nextPermissionMode(agent) });
+      return;
+    }
     if (slashSuggestions.length > 0) {
       if (event.key === "ArrowDown") {
         event.preventDefault();
