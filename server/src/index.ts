@@ -65,6 +65,7 @@ const appAuthToken = process.env.AGENTCONTROL_AUTH_TOKEN || nanoid(48);
 const authCookieName = "agent_control_token";
 const anthropicModelsApiUrl = "https://api.anthropic.com/v1/models";
 const anthropicModelsDocUrl = "https://docs.anthropic.com/en/docs/about-claude/models/overview";
+const anthropicOpus47NewsUrl = "https://www.anthropic.com/news/claude-opus-4-7";
 const openAiModelsDocUrl = "https://developers.openai.com/api/docs/models";
 const codexModelsDocUrl = "https://developers.openai.com/codex/models";
 
@@ -170,7 +171,13 @@ function sortClaudeModels(ids: string[]): string[] {
 }
 
 function parsePublishedClaudeModels(html: string): ModelProfile[] {
-  const ids = uniqueModelIds([...html.matchAll(/\bclaude-[a-z0-9-]+(?:-\d{8}|-latest)\b/gi)].map((match) => match[0]));
+  const ids = uniqueModelIds(
+    [
+      ...html.matchAll(
+        /\b(?:claude-(?:opus|sonnet|haiku)-\d(?:-\d+)?(?:-\d{8})?|claude-\d(?:-\d+)?-(?:opus|sonnet|haiku)(?:-\d{8}|-latest)?)\b/gi
+      )
+    ].map((match) => match[0])
+  );
   return claudeModelProfiles(sortClaudeModels(ids));
 }
 
@@ -197,9 +204,10 @@ async function fetchClaudeModels(): Promise<{ sourceUrl: string; models: ModelPr
   } catch {
     // Fall back to the public docs when no Anthropic key is configured or the API is unavailable.
   }
+  const [modelsHtml, opus47Html] = await Promise.all([fetchText(anthropicModelsDocUrl), fetchText(anthropicOpus47NewsUrl)]);
   return {
     sourceUrl: anthropicModelsDocUrl,
-    models: parsePublishedClaudeModels(await fetchText(anthropicModelsDocUrl))
+    models: parsePublishedClaudeModels(`${modelsHtml}\n${opus47Html}`)
   };
 }
 
