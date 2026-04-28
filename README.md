@@ -135,7 +135,7 @@ npm run start:server
 
 ## Projects
 
-Add a project from the project menu in the top bar. The folder selector can browse local directories, or you can paste a path manually. The folder icon next to the project controls opens the selected project in the system file manager.
+Add a project from the project menu in the top bar. The folder selector can browse your home folder, configured project roots, existing project folders, and configured agent directories; you can also paste a path manually. The folder icon next to the project controls opens the selected project in the system file manager.
 
 Project behavior:
 

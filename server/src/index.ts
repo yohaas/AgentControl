@@ -410,6 +410,7 @@ function pathInsideOrEqual(parent: string, child: string): boolean {
 async function allowedDirectoryRoots(): Promise<DirectoryEntry[]> {
   await mkdir(projectsRoot, { recursive: true, mode: 0o700 }).catch(() => undefined);
   const candidates: DirectoryEntry[] = [
+    { name: "Home", path: os.homedir() },
     { name: "Projects", path: projectsRoot },
     ...projects.map((project) => ({ name: project.name, path: project.path })),
     { name: "Claude agents", path: agentDirs.claude },
@@ -1130,7 +1131,7 @@ app.get("/api/filesystem/directories", async (request, response) => {
   const requestedPath = typeof request.query.path === "string" && request.query.path.trim() ? request.query.path.trim() : roots[0]?.path || projectsRoot;
   const directoryPath = path.resolve(expandHome(requestedPath));
   if (!isAllowedDirectoryPath(directoryPath, roots)) {
-    response.status(403).json({ error: "Folder browsing is limited to configured project and agent directories." });
+    response.status(403).json({ error: "Folder browsing is limited to your home folder, configured projects, and agent directories." });
     return;
   }
 
