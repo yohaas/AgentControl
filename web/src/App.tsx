@@ -2370,13 +2370,15 @@ function AgentTile({
           <div className="flex min-w-0 items-center gap-1">
             <span className="truncate text-sm font-semibold">{agent.displayName}</span>
             {agent.remoteControl && <Badge className="px-1 py-0 text-[10px]">RC</Badge>}
-            <LastActivityText agent={agent} compact timeOnly />
           </div>
           <div className="flex min-w-0 items-center gap-2">
             <ModelMenu agent={agent} compact />
           </div>
         </div>
-        <StatusPill status={agent.status} />
+        <span className="flex shrink-0 flex-col items-end gap-1">
+          <StatusPill status={agent.status} />
+          <LastActivityText agent={agent} compact timeOnly />
+        </span>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" title="Agent actions">
@@ -2689,7 +2691,6 @@ function AgentPanelHeader({ agent }: { agent: RunningAgent }) {
         <div className="flex min-w-0 items-center gap-2">
           <span className="truncate text-sm font-semibold">{agent.displayName}</span>
           {agent.remoteControl && <Badge>RC</Badge>}
-          <LastActivityText agent={agent} timeOnly />
         </div>
         <div className="flex min-w-0 items-center gap-2">
           <ModelMenu agent={agent} />
@@ -2700,6 +2701,10 @@ function AgentPanelHeader({ agent }: { agent: RunningAgent }) {
           Resume
         </Button>
       )}
+      <span className="flex shrink-0 flex-col items-end gap-1">
+        <StatusPill status={agent.status} />
+        <LastActivityText agent={agent} compact timeOnly />
+      </span>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="outline" size="icon">
