@@ -346,7 +346,15 @@ function AgentDot({ color, className }: { color: string; className?: string }) {
   return <span className={cn("h-3 w-3 shrink-0 rounded-full", className)} style={{ background: color }} />;
 }
 
-function ProviderIcon({ provider, className }: { provider?: AgentProvider; className?: string }) {
+function ProviderIcon({
+  provider,
+  className,
+  iconClassName
+}: {
+  provider?: AgentProvider;
+  className?: string;
+  iconClassName?: string;
+}) {
   const resolvedProvider = provider || "claude";
   const Icon = resolvedProvider === "openai" ? Brain : resolvedProvider === "codex" ? Code2 : Sparkles;
   const label = providerLabel(resolvedProvider);
@@ -362,7 +370,7 @@ function ProviderIcon({ provider, className }: { provider?: AgentProvider; class
       title={label}
       aria-label={label}
     >
-      <Icon className="h-3 w-3" />
+      <Icon className={cn("h-3 w-3", iconClassName)} />
     </span>
   );
 }
@@ -2996,14 +3004,15 @@ function Sidebar() {
                   className="flex min-w-0 flex-1 items-center gap-2 rounded-sm px-1 py-1 text-left"
                   onClick={() => focusRunningAgent(agent.id)}
                 >
-                  <AgentDot color={agent.color} />
+                  <ProviderIcon provider={agent.provider} className="h-10 w-7 rounded-md" iconClassName="h-4 w-4" />
                   <span className="min-w-0 flex-1">
                     <span className="flex items-center gap-1 truncate text-sm">
+                      <AgentDot color={agent.color} className="h-2 w-2" />
                       {agent.displayName}
                       {agent.remoteControl && <Badge className="px-1 py-0 text-[10px]">RC</Badge>}
                     </span>
                     <span className="flex min-w-0 items-center gap-2">
-                      <ModelText agent={agent} />
+                      <ModelText agent={agent} showProviderIcon={false} />
                     </span>
                   </span>
                   <span className="flex shrink-0 flex-col items-end gap-1">
@@ -3283,20 +3292,28 @@ function BuiltInAgentDialog({
   );
 }
 
-function ModelText({ agent }: { agent: RunningAgent }) {
+function ModelText({ agent, showProviderIcon = true }: { agent: RunningAgent; showProviderIcon?: boolean }) {
   const flash = useAppStore((state) => state.flashModels[agent.id]);
   return (
     <span
       className={cn("flex min-w-0 items-center gap-1 rounded-sm text-xs text-muted-foreground", flash && "animate-model-flash text-primary")}
       title={agent.remoteControl ? "Last known model. May have changed in claude.ai/code." : agent.currentModel}
     >
-      <ProviderIcon provider={agent.provider} />
+      {showProviderIcon && <ProviderIcon provider={agent.provider} />}
       <span className="truncate">{agent.currentModel}</span>
     </span>
   );
 }
 
-function ModelMenu({ agent, compact = false }: { agent: RunningAgent; compact?: boolean }) {
+function ModelMenu({
+  agent,
+  compact = false,
+  showProviderIcon = true
+}: {
+  agent: RunningAgent;
+  compact?: boolean;
+  showProviderIcon?: boolean;
+}) {
   const settings = useAppStore((state) => state.settings);
   const canSwitch = !agent.remoteControl && agent.status !== "switching-model" && agentHasProcess(agent);
   const models = modelProfilesForSettings(settings).filter((profile) => profile.provider === (agent.provider || "claude"));
@@ -3312,7 +3329,7 @@ function ModelMenu({ agent, compact = false }: { agent: RunningAgent; compact?: 
           )}
           title={agent.remoteControl ? "Last known model. May have changed in claude.ai/code." : canSwitch ? "Switch model" : "Agent process is not running."}
         >
-          <ProviderIcon provider={agent.provider} />
+          {showProviderIcon && <ProviderIcon provider={agent.provider} />}
           <span className="truncate">
             {agent.status === "switching-model" ? agent.statusMessage || "Switching model..." : agent.currentModel}
           </span>
@@ -5169,14 +5186,15 @@ function AgentTile({
         >
           <GripVertical className="h-4 w-4 shrink-0" />
         </span>
-        <AgentDot color={agent.color} />
+        <ProviderIcon provider={agent.provider} className="h-9 w-7 rounded-md" iconClassName="h-4 w-4" />
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-1">
+            <AgentDot color={agent.color} className="h-2 w-2" />
             <span className="truncate text-sm font-semibold">{agent.displayName}</span>
             {agent.remoteControl && <Badge className="px-1 py-0 text-[10px]">RC</Badge>}
           </div>
           <div className="flex min-w-0 items-center gap-2">
-            <ModelMenu agent={agent} compact />
+            <ModelMenu agent={agent} compact showProviderIcon={false} />
           </div>
         </div>
         <span className="flex shrink-0 items-center gap-2">
@@ -5558,14 +5576,15 @@ function AgentPanelHeader({ agent }: { agent: RunningAgent }) {
 
   return (
     <div className="flex h-14 shrink-0 items-center gap-3 border-b border-border px-4">
-      <AgentDot color={agent.color} />
+      <ProviderIcon provider={agent.provider} className="h-10 w-8 rounded-md" iconClassName="h-4 w-4" />
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-center gap-2">
+          <AgentDot color={agent.color} className="h-2 w-2" />
           <span className="truncate text-sm font-semibold">{agent.displayName}</span>
           {agent.remoteControl && <Badge>RC</Badge>}
         </div>
         <div className="flex min-w-0 items-center gap-2">
-          <ModelMenu agent={agent} />
+          <ModelMenu agent={agent} showProviderIcon={false} />
         </div>
       </div>
       {agent.restorable && (
