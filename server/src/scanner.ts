@@ -1,4 +1,4 @@
-import { readdir, readFile, stat } from "node:fs/promises";
+import { readdir, readFile, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import matter from "gray-matter";
@@ -61,8 +61,29 @@ async function parseAgentFile(filePath: string): Promise<AgentDef | null> {
     color: stringValue(data.color) || colorForName(name),
     defaultModel: modelValue(data),
     tools: toolsValue(data.tools),
+    plugins: toolsValue(data.plugins),
     systemPrompt: parsed.content.trim()
   };
+}
+
+export async function updateAgentPlugins(projectPath: string, agentName: string, plugins: string[]): Promise<void> {
+  const agentsPath = path.join(projectPath, ".claude", "agents");
+  const agentFiles = await readdir(agentsPath, { withFileTypes: true }).catch(() => []);
+  for (const file of agentFiles.filter((item) => item.isFile() && item.name.endsWith(".md"))) {
+    const filePath = path.join(agentsPath, file.name);
+    const raw = await readFile(filePath, "utf8");
+    const parsed = matter(raw);
+    const data = parsed.data as Record<string, unknown>;
+    const name = stringValue(data.name) || path.basename(filePath, ".md");
+    if (name !== agentName) continue;
+    const next = matter.stringify(parsed.content.trim() ? `${parsed.content.trim()}\n` : "", {
+      ...data,
+      plugins
+    });
+    await writeFile(filePath, next, "utf8");
+    return;
+  }
+  throw new Error("Agent definition file not found.");
 }
 
 async function readAgentDefs(projectPath: string): Promise<AgentDef[]> {

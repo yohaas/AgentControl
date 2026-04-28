@@ -26,7 +26,7 @@ import {
 } from "./config.js";
 import { addMarketplace, enablePlugin, installPlugin, listPlugins, pluginCatalog } from "./plugins.js";
 import { AgentRuntimeManager } from "./runtime.js";
-import { scanConfiguredProjects, scanProject } from "./scanner.js";
+import { scanConfiguredProjects, scanProject, updateAgentPlugins } from "./scanner.js";
 import { TerminalManager } from "./terminal.js";
 
 const PORT = Number(process.env.PORT || 4317);
@@ -254,6 +254,26 @@ app.get("/api/projects/:id/agents", (request, response) => {
     return;
   }
   response.json(project.agents);
+});
+
+app.put("/api/projects/:id/agents/:name/plugins", async (request, response) => {
+  const project = projectById(request.params.id);
+  if (!project) {
+    response.status(404).json({ error: "Project not found." });
+    return;
+  }
+  const plugins = Array.isArray(request.body?.plugins)
+    ? request.body.plugins
+        .filter((item: unknown): item is string => typeof item === "string" && item.trim().length > 0)
+        .map((item: string) => item.trim())
+    : [];
+  try {
+    await updateAgentPlugins(project.path, request.params.name, plugins);
+    projects = config.projectPaths?.length ? await scanConfiguredProjects(config.projectPaths) : [];
+    response.json(projects);
+  } catch (error) {
+    response.status(500).json({ error: error instanceof Error ? error.message : String(error) });
+  }
 });
 
 app.get("/api/projects/:id/files", async (request, response) => {

@@ -27,6 +27,12 @@ export const api = {
     json<ProjectFileEntry[]>(
       `/api/projects/${encodeURIComponent(id)}/files${query?.trim() ? `?query=${encodeURIComponent(query.trim())}` : ""}`
     ),
+  saveAgentPlugins: (projectId: string, agentName: string, plugins: string[]) =>
+    json<Project[]>(`/api/projects/${encodeURIComponent(projectId)}/agents/${encodeURIComponent(agentName)}/plugins`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ plugins })
+    }),
   addProjectContext: (id: string, path: string) =>
     json<MessageAttachment>(`/api/projects/${encodeURIComponent(id)}/context`, {
       method: "POST",

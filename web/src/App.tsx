@@ -2336,6 +2336,8 @@ function LaunchDialog() {
   const settings = useAppStore((state) => state.settings);
   const capabilities = useAppStore((state) => state.capabilities);
   const agents = useAppStore((state) => state.agents);
+  const setProjects = useAppStore((state) => state.setProjects);
+  const addError = useAppStore((state) => state.addError);
   const closeLaunchModal = useAppStore((state) => state.closeLaunchModal);
   const [projectId, setProjectId] = useState("");
   const [defName, setDefName] = useState("");
@@ -2343,6 +2345,7 @@ function LaunchDialog() {
   const [model, setModel] = useState(DEFAULT_MODEL);
   const [initialPrompt, setInitialPrompt] = useState("");
   const [remoteControl, setRemoteControl] = useState(false);
+  const [pluginText, setPluginText] = useState("");
 
   const project = projects.find((candidate) => candidate.id === projectId);
   const agentOptions = useMemo(() => agentDefsWithGeneric(project), [project]);
@@ -2372,11 +2375,13 @@ function LaunchDialog() {
     setModel(nextDef?.defaultModel || settings.models[0] || DEFAULT_MODEL);
     setInitialPrompt(modal.initialPrompt || "");
     setRemoteControl(false);
+    setPluginText((nextDef?.plugins || []).join("\n"));
   }, [modal, projects, settings.models]);
 
   useEffect(() => {
     if (!def) return;
     setModel(def.defaultModel || settings.models[0] || DEFAULT_MODEL);
+    setPluginText((def.plugins || []).join("\n"));
   }, [def, settings.models]);
 
   function selectProject(nextProjectId: string) {
@@ -2411,6 +2416,19 @@ function LaunchDialog() {
       }
     });
     closeLaunchModal();
+  }
+
+  async function saveAgentPlugins() {
+    if (!projectId || !defName) return;
+    const plugins = pluginText
+      .split(/[\r\n,]+/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+    try {
+      setProjects(await api.saveAgentPlugins(projectId, defName, plugins));
+    } catch (error) {
+      addError(error instanceof Error ? error.message : String(error));
+    }
   }
 
   const rcDisabled = !capabilities?.supportsRemoteControl;
@@ -2502,6 +2520,20 @@ function LaunchDialog() {
                 ))}
               </SelectContent>
             </Select>
+          </label>
+          <label className="grid gap-1.5 text-sm">
+            <span className="flex items-center justify-between gap-2">
+              <span>Agent plugins</span>
+              <Button type="button" variant="outline" size="sm" onClick={() => void saveAgentPlugins()} disabled={!projectId || !defName}>
+                Save
+              </Button>
+            </span>
+            <Textarea
+              value={pluginText}
+              onChange={(event) => setPluginText(event.target.value)}
+              className="min-h-16 resize-y text-xs leading-5"
+              placeholder="One plugin id per line"
+            />
           </label>
           <label className="grid gap-1.5 text-sm">
             <span className="flex items-baseline gap-2">

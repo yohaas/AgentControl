@@ -23,6 +23,7 @@ export interface AgentDef {
   color: string;
   defaultModel?: string;
   tools: string[];
+  plugins?: string[];
   systemPrompt: string;
 }
 
