@@ -1260,6 +1260,44 @@ function pathIsDescendant(child: string, parent: string) {
   return normalizedChild !== normalizedParent && normalizedChild.startsWith(`${normalizedParent}/`);
 }
 
+function nearestParentProject(project: Project, projects: Project[]) {
+  return projects
+    .filter((candidate) => candidate.id !== project.id && pathIsDescendant(project.path, candidate.path))
+    .sort((left, right) => comparablePath(right.path, isLikelyWindowsPath(right.path)).length - comparablePath(left.path, isLikelyWindowsPath(left.path)).length)[0];
+}
+
+function projectRelativePath(project: Project, parent: Project) {
+  const childPath = project.path.trim().replace(/\\/g, "/").replace(/\/+$/g, "");
+  const parentPath = parent.path.trim().replace(/\\/g, "/").replace(/\/+$/g, "");
+  const windowsPath = isLikelyWindowsPath(project.path) || isLikelyWindowsPath(parent.path);
+  const childComparable = comparablePath(project.path, windowsPath);
+  const parentComparable = comparablePath(parent.path, windowsPath);
+  return childComparable.startsWith(`${parentComparable}/`) ? childPath.slice(parentPath.length + 1) : childPath;
+}
+
+function projectSelectorRows(projects: Project[]) {
+  const parentById = new Map<string, Project>();
+  const childrenByParentId = new Map<string, Project[]>();
+  for (const project of projects) {
+    const parent = nearestParentProject(project, projects);
+    if (!parent) continue;
+    parentById.set(project.id, parent);
+    childrenByParentId.set(parent.id, [...(childrenByParentId.get(parent.id) || []), project]);
+  }
+
+  const rows: Array<{ project: Project; parent?: Project; depth: number }> = [];
+  const addProject = (project: Project, depth: number) => {
+    const parent = parentById.get(project.id);
+    rows.push({ project, parent, depth });
+    for (const child of childrenByParentId.get(project.id) || []) addProject(child, depth + 1);
+  };
+
+  for (const project of projects) {
+    if (!parentById.has(project.id)) addProject(project, 0);
+  }
+  return rows;
+}
+
 function pathSeparatorFor(projectPath: string) {
   return isLikelyWindowsPath(projectPath) ? "\\" : "/";
 }
@@ -1389,6 +1427,7 @@ function Header() {
   const [connectionMenuOpen, setConnectionMenuOpen] = useState(false);
   const [supervised, setSupervised] = useState<boolean | undefined>();
   const selectedProject = projects.find((project) => project.id === selectedProjectId);
+  const projectRows = useMemo(() => projectSelectorRows(projects), [projects]);
   const projectAgents = useMemo(() => agentsForProject(agentsById, selectedProjectId), [agentsById, selectedProjectId]);
   const agentCount = projectAgents.length;
   const terminalCount = useMemo(
@@ -1561,11 +1600,21 @@ function Header() {
               <ChevronDown className="h-4 w-4 shrink-0" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-60">
-            {projects.map((project) => (
-              <DropdownMenuItem key={project.id} onClick={() => setSelectedProject(project.id)} className="justify-between gap-2">
-                <span className="truncate">{project.name}</span>
-                {project.id === selectedProjectId && <Check className="h-4 w-4" />}
+          <DropdownMenuContent align="end" className="w-72">
+            {projectRows.map(({ project, parent, depth }) => (
+              <DropdownMenuItem
+                key={project.id}
+                onClick={() => setSelectedProject(project.id)}
+                className={cn("justify-between gap-2", depth > 0 && "pl-7")}
+              >
+                <span className="flex min-w-0 items-center gap-2">
+                  {depth > 0 && <FolderTree className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
+                  <span className="min-w-0">
+                    <span className="block truncate">{project.name}</span>
+                    {parent && <span className="block truncate text-xs text-muted-foreground">{projectRelativePath(project, parent)}</span>}
+                  </span>
+                </span>
+                {project.id === selectedProjectId && <Check className="h-4 w-4 shrink-0" />}
               </DropdownMenuItem>
             ))}
             <DropdownMenuItem className="gap-2 border-t border-border" onClick={() => setAddProjectOpen(true)}>
