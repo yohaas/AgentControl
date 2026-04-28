@@ -8037,11 +8037,60 @@ function ErrorStack() {
   );
 }
 
+function serverStartupErrorMessage(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  if (/failed to fetch|load failed|networkerror/i.test(message)) return "The AgentControl server is not responding.";
+  return message || "The AgentControl server is not responding.";
+}
+
+function ServerOfflinePage({ error, onRetry }: { error?: string; onRetry: () => void }) {
+  return (
+    <div className="grid min-h-screen place-items-center bg-background p-6 text-foreground">
+      <main className="w-full max-w-2xl rounded-md border border-border bg-card p-6 shadow-lg">
+        <div className="mb-5 flex items-center gap-3">
+          <span className="grid h-10 w-10 place-items-center rounded-md bg-primary/10 text-primary">
+            <Bot className="h-5 w-5" />
+          </span>
+          <div>
+            <h1 className="text-lg font-semibold">Start AgentControl</h1>
+            <p className="text-sm text-muted-foreground">The web app is loaded, but the local server is not reachable.</p>
+          </div>
+        </div>
+
+        {error && (
+          <p className="mb-4 rounded-md border border-destructive/35 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            {error}
+          </p>
+        )}
+
+        <div className="grid gap-3 text-sm">
+          <p>If this web page is already open and only the API server is missing, start the backend:</p>
+          <pre className="overflow-x-auto rounded-md border border-border bg-muted p-3 font-mono text-xs">npm run dev -w server</pre>
+          <p>To start the full dev stack from the project folder:</p>
+          <pre className="overflow-x-auto rounded-md border border-border bg-muted p-3 font-mono text-xs">npm run dev</pre>
+          <p>For restart/shutdown controls inside the app, start supervised mode:</p>
+          <pre className="overflow-x-auto rounded-md border border-border bg-muted p-3 font-mono text-xs">npm run dev:supervised</pre>
+          <p className="text-muted-foreground">
+            The API should be available at <span className="font-mono">http://127.0.0.1:4317</span>. The web UI normally runs at{" "}
+            <span className="font-mono">http://127.0.0.1:4318</span>.
+          </p>
+        </div>
+
+        <div className="mt-6 flex justify-end">
+          <Button onClick={onRetry}>
+            <RefreshCw className="h-4 w-4" />
+            Retry
+          </Button>
+        </div>
+      </main>
+    </div>
+  );
+}
+
 export function App() {
   const setProjects = useAppStore((state) => state.setProjects);
   const setCapabilities = useAppStore((state) => state.setCapabilities);
   const setSettings = useAppStore((state) => state.setSettings);
-  const addError = useAppStore((state) => state.addError);
   const openLaunchModal = useAppStore((state) => state.openLaunchModal);
   const selectedAgentId = useAppStore((state) => state.selectedAgentId);
   const selectedProjectId = useAppStore((state) => state.selectedProjectId);
@@ -8053,6 +8102,8 @@ export function App() {
   const terminalDock = useAppStore((state) => state.settings.terminalDock);
   const themeMode = useAppStore((state) => state.settings.themeMode);
   const [poppedOutTerminalIds, setPoppedOutTerminalIds] = useState(readPoppedOutTerminalIds);
+  const [serverStartupError, setServerStartupError] = useState<string | undefined>();
+  const [serverRetryCount, setServerRetryCount] = useState(0);
   const terminalSideDocked = terminalOpen && (terminalDock === "left" || terminalDock === "right");
   const terminalBottomOrFloating = terminalOpen && !terminalSideDocked;
   useThemeMode(themeMode);
@@ -8081,16 +8132,24 @@ export function App() {
   );
 
   useEffect(() => {
+    let cancelled = false;
     void Promise.all([api.projects(), api.capabilities(), api.settings()])
       .then(([projects, capabilities, settings]) => {
+        if (cancelled) return;
         setProjects(projects);
         setCapabilities(capabilities);
         setSettings(settings);
+        setServerStartupError(undefined);
+        connectWebSocket();
       })
-      .catch((error: unknown) => addError(error instanceof Error ? error.message : String(error)));
-    connectWebSocket();
-    return () => disconnectWebSocket();
-  }, [addError, setCapabilities, setProjects, setSettings]);
+      .catch((error: unknown) => {
+        if (!cancelled) setServerStartupError(serverStartupErrorMessage(error));
+      });
+    return () => {
+      cancelled = true;
+      disconnectWebSocket();
+    };
+  }, [serverRetryCount, setCapabilities, setProjects, setSettings]);
 
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
@@ -8138,6 +8197,10 @@ export function App() {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [openLaunchModal, selectedAgentId, selectedProjectId, setSearchOpen, setSelectedAgent]);
+
+  if (serverStartupError) {
+    return <ServerOfflinePage error={serverStartupError} onRetry={() => setServerRetryCount((count) => count + 1)} />;
+  }
 
   return (
     <div className="flex h-screen min-w-[900px] flex-col overflow-hidden bg-background text-foreground">
