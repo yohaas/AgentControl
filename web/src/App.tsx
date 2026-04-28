@@ -1796,6 +1796,15 @@ function LaunchDialog() {
               </SelectContent>
             </Select>
           </label>
+          <label className="grid gap-1.5 text-sm">
+            Agent file prompt
+            <Textarea
+              value={def?.systemPrompt || ""}
+              readOnly
+              className="max-h-44 min-h-24 resize-y overflow-y-auto text-xs leading-5"
+              placeholder="No prompt in agent file"
+            />
+          </label>
           <label className="flex items-start gap-2 rounded-md border border-border p-3 text-sm" title={rcDisabled ? capabilities?.remoteControlReason : undefined}>
             <input
               type="checkbox"
