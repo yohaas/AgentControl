@@ -134,6 +134,8 @@ interface SlashCommandSuggestion {
   argumentHint?: string;
   source?: SlashCommandInfo["source"];
   interactive?: boolean;
+  disabled?: boolean;
+  disabledReason?: string;
 }
 
 type ToolUseEvent = Extract<TranscriptEvent, { kind: "tool_use" }>;
@@ -177,6 +179,10 @@ function normalizeUiSlashCommand(command: SlashCommandInfo | string): SlashComma
 
 function slashCommandInsertValue(command: SlashCommandInfo) {
   return command.argumentHint ? `${command.command} ` : command.command;
+}
+
+function enabledSlashSuggestion(suggestion?: SlashCommandSuggestion): SlashCommandSuggestion | undefined {
+  return suggestion && !suggestion.disabled ? suggestion : undefined;
 }
 
 const TERMINAL_DOCK_OPTIONS = [
@@ -953,7 +959,9 @@ function slashCommandSuggestions(draft: string, models: string[], sessionCommand
         description: normalized.description || "Pass through to Claude",
         argumentHint: normalized.argumentHint,
         source: normalized.source,
-        interactive: normalized.interactive
+        interactive: normalized.interactive,
+        disabled: normalized.interactive,
+        disabledReason: normalized.interactive ? "Requires Claude TUI" : undefined
       };
     }),
     { value: "/model ", label: "/model", description: "Switch this agent to another model", argumentHint: "[model]", source: "builtin" as const }
@@ -990,14 +998,18 @@ function SlashCommandAutocomplete({
         <button
           key={suggestion.value}
           type="button"
+          disabled={suggestion.disabled}
+          title={suggestion.disabledReason}
           className={cn(
             "flex w-full min-w-0 items-start gap-3 px-3 py-2 text-left hover:bg-accent",
             compact ? "text-xs" : "text-sm",
-            index === activeIndex && "bg-accent"
+            index === activeIndex && "bg-accent",
+            suggestion.disabled && "cursor-not-allowed opacity-55 hover:bg-transparent"
           )}
           onMouseEnter={() => onActiveIndexChange(index)}
           onMouseDown={(event) => {
             event.preventDefault();
+            if (suggestion.disabled) return;
             onSelect(suggestion.value);
           }}
         >
@@ -1007,7 +1019,7 @@ function SlashCommandAutocomplete({
           </span>
           <span className="min-w-0 flex-1 truncate text-muted-foreground">{suggestion.description}</span>
           {suggestion.source && <Badge className="shrink-0 text-[10px] uppercase">{suggestion.source}</Badge>}
-          {suggestion.interactive && <Badge className="shrink-0 border-amber-400/40 text-[10px] uppercase text-amber-200">TUI</Badge>}
+          {suggestion.disabled && <Badge className="shrink-0 border-amber-400/40 text-[10px] uppercase text-amber-200">Requires TUI</Badge>}
         </button>
       ))}
     </div>
@@ -3398,14 +3410,19 @@ function AgentTile({
       }
       if (event.key === "Tab") {
         event.preventDefault();
-        selectSlashCommand(slashSuggestions[activeSlashIndex]?.value || slashSuggestions[0].value);
+        const selected = enabledSlashSuggestion(slashSuggestions[activeSlashIndex]) || slashSuggestions.find((suggestion) => !suggestion.disabled);
+        if (selected) selectSlashCommand(selected.value);
         return;
       }
       if (event.key === "Enter" && !event.shiftKey) {
-        const selected = slashSuggestions[activeSlashIndex]?.value || slashSuggestions[0].value;
-        if (draft.trim() !== selected.trim()) {
+        const selected = enabledSlashSuggestion(slashSuggestions[activeSlashIndex]);
+        if (selected && draft.trim() !== selected.value.trim()) {
           event.preventDefault();
-          selectSlashCommand(selected);
+          selectSlashCommand(selected.value);
+          return;
+        }
+        if (slashSuggestions[activeSlashIndex]?.disabled) {
+          event.preventDefault();
           return;
         }
       }
@@ -4092,14 +4109,19 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
       }
       if (event.key === "Tab") {
         event.preventDefault();
-        selectSlashCommand(slashSuggestions[activeSlashIndex]?.value || slashSuggestions[0].value);
+        const selected = enabledSlashSuggestion(slashSuggestions[activeSlashIndex]) || slashSuggestions.find((suggestion) => !suggestion.disabled);
+        if (selected) selectSlashCommand(selected.value);
         return;
       }
       if (event.key === "Enter" && !event.shiftKey) {
-        const selected = slashSuggestions[activeSlashIndex]?.value || slashSuggestions[0].value;
-        if (draft.trim() !== selected.trim()) {
+        const selected = enabledSlashSuggestion(slashSuggestions[activeSlashIndex]);
+        if (selected && draft.trim() !== selected.value.trim()) {
           event.preventDefault();
-          selectSlashCommand(selected);
+          selectSlashCommand(selected.value);
+          return;
+        }
+        if (slashSuggestions[activeSlashIndex]?.disabled) {
+          event.preventDefault();
           return;
         }
       }
