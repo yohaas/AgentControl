@@ -2828,6 +2828,8 @@ function LaunchDialog() {
                             <Badge className={enabled ? "border-teal-400/40 text-teal-200" : "border-zinc-500/40 text-zinc-300"}>
                               {enabled ? "Enabled" : "Installed"}
                             </Badge>
+                          ) : plugin.selectedOnly && !pluginPickerExpanded ? (
+                            <Badge className="border-primary/40 text-primary">Selected</Badge>
                           ) : plugin.selectedOnly ? (
                             <Badge className="border-amber-400/40 text-amber-200">Missing</Badge>
                           ) : (
@@ -2848,6 +2850,10 @@ function LaunchDialog() {
                           onClick={() => void enableLaunchPlugin(plugin.id)}
                         >
                           {enabled ? "Enabled" : enablingPlugin === plugin.id ? "Enabling" : "Enable"}
+                        </Button>
+                      ) : plugin.selectedOnly && !pluginPickerExpanded ? (
+                        <Button type="button" size="sm" variant="outline" onClick={() => void expandPluginPicker()} disabled={pluginsLoading}>
+                          Add Plugins
                         </Button>
                       ) : (
                         <Button
