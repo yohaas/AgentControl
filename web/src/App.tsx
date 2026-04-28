@@ -3229,7 +3229,10 @@ function BuiltInAgentDialog({
             </label>
             <label className="grid gap-1.5 text-sm">
               Color
-              <Input value={color} onChange={(event) => setColor(event.target.value)} placeholder="#ffffff" />
+              <div className="flex items-center gap-2">
+                <AgentDot color={color || "#ffffff"} className="h-4 w-4 border border-border" />
+                <Input value={color} onChange={(event) => setColor(event.target.value)} placeholder="#ffffff" />
+              </div>
             </label>
           </div>
           <label className="grid gap-1.5 text-sm">
