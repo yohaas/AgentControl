@@ -45,6 +45,7 @@ import {
   PanelBottom,
   PanelLeft,
   PanelRight,
+  Pencil,
   PictureInPicture2,
   Play,
   Plus,
@@ -104,11 +105,11 @@ import { getSelectionInRoot, useTextSelection } from "./hooks/use-text-selection
 import { api } from "./lib/api";
 import { cn, downloadText, formatDuration, prettyJson } from "./lib/utils";
 import { connectWebSocket, disconnectWebSocket, sendCommand } from "./lib/ws-client";
-import { useAppStore, type ThemeMode } from "./store/app-store";
+import { useAppStore, type QueuedMessage, type ThemeMode } from "./store/app-store";
 
 const DEFAULT_MODEL = "claude-sonnet-4-6";
 const EMPTY_TRANSCRIPT: TranscriptEvent[] = [];
-const EMPTY_QUEUE: { id: string; text: string; attachments: MessageAttachment[] }[] = [];
+const EMPTY_QUEUE: QueuedMessage[] = [];
 const TERMINAL_DOCK_MESSAGE = "agent-control:dock-terminal";
 const TERMINAL_DOCK_STORAGE_KEY = "agent-control-terminal-dock-request";
 const TERMINAL_POPOUT_STORAGE_KEY = "agent-control-popped-out-terminals";
@@ -790,6 +791,133 @@ function ComposerAddMenu({
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+function QueuedMessageList({
+  agentId,
+  queue,
+  compact = false
+}: {
+  agentId: string;
+  queue: QueuedMessage[];
+  compact?: boolean;
+}) {
+  const updateQueuedMessage = useAppStore((state) => state.updateQueuedMessage);
+  const removeQueuedMessage = useAppStore((state) => state.removeQueuedMessage);
+  const reorderQueuedMessages = useAppStore((state) => state.reorderQueuedMessages);
+  const [expanded, setExpanded] = useState(true);
+  const [editingId, setEditingId] = useState<string | undefined>();
+  const [draggingId, setDraggingId] = useState<string | undefined>();
+
+  if (queue.length === 0) return null;
+
+  function moveMessage(dragId: string, targetId: string) {
+    if (dragId === targetId) return;
+    const currentIds = queue.map((message) => message.id);
+    const from = currentIds.indexOf(dragId);
+    const to = currentIds.indexOf(targetId);
+    if (from < 0 || to < 0) return;
+    const next = [...currentIds];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    reorderQueuedMessages(agentId, next);
+  }
+
+  return (
+    <div className="mb-2 rounded-md border border-border bg-background/60">
+      <button
+        type="button"
+        className="flex w-full items-center justify-between gap-2 px-2 py-1.5 text-left text-xs text-muted-foreground hover:bg-accent/50"
+        onClick={() => setExpanded((value) => !value)}
+      >
+        <span className="font-medium text-foreground">
+          Queued messages ({queue.length})
+        </span>
+        <ChevronDown className={cn("h-4 w-4 transition-transform", expanded && "rotate-180")} />
+      </button>
+      {expanded && (
+        <div className="grid gap-1 border-t border-border p-1.5">
+          {queue.map((message, index) => {
+            const editing = editingId === message.id;
+            const label = message.text.trim() || `${message.attachments.length} attachment(s)`;
+            return (
+              <div
+                key={message.id}
+                className={cn(
+                  "grid gap-1 rounded-md border border-border bg-card/70 p-1.5",
+                  draggingId === message.id && "opacity-50"
+                )}
+                onDragOver={(event) => {
+                  if (!draggingId) return;
+                  event.preventDefault();
+                  event.stopPropagation();
+                  event.dataTransfer.dropEffect = "move";
+                }}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  const dragId = event.dataTransfer.getData("application/x-queued-message-id") || draggingId;
+                  if (dragId) moveMessage(dragId, message.id);
+                  setDraggingId(undefined);
+                }}
+              >
+                <div className="flex min-w-0 items-center gap-1.5">
+                  <button
+                    type="button"
+                    className="cursor-grab rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+                    draggable
+                    title="Drag to reorder"
+                    onDragStart={(event) => {
+                      event.stopPropagation();
+                      setDraggingId(message.id);
+                      event.dataTransfer.effectAllowed = "move";
+                      event.dataTransfer.setData("application/x-queued-message-id", message.id);
+                    }}
+                    onDragEnd={() => setDraggingId(undefined)}
+                  >
+                    <GripVertical className="h-3.5 w-3.5" />
+                  </button>
+                  <span className="shrink-0 text-[11px] text-muted-foreground">{index + 1}</span>
+                  <span className={cn("min-w-0 flex-1 truncate text-xs", compact && "text-[11px]")} title={label}>
+                    {label}
+                  </span>
+                  {message.attachments.length > 0 && <Badge className="shrink-0">{message.attachments.length}</Badge>}
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    title={editing ? "Done editing" : "Edit queued message"}
+                    onClick={() => setEditingId((current) => (current === message.id ? undefined : message.id))}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                    title="Delete queued message"
+                    onClick={() => removeQueuedMessage(agentId, message.id)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+                {editing && (
+                  <Textarea
+                    className={cn("min-h-20 resize-y text-xs", compact && "min-h-16")}
+                    value={message.text}
+                    onChange={(event) => updateQueuedMessage(agentId, message.id, { text: event.target.value })}
+                    placeholder={message.attachments.length > 0 ? "Optional message for attachments" : "Queued message"}
+                  />
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -4029,7 +4157,6 @@ function AgentTile({
   const setDraft = useAppStore((state) => state.setDraft);
   const queue = useAppStore((state) => state.messageQueues[agent.id] || EMPTY_QUEUE);
   const enqueueMessage = useAppStore((state) => state.enqueueMessage);
-  const removeQueuedMessage = useAppStore((state) => state.removeQueuedMessage);
   const popNextQueuedMessage = useAppStore((state) => state.popNextQueuedMessage);
   const addError = useAppStore((state) => state.addError);
   const setSelectedAgent = useAppStore((state) => state.setSelectedAgent);
@@ -4463,6 +4590,7 @@ function AgentTile({
             onSelect={(attachment) => setAttachments((current) => [...current, attachment])}
             onDone={() => window.requestAnimationFrame(() => inputRef.current?.focus())}
           />
+          <QueuedMessageList agentId={agent.id} queue={queue} compact />
           <div
             className={cn(
               "relative rounded-md border border-border bg-background/80",
@@ -4552,15 +4680,6 @@ function AgentTile({
               </div>
             </div>
           </div>
-          {queue.length > 0 && (
-            <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted-foreground">
-              {queue.map((message, index) => (
-                <button key={message.id} className="rounded-md border border-border px-2 py-1 hover:bg-accent" onClick={() => removeQueuedMessage(agent.id, message.id)} title="Cancel queued message">
-                  queued {index + 1}: {message.text.slice(0, 36) || `${message.attachments.length} attachment(s)`}
-                </button>
-              ))}
-            </div>
-          )}
         </div>
       )}
       <div
@@ -4784,7 +4903,6 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
   const setDraft = useAppStore((state) => state.setDraft);
   const queue = useAppStore((state) => state.messageQueues[agent.id] || EMPTY_QUEUE);
   const enqueueMessage = useAppStore((state) => state.enqueueMessage);
-  const removeQueuedMessage = useAppStore((state) => state.removeQueuedMessage);
   const popNextQueuedMessage = useAppStore((state) => state.popNextQueuedMessage);
   const addError = useAppStore((state) => state.addError);
   const settings = useAppStore((state) => state.settings);
@@ -5093,6 +5211,7 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
           onSelect={(attachment) => setAttachments((current) => [...current, attachment])}
           onDone={() => window.requestAnimationFrame(() => inputRef.current?.focus())}
         />
+        <QueuedMessageList agentId={agent.id} queue={queue} />
         <div
           className={cn(
             "relative mx-auto w-full min-w-0 max-w-4xl rounded-md border border-border bg-background/80",
@@ -5179,15 +5298,6 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
             </div>
           </div>
         </div>
-        {queue.length > 0 && (
-          <div className="mx-auto mt-2 flex w-full max-w-4xl flex-wrap gap-2 text-xs text-muted-foreground">
-            {queue.map((message, index) => (
-              <button key={message.id} className="rounded-md border border-border px-2 py-1 hover:bg-accent" onClick={() => removeQueuedMessage(agent.id, message.id)} title="Cancel queued message">
-                queued {index + 1}: {message.text.slice(0, 48) || `${message.attachments.length} attachment(s)`}
-              </button>
-            ))}
-          </div>
-        )}
       </div>
     </main>
   );

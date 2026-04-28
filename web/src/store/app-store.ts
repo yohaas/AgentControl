@@ -61,7 +61,7 @@ interface LaunchModalState {
   initialPrompt?: string;
 }
 
-interface QueuedMessage {
+export interface QueuedMessage {
   id: string;
   text: string;
   attachments: MessageAttachment[];
@@ -107,7 +107,9 @@ interface AppState {
   handleServerEvent: (event: WsServerEvent) => void;
   setDraft: (id: string, text: string) => void;
   enqueueMessage: (id: string, message: Omit<QueuedMessage, "id">) => void;
+  updateQueuedMessage: (id: string, messageId: string, patch: Partial<Omit<QueuedMessage, "id">>) => void;
   removeQueuedMessage: (id: string, messageId: string) => void;
+  reorderQueuedMessages: (id: string, orderedIds: string[]) => void;
   popNextQueuedMessage: (id: string) => QueuedMessage | undefined;
   setScrollPosition: (id: string, top: number) => void;
   setTileOrder: (ids: string[]) => void;
@@ -534,6 +536,13 @@ export const useAppStore = create<AppState>((set, get) => ({
         [id]: [...(state.messageQueues[id] || []), { ...message, id: `${Date.now()}-${Math.random().toString(36).slice(2)}` }]
       }
     })),
+  updateQueuedMessage: (id, messageId, patch) =>
+    set((state) => ({
+      messageQueues: {
+        ...state.messageQueues,
+        [id]: (state.messageQueues[id] || []).map((message) => (message.id === messageId ? { ...message, ...patch } : message))
+      }
+    })),
   removeQueuedMessage: (id, messageId) =>
     set((state) => ({
       messageQueues: {
@@ -541,6 +550,19 @@ export const useAppStore = create<AppState>((set, get) => ({
         [id]: (state.messageQueues[id] || []).filter((message) => message.id !== messageId)
       }
     })),
+  reorderQueuedMessages: (id, orderedIds) =>
+    set((state) => {
+      const queue = state.messageQueues[id] || [];
+      const byId = new Map(queue.map((message) => [message.id, message]));
+      const ordered = orderedIds.map((messageId) => byId.get(messageId)).filter((message): message is QueuedMessage => Boolean(message));
+      const missing = queue.filter((message) => !orderedIds.includes(message.id));
+      return {
+        messageQueues: {
+          ...state.messageQueues,
+          [id]: [...ordered, ...missing]
+        }
+      };
+    }),
   popNextQueuedMessage: (id) => {
     const queue = get().messageQueues[id] || [];
     const [next, ...rest] = queue;
