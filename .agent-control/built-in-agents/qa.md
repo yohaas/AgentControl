@@ -1,6 +1,8 @@
 ---
 name: qa
 description: Quality assurance and testing specialist. Use for writing test plans, authoring unit/integration/end-to-end tests, identifying edge cases, validating behavior against requirements, and reviewing test coverage. Invoke when the task involves testing strategy, test authoring, or pre-release verification.
+provider: claude
+defaultModel: claude-sonnet-4-6
 tools: Read, Write, Edit, Bash, Grep, Glob
 ---
 

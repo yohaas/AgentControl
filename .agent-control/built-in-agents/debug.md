@@ -1,6 +1,8 @@
 ---
 name: debug
 description: Debugging and root-cause-analysis specialist. Use when something is broken, flaky, or behaving unexpectedly and the cause isn't obvious. Invoke for bug reproduction, log analysis, stack trace investigation, intermittent failures, and diagnosing why code does what it does.
+provider: claude
+defaultModel: claude-opus-4-7
 tools: Read, Edit, Bash, Grep, Glob
 ---
 

@@ -1,6 +1,8 @@
 ---
 name: security
 description: Security review and hardening specialist. Use for threat modeling, reviewing code for vulnerabilities, auditing authentication/authorization, evaluating dependencies, handling secrets, and validating input/output safety. Invoke when the task involves security review, sensitive data handling, or anything touching auth, crypto, or external trust boundaries.
+provider: claude
+defaultModel: claude-opus-4-7
 tools: Read, Bash, Grep, Glob
 ---
 

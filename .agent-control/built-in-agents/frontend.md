@@ -1,6 +1,8 @@
 ---
 name: frontend
 description: Client-side development specialist. Use for UI components, state management, styling, accessibility, browser APIs, build tooling, and user-facing interactions. Invoke for tasks involving HTML, CSS, JavaScript/TypeScript, React/Vue/Svelte/etc., responsive design, or anything the user sees and clicks.
+provider: claude
+defaultModel: claude-sonnet-4-6
 tools: Read, Write, Edit, Bash, Grep, Glob
 ---
 

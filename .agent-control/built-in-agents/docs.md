@@ -1,6 +1,8 @@
 ---
 name: docs
 description: Technical writing specialist. Use for authoring or improving READMEs, API references, architecture docs, runbooks, tutorials, changelogs, and inline code documentation. Invoke when the task involves writing for human readers — explaining how something works, how to use it, or how to operate it.
+provider: claude
+defaultModel: claude-sonnet-4-6
 tools: Read, Write, Edit, Bash, Grep, Glob
 ---
 

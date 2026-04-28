@@ -1,6 +1,8 @@
 ---
 name: product
 description: Product thinking and requirements specialist. Use for clarifying user needs, scoping features, writing PRDs and user stories, prioritizing tradeoffs, defining acceptance criteria, and aligning implementation with user value. Invoke when the task involves "what should we build and why," not just "how do we build it."
+provider: claude
+defaultModel: claude-sonnet-4-6
 tools: Read, Write, Edit, Grep, Glob
 ---
 
