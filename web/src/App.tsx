@@ -1,4 +1,12 @@
-import { useEffect, useMemo, useRef, useState, type ClipboardEvent as ReactClipboardEvent, type PointerEvent as ReactPointerEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ClipboardEvent as ReactClipboardEvent,
+  type PointerEvent as ReactPointerEvent,
+  type UIEvent as ReactUIEvent
+} from "react";
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal as XTerm } from "@xterm/xterm";
 import {
@@ -120,6 +128,14 @@ function isAgentBusy(agent: RunningAgent) {
 
 function hasStreamingAssistantText(transcript: TranscriptEvent[]) {
   return transcript.some((event) => event.kind === "assistant_text" && event.streaming);
+}
+
+function latestUserMessage(transcript: TranscriptEvent[]) {
+  for (let index = transcript.length - 1; index >= 0; index -= 1) {
+    const event = transcript[index];
+    if (event.kind === "user") return event;
+  }
+  return undefined;
 }
 
 function AgentActivityIndicator({ agent, compact = false }: { agent: RunningAgent; compact?: boolean }) {
@@ -1667,9 +1683,11 @@ function AgentTile({
   const tileRef = useRef<HTMLElement | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  const [showPinnedMessage, setShowPinnedMessage] = useState(false);
   const isBusy = isAgentBusy(agent);
   const canType = !agent.remoteControl && agentHasProcess(agent);
   const showActivityIndicator = isBusy && !hasStreamingAssistantText(transcript);
+  const pinnedMessage = latestUserMessage(transcript);
 
   useEffect(() => {
     const root = rootRef.current;
@@ -1677,6 +1695,11 @@ function AgentTile({
     const nearBottom = root.scrollHeight - root.scrollTop - root.clientHeight < 180;
     if (nearBottom) root.scrollTop = root.scrollHeight;
   }, [transcript, agent.id]);
+
+  function handleTranscriptScroll(event: ReactUIEvent<HTMLDivElement>) {
+    const nextVisible = event.currentTarget.scrollTop > 24;
+    setShowPinnedMessage((current) => (current === nextVisible ? current : nextVisible));
+  }
 
   useEffect(() => {
     if (focusedAgentId !== agent.id) return;
@@ -1817,10 +1840,12 @@ function AgentTile({
             id={transcriptRootId}
             ref={rootRef}
             className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-3"
+            onScroll={handleTranscriptScroll}
             onMouseUp={() => selection.captureSelection()}
             onKeyUp={() => selection.captureSelection()}
             onContextMenuCapture={() => selection.captureSelection()}
           >
+            {pinnedMessage && showPinnedMessage && <PinnedUserMessage event={pinnedMessage} compact />}
             {agent.statusMessage && (
               <p className="mb-3 rounded-md border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
                 {agent.statusMessage}
@@ -1959,6 +1984,31 @@ function TranscriptPreview({ event, agent }: { event: TranscriptEvent; agent: Ru
     </div>
   );
 }
+
+function PinnedUserMessage({
+  event,
+  compact = false
+}: {
+  event: Extract<TranscriptEvent, { kind: "user" }>;
+  compact?: boolean;
+}) {
+  return (
+    <div className="sticky top-0 z-20 mb-3 flex justify-end">
+      <div
+        className={cn(
+          "max-w-full rounded-md border border-primary/40 bg-primary/95 px-3 py-2 text-primary-foreground shadow-lg backdrop-blur",
+          compact ? "text-xs leading-4" : "text-sm leading-5"
+        )}
+      >
+        <div className="line-clamp-2 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{event.text || "Attachment"}</div>
+        {event.attachments && event.attachments.length > 0 && (
+          <div className="mt-1 text-[11px] opacity-80">{event.attachments.length} attachment(s)</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function RemoteControlPanel({ agent }: { agent: RunningAgent }) {
   const [, setTick] = useState(0);
   useEffect(() => {
@@ -2068,9 +2118,11 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
   const transcriptRootId = `transcript-root-${agent.id}`;
   const selection = useTextSelection(`#${transcriptRootId}`);
   const [attachments, setAttachments] = useState<MessageAttachment[]>([]);
+  const [showPinnedMessage, setShowPinnedMessage] = useState(scrollTop > 24);
   const isBusy = isAgentBusy(agent);
   const canType = agentHasProcess(agent);
   const showActivityIndicator = isBusy && !hasStreamingAssistantText(transcript);
+  const pinnedMessage = latestUserMessage(transcript);
 
   useEffect(() => {
     const root = rootRef.current;
@@ -2116,6 +2168,13 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
     window.requestAnimationFrame(() => inputRef.current?.focus());
   }
 
+  function handleTranscriptScroll(event: ReactUIEvent<HTMLDivElement>) {
+    const top = event.currentTarget.scrollTop;
+    setScrollPosition(agent.id, top);
+    const nextVisible = top > 24;
+    setShowPinnedMessage((current) => (current === nextVisible ? current : nextVisible));
+  }
+
   async function handlePaste(event: ReactClipboardEvent<HTMLTextAreaElement>) {
     const files = pastedImageFiles(event);
     if (files.length === 0) return;
@@ -2145,7 +2204,7 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
             id={transcriptRootId}
             ref={rootRef}
             className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-4"
-            onScroll={(event) => setScrollPosition(agent.id, event.currentTarget.scrollTop)}
+            onScroll={handleTranscriptScroll}
             onPointerDown={(event) => {
               selection.clearSelection();
             }}
@@ -2154,6 +2213,7 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
             onContextMenuCapture={() => selection.captureSelection()}
           >
             <div className="mx-auto grid w-full min-w-0 max-w-4xl gap-3">
+              {pinnedMessage && showPinnedMessage && <PinnedUserMessage event={pinnedMessage} />}
               {transcript.length === 0 ? (
                 showActivityIndicator ? (
                   <AgentActivityIndicator agent={agent} />
