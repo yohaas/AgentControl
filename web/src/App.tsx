@@ -2184,6 +2184,7 @@ function AgentTile({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [showPinnedMessage, setShowPinnedMessage] = useState(false);
   const [slashMenuSuppressed, setSlashMenuSuppressed] = useState(false);
+  const [slashInsertedByButton, setSlashInsertedByButton] = useState(false);
   const isBusy = isAgentBusy(agent);
   const canType = !agent.remoteControl && agentHasProcess(agent);
   const showActivityIndicator = isBusy && !hasStreamingAssistantText(transcript);
@@ -2252,15 +2253,25 @@ function AgentTile({
   function selectSlashCommand(value: string) {
     setDraft(agent.id, value);
     setSlashMenuSuppressed(false);
+    setSlashInsertedByButton(false);
     window.requestAnimationFrame(() => inputRef.current?.focus());
   }
 
   function toggleSlashMenu() {
     if (rawSlashSuggestions.length > 0 && !slashMenuSuppressed) {
       setSlashMenuSuppressed(true);
+      if (slashInsertedByButton || draft.trim() === "/") {
+        setDraft(agent.id, draft.replace(/^\s*\//, ""));
+        setSlashInsertedByButton(false);
+      }
     } else {
       setSlashMenuSuppressed(false);
-      setDraft(agent.id, draft.startsWith("/") ? draft : `/${draft}`);
+      if (draft.trimStart().startsWith("/")) {
+        setSlashInsertedByButton(false);
+      } else {
+        setDraft(agent.id, `/${draft}`);
+        setSlashInsertedByButton(true);
+      }
     }
     window.requestAnimationFrame(() => inputRef.current?.focus());
   }
@@ -2492,6 +2503,7 @@ function AgentTile({
                 disabled={!canType}
                 onChange={(event) => {
                   setSlashMenuSuppressed(false);
+                  setSlashInsertedByButton(false);
                   setDraft(agent.id, event.target.value);
                 }}
                 onPaste={handlePaste}
@@ -2763,6 +2775,7 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
   const [showPinnedMessage, setShowPinnedMessage] = useState(false);
   const [activeSlashIndex, setActiveSlashIndex] = useState(0);
   const [slashMenuSuppressed, setSlashMenuSuppressed] = useState(false);
+  const [slashInsertedByButton, setSlashInsertedByButton] = useState(false);
   const isBusy = isAgentBusy(agent);
   const canType = agentHasProcess(agent);
   const showActivityIndicator = isBusy && !hasStreamingAssistantText(transcript);
@@ -2825,15 +2838,25 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
   function selectSlashCommand(value: string) {
     setDraft(agent.id, value);
     setSlashMenuSuppressed(false);
+    setSlashInsertedByButton(false);
     window.requestAnimationFrame(() => inputRef.current?.focus());
   }
 
   function toggleSlashMenu() {
     if (rawSlashSuggestions.length > 0 && !slashMenuSuppressed) {
       setSlashMenuSuppressed(true);
+      if (slashInsertedByButton || draft.trim() === "/") {
+        setDraft(agent.id, draft.replace(/^\s*\//, ""));
+        setSlashInsertedByButton(false);
+      }
     } else {
       setSlashMenuSuppressed(false);
-      setDraft(agent.id, draft.startsWith("/") ? draft : `/${draft}`);
+      if (draft.trimStart().startsWith("/")) {
+        setSlashInsertedByButton(false);
+      } else {
+        setDraft(agent.id, `/${draft}`);
+        setSlashInsertedByButton(true);
+      }
     }
     window.requestAnimationFrame(() => inputRef.current?.focus());
   }
@@ -2983,6 +3006,7 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
               disabled={!canType}
               onChange={(event) => {
                 setSlashMenuSuppressed(false);
+                setSlashInsertedByButton(false);
                 setDraft(agent.id, event.target.value);
               }}
               onPaste={handlePaste}
