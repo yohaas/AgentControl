@@ -34,6 +34,7 @@ export interface AgentQuestion {
 export interface AgentQuestionAnswer {
   questionIndex: number;
   labels: string[];
+  otherText?: string;
 }
 
 export interface AgentDef {

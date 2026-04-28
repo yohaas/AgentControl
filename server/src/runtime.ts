@@ -1779,9 +1779,11 @@ export class AgentRuntimeManager {
       const requested = answers.find((answer) => answer.questionIndex === questionIndex);
       const allowed = new Set(question.options.map((option) => option.label));
       const labels = (requested?.labels || []).filter((label) => allowed.has(label));
+      const otherText = requested?.otherText?.trim();
       return {
         questionIndex,
-        labels: question.multiSelect ? labels : labels.slice(0, 1)
+        labels: question.multiSelect ? labels : labels.slice(0, 1),
+        ...(otherText ? { otherText } : {})
       };
     });
   }
@@ -1791,8 +1793,10 @@ export class AgentRuntimeManager {
     return [
       "Answers to your questions:",
       ...questions.map((question, index) => {
+        const answer = answers.find((item) => item.questionIndex === index);
         const labels = byIndex.get(index) || [];
-        return [`${index + 1}. ${question.header || question.question}`, `Answer: ${labels.length ? labels.join(", ") : "No selection"}`].join("\n");
+        const parts = [...labels, answer?.otherText ? `Other: ${answer.otherText}` : ""].filter(Boolean);
+        return [`${index + 1}. ${question.header || question.question}`, `Answer: ${parts.length ? parts.join(", ") : "No selection"}`].join("\n");
       })
     ].join("\n\n");
   }

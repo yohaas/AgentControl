@@ -687,7 +687,8 @@ function questionEventPlainText(event: QuestionsEvent) {
         `${index + 1}. ${question.header || question.question}`,
         question.question,
         ...question.options.map((option) => `- ${option.label}${option.description ? `: ${option.description}` : ""}`),
-        answer?.labels.length ? `Selected: ${answer.labels.join(", ")}` : undefined
+        answer?.labels.length ? `Selected: ${answer.labels.join(", ")}` : undefined,
+        answer?.otherText ? `Other: ${answer.otherText}` : undefined
       ]
         .filter(Boolean)
         .join("\n");
@@ -6335,19 +6336,27 @@ function PinnedUserMessage({
 function QuestionCard({ event, agent, compact = false }: { event: QuestionsEvent; agent: RunningAgent; compact?: boolean }) {
   const initialSelections = useMemo(
     () =>
-      event.questions.map((question) => {
-        const answered = event.answers?.find((answer) => answer.questionIndex === event.questions.indexOf(question));
+      event.questions.map((question, questionIndex) => {
+        const answered = event.answers?.find((answer) => answer.questionIndex === questionIndex);
         if (answered) return answered.labels;
         const recommended = question.options.find((option) => /\brecommended\b/i.test(option.label));
         return recommended ? [recommended.label] : [];
       }),
     [event]
   );
+  const initialOtherTexts = useMemo(
+    () => event.questions.map((_, questionIndex) => event.answers?.find((answer) => answer.questionIndex === questionIndex)?.otherText || ""),
+    [event]
+  );
   const [selections, setSelections] = useState<string[][]>(initialSelections);
+  const [otherSelected, setOtherSelected] = useState<boolean[]>(initialOtherTexts.map((text) => Boolean(text)));
+  const [otherTexts, setOtherTexts] = useState<string[]>(initialOtherTexts);
 
   useEffect(() => {
     setSelections(initialSelections);
-  }, [initialSelections]);
+    setOtherSelected(initialOtherTexts.map((text) => Boolean(text)));
+    setOtherTexts(initialOtherTexts);
+  }, [initialOtherTexts, initialSelections]);
 
   function toggle(questionIndex: number, label: string, multiSelect?: boolean) {
     if (event.answered) return;
@@ -6360,16 +6369,30 @@ function QuestionCard({ event, agent, compact = false }: { event: QuestionsEvent
     );
   }
 
+  function toggleOther(questionIndex: number, multiSelect?: boolean) {
+    if (event.answered) return;
+    setOtherSelected((current) => current.map((selected, index) => (index === questionIndex ? !selected : selected)));
+    if (!multiSelect) {
+      setSelections((current) => current.map((labels, index) => (index === questionIndex ? [] : labels)));
+    }
+  }
+
   function submit() {
     sendCommand({
       type: "answerQuestions",
       id: agent.id,
       eventId: event.id,
-      answers: selections.map((labels, questionIndex) => ({ questionIndex, labels }))
+      answers: selections.map((labels, questionIndex) => ({
+        questionIndex,
+        labels,
+        otherText: otherSelected[questionIndex] ? otherTexts[questionIndex].trim() : undefined
+      }))
     });
   }
 
-  const missingAnswer = event.questions.some((question, index) => !question.multiSelect && selections[index].length === 0);
+  const missingAnswer = event.questions.some(
+    (question, index) => !question.multiSelect && selections[index].length === 0 && !(otherSelected[index] && otherTexts[index].trim())
+  );
 
   return (
     <div
@@ -6410,7 +6433,10 @@ function QuestionCard({ event, agent, compact = false }: { event: QuestionsEvent
                       name={`${event.id}:${questionIndex}`}
                       checked={selected}
                       disabled={event.answered}
-                      onChange={() => toggle(questionIndex, option.label, question.multiSelect)}
+                      onChange={() => {
+                        toggle(questionIndex, option.label, question.multiSelect);
+                        if (!question.multiSelect) setOtherSelected((current) => current.map((selected, index) => (index === questionIndex ? false : selected)));
+                      }}
                     />
                     <span className="min-w-0">
                       <span className="block font-medium">{option.label}</span>
@@ -6419,6 +6445,34 @@ function QuestionCard({ event, agent, compact = false }: { event: QuestionsEvent
                   </label>
                 );
               })}
+              <label
+                className={cn(
+                  "flex cursor-pointer items-start gap-2 rounded-md border border-border px-3 py-2",
+                  otherSelected[questionIndex] && "border-primary/60 bg-primary/10",
+                  event.answered && "cursor-default opacity-80"
+                )}
+              >
+                <input
+                  className="mt-1"
+                  type={question.multiSelect ? "checkbox" : "radio"}
+                  name={`${event.id}:${questionIndex}`}
+                  checked={Boolean(otherSelected[questionIndex])}
+                  disabled={event.answered}
+                  onChange={() => toggleOther(questionIndex, question.multiSelect)}
+                />
+                <span className="min-w-0 flex-1">
+                  <span className="block font-medium">Other</span>
+                  <Input
+                    className="mt-2"
+                    value={otherTexts[questionIndex] || ""}
+                    disabled={event.answered || !otherSelected[questionIndex]}
+                    placeholder="Type your answer"
+                    onChange={(inputEvent) =>
+                      setOtherTexts((current) => current.map((text, index) => (index === questionIndex ? inputEvent.target.value : text)))
+                    }
+                  />
+                </span>
+              </label>
             </div>
           </section>
         ))}
