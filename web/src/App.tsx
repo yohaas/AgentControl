@@ -572,6 +572,10 @@ function cleanDroppedPath(text: string) {
   return trimmed.replace(/^["']|["']$/g, "");
 }
 
+function isAgentReorderDrag(dataTransfer: DataTransfer) {
+  return Array.from(dataTransfer.types).includes("application/x-agent-id");
+}
+
 async function attachmentsFromDrop(agent: RunningAgent, dataTransfer: DataTransfer) {
   const files = Array.from(dataTransfer.files || []);
   if (files.length > 0) return uploadFiles(files);
@@ -2912,8 +2916,10 @@ function AgentTile({
   const suppressAutoFocusRef = useRef(false);
   const [showPinnedMessage, setShowPinnedMessage] = useState(false);
   const [contextOpen, setContextOpen] = useState(false);
+  const [composerDropActive, setComposerDropActive] = useState(false);
   const [slashMenuSuppressed, setSlashMenuSuppressed] = useState(false);
   const [slashInsertedByButton, setSlashInsertedByButton] = useState(false);
+  const composerDragDepthRef = useRef(0);
   const isBusy = isAgentBusy(agent);
   const canType = !agent.remoteControl && agentHasProcess(agent);
   const showActivityIndicator = isBusy && !hasStreamingAssistantText(transcript);
@@ -3081,7 +3087,10 @@ function AgentTile({
   }
 
   async function handleDrop(event: ReactDragEvent<HTMLDivElement>) {
-    if (!canType) return;
+    composerDragDepthRef.current = 0;
+    setComposerDropActive(false);
+    event.stopPropagation();
+    if (!canType || isAgentReorderDrag(event.dataTransfer)) return;
     event.preventDefault();
     try {
       const dropped = await attachmentsFromDrop(agent, event.dataTransfer);
@@ -3089,6 +3098,30 @@ function AgentTile({
     } catch (error) {
       addError(error instanceof Error ? error.message : String(error));
     }
+  }
+
+  function handleComposerDragEnter(event: ReactDragEvent<HTMLDivElement>) {
+    if (!canType || isAgentReorderDrag(event.dataTransfer)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    composerDragDepthRef.current += 1;
+    setComposerDropActive(true);
+  }
+
+  function handleComposerDragOver(event: ReactDragEvent<HTMLDivElement>) {
+    if (!canType || isAgentReorderDrag(event.dataTransfer)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = "copy";
+    setComposerDropActive(true);
+  }
+
+  function handleComposerDragLeave(event: ReactDragEvent<HTMLDivElement>) {
+    if (!canType || isAgentReorderDrag(event.dataTransfer)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    composerDragDepthRef.current = Math.max(0, composerDragDepthRef.current - 1);
+    if (composerDragDepthRef.current === 0) setComposerDropActive(false);
   }
 
   function startResize(event: ReactPointerEvent<HTMLDivElement>) {
@@ -3149,14 +3182,17 @@ function AgentTile({
       }}
       onDrop={(event) => {
         event.preventDefault();
-        onMove(event.dataTransfer.getData("text/plain"), agent.id);
+        onMove(event.dataTransfer.getData("application/x-agent-id") || event.dataTransfer.getData("text/plain"), agent.id);
       }}
     >
       <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-3">
         <span
           className="cursor-grab text-muted-foreground"
           draggable
-          onDragStart={(event) => event.dataTransfer.setData("text/plain", agent.id)}
+          onDragStart={(event) => {
+            event.dataTransfer.setData("application/x-agent-id", agent.id);
+            event.dataTransfer.setData("text/plain", agent.id);
+          }}
           title="Drag to reorder"
         >
           <GripVertical className="h-4 w-4 shrink-0" />
@@ -3269,12 +3305,20 @@ function AgentTile({
             onDone={() => window.requestAnimationFrame(() => inputRef.current?.focus())}
           />
           <div
-            className="rounded-md border border-border bg-background/80 focus-within:ring-1 focus-within:ring-ring"
-            onDragOver={(event) => {
-              if (canType) event.preventDefault();
-            }}
+            className={cn(
+              "relative rounded-md border border-border bg-background/80 focus-within:ring-1 focus-within:ring-ring",
+              composerDropActive && "border-primary ring-1 ring-primary/60"
+            )}
+            onDragEnter={handleComposerDragEnter}
+            onDragOver={handleComposerDragOver}
+            onDragLeave={handleComposerDragLeave}
             onDrop={(event) => void handleDrop(event)}
           >
+            {composerDropActive && (
+              <div className="pointer-events-none absolute inset-0 z-20 grid place-items-center rounded-md border border-dashed border-primary bg-background/85 text-sm font-medium text-foreground shadow-sm backdrop-blur-sm">
+                Drop here
+              </div>
+            )}
             <div className="grid gap-2 px-2 pt-2">
               <AttachmentChips
                 attachments={attachments}
@@ -3580,9 +3624,11 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
   const [attachments, setAttachments] = useState<MessageAttachment[]>([]);
   const [showPinnedMessage, setShowPinnedMessage] = useState(false);
   const [contextOpen, setContextOpen] = useState(false);
+  const [composerDropActive, setComposerDropActive] = useState(false);
   const [activeSlashIndex, setActiveSlashIndex] = useState(0);
   const [slashMenuSuppressed, setSlashMenuSuppressed] = useState(false);
   const [slashInsertedByButton, setSlashInsertedByButton] = useState(false);
+  const composerDragDepthRef = useRef(0);
   const isBusy = isAgentBusy(agent);
   const canType = agentHasProcess(agent);
   const showActivityIndicator = isBusy && !hasStreamingAssistantText(transcript);
@@ -3744,7 +3790,10 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
   }
 
   async function handleDrop(event: ReactDragEvent<HTMLDivElement>) {
-    if (!canType) return;
+    composerDragDepthRef.current = 0;
+    setComposerDropActive(false);
+    event.stopPropagation();
+    if (!canType || isAgentReorderDrag(event.dataTransfer)) return;
     event.preventDefault();
     try {
       const dropped = await attachmentsFromDrop(agent, event.dataTransfer);
@@ -3752,6 +3801,30 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
     } catch (error) {
       addError(error instanceof Error ? error.message : String(error));
     }
+  }
+
+  function handleComposerDragEnter(event: ReactDragEvent<HTMLDivElement>) {
+    if (!canType || isAgentReorderDrag(event.dataTransfer)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    composerDragDepthRef.current += 1;
+    setComposerDropActive(true);
+  }
+
+  function handleComposerDragOver(event: ReactDragEvent<HTMLDivElement>) {
+    if (!canType || isAgentReorderDrag(event.dataTransfer)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = "copy";
+    setComposerDropActive(true);
+  }
+
+  function handleComposerDragLeave(event: ReactDragEvent<HTMLDivElement>) {
+    if (!canType || isAgentReorderDrag(event.dataTransfer)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    composerDragDepthRef.current = Math.max(0, composerDragDepthRef.current - 1);
+    if (composerDragDepthRef.current === 0) setComposerDropActive(false);
   }
 
   return (
@@ -3822,12 +3895,20 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
           onDone={() => window.requestAnimationFrame(() => inputRef.current?.focus())}
         />
         <div
-          className="mx-auto w-full min-w-0 max-w-4xl rounded-md border border-border bg-background/80 focus-within:ring-1 focus-within:ring-ring"
-          onDragOver={(event) => {
-            if (canType) event.preventDefault();
-          }}
+          className={cn(
+            "relative mx-auto w-full min-w-0 max-w-4xl rounded-md border border-border bg-background/80 focus-within:ring-1 focus-within:ring-ring",
+            composerDropActive && "border-primary ring-1 ring-primary/60"
+          )}
+          onDragEnter={handleComposerDragEnter}
+          onDragOver={handleComposerDragOver}
+          onDragLeave={handleComposerDragLeave}
           onDrop={(event) => void handleDrop(event)}
         >
+          {composerDropActive && (
+            <div className="pointer-events-none absolute inset-0 z-20 grid place-items-center rounded-md border border-dashed border-primary bg-background/85 text-sm font-medium text-foreground shadow-sm backdrop-blur-sm">
+              Drop here
+            </div>
+          )}
           <div className="grid gap-2 px-2 pt-2">
             <AttachmentChips
               attachments={attachments}
