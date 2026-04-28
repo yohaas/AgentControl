@@ -698,6 +698,8 @@ function Header() {
   const addError = useAppStore((state) => state.addError);
   const [devCommand, setDevCommand] = useState("npm run dev");
   const [addProjectOpen, setAddProjectOpen] = useState(false);
+  const [connectionMenuOpen, setConnectionMenuOpen] = useState(false);
+  const [supervised, setSupervised] = useState<boolean | undefined>();
   const selectedProject = projects.find((project) => project.id === selectedProjectId);
   const projectAgents = useMemo(() => agentsForProject(agentsById, selectedProjectId), [agentsById, selectedProjectId]);
   const agentCount = projectAgents.length;
@@ -717,6 +719,38 @@ function Header() {
     }
     setDevCommand(window.localStorage.getItem(devCommandStorageKey(selectedProjectId)) || "npm run dev");
   }, [selectedProjectId]);
+
+  useEffect(() => {
+    if (!connectionMenuOpen) return;
+    void refreshAdminStatus();
+  }, [connectionMenuOpen]);
+
+  async function refreshAdminStatus() {
+    try {
+      const status = await api.adminStatus();
+      setSupervised(status.supervised);
+    } catch (error) {
+      addError(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  async function restartAgentControl() {
+    if (!window.confirm("Restart AgentControl? The dashboard will disconnect briefly.")) return;
+    try {
+      await api.restartApp();
+    } catch (error) {
+      addError(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  async function shutdownAgentControl() {
+    if (!window.confirm("Shutdown AgentControl? You will need to start it again from a terminal unless supervised.")) return;
+    try {
+      await api.shutdownApp();
+    } catch (error) {
+      addError(error instanceof Error ? error.message : String(error));
+    }
+  }
 
   function sortChatsByAgentType() {
     const sorted = orderedAgentsForTiles(projectAgents, tileOrder)
@@ -877,9 +911,34 @@ function Header() {
         </Button>
         <PluginsDialog />
         <SettingsDialog />
-        <Badge className={wsConnected ? "border-teal-400/40 text-teal-200" : "border-red-400/40 text-red-200"}>
-          {wsConnected ? "Connected" : "Disconnected"}
-        </Badge>
+        <DropdownMenu open={connectionMenuOpen} onOpenChange={setConnectionMenuOpen}>
+          <DropdownMenuTrigger asChild>
+            <button
+              className={cn(
+                "inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium",
+                wsConnected ? "border-teal-400/40 text-teal-200" : "border-red-400/40 text-red-200"
+              )}
+              title="AgentControl status"
+            >
+              {wsConnected ? "Connected" : "Disconnected"}
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuItem onClick={() => void restartAgentControl()} disabled={supervised === false}>
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Restart AgentControl
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => void shutdownAgentControl()}>
+              <X className="mr-2 h-4 w-4" />
+              Shutdown AgentControl
+            </DropdownMenuItem>
+            {supervised === false && (
+              <div className="px-2 py-1.5 text-xs text-muted-foreground">
+                Restart is available after launching with npm run dev:supervised.
+              </div>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </header>
   );
@@ -1949,7 +2008,6 @@ function SettingsDialog() {
   const [tileColumns, setTileColumns] = useState(settings.tileColumns);
   const [pinLastSentMessage, setPinLastSentMessage] = useState(settings.pinLastSentMessage);
   const [terminalDock, setTerminalDock] = useState(settings.terminalDock);
-  const [supervised, setSupervised] = useState<boolean | undefined>();
 
   useEffect(() => {
     if (!open) return;
@@ -1961,17 +2019,7 @@ function SettingsDialog() {
     setTileColumns(settings.tileColumns);
     setPinLastSentMessage(settings.pinLastSentMessage);
     setTerminalDock(settings.terminalDock);
-    void refreshAdminStatus();
   }, [open, settings]);
-
-  async function refreshAdminStatus() {
-    try {
-      const status = await api.adminStatus();
-      setSupervised(status.supervised);
-    } catch (error) {
-      addError(error instanceof Error ? error.message : String(error));
-    }
-  }
 
   async function save() {
     try {
@@ -2033,24 +2081,6 @@ function SettingsDialog() {
       addError(error instanceof Error ? error.message : String(error));
     } finally {
       if (importInputRef.current) importInputRef.current.value = "";
-    }
-  }
-
-  async function restartAgentControl() {
-    if (!window.confirm("Restart AgentControl? The dashboard will disconnect briefly.")) return;
-    try {
-      await api.restartApp();
-    } catch (error) {
-      addError(error instanceof Error ? error.message : String(error));
-    }
-  }
-
-  async function shutdownAgentControl() {
-    if (!window.confirm("Shutdown AgentControl? You will need to start it again from a terminal unless supervised.")) return;
-    try {
-      await api.shutdownApp();
-    } catch (error) {
-      addError(error instanceof Error ? error.message : String(error));
     }
   }
 
@@ -2170,24 +2200,6 @@ function SettingsDialog() {
               <FolderOpen className="h-4 w-4" />
               Import Config
             </Button>
-          </div>
-          <div className="grid gap-2 rounded-md border border-border p-3">
-            <div className="text-sm font-medium">AgentControl</div>
-            <div className="flex flex-wrap gap-2">
-              <Button variant="outline" onClick={restartAgentControl} disabled={supervised === false}>
-                <RefreshCw className="h-4 w-4" />
-                Restart
-              </Button>
-              <Button variant="outline" onClick={shutdownAgentControl}>
-                <X className="h-4 w-4" />
-                Shutdown
-              </Button>
-            </div>
-            {supervised === false && (
-              <p className="text-xs text-muted-foreground">
-                Restart is available after launching with npm run dev:supervised.
-              </p>
-            )}
           </div>
           <input
             ref={importInputRef}
