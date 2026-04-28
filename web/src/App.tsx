@@ -421,7 +421,12 @@ function ActiveAgentDot({ agent, className }: { agent: RunningAgent; className?:
       style={{ background: agent.color }}
     >
       {busy && (
-        <span className="pointer-events-none absolute inset-y-0 left-0 w-1/2 animate-agent-dot-wave bg-gradient-to-r from-transparent via-white/80 to-transparent" />
+        <span
+          className={cn(
+            "pointer-events-none absolute inset-y-0 left-0 w-1/2 animate-agent-dot-wave bg-gradient-to-r from-transparent to-transparent",
+            needsContrast ? "via-neutral-950/80" : "via-white/80"
+          )}
+        />
       )}
     </span>
   );
