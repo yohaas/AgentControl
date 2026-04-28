@@ -3926,7 +3926,6 @@ function AgentPanelHeader({ agent }: { agent: RunningAgent }) {
         <LastActivityText agent={agent} compact timeOnly />
         <StatusPill status={agent.status} />
       </span>
-      <SessionInfoPopover agent={agent} />
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="outline" size="icon">
