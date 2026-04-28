@@ -369,7 +369,7 @@ function AgentActivityIndicator({ agent, compact = false }: { agent: RunningAgen
           "inline-flex min-w-0 items-center rounded-md border border-border bg-background/70 px-3 py-2",
           compact ? "text-xs" : "text-sm"
         )}
-        style={{ borderLeftColor: agent.color, borderLeftWidth: 4 }}
+        style={{ borderLeftColor: agentAccentColor(agent.color), borderLeftWidth: 4 }}
       >
         <ThinkingText />
       </div>
@@ -377,15 +377,47 @@ function AgentActivityIndicator({ agent, compact = false }: { agent: RunningAgen
   );
 }
 
+function isLightAgentColor(color: string) {
+  const value = color.trim().toLowerCase();
+  if (value === "white") return true;
+  const hex = value.match(/^#?([0-9a-f]{3}|[0-9a-f]{6})$/i)?.[1];
+  if (!hex) return false;
+  const expanded = hex.length === 3 ? hex.split("").map((char) => char + char).join("") : hex;
+  const red = parseInt(expanded.slice(0, 2), 16);
+  const green = parseInt(expanded.slice(2, 4), 16);
+  const blue = parseInt(expanded.slice(4, 6), 16);
+  return (red * 299 + green * 587 + blue * 114) / 1000 > 235;
+}
+
+function agentAccentColor(color: string) {
+  return isLightAgentColor(color) ? "hsl(var(--foreground))" : color;
+}
+
 function AgentDot({ color, className }: { color: string; className?: string }) {
-  return <span className={cn("h-3 w-3 shrink-0 rounded-full", className)} style={{ background: color }} />;
+  const needsContrast = isLightAgentColor(color);
+  return (
+    <span
+      className={cn(
+        "h-3 w-3 shrink-0 rounded-full",
+        className,
+        needsContrast && "border border-neutral-950 dark:border-border"
+      )}
+      style={{ background: color }}
+    />
+  );
 }
 
 function ActiveAgentDot({ agent, className }: { agent: RunningAgent; className?: string }) {
   const busy = isAgentBusy(agent);
+  const needsContrast = isLightAgentColor(agent.color);
   return (
     <span
-      className={cn("relative h-3 w-3 shrink-0 overflow-hidden rounded-full", busy && "animate-pulse", className)}
+      className={cn(
+        "relative h-3 w-3 shrink-0 overflow-hidden rounded-full",
+        busy && "animate-pulse",
+        className,
+        needsContrast && "border border-neutral-950 dark:border-border"
+      )}
       style={{ background: agent.color }}
     >
       {busy && (
@@ -6086,7 +6118,7 @@ function TranscriptPreview({
         )}
         data-copy-block="true"
         data-copy-event-id={event.id}
-        style={!isUser ? { borderLeftColor: agent.color, borderLeftWidth: 4 } : undefined}
+        style={!isUser ? { borderLeftColor: agentAccentColor(agent.color), borderLeftWidth: 4 } : undefined}
       >
         {showPopout && <ChatBlockPopoutButton source={agent} text={event.text} compact />}
         <CollapsibleText text={event.text} compact />
@@ -6894,7 +6926,7 @@ function TranscriptItem({
         )}
         data-copy-block="true"
         data-copy-event-id={event.id}
-        style={!isUser ? { borderLeftColor: agent.color, borderLeftWidth: 4 } : undefined}
+        style={!isUser ? { borderLeftColor: agentAccentColor(agent.color), borderLeftWidth: 4 } : undefined}
       >
         {showPopout && <ChatBlockPopoutButton source={agent} text={event.text} />}
         {event.sourceAgent && (
