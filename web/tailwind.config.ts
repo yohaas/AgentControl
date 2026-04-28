@@ -35,10 +35,15 @@ export default {
         "model-flash": {
           "0%": { boxShadow: "0 0 0 0 hsl(var(--primary) / 0.55)" },
           "100%": { boxShadow: "0 0 0 9px hsl(var(--primary) / 0)" }
+        },
+        "agent-dot-wave": {
+          "0%": { transform: "translateX(-140%)" },
+          "100%": { transform: "translateX(240%)" }
         }
       },
       animation: {
-        "model-flash": "model-flash 900ms ease-out"
+        "model-flash": "model-flash 900ms ease-out",
+        "agent-dot-wave": "agent-dot-wave 1.15s linear infinite"
       }
     }
   },

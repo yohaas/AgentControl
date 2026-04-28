@@ -349,6 +349,20 @@ function AgentDot({ color, className }: { color: string; className?: string }) {
   return <span className={cn("h-3 w-3 shrink-0 rounded-full", className)} style={{ background: color }} />;
 }
 
+function CollapsedAgentDot({ agent }: { agent: RunningAgent }) {
+  const busy = isAgentBusy(agent);
+  return (
+    <span
+      className={cn("relative h-3 w-3 shrink-0 overflow-hidden rounded-full", busy && "animate-pulse")}
+      style={{ background: agent.color }}
+    >
+      {busy && (
+        <span className="pointer-events-none absolute inset-y-0 left-0 w-1/2 animate-agent-dot-wave bg-gradient-to-r from-transparent via-white/80 to-transparent" />
+      )}
+    </span>
+  );
+}
+
 function ProviderIcon({
   provider,
   className,
@@ -2971,7 +2985,7 @@ function Sidebar() {
                 onClick={() => focusRunningAgent(agent.id)}
                 title={`${agent.displayName}\n${agent.currentModel}\n${fullLastActivity(agent.updatedAt || agent.launchedAt)}`}
               >
-                <AgentDot color={agent.color} className={cn(isAgentBusy(agent) && "animate-pulse")} />
+                <CollapsedAgentDot agent={agent} />
               </button>
               <Button
                 variant="ghost"
