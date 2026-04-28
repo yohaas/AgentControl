@@ -42,6 +42,7 @@ import {
   Hand,
   Home,
   Image as ImageIcon,
+  Loader2,
   Maximize2,
   Minimize2,
   MoreHorizontal,
@@ -3170,6 +3171,7 @@ function Sidebar() {
   const addError = useAppStore((state) => state.addError);
   const [runningSort, setRunningSort] = useState<"lastActivity" | "type">("lastActivity");
   const [agentTab, setAgentTab] = useState<"project" | "builtIn">("builtIn");
+  const [availableOpen, setAvailableOpen] = useState(true);
 
   const project = projects.find((candidate) => candidate.id === selectedProjectId);
   const projectAgentDefs = project?.agents || [];
@@ -3406,65 +3408,79 @@ function Sidebar() {
       </section>
       <section className="mt-auto shrink-0 border-t border-border p-3">
         <div className="mb-2 flex items-center justify-between gap-2">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Available Agents</h2>
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={!project || availableAgentDefs.length === 0}
-            onClick={launchAllDefinitions}
-            title="Launch all definitions with defaults"
-          >
-            <Plus className="h-4 w-4" />
-            Launch All
-          </Button>
-        </div>
-        <div className="mb-2 grid grid-cols-2 gap-1 rounded-md bg-muted p-1">
           <button
-            className={cn("rounded px-2 py-1 text-xs font-medium", agentTab === "project" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground")}
-            onClick={() => setAgentTab("project")}
+            type="button"
+            className="flex min-w-0 items-center gap-1 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground hover:text-foreground"
+            onClick={() => setAvailableOpen((open) => !open)}
+            aria-expanded={availableOpen}
           >
-            Project
+            {availableOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+            <span>Available Agents</span>
           </button>
-          <button
-            className={cn("rounded px-2 py-1 text-xs font-medium", agentTab === "builtIn" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground")}
-            onClick={() => setAgentTab("builtIn")}
-          >
-            Built-In
-          </button>
-        </div>
-        <div className="max-h-[38vh] space-y-1 overflow-y-auto overflow-x-hidden pr-1">
-          {!project ? (
-            <p className="rounded-md border border-dashed border-border px-3 py-5 text-center text-sm text-muted-foreground">
-              Add a project to get started.
-            </p>
-          ) : agentTab === "project" && projectAgentDefs.length === 0 ? (
-            <p className="rounded-md border border-dashed border-border px-3 py-5 text-center text-sm text-muted-foreground">
-              Add agents to your project to show them here.
-            </p>
-          ) : availableAgentDefs.length === 0 ? (
-            <p className="rounded-md border border-dashed border-border px-3 py-5 text-center text-sm text-muted-foreground">
-              Add a built-in agent to show it here.
-            </p>
-          ) : (
-            <div className="grid grid-cols-2 gap-2">
-              {availableAgentDefs.map((agent) => (
-                <button
-                  key={agent.name}
-                  className="grid min-h-20 content-start gap-1 rounded-md border border-border bg-background/40 px-2 py-2 text-left hover:bg-accent"
-                  onClick={() => openLaunchModal({ projectId: project.id, defName: agent.name, agentSource: agentTab })}
-                >
-                  <span className="flex min-w-0 items-center gap-1.5">
-                    <AgentDot color={agent.color} />
-                    <span className="truncate text-xs font-medium">{agent.name}</span>
-                  </span>
-                  {agent.defaultModel && (
-                    <span className="line-clamp-2 text-[11px] leading-4 text-muted-foreground">{agent.defaultModel}</span>
-                  )}
-                </button>
-              ))}
-            </div>
+          {availableOpen && (
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={!project || availableAgentDefs.length === 0}
+              onClick={launchAllDefinitions}
+              title="Launch all definitions with defaults"
+            >
+              <Plus className="h-4 w-4" />
+              Launch All
+            </Button>
           )}
         </div>
+        {availableOpen && (
+          <>
+            <div className="mb-2 grid grid-cols-2 gap-1 rounded-md bg-muted p-1">
+              <button
+                className={cn("rounded px-2 py-1 text-xs font-medium", agentTab === "project" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground")}
+                onClick={() => setAgentTab("project")}
+              >
+                Project
+              </button>
+              <button
+                className={cn("rounded px-2 py-1 text-xs font-medium", agentTab === "builtIn" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground")}
+                onClick={() => setAgentTab("builtIn")}
+              >
+                Built-In
+              </button>
+            </div>
+            <div className="max-h-[38vh] space-y-1 overflow-y-auto overflow-x-hidden pr-1">
+              {!project ? (
+                <p className="rounded-md border border-dashed border-border px-3 py-5 text-center text-sm text-muted-foreground">
+                  Add a project to get started.
+                </p>
+              ) : agentTab === "project" && projectAgentDefs.length === 0 ? (
+                <p className="rounded-md border border-dashed border-border px-3 py-5 text-center text-sm text-muted-foreground">
+                  Add agents to your project to show them here.
+                </p>
+              ) : availableAgentDefs.length === 0 ? (
+                <p className="rounded-md border border-dashed border-border px-3 py-5 text-center text-sm text-muted-foreground">
+                  Add a built-in agent to show it here.
+                </p>
+              ) : (
+                <div className="grid grid-cols-2 gap-2">
+                  {availableAgentDefs.map((agent) => (
+                    <button
+                      key={agent.name}
+                      className="grid min-h-20 content-start gap-1 rounded-md border border-border bg-background/40 px-2 py-2 text-left hover:bg-accent"
+                      onClick={() => openLaunchModal({ projectId: project.id, defName: agent.name, agentSource: agentTab })}
+                    >
+                      <span className="flex min-w-0 items-center gap-1.5">
+                        <AgentDot color={agent.color} />
+                        <span className="truncate text-xs font-medium">{agent.name}</span>
+                      </span>
+                      {agent.defaultModel && (
+                        <span className="line-clamp-2 text-[11px] leading-4 text-muted-foreground">{agent.defaultModel}</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </>
+        )}
       </section>
       <div
         className="absolute bottom-0 right-0 top-0 z-20 w-2 cursor-ew-resize hover:bg-primary/20"
@@ -4119,6 +4135,7 @@ function LaunchDialog() {
   const [enablingPlugin, setEnablingPlugin] = useState<string | undefined>();
   const [pluginPickerExpanded, setPluginPickerExpanded] = useState(false);
   const [agentFileOpen, setAgentFileOpen] = useState(false);
+  const [launching, setLaunching] = useState(false);
 
   const projectId = selectedProjectId || "";
   const project = projects.find((candidate) => candidate.id === projectId);
@@ -4207,6 +4224,7 @@ function LaunchDialog() {
     setPluginCatalog({ installed: [], available: [], marketplaces: [] });
     setPluginPickerExpanded(false);
     setAgentFileOpen(false);
+    setLaunching(false);
   }, [modal, modelProfiles, projectId, projects, settings.models]);
 
   useEffect(() => {
@@ -4285,27 +4303,36 @@ function LaunchDialog() {
   }
 
   async function launch() {
-    if (!projectId || !defName) return;
-    if (def?.sourcePath && !arraysEqual(pluginIds, def.plugins || [])) {
-      const saved = await saveAgentPlugins();
-      if (!saved) return;
-    }
-    sendCommand({
-      type: "launch",
-      request: {
-        projectId,
-        defName,
-        agentSource,
-        displayName,
-        provider,
-        model,
-        initialPrompt,
-        remoteControl: false,
-        permissionMode: settings.defaultAgentMode,
-        autoApprove: settings.autoApprove
+    if (!projectId || !defName || launching) return;
+    setLaunching(true);
+    try {
+      if (def?.sourcePath && !arraysEqual(pluginIds, def.plugins || [])) {
+        const saved = await saveAgentPlugins();
+        if (!saved) {
+          setLaunching(false);
+          return;
+        }
       }
-    });
-    closeLaunchModal();
+      sendCommand({
+        type: "launch",
+        request: {
+          projectId,
+          defName,
+          agentSource,
+          displayName,
+          provider,
+          model,
+          initialPrompt,
+          remoteControl: false,
+          permissionMode: settings.defaultAgentMode,
+          autoApprove: settings.autoApprove
+        }
+      });
+      closeLaunchModal();
+    } catch (error) {
+      addError(error instanceof Error ? error.message : String(error));
+      setLaunching(false);
+    }
   }
 
   async function saveAgentPlugins(): Promise<boolean> {
@@ -4650,9 +4677,9 @@ function LaunchDialog() {
               placeholder="Optional"
             />
           </label>
-          <Button onClick={launch} disabled={!projectId || !defName || !model}>
-            <Plus className="h-4 w-4" />
-            Launch
+          <Button onClick={launch} disabled={!projectId || !defName || !model || launching}>
+            {launching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+            {launching ? "Launching..." : "Launch"}
           </Button>
           </div>
         </DialogContent>

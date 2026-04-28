@@ -282,8 +282,6 @@ export class AgentRuntimeManager {
     const timestamp = now();
     const permissionMode = this.initialPermissionMode(request);
     const currentModel = isSyntheticModel(request.model) ? this.defaultModelForDefinition(def, provider) : request.model;
-    const installedPlugins = supportsPluginProvider(provider) ? await listPlugins(provider).catch(() => []) : [];
-    const slashCommands = await scanSlashCommands(project.path, installedPlugins, def.plugins || [], provider).catch(() => []);
     const agent: RunningAgent = {
       id: nanoid(),
       provider,
@@ -303,7 +301,7 @@ export class AgentRuntimeManager {
       effort: request.effort || "medium",
       thinking: request.thinking ?? true,
       planMode: permissionMode === "plan",
-      slashCommands,
+      slashCommands: [],
       activePlugins: supportsPluginProvider(provider) ? def.plugins || [] : []
     };
 
@@ -322,6 +320,7 @@ export class AgentRuntimeManager {
     this.states.set(agent.id, state);
     this.broadcast({ type: "agent.launched", agent });
     this.persist();
+    void this.refreshSlashCommands(state, project, def, provider);
 
     if (provider === "openai") {
       this.setStatus(state, process.env.OPENAI_API_KEY ? "idle" : "error", process.env.OPENAI_API_KEY ? undefined : "OPENAI_API_KEY is not set.");
@@ -343,6 +342,28 @@ export class AgentRuntimeManager {
     }
 
     return agent;
+  }
+
+  private async refreshSlashCommands(state: AgentProcessState, project: Project, def: AgentDef, provider: AgentProvider): Promise<void> {
+    try {
+      const installedPlugins = supportsPluginProvider(provider) ? await listPlugins(provider).catch(() => []) : [];
+      const slashCommands = await scanSlashCommands(project.path, installedPlugins, def.plugins || [], provider).catch(() => []);
+      if (this.states.get(state.agent.id) !== state) return;
+      state.agent.slashCommands = slashCommands;
+      state.agent.updatedAt = now();
+      this.broadcast({
+        type: "agent.session_info_changed",
+        id: state.agent.id,
+        tools: state.agent.sessionTools || [],
+        mcpServers: state.agent.mcpServers || [],
+        slashCommands,
+        activePlugins: state.agent.activePlugins || [],
+        updatedAt: state.agent.updatedAt
+      });
+      this.persist();
+    } catch {
+      // Slash command discovery is auxiliary; launching the process should not wait on it.
+    }
   }
 
   resume(id: string): void {
