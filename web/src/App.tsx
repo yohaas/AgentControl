@@ -1287,12 +1287,17 @@ function Header() {
           <DropdownMenuTrigger asChild>
             <button
               className={cn(
-                "inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium",
-                wsConnected ? "border-teal-400/40 text-teal-200" : "border-red-400/40 text-red-200"
+                "grid h-8 w-8 place-items-center rounded-md border border-border hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                wsConnected ? "text-emerald-400" : "text-red-400"
               )}
-              title="AgentControl status"
+              title={
+                wsConnected
+                  ? "AgentControl is connected. Click for restart and shutdown options."
+                  : "AgentControl is disconnected. The dashboard is not receiving live updates."
+              }
+              aria-label={wsConnected ? "AgentControl connected" : "AgentControl disconnected"}
             >
-              {wsConnected ? "Connected" : "Disconnected"}
+              <span className="h-3 w-3 rounded-full bg-current shadow-[0_0_0_3px_rgba(255,255,255,0.06)]" />
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
