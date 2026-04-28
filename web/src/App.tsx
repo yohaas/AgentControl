@@ -13,6 +13,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import { Terminal as XTerm } from "@xterm/xterm";
 import {
   ArrowDownAZ,
+  ArrowUp,
   Bot,
   Check,
   ChevronDown,
@@ -39,7 +40,6 @@ import {
   Puzzle,
   RefreshCw,
   Search,
-  Send,
   Settings,
   SquareTerminal,
   Trash2,
@@ -1453,6 +1453,9 @@ function ModelMenu({ agent, compact = false }: { agent: RunningAgent; compact?: 
 }
 
 function ComposerModeMenu({ agent, compact = false }: { agent: RunningAgent; compact?: boolean }) {
+  const label = agent.planMode ? "Plan mode" : "Default mode";
+  const compactLabel = agent.planMode ? "Plan" : "Default";
+
   function setPlanMode(planMode: boolean) {
     if (agent.planMode === planMode) return;
     sendCommand({ type: "setPlanMode", id: agent.id, planMode });
@@ -1462,12 +1465,13 @@ function ComposerModeMenu({ agent, compact = false }: { agent: RunningAgent; com
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button
-          variant={agent.planMode ? "default" : "outline"}
+          variant="outline"
           size="sm"
-          className={cn("h-7 px-2", compact ? "w-10" : "w-full")}
-          title={agent.planMode ? "Plan mode" : "Default mode"}
+          className={cn("h-7 justify-between gap-1 px-2", compact ? "w-20 text-[11px]" : "w-full")}
+          title={label}
         >
-          <ChevronUp className="h-4 w-4" />
+          <span className="truncate">{compact ? compactLabel : label}</span>
+          <ChevronDown className="h-3.5 w-3.5 shrink-0" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
@@ -2293,7 +2297,7 @@ function AgentTile({
                 onClick={isBusy ? stopCurrentResponse : send}
                 title={isBusy ? "Stop response" : "Send"}
               >
-                {isBusy ? <X className="h-4 w-4" /> : <Send className="h-4 w-4" />}
+                {isBusy ? <X className="h-4 w-4" /> : <ArrowUp className="h-4 w-4" />}
               </Button>
               <ComposerModeMenu agent={agent} compact />
             </div>
@@ -2713,7 +2717,7 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
               disabled={isBusy ? !agentHasProcess(agent) : !canType || (!draft.trim() && attachments.length === 0)}
               onClick={isBusy ? stopCurrentResponse : send}
             >
-              {isBusy ? <X className="h-4 w-4" /> : <Send className="h-4 w-4" />}
+              {isBusy ? <X className="h-4 w-4" /> : <ArrowUp className="h-4 w-4" />}
               {isBusy ? "Stop" : "Send"}
             </Button>
             <ComposerModeMenu agent={agent} />
