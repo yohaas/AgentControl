@@ -314,7 +314,10 @@ export class AgentRuntimeManager {
 
   userMessage(id: string, text: string, sourceAgent?: TranscriptEvent["sourceAgent"], attachments: MessageAttachment[] = []): void {
     const state = this.requiredState(id);
-    if (state.agent.remoteControl) throw new Error("Remote Control agents do not accept dashboard messages.");
+    if (state.agent.remoteControl) {
+      this.remoteControlUserMessage(state, text, attachments);
+      return;
+    }
     if (state.agent.provider === "openai" || state.agent.provider === "codex" || this.isClaudeApi(state)) {
       void this.providerUserMessage(state, text, sourceAgent, attachments).catch((error: unknown) => {
         state.activeTurn = false;
@@ -400,6 +403,22 @@ export class AgentRuntimeManager {
       }
     };
     child.stdin.write(`${JSON.stringify(payload)}\n`);
+  }
+
+  private remoteControlUserMessage(state: AgentProcessState, text: string, attachments: MessageAttachment[] = []): void {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    if (attachments.length > 0) throw new Error("Remote Control stdin bridge does not support attachments.");
+    if (!state.child || state.child.killed || !state.child.stdin.writable) {
+      throw new Error("Remote Control process is not running.");
+    }
+    this.pushTranscript(state, {
+      ...eventBase(state.agent.id, state.agent.currentModel),
+      kind: "user",
+      text: trimmed
+    });
+    state.child.stdin.write(`${trimmed}\n`);
+    this.addRemoteControlDiagnostic(state, "stdin", trimmed);
   }
 
   kill(id: string): void {
@@ -1261,6 +1280,7 @@ export class AgentRuntimeManager {
       console.log(`[${state.agent.displayName}:rc] ${diagnosticLine || line}`);
       this.storeRawLine(state, line);
       if (diagnosticLine) this.addRemoteControlDiagnostic(state, stream, diagnosticLine);
+      if (stream === "stdout" && diagnosticLine) this.pushRemoteControlTranscriptLine(state, diagnosticLine);
       if (/connected|joined|opened/i.test(diagnosticLine || line)) {
         this.updateRemoteControlState(state, "connected", "Remote Control connected.");
       }
@@ -1828,7 +1848,31 @@ export class AgentRuntimeManager {
     return stripped;
   }
 
-  private addRemoteControlDiagnostic(state: AgentProcessState, stream: "stdout" | "stderr", line: string): void {
+  private remoteControlConversationText(line: string): string | undefined {
+    const text = line.trim();
+    if (!text || text.length > 4000) return undefined;
+    if (this.remoteControlUrl(text)) return undefined;
+    if (/^(remote control|status:|uptime:|pid:|open\b|scan\b|qr\b|waiting\b|connected\b|joined\b|opened\b)/i.test(text)) return undefined;
+    if (/^(http|ws)s?:\/\//i.test(text)) return undefined;
+    if (/^[\W_]+$/.test(text)) return undefined;
+    return text;
+  }
+
+  private pushRemoteControlTranscriptLine(state: AgentProcessState, line: string): void {
+    const text = this.remoteControlConversationText(line);
+    if (!text) return;
+    const recentDuplicate = state.transcript
+      .slice(-8)
+      .some((event) => (event.kind === "user" || event.kind === "assistant_text" || event.kind === "system") && event.text.trim() === text);
+    if (recentDuplicate) return;
+    this.pushTranscript(state, {
+      ...eventBase(state.agent.id, state.agent.currentModel),
+      kind: "user",
+      text
+    });
+  }
+
+  private addRemoteControlDiagnostic(state: AgentProcessState, stream: "stdout" | "stderr" | "stdin", line: string): void {
     const formatted = `[${stream}] ${line}`;
     if (state.rcLastDiagnostic === formatted || (state.agent.rcDiagnostics || []).includes(formatted)) return;
     state.rcLastDiagnostic = formatted;

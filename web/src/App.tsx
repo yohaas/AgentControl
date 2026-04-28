@@ -5479,7 +5479,8 @@ function AgentTile({
   const [slashMenuSuppressed, setSlashMenuSuppressed] = useState(false);
   const composerDragDepthRef = useRef(0);
   const isBusy = isAgentBusy(agent);
-  const canType = !agent.remoteControl && agentHasProcess(agent);
+  const canType = agentHasProcess(agent);
+  const canAttach = !agent.remoteControl;
   const showActivityIndicator = isBusy && !hasStreamingAssistantText(transcript);
   const pinnedMessage = latestUserMessage(transcript);
   const pinLastSentMessage = settings.pinLastSentMessage;
@@ -5559,7 +5560,11 @@ function AgentTile({
   }
 
   function send() {
-    if ((!draft.trim() && attachments.length === 0) || agent.remoteControl) return;
+    if (!draft.trim() && attachments.length === 0) return;
+    if (agent.remoteControl && attachments.length > 0) {
+      addError("Remote Control stdin bridge does not support attachments yet.");
+      return;
+    }
     if (handleNativeSlashCommand(agent, draft)) {
       setDraft(agent.id, "");
       return;
@@ -5604,7 +5609,7 @@ function AgentTile({
       window.requestAnimationFrame(() => inputRef.current?.focus());
       return;
     }
-    if (!canType || agent.remoteControl) {
+    if (!canType) {
       window.requestAnimationFrame(() => inputRef.current?.focus());
       return;
     }
@@ -5717,7 +5722,7 @@ function AgentTile({
     composerDragDepthRef.current = 0;
     setComposerDropActive(false);
     event.stopPropagation();
-    if (!canType || isAgentReorderDrag(event.dataTransfer)) return;
+    if (!canType || !canAttach || isAgentReorderDrag(event.dataTransfer)) return;
     event.preventDefault();
     try {
       const dropped = await attachmentsFromDrop(agent, event.dataTransfer);
@@ -5728,7 +5733,7 @@ function AgentTile({
   }
 
   function handleComposerDragEnter(event: ReactDragEvent<HTMLDivElement>) {
-    if (!canType || isAgentReorderDrag(event.dataTransfer)) return;
+    if (!canType || !canAttach || isAgentReorderDrag(event.dataTransfer)) return;
     event.preventDefault();
     event.stopPropagation();
     composerDragDepthRef.current += 1;
@@ -5736,7 +5741,7 @@ function AgentTile({
   }
 
   function handleComposerDragOver(event: ReactDragEvent<HTMLDivElement>) {
-    if (!canType || isAgentReorderDrag(event.dataTransfer)) return;
+    if (!canType || !canAttach || isAgentReorderDrag(event.dataTransfer)) return;
     event.preventDefault();
     event.stopPropagation();
     event.dataTransfer.dropEffect = "copy";
@@ -5744,7 +5749,7 @@ function AgentTile({
   }
 
   function handleComposerDragLeave(event: ReactDragEvent<HTMLDivElement>) {
-    if (!canType || isAgentReorderDrag(event.dataTransfer)) return;
+    if (!canType || !canAttach || isAgentReorderDrag(event.dataTransfer)) return;
     event.preventDefault();
     event.stopPropagation();
     composerDragDepthRef.current = Math.max(0, composerDragDepthRef.current - 1);
@@ -5890,8 +5895,8 @@ function AgentTile({
                   </p>
                 )}
                 {agent.remoteControl ? (
-                  <div className="grid h-full place-items-center text-center">
-                    <div className="grid max-w-sm justify-items-center gap-3">
+                  <div className="grid gap-3">
+                    <div className="grid justify-items-center gap-3 rounded-md border border-dashed border-border p-3 text-center">
                       {agent.qr ? (
                         <img className="h-36 w-36 rounded-md bg-white p-2" src={agent.qr} alt="Remote Control QR code" />
                       ) : (
@@ -5901,7 +5906,7 @@ function AgentTile({
                       )}
                       <p className="text-sm text-muted-foreground">{remoteControlLabel(agent)}</p>
                       <p className="text-xs text-muted-foreground">
-                        Live conversation stays in Claude. AgentControl shows connection state and CLI diagnostics.
+                        Experimental bridge: stdout is mirrored below, and messages typed here are sent to Remote Control stdin.
                       </p>
                       {agent.rcUrl && <p className="max-w-full break-all text-xs text-muted-foreground">{agent.rcUrl}</p>}
                       <Button
@@ -5916,8 +5921,24 @@ function AgentTile({
                         {(agent.rcDiagnostics || []).length > 0
                           ? (agent.rcDiagnostics || []).slice(-6).join("\n")
                           : "Waiting for Remote Control diagnostics..."}
-                      </pre>
-                    </div>
+                        </pre>
+                      </div>
+                    {transcript.length === 0 ? (
+                      <p className="rounded-md border border-dashed border-border px-3 py-6 text-center text-sm text-muted-foreground">
+                        No mirrored Remote Control transcript yet.
+                      </p>
+                    ) : (
+                      <div className="grid gap-2">
+                        {transcriptItems.map((item) => (
+                          <TranscriptPreview
+                            key={item.kind === "tool_pair" ? item.event.id : item.event.id}
+                            item={item}
+                            agent={agent}
+                            latestUserMessageId={pinnedMessage?.id}
+                          />
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ) : transcript.length === 0 ? (
                   showActivityIndicator ? (
@@ -5952,7 +5973,6 @@ function AgentTile({
               getCachedSelectedText={selection.getCachedSelection}
             />
           </ContextMenu>
-          {!agent.remoteControl && (
             <div className="shrink-0 border-t border-border p-3">
           <AddContextDialog
             agent={agent}
@@ -6040,7 +6060,7 @@ function AgentTile({
                     event.currentTarget.value = "";
                   }}
                 />
-                <ComposerAddMenu disabled={!canType} onUpload={() => fileInputRef.current?.click()} onAddContext={() => setContextOpen(true)} />
+                <ComposerAddMenu disabled={!canType || !canAttach} onUpload={() => fileInputRef.current?.click()} onAddContext={() => setContextOpen(true)} />
                 <Button
                   variant="ghost"
                   size="icon"
@@ -6072,7 +6092,6 @@ function AgentTile({
             </div>
           </div>
             </div>
-          )}
           <div
             className="absolute bottom-0 right-0 top-0 w-2 cursor-ew-resize rounded-r-md hover:bg-primary/20"
             onPointerDown={startResize}
@@ -6324,6 +6343,7 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
   const composerDragDepthRef = useRef(0);
   const isBusy = isAgentBusy(agent);
   const canType = agentHasProcess(agent);
+  const canAttach = !agent.remoteControl;
   const showActivityIndicator = isBusy && !hasStreamingAssistantText(transcript);
   const pinnedMessage = latestUserMessage(transcript);
   const pinLastSentMessage = settings.pinLastSentMessage;
@@ -6376,6 +6396,10 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
 
   function send() {
     if (!draft.trim() && attachments.length === 0) return;
+    if (agent.remoteControl && attachments.length > 0) {
+      addError("Remote Control stdin bridge does not support attachments yet.");
+      return;
+    }
     if (handleNativeSlashCommand(agent, draft)) {
       setDraft(agent.id, "");
       return;
@@ -6555,7 +6579,7 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
     composerDragDepthRef.current = 0;
     setComposerDropActive(false);
     event.stopPropagation();
-    if (!canType || isAgentReorderDrag(event.dataTransfer)) return;
+    if (!canType || !canAttach || isAgentReorderDrag(event.dataTransfer)) return;
     event.preventDefault();
     try {
       const dropped = await attachmentsFromDrop(agent, event.dataTransfer);
@@ -6566,7 +6590,7 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
   }
 
   function handleComposerDragEnter(event: ReactDragEvent<HTMLDivElement>) {
-    if (!canType || isAgentReorderDrag(event.dataTransfer)) return;
+    if (!canType || !canAttach || isAgentReorderDrag(event.dataTransfer)) return;
     event.preventDefault();
     event.stopPropagation();
     composerDragDepthRef.current += 1;
@@ -6574,7 +6598,7 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
   }
 
   function handleComposerDragOver(event: ReactDragEvent<HTMLDivElement>) {
-    if (!canType || isAgentReorderDrag(event.dataTransfer)) return;
+    if (!canType || !canAttach || isAgentReorderDrag(event.dataTransfer)) return;
     event.preventDefault();
     event.stopPropagation();
     event.dataTransfer.dropEffect = "copy";
@@ -6582,7 +6606,7 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
   }
 
   function handleComposerDragLeave(event: ReactDragEvent<HTMLDivElement>) {
-    if (!canType || isAgentReorderDrag(event.dataTransfer)) return;
+    if (!canType || !canAttach || isAgentReorderDrag(event.dataTransfer)) return;
     event.preventDefault();
     event.stopPropagation();
     composerDragDepthRef.current = Math.max(0, composerDragDepthRef.current - 1);
@@ -6734,7 +6758,7 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
                   event.currentTarget.value = "";
                 }}
               />
-              <ComposerAddMenu disabled={!canType} onUpload={() => fileInputRef.current?.click()} onAddContext={() => setContextOpen(true)} />
+              <ComposerAddMenu disabled={!canType || !canAttach} onUpload={() => fileInputRef.current?.click()} onAddContext={() => setContextOpen(true)} />
               <Button
                 variant="ghost"
                 size="icon"
