@@ -2555,6 +2555,7 @@ function AgentTile({
   const popNextQueuedMessage = useAppStore((state) => state.popNextQueuedMessage);
   const addError = useAppStore((state) => state.addError);
   const setSelectedAgent = useAppStore((state) => state.setSelectedAgent);
+  const setFocusedAgent = useAppStore((state) => state.setFocusedAgent);
   const setTileWidth = useAppStore((state) => state.setTileWidth);
   const focusedAgentId = useAppStore((state) => state.focusedAgentId);
   const settings = useAppStore((state) => state.settings);
@@ -2566,6 +2567,7 @@ function AgentTile({
   const rootRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const suppressAutoFocusRef = useRef(false);
   const [showPinnedMessage, setShowPinnedMessage] = useState(false);
   const [contextOpen, setContextOpen] = useState(false);
   const [slashMenuSuppressed, setSlashMenuSuppressed] = useState(false);
@@ -2595,6 +2597,10 @@ function AgentTile({
   useEffect(() => {
     if (focusedAgentId !== agent.id) return;
     tileRef.current?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    if (suppressAutoFocusRef.current) {
+      suppressAutoFocusRef.current = false;
+      return;
+    }
     if (canType) {
       window.requestAnimationFrame(() => inputRef.current?.focus());
     }
@@ -2610,6 +2616,12 @@ function AgentTile({
   useEffect(() => {
     setActiveSlashIndex(0);
   }, [slashSuggestions.length, draft]);
+
+  function activateTile(focusInput = false) {
+    suppressAutoFocusRef.current = !focusInput;
+    setSelectedAgent(undefined);
+    setFocusedAgent(agent.id);
+  }
 
   function send() {
     if ((!draft.trim() && attachments.length === 0) || agent.remoteControl) return;
@@ -2776,6 +2788,7 @@ function AgentTile({
       style={{ height, flex: `0 0 ${width ? `${width}px` : defaultWidth}` }}
       onDragOver={(event) => event.preventDefault()}
       onPointerDown={(event) => {
+        activateTile(false);
         selection.clearSelection();
       }}
       onDrop={(event) => {
@@ -2918,7 +2931,9 @@ function AgentTile({
                 className="h-9 min-h-9 resize-none overflow-y-auto border-0 bg-transparent py-2 text-sm leading-5 focus-visible:ring-0"
                 value={draft}
                 disabled={!canType}
+                onFocus={() => activateTile(true)}
                 onChange={(event) => {
+                  activateTile(true);
                   setSlashMenuSuppressed(false);
                   setSlashInsertedByButton(false);
                   setDraft(agent.id, event.target.value);
