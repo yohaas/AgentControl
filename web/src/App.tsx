@@ -2807,7 +2807,7 @@ function PluginManagementPanel({ provider }: { provider: Extract<AgentProvider, 
             <Input
               value={manualPlugin}
               onChange={(event) => setManualPlugin(event.target.value)}
-              placeholder={provider === "codex" ? "Enable by plugin id" : "Install by exact plugin id"}
+              placeholder="Install by plugin id"
             />
             <Button disabled={!manualPlugin.trim() || Boolean(installingPlugin)} onClick={() => void install(manualPlugin)}>
               <Plus className="h-4 w-4" />
