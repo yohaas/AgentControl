@@ -13,6 +13,16 @@ function colorForName(name: string): string {
   return `hsl(${hue} 65% 55%)`;
 }
 
+function genericAgentDef(): AgentDef {
+  return {
+    name: "Generic",
+    description: "General-purpose Claude agent",
+    color: colorForName("Generic"),
+    tools: [],
+    systemPrompt: ""
+  };
+}
+
 function projectId(projectPath: string): string {
   return Buffer.from(path.resolve(projectPath)).toString("base64url");
 }
@@ -55,6 +65,25 @@ async function parseAgentFile(filePath: string): Promise<AgentDef | null> {
   };
 }
 
+async function readAgentDefs(projectPath: string): Promise<AgentDef[]> {
+  const agentsPath = path.join(projectPath, ".claude", "agents");
+  const agentDirStats = await stat(agentsPath).catch(() => null);
+  if (!agentDirStats?.isDirectory()) return [genericAgentDef()];
+
+  const agentFiles = await readdir(agentsPath, { withFileTypes: true }).catch(() => []);
+  const agents = (
+    await Promise.all(
+      agentFiles
+        .filter((file) => file.isFile() && file.name.endsWith(".md"))
+        .map((file) => parseAgentFile(path.join(agentsPath, file.name)).catch(() => null))
+    )
+  )
+    .filter((agent): agent is AgentDef => Boolean(agent))
+    .sort((left, right) => left.name.localeCompare(right.name));
+
+  return agents.length > 0 ? agents : [genericAgentDef()];
+}
+
 export async function scanProjects(projectsRoot: string): Promise<Project[]> {
   const rootStats = await stat(projectsRoot).catch(() => null);
   if (!rootStats?.isDirectory()) return [];
@@ -65,20 +94,7 @@ export async function scanProjects(projectsRoot: string): Promise<Project[]> {
   for (const entry of entries) {
     if (!entry.isDirectory()) continue;
     const projectPath = path.join(projectsRoot, entry.name);
-    const agentsPath = path.join(projectPath, ".claude", "agents");
-    const agentDirStats = await stat(agentsPath).catch(() => null);
-    if (!agentDirStats?.isDirectory()) continue;
-
-    const agentFiles = await readdir(agentsPath, { withFileTypes: true }).catch(() => []);
-    const agents = (
-      await Promise.all(
-        agentFiles
-          .filter((file) => file.isFile() && file.name.endsWith(".md"))
-          .map((file) => parseAgentFile(path.join(agentsPath, file.name)).catch(() => null))
-      )
-    )
-      .filter((agent): agent is AgentDef => Boolean(agent))
-      .sort((left, right) => left.name.localeCompare(right.name));
+    const agents = await readAgentDefs(projectPath);
 
     projects.push({
       id: projectId(projectPath),
@@ -95,28 +111,7 @@ export async function scanProject(projectPath: string): Promise<Project | null> 
   const resolvedPath = path.resolve(expandHome(projectPath));
   const projectStats = await stat(resolvedPath).catch(() => null);
   if (!projectStats?.isDirectory()) return null;
-
-  const agentsPath = path.join(resolvedPath, ".claude", "agents");
-  const agentDirStats = await stat(agentsPath).catch(() => null);
-  if (!agentDirStats?.isDirectory()) {
-    return {
-      id: projectId(resolvedPath),
-      name: path.basename(resolvedPath),
-      path: resolvedPath,
-      agents: []
-    };
-  }
-
-  const agentFiles = await readdir(agentsPath, { withFileTypes: true }).catch(() => []);
-  const agents = (
-    await Promise.all(
-      agentFiles
-        .filter((file) => file.isFile() && file.name.endsWith(".md"))
-        .map((file) => parseAgentFile(path.join(agentsPath, file.name)).catch(() => null))
-    )
-  )
-    .filter((agent): agent is AgentDef => Boolean(agent))
-    .sort((left, right) => left.name.localeCompare(right.name));
+  const agents = await readAgentDefs(resolvedPath);
 
   return {
     id: projectId(resolvedPath),
