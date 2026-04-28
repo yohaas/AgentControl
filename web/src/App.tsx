@@ -2220,6 +2220,10 @@ function currentEffort(agent: RunningAgent): AgentEffort {
   return agent.effort || "medium";
 }
 
+function currentThinking(agent: RunningAgent): boolean {
+  return agent.thinking !== false;
+}
+
 function ComposerModeMenu({
   agent,
   compact = false,
@@ -2231,6 +2235,7 @@ function ComposerModeMenu({
 }) {
   const activeMode = currentPermissionMode(agent);
   const activeEffort = currentEffort(agent);
+  const activeThinking = currentThinking(agent);
   const activeEffortLabel = EFFORT_OPTIONS.find((option) => option.effort === activeEffort)?.label || "Medium";
   const activeOption = COMPOSER_MODE_OPTIONS.find((option) => option.mode === activeMode) || COMPOSER_MODE_OPTIONS[0];
   const ActiveIcon = activeOption.icon;
@@ -2243,6 +2248,11 @@ function ComposerModeMenu({
   function setEffort(effort: AgentEffort) {
     if (activeEffort === effort) return;
     sendCommand({ type: "setEffort", id: agent.id, effort });
+  }
+
+  function setThinking(thinking: boolean) {
+    if (activeThinking === thinking) return;
+    sendCommand({ type: "setThinking", id: agent.id, thinking });
   }
 
   return (
@@ -2299,6 +2309,40 @@ function ComposerModeMenu({
             );
           })}
         </div>
+        <button
+          type="button"
+          className={cn(
+            "mt-2 flex w-full items-start gap-3 rounded-md border-t border-border px-2 py-2.5 text-left",
+            activeThinking && "bg-primary/20 text-foreground"
+          )}
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            setThinking(!activeThinking);
+          }}
+        >
+          <Brain className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-medium leading-none">Thinking</span>
+            <span className="mt-1 block text-xs leading-snug text-muted-foreground">
+              {activeThinking ? "Claude can use extended thinking for this session." : "Claude will skip extended thinking where supported."}
+            </span>
+          </span>
+          <span
+            className={cn(
+              "mt-0.5 inline-flex h-5 w-9 shrink-0 items-center rounded-full border border-border bg-muted p-0.5 transition-colors",
+              activeThinking && "border-primary/50 bg-primary/30"
+            )}
+            aria-hidden="true"
+          >
+            <span
+              className={cn(
+                "h-3.5 w-3.5 rounded-full bg-muted-foreground transition-transform",
+                activeThinking && "translate-x-4 bg-foreground"
+              )}
+            />
+          </span>
+        </button>
         <div className="mt-2 flex items-center gap-3 border-t border-border px-2 pt-2 text-xs text-muted-foreground">
           <Brain className="h-4 w-4" />
           <span className="flex-1">

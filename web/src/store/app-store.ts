@@ -335,6 +335,16 @@ export const useAppStore = create<AppState>((set, get) => ({
           )
         }));
         break;
+      case "agent.thinking_changed":
+        set((state) => ({
+          agents: withAgent(state.agents, event.id, (agent) =>
+            mergeAgent(agent, {
+              thinking: event.thinking,
+              updatedAt: event.updatedAt
+            })
+          )
+        }));
+        break;
       case "agent.session_info_changed":
         set((state) => ({
           agents: withAgent(state.agents, event.id, (agent) =>

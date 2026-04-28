@@ -88,6 +88,7 @@ export interface RunningAgent {
   remoteControl: boolean;
   permissionMode?: AgentPermissionMode;
   effort?: AgentEffort;
+  thinking?: boolean;
   planMode?: boolean;
   rcUrl?: string;
   qr?: string;
@@ -169,6 +170,7 @@ export interface LaunchRequest {
   remoteControl?: boolean;
   permissionMode?: AgentPermissionMode;
   effort?: AgentEffort;
+  thinking?: boolean;
   planMode?: boolean;
   autoApprove?: AutoApproveMode;
 }
@@ -307,6 +309,12 @@ export type WsServerEvent =
       updatedAt: string;
     }
   | {
+      type: "agent.thinking_changed";
+      id: string;
+      thinking: boolean;
+      updatedAt: string;
+    }
+  | {
       type: "agent.session_info_changed";
       id: string;
       tools: string[];
@@ -432,6 +440,11 @@ export type WsClientCommand =
       type: "setEffort";
       id: string;
       effort: AgentEffort;
+    }
+  | {
+      type: "setThinking";
+      id: string;
+      thinking: boolean;
     }
   | {
       type: "enablePlugin";

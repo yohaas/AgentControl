@@ -224,6 +224,7 @@ export class AgentRuntimeManager {
       rcDiagnostics: request.remoteControl ? [] : undefined,
       permissionMode,
       effort: request.effort || "medium",
+      thinking: request.thinking ?? true,
       planMode: permissionMode === "plan"
     };
 
@@ -445,6 +446,37 @@ export class AgentRuntimeManager {
     this.persist();
   }
 
+  setThinking(id: string, thinking: boolean): void {
+    const state = this.requiredState(id);
+    if (state.agent.remoteControl) throw new Error("Remote Control agents cannot change thinking from the dashboard.");
+
+    state.agent.thinking = thinking;
+    state.agent.updatedAt = now();
+    if (state.child && !state.child.killed) {
+      state.child.stdin.write(
+        `${JSON.stringify({
+          type: "control",
+          subtype: "set_thinking",
+          thinking,
+          enabled: thinking,
+          alwaysThinkingEnabled: thinking
+        })}\n`
+      );
+    }
+    this.pushTranscript(state, {
+      ...eventBase(state.agent.id, state.agent.currentModel),
+      kind: "system",
+      text: `Thinking ${thinking ? "enabled" : "disabled"}.`
+    });
+    this.broadcast({
+      type: "agent.thinking_changed",
+      id: state.agent.id,
+      thinking,
+      updatedAt: state.agent.updatedAt
+    });
+    this.persist();
+  }
+
   sendTo(command: SendToCommand): void {
     if (command.target.kind !== "existing") return;
 
@@ -626,7 +658,14 @@ export class AgentRuntimeManager {
           model
         ];
 
-    args.push("--permission-mode", this.permissionMode(state), "--effort", state.agent.effort || "medium");
+    args.push(
+      "--permission-mode",
+      this.permissionMode(state),
+      "--effort",
+      state.agent.effort || "medium",
+      "--settings",
+      JSON.stringify({ alwaysThinkingEnabled: state.agent.thinking !== false })
+    );
     const permissionMcpConfig = this.writePermissionMcpConfig(state);
     args.push(
       "--mcp-config",
@@ -639,6 +678,7 @@ export class AgentRuntimeManager {
 
     const child = spawn(resolveClaudeCommand(), args, {
       cwd: state.agent.projectPath,
+      env: this.claudeEnv(state),
       windowsHide: true
     });
     state.child = child;
@@ -807,6 +847,13 @@ export class AgentRuntimeManager {
     };
     writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`, "utf8");
     return configPath;
+  }
+
+  private claudeEnv(state: AgentProcessState): NodeJS.ProcessEnv {
+    const env: NodeJS.ProcessEnv = { ...process.env };
+    if (state.agent.thinking === false) env.MAX_THINKING_TOKENS = "0";
+    else delete env.MAX_THINKING_TOKENS;
+    return env;
   }
 
   private permissionMcpScriptPath(): { command: string; args: string[] } {
