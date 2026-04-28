@@ -2504,10 +2504,6 @@ function LaunchDialog() {
             <DialogTitle>Launch Agent</DialogTitle>
           </DialogHeader>
           <div className="grid gap-3">
-            <div className="flex min-w-0 items-center justify-between gap-3 rounded-md border border-border px-3 py-2 text-sm">
-              <span className="text-muted-foreground">Project</span>
-              <span className="truncate font-medium">{project?.name || "No project selected"}</span>
-            </div>
           <label className="grid gap-1.5 text-sm">
             Agent type
             <Select value={defName} onValueChange={selectDef}>
