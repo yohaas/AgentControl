@@ -1,4 +1,6 @@
 import os from "node:os";
+import { mkdirSync } from "node:fs";
+import path from "node:path";
 import { nanoid } from "nanoid";
 import { spawn as spawnPty, type IPty } from "node-pty";
 import type { Project, TerminalSession, TerminalSnapshot, WsServerEvent } from "@agent-control/shared";
@@ -6,6 +8,13 @@ import type { Project, TerminalSession, TerminalSnapshot, WsServerEvent } from "
 const MAX_OUTPUT_CHUNKS = 2000;
 const DEFAULT_COLS = 100;
 const DEFAULT_ROWS = 30;
+const terminalHistoryDir = path.join(os.homedir(), ".agent-dashboard", "terminal-history");
+
+interface ShellSpec {
+  command: string;
+  args: string[];
+  env?: Record<string, string>;
+}
 
 interface TerminalState {
   session: TerminalSession;
@@ -21,16 +30,53 @@ function envForPty(): Record<string, string> {
   return Object.fromEntries(Object.entries(process.env).filter((entry): entry is [string, string] => typeof entry[1] === "string"));
 }
 
-function defaultShell() {
+function shellName(command: string): string {
+  return path.basename(command).toLowerCase();
+}
+
+function powershellString(value: string): string {
+  return `'${value.replace(/'/g, "''")}'`;
+}
+
+function historyPathForProject(projectId?: string): string {
+  mkdirSync(terminalHistoryDir, { recursive: true });
+  return path.join(terminalHistoryDir, `${projectId || "global"}.history`);
+}
+
+function defaultShell(historyPath: string): ShellSpec {
   if (process.platform === "win32") {
+    const command = process.env.AGENT_CONTROL_SHELL || process.env.SHELL || "powershell.exe";
+    const name = shellName(command);
+    if (name === "powershell.exe" || name === "pwsh.exe" || name === "powershell" || name === "pwsh") {
+      return {
+        command,
+        args: [
+          "-NoLogo",
+          "-NoExit",
+          "-Command",
+          `try { Set-PSReadLineOption -HistorySavePath ${powershellString(historyPath)} -HistorySaveStyle SaveIncrementally } catch { }`
+        ]
+      };
+    }
     return {
-      command: process.env.ComSpec?.toLowerCase().endsWith("cmd.exe") ? process.env.ComSpec : "powershell.exe",
-      args: process.env.ComSpec?.toLowerCase().endsWith("cmd.exe") ? [] : ["-NoLogo"]
+      command,
+      args: []
     };
   }
+  const command = process.env.AGENT_CONTROL_SHELL || process.env.SHELL || "bash";
+  const existingPromptCommand = process.env.PROMPT_COMMAND;
+  const promptCommand = existingPromptCommand
+    ? `history -a; history -n; ${existingPromptCommand}`
+    : "history -a; history -n";
   return {
-    command: process.env.SHELL || "bash",
-    args: []
+    command,
+    args: [],
+    env: {
+      HISTFILE: historyPath,
+      HISTSIZE: "5000",
+      HISTFILESIZE: "10000",
+      PROMPT_COMMAND: promptCommand
+    }
   };
 }
 
@@ -51,7 +97,7 @@ export class TerminalManager {
 
   start(projectId?: string, cols = DEFAULT_COLS, rows = DEFAULT_ROWS): TerminalSession {
     const project = projectId ? this.projects().find((candidate) => candidate.id === projectId) : undefined;
-    const shell = defaultShell();
+    const shell = defaultShell(historyPathForProject(project?.id || projectId));
     const timestamp = now();
     const session: TerminalSession = {
       id: nanoid(10),
@@ -70,7 +116,7 @@ export class TerminalManager {
       cols,
       rows,
       cwd: session.cwd,
-      env: envForPty()
+      env: { ...envForPty(), ...shell.env }
     });
     const state: TerminalState = {
       session,
