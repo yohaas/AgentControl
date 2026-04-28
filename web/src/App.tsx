@@ -62,12 +62,14 @@ import type {
   AgentDef,
   AgentEffort,
   AgentPermissionMode,
+  AgentProvider,
   ClaudePluginCatalog,
   DirectoryEntry,
   DirectoryListing,
   GitStatus,
   GitWorktreeList,
   MessageAttachment,
+  ModelProfile,
   Project,
   ProjectFileEntry,
   RunningAgent,
@@ -1102,7 +1104,33 @@ function fullLastActivity(value?: string) {
 }
 
 function agentHasProcess(agent: RunningAgent) {
+  if (agent.provider === "openai" || agent.provider === "codex") return agent.status !== "killed" && agent.status !== "error";
   return Boolean(agent.pid) && agent.status !== "killed" && agent.status !== "error" && agent.status !== "paused" && !agent.restorable;
+}
+
+function providerLabel(provider?: AgentProvider) {
+  if (provider === "codex") return "Codex";
+  if (provider === "openai") return "OpenAI";
+  return "Claude";
+}
+
+function modelProfilesForSettings(settings: { models: string[]; modelProfiles?: ModelProfile[] }): ModelProfile[] {
+  if (settings.modelProfiles?.length) return settings.modelProfiles;
+  return settings.models.map((model, index) => ({ id: model, provider: "claude", default: index === 0 }));
+}
+
+function parseModelProfiles(text: string): ModelProfile[] {
+  return text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const [maybeProvider, ...modelParts] = line.split(":");
+      const provider: AgentProvider = maybeProvider === "claude" || maybeProvider === "codex" || maybeProvider === "openai" ? maybeProvider : "claude";
+      const id = modelParts.length ? modelParts.join(":").trim() : line;
+      return { provider, id: id.trim() };
+    })
+    .filter((profile) => profile.id.length > 0);
 }
 
 function orderedAgentsForTiles(agents: RunningAgent[], tileOrder: string[]) {
@@ -2429,6 +2457,7 @@ function ModelText({ agent }: { agent: RunningAgent }) {
 function ModelMenu({ agent, compact = false }: { agent: RunningAgent; compact?: boolean }) {
   const settings = useAppStore((state) => state.settings);
   const canSwitch = !agent.remoteControl && agent.status !== "switching-model" && agentHasProcess(agent);
+  const models = modelProfilesForSettings(settings).filter((profile) => profile.provider === (agent.provider || "claude"));
 
   return (
     <Popover>
@@ -2447,9 +2476,9 @@ function ModelMenu({ agent, compact = false }: { agent: RunningAgent; compact?: 
       <PopoverContent className="w-64">
         <div className="grid gap-2">
           <p className="text-sm font-medium">Switch model</p>
-          {settings.models.map((model) => (
-            <Button key={model} variant="ghost" className="justify-start" onClick={() => sendCommand({ type: "setModel", id: agent.id, model })}>
-              {model}
+          {models.map((model) => (
+            <Button key={model.id} variant="ghost" className="justify-start" onClick={() => sendCommand({ type: "setModel", id: agent.id, model: model.id })}>
+              {model.label || model.id}
             </Button>
           ))}
         </div>
@@ -2687,6 +2716,7 @@ function LaunchDialog() {
   const closeLaunchModal = useAppStore((state) => state.closeLaunchModal);
   const [defName, setDefName] = useState("");
   const [displayName, setDisplayName] = useState("");
+  const [provider, setProvider] = useState<AgentProvider>("claude");
   const [model, setModel] = useState(DEFAULT_MODEL);
   const [initialPrompt, setInitialPrompt] = useState("");
   const [remoteControl, setRemoteControl] = useState(false);
@@ -2704,9 +2734,16 @@ function LaunchDialog() {
   const project = projects.find((candidate) => candidate.id === projectId);
   const agentOptions = useMemo(() => agentDefsWithGeneric(project), [project]);
   const def = agentOptions.find((candidate) => candidate.name === defName);
+  const modelProfiles = useMemo(() => modelProfilesForSettings(settings), [settings]);
   const modelOptions = useMemo(
-    () => Array.from(new Set([def?.defaultModel, ...settings.models].filter((item): item is string => Boolean(item)))),
-    [def?.defaultModel, settings.models]
+    () => {
+      const options = modelProfiles.filter((item) => item.provider === provider);
+      if (def?.defaultModel && !options.some((item) => item.id === def.defaultModel)) {
+        return [{ id: def.defaultModel, provider }, ...options];
+      }
+      return options.length ? options : [{ id: def?.defaultModel || settings.models[0] || DEFAULT_MODEL, provider }];
+    },
+    [def?.defaultModel, modelProfiles, provider, settings.models]
   );
   const restorableSessions = useMemo(
     () =>
@@ -2722,9 +2759,11 @@ function LaunchDialog() {
     const nextAgentOptions = agentDefsWithGeneric(nextProject);
     const nextDefName = modal.defName || nextAgentOptions[0]?.name || "";
     const nextDef = nextAgentOptions.find((candidate) => candidate.name === nextDefName);
+    const nextProvider = nextDef?.provider || "claude";
     setDefName(nextDefName);
     setDisplayName("");
-    setModel(nextDef?.defaultModel || settings.models[0] || DEFAULT_MODEL);
+    setProvider(nextProvider);
+    setModel(nextDef?.defaultModel || modelProfiles.find((item) => item.provider === nextProvider && item.default)?.id || modelProfiles.find((item) => item.provider === nextProvider)?.id || settings.models[0] || DEFAULT_MODEL);
     setInitialPrompt(modal.initialPrompt || "");
     setRemoteControl(false);
     setPluginIds(nextDef?.plugins || []);
@@ -2732,18 +2771,22 @@ function LaunchDialog() {
     setPluginCatalog({ installed: [], available: [], marketplaces: [] });
     setPluginPickerExpanded(false);
     setAgentFileOpen(false);
-  }, [modal, projectId, projects, settings.models]);
+  }, [modal, modelProfiles, projectId, projects, settings.models]);
 
   useEffect(() => {
     if (!def) return;
-    setModel(def.defaultModel || settings.models[0] || DEFAULT_MODEL);
+    const nextProvider = def.provider || provider;
+    setProvider(nextProvider);
+    setModel(def.defaultModel || modelProfiles.find((item) => item.provider === nextProvider && item.default)?.id || modelProfiles.find((item) => item.provider === nextProvider)?.id || settings.models[0] || DEFAULT_MODEL);
     setPluginIds(def.plugins || []);
-  }, [def, settings.models]);
+  }, [def, modelProfiles, settings.models]);
 
   function selectDef(nextDefName: string) {
     const nextDef = agentOptions.find((candidate) => candidate.name === nextDefName);
+    const nextProvider = nextDef?.provider || provider;
     setDefName(nextDefName);
-    setModel(nextDef?.defaultModel || settings.models[0] || DEFAULT_MODEL);
+    setProvider(nextProvider);
+    setModel(nextDef?.defaultModel || modelProfiles.find((item) => item.provider === nextProvider && item.default)?.id || modelProfiles.find((item) => item.provider === nextProvider)?.id || settings.models[0] || DEFAULT_MODEL);
     setPluginIds(nextDef?.plugins || []);
     setPluginQuery("");
     setPluginPickerExpanded(false);
@@ -2812,6 +2855,7 @@ function LaunchDialog() {
         projectId,
         defName,
         displayName,
+        provider,
         model,
         initialPrompt: remoteControl ? undefined : initialPrompt,
         remoteControl,
@@ -2846,7 +2890,7 @@ function LaunchDialog() {
     }
   }
 
-  const rcDisabled = !capabilities?.supportsRemoteControl;
+  const rcDisabled = provider !== "claude" || !capabilities?.supportsRemoteControl;
   const installedPlugins = useMemo(() => new Map(pluginCatalog.installed.map((plugin) => [plugin.name, plugin])), [pluginCatalog.installed]);
   const selectedPluginRows = useMemo(
     () =>
@@ -2934,6 +2978,31 @@ function LaunchDialog() {
             Display name
             <Input value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder={def?.name || "Agent"} />
           </label>
+          <label className="grid gap-1.5 text-sm">
+            Provider
+            <Select
+              value={provider}
+              onValueChange={(value) => {
+                const nextProvider = value as AgentProvider;
+                setProvider(nextProvider);
+                setRemoteControl(false);
+                setModel(
+                  modelProfiles.find((item) => item.provider === nextProvider && item.default)?.id ||
+                    modelProfiles.find((item) => item.provider === nextProvider)?.id ||
+                    model
+                );
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="claude">Claude Code</SelectItem>
+                <SelectItem value="codex">Codex CLI</SelectItem>
+                <SelectItem value="openai">OpenAI API</SelectItem>
+              </SelectContent>
+            </Select>
+          </label>
           {restorableSessions.length > 0 && (
             <section className="grid gap-2 rounded-md border border-border p-3">
               <div>
@@ -2971,14 +3040,21 @@ function LaunchDialog() {
               </SelectTrigger>
               <SelectContent>
                 {modelOptions.map((item) => (
-                  <SelectItem key={item} value={item}>
-                    {item}
+                  <SelectItem key={item.id} value={item.id}>
+                    {item.label || item.id}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </label>
-          <section className="grid gap-2 text-sm">
+          {provider !== "claude" && (
+            <div className="rounded-md border border-border px-3 py-2 text-xs text-muted-foreground">
+              {provider === "codex"
+                ? "Codex sessions run through the configured Codex CLI. Claude plugins and Remote Control are disabled."
+                : "OpenAI API sessions stream through the Responses API using OPENAI_API_KEY. Local shell tools are not bridged by default."}
+            </div>
+          )}
+          {provider === "claude" && <section className="grid gap-2 text-sm">
             <div className="flex items-center justify-between gap-2">
               <div>
                 <h3 className="text-sm font-medium">Agent plugins</h3>
@@ -3102,7 +3178,7 @@ function LaunchDialog() {
             {!def?.sourcePath && (
               <p className="text-xs text-muted-foreground">Generic agents need an agent file before plugin selections can be saved.</p>
             )}
-          </section>
+          </section>}
           <label className="flex items-start gap-2 rounded-md border border-border p-3 text-sm" title={rcDisabled ? capabilities?.remoteControlReason : undefined}>
             <input
               type="checkbox"
@@ -3179,6 +3255,14 @@ function SettingsDialog() {
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const [projectPathsText, setProjectPathsText] = useState((settings.projectPaths || []).join("\n"));
   const [modelsText, setModelsText] = useState(settings.models.join("\n"));
+  const [modelProfilesText, setModelProfilesText] = useState((settings.modelProfiles || []).map((profile) => `${profile.provider}:${profile.id}`).join("\n"));
+  const [gitPath, setGitPath] = useState(settings.gitPath || "");
+  const [claudePath, setClaudePath] = useState(settings.claudePath || "");
+  const [codexPath, setCodexPath] = useState(settings.codexPath || "");
+  const [anthropicApiKey, setAnthropicApiKey] = useState("");
+  const [openaiApiKey, setOpenaiApiKey] = useState("");
+  const [clearAnthropicApiKey, setClearAnthropicApiKey] = useState(false);
+  const [clearOpenaiApiKey, setClearOpenaiApiKey] = useState(false);
   const [autoApprove, setAutoApprove] = useState(settings.autoApprove);
   const [defaultAgentMode, setDefaultAgentMode] = useState<AgentPermissionMode>(settings.defaultAgentMode);
   const [tileHeight, setTileHeight] = useState(settings.tileHeight);
@@ -3189,6 +3273,14 @@ function SettingsDialog() {
     if (!open) return;
     setProjectPathsText((settings.projectPaths || []).join("\n"));
     setModelsText(settings.models.join("\n"));
+    setModelProfilesText((settings.modelProfiles || []).map((profile) => `${profile.provider}:${profile.id}`).join("\n"));
+    setGitPath(settings.gitPath || "");
+    setClaudePath(settings.claudePath || "");
+    setCodexPath(settings.codexPath || "");
+    setAnthropicApiKey("");
+    setOpenaiApiKey("");
+    setClearAnthropicApiKey(false);
+    setClearOpenaiApiKey(false);
     setAutoApprove(settings.autoApprove);
     setDefaultAgentMode(settings.defaultAgentMode);
     setTileHeight(settings.tileHeight);
@@ -3202,6 +3294,14 @@ function SettingsDialog() {
         ...settings,
         projectPaths: projectPathsText.split(/\r?\n/).map((line) => line.trim()).filter(Boolean),
         models: modelsText.split(/\r?\n/).map((line) => line.trim()).filter(Boolean),
+        modelProfiles: parseModelProfiles(modelProfilesText),
+        gitPath,
+        claudePath,
+        codexPath,
+        anthropicApiKey: anthropicApiKey.trim() || undefined,
+        openaiApiKey: openaiApiKey.trim() || undefined,
+        clearAnthropicApiKey,
+        clearOpenaiApiKey,
         autoApprove,
         defaultAgentMode,
         tileHeight,
@@ -3224,6 +3324,10 @@ function SettingsDialog() {
         ...settings,
         projectPaths: projectPathsText.split(/\r?\n/).map((line) => line.trim()).filter(Boolean),
         models: modelsText.split(/\r?\n/).map((line) => line.trim()).filter(Boolean),
+        modelProfiles: parseModelProfiles(modelProfilesText),
+        gitPath,
+        claudePath,
+        codexPath,
         autoApprove,
         defaultAgentMode,
         tileHeight,
@@ -3244,6 +3348,10 @@ function SettingsDialog() {
       setProjects(await api.refresh());
       setProjectPathsText((next.projectPaths || []).join("\n"));
       setModelsText(next.models.join("\n"));
+      setModelProfilesText((next.modelProfiles || []).map((profile) => `${profile.provider}:${profile.id}`).join("\n"));
+      setGitPath(next.gitPath || "");
+      setClaudePath(next.claudePath || "");
+      setCodexPath(next.codexPath || "");
       setAutoApprove(next.autoApprove);
       setDefaultAgentMode(next.defaultAgentMode);
       setTileHeight(next.tileHeight);
@@ -3274,6 +3382,64 @@ function SettingsDialog() {
             Models
             <Textarea value={modelsText} onChange={(event) => setModelsText(event.target.value)} />
           </label>
+          <label className="grid gap-1.5 text-sm">
+            Provider models
+            <Textarea
+              value={modelProfilesText}
+              onChange={(event) => setModelProfilesText(event.target.value)}
+              placeholder="claude:claude-sonnet-4-6&#10;codex:gpt-5.3-codex&#10;openai:gpt-5.4"
+            />
+          </label>
+          <section className="grid gap-2 rounded-md border border-border p-3">
+            <div>
+              <h3 className="text-sm font-medium">Paths</h3>
+              <p className="text-xs text-muted-foreground">Leave blank to auto-detect from PATH or environment variables.</p>
+            </div>
+            <label className="grid gap-1.5 text-sm">
+              Git path
+              <Input value={gitPath} onChange={(event) => setGitPath(event.target.value)} placeholder="git" />
+            </label>
+            <label className="grid gap-1.5 text-sm">
+              Claude path
+              <Input value={claudePath} onChange={(event) => setClaudePath(event.target.value)} placeholder="claude" />
+            </label>
+            <label className="grid gap-1.5 text-sm">
+              Codex path
+              <Input value={codexPath} onChange={(event) => setCodexPath(event.target.value)} placeholder="codex" />
+            </label>
+          </section>
+          <section className="grid gap-2 rounded-md border border-border p-3">
+            <div>
+              <h3 className="text-sm font-medium">Provider keys</h3>
+              <p className="text-xs text-muted-foreground">Environment variables win unless you save a local key here. Saved keys are not exported.</p>
+            </div>
+            <label className="grid gap-1.5 text-sm">
+              Anthropic API key
+              <Input
+                type="password"
+                value={anthropicApiKey}
+                onChange={(event) => setAnthropicApiKey(event.target.value)}
+                placeholder={`Current: ${settings.anthropicKeySource || "missing"}`}
+              />
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={clearAnthropicApiKey} onChange={(event) => setClearAnthropicApiKey(event.target.checked)} />
+              Clear saved Anthropic key{settings.anthropicKeySaved ? "" : " (none saved)"}
+            </label>
+            <label className="grid gap-1.5 text-sm">
+              OpenAI API key
+              <Input
+                type="password"
+                value={openaiApiKey}
+                onChange={(event) => setOpenaiApiKey(event.target.value)}
+                placeholder={`Current: ${settings.openaiKeySource || "missing"}`}
+              />
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={clearOpenaiApiKey} onChange={(event) => setClearOpenaiApiKey(event.target.checked)} />
+              Clear saved OpenAI key{settings.openaiKeySaved ? "" : " (none saved)"}
+            </label>
+          </section>
           <label className="grid gap-1.5 text-sm">
             Default mode for new agents
             <Select value={defaultAgentMode} onValueChange={(value) => setDefaultAgentMode(value as AgentPermissionMode)}>
@@ -3939,7 +4105,7 @@ function AgentTile({
                   setDraft(agent.id, event.target.value);
                 }}
                 onPaste={handlePaste}
-                placeholder={isBusy ? "Queue a message..." : "chat with Claude"}
+                placeholder={isBusy ? "Queue a message..." : `chat with ${providerLabel(agent.provider)}`}
                 onKeyDown={handleComposerKeyDown}
               />
             </div>
@@ -4534,7 +4700,7 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
                 setDraft(agent.id, event.target.value);
               }}
               onPaste={handlePaste}
-              placeholder={isBusy ? "Queue a message..." : "chat with Claude"}
+              placeholder={isBusy ? "Queue a message..." : `chat with ${providerLabel(agent.provider)}`}
               onKeyDown={handleComposerKeyDown}
             />
           </div>

@@ -30,7 +30,9 @@ import { detectCapabilities } from "./capabilities.js";
 import {
   expandHome,
   readConfig,
+  readSecrets,
   resolveDefaultAgentMode,
+  resolveModelProfiles,
   resolveModels,
   resolvePinLastSentMessage,
   resolveProjectsRoot,
@@ -38,7 +40,8 @@ import {
   resolveTerminalDock,
   resolveTileColumns,
   resolveTileHeight,
-  writeConfig
+  writeConfig,
+  writeSecrets
 } from "./config.js";
 import { addMarketplace, enablePlugin, installPlugin, listPlugins, pluginCatalog } from "./plugins.js";
 import { AgentRuntimeManager } from "./runtime.js";
@@ -57,6 +60,11 @@ const appAuthToken = process.env.AGENTCONTROL_AUTH_TOKEN || nanoid(48);
 const authCookieName = "agent_control_token";
 
 let config = await readConfig();
+let secrets = await readSecrets();
+if (config.claudePath) process.env.AGENTCONTROL_CLAUDE_PATH = config.claudePath;
+if (config.codexPath) process.env.AGENTCONTROL_CODEX_PATH = config.codexPath;
+if (!process.env.ANTHROPIC_API_KEY && secrets.anthropicApiKey) process.env.ANTHROPIC_API_KEY = secrets.anthropicApiKey;
+if (!process.env.OPENAI_API_KEY && secrets.openaiApiKey) process.env.OPENAI_API_KEY = secrets.openaiApiKey;
 let projectsRoot = resolveProjectsRoot(config);
 let projects: Project[] = config.projectPaths?.length ? await scanConfiguredProjects(config.projectPaths) : [];
 let capabilities: Capabilities = await detectCapabilities();
@@ -349,7 +357,7 @@ function parseGitWorktrees(output: string, currentPath: string): GitWorktree[] {
 
 function gitCommand(cwd: string, args: string[], timeout = 15000): Promise<string> {
   return new Promise((resolve, reject) => {
-    execFile("git", args, { cwd, timeout, windowsHide: true }, (error, stdout, stderr) => {
+    execFile(process.env.GIT_PATH || "git", args, { cwd, timeout, windowsHide: true }, (error, stdout, stderr) => {
       if (error) {
         reject(new Error((stderr || error.message || "Git command failed.").trim()));
         return;
@@ -941,6 +949,14 @@ app.get("/api/settings", (_request, response) => {
     projectsRoot,
     projectPaths: config.projectPaths || [],
     models: resolveModels(config),
+    modelProfiles: resolveModelProfiles(config),
+    gitPath: config.gitPath || process.env.GIT_PATH || "git",
+    claudePath: config.claudePath || process.env.CLAUDE_CODE_CLI || process.env.AGENTCONTROL_CLAUDE_PATH || "",
+    codexPath: config.codexPath || process.env.CODEX_CLI || process.env.AGENTCONTROL_CODEX_PATH || "",
+    anthropicKeySaved: Boolean(secrets.anthropicApiKey),
+    openaiKeySaved: Boolean(secrets.openaiApiKey),
+    anthropicKeySource: process.env.ANTHROPIC_API_KEY ? (secrets.anthropicApiKey === process.env.ANTHROPIC_API_KEY ? "local" : "env") : "missing",
+    openaiKeySource: process.env.OPENAI_API_KEY ? (secrets.openaiApiKey === process.env.OPENAI_API_KEY ? "local" : "env") : "missing",
     autoApprove: config.autoApprove || "off",
     defaultAgentMode: resolveDefaultAgentMode(config),
     tileHeight: resolveTileHeight(config),
@@ -1003,11 +1019,23 @@ app.post("/api/plugins/marketplaces", async (request, response) => {
 });
 
 app.put("/api/settings", async (request, response) => {
-  const body = request.body as DashboardConfig;
+  const body = request.body as DashboardConfig & { anthropicApiKey?: string; openaiApiKey?: string; clearAnthropicApiKey?: boolean; clearOpenaiApiKey?: boolean };
+  if (typeof body.anthropicApiKey === "string" || typeof body.openaiApiKey === "string" || body.clearAnthropicApiKey || body.clearOpenaiApiKey) {
+    secrets = await writeSecrets({
+      anthropicApiKey: body.clearAnthropicApiKey ? undefined : body.anthropicApiKey?.trim() || secrets.anthropicApiKey,
+      openaiApiKey: body.clearOpenaiApiKey ? undefined : body.openaiApiKey?.trim() || secrets.openaiApiKey
+    });
+    if (body.clearAnthropicApiKey) delete process.env.ANTHROPIC_API_KEY;
+    if (body.clearOpenaiApiKey) delete process.env.OPENAI_API_KEY;
+  }
   config = await writeConfig({
     projectsRoot: typeof body.projectsRoot === "string" ? body.projectsRoot : config.projectsRoot,
     projectPaths: Array.isArray(body.projectPaths) ? body.projectPaths : config.projectPaths,
     models: Array.isArray(body.models) ? body.models : config.models,
+    modelProfiles: Array.isArray(body.modelProfiles) ? body.modelProfiles : config.modelProfiles,
+    gitPath: typeof body.gitPath === "string" ? body.gitPath.trim() : config.gitPath,
+    claudePath: typeof body.claudePath === "string" ? body.claudePath.trim() : config.claudePath,
+    codexPath: typeof body.codexPath === "string" ? body.codexPath.trim() : config.codexPath,
     autoApprove: body.autoApprove || config.autoApprove,
     defaultAgentMode: resolveDefaultAgentMode(body.defaultAgentMode ? body : config),
     tileHeight: typeof body.tileHeight === "number" ? resolveTileHeight(body) : resolveTileHeight(config),
@@ -1016,12 +1044,34 @@ app.put("/api/settings", async (request, response) => {
     pinLastSentMessage: typeof body.pinLastSentMessage === "boolean" ? body.pinLastSentMessage : resolvePinLastSentMessage(config),
     terminalDock: resolveTerminalDock(body.terminalDock ? body : config)
   });
+  if (config.claudePath) process.env.AGENTCONTROL_CLAUDE_PATH = config.claudePath;
+  else delete process.env.AGENTCONTROL_CLAUDE_PATH;
+  if (config.codexPath) process.env.AGENTCONTROL_CODEX_PATH = config.codexPath;
+  else delete process.env.AGENTCONTROL_CODEX_PATH;
+  if (config.gitPath) process.env.GIT_PATH = config.gitPath;
+  if (!process.env.ANTHROPIC_API_KEY || secrets.anthropicApiKey) {
+    if (secrets.anthropicApiKey) process.env.ANTHROPIC_API_KEY = secrets.anthropicApiKey;
+    else delete process.env.ANTHROPIC_API_KEY;
+  }
+  if (!process.env.OPENAI_API_KEY || secrets.openaiApiKey) {
+    if (secrets.openaiApiKey) process.env.OPENAI_API_KEY = secrets.openaiApiKey;
+    else delete process.env.OPENAI_API_KEY;
+  }
+  capabilities = await detectCapabilities();
   projectsRoot = resolveProjectsRoot(config);
   projects = config.projectPaths?.length ? await scanConfiguredProjects(config.projectPaths) : [];
   response.json({
     projectsRoot,
     projectPaths: config.projectPaths || [],
     models: resolveModels(config),
+    modelProfiles: resolveModelProfiles(config),
+    gitPath: config.gitPath || process.env.GIT_PATH || "git",
+    claudePath: config.claudePath || process.env.CLAUDE_CODE_CLI || process.env.AGENTCONTROL_CLAUDE_PATH || "",
+    codexPath: config.codexPath || process.env.CODEX_CLI || process.env.AGENTCONTROL_CODEX_PATH || "",
+    anthropicKeySaved: Boolean(secrets.anthropicApiKey),
+    openaiKeySaved: Boolean(secrets.openaiApiKey),
+    anthropicKeySource: process.env.ANTHROPIC_API_KEY ? (secrets.anthropicApiKey === process.env.ANTHROPIC_API_KEY ? "local" : "env") : "missing",
+    openaiKeySource: process.env.OPENAI_API_KEY ? (secrets.openaiApiKey === process.env.OPENAI_API_KEY ? "local" : "env") : "missing",
     autoApprove: config.autoApprove || "off",
     defaultAgentMode: resolveDefaultAgentMode(config),
     tileHeight: resolveTileHeight(config),

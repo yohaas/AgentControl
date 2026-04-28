@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
-import type { AuthMethod, Capabilities } from "@agent-control/shared";
+import type { AuthMethod, Capabilities, ProviderCapability } from "@agent-control/shared";
 
 const execFileAsync = promisify(execFile);
 
@@ -28,8 +28,9 @@ function resolveWindowsClaudeCommand(commandPath: string): string {
 }
 
 export function resolveClaudeCommand(): string {
-  if (process.env.CLAUDE_CODE_CLI) {
-    return process.platform === "win32" ? resolveWindowsClaudeCommand(process.env.CLAUDE_CODE_CLI) : process.env.CLAUDE_CODE_CLI;
+  const configured = process.env.CLAUDE_CODE_CLI || process.env.AGENTCONTROL_CLAUDE_PATH;
+  if (configured) {
+    return process.platform === "win32" ? resolveWindowsClaudeCommand(configured) : configured;
   }
   if (process.platform !== "win32") return "claude";
 
@@ -41,6 +42,16 @@ export function resolveClaudeCommand(): string {
   if (existsSync(cmdShim)) return resolveWindowsClaudeCommand(cmdShim);
 
   return "claude.cmd";
+}
+
+export function resolveCodexCommand(): string {
+  const configured = process.env.CODEX_CLI || process.env.AGENTCONTROL_CODEX_PATH;
+  if (configured) return configured;
+  if (process.platform !== "win32") return "codex";
+  const npmDir = process.env.APPDATA ? path.join(process.env.APPDATA, "npm") : path.join(os.homedir(), "AppData", "Roaming", "npm");
+  const cmdShim = path.join(npmDir, "codex.cmd");
+  if (existsSync(cmdShim)) return cmdShim;
+  return "codex.cmd";
 }
 
 function compareVersions(left: string, right: string): number {
@@ -78,41 +89,107 @@ export async function detectCapabilities(): Promise<Capabilities> {
   let authMethod: AuthMethod = "unknown";
   const claudeCommand = resolveClaudeCommand();
 
+  let claudeAvailable = false;
   try {
     const { stdout, stderr } = await execFileAsync(claudeCommand, ["--version"], { timeout: 4000 });
     cliVersion = parseVersion(`${stdout}\n${stderr}`);
+    claudeAvailable = true;
   } catch {
-    return {
-      supportsRemoteControl: false,
-      authMethod,
-      remoteControlReason: "Claude Code CLI was not found."
-    };
+    // Continue with non-Claude providers.
   }
 
-  try {
-    const { stdout, stderr } = await execFileAsync(claudeCommand, ["auth", "status"], { timeout: 4000 });
-    authMethod = parseAuthMethod(`${stdout}\n${stderr}`);
-  } catch {
+  if (claudeAvailable) {
     try {
-      const { stdout, stderr } = await execFileAsync(claudeCommand, ["/status"], { timeout: 4000 });
+      const { stdout, stderr } = await execFileAsync(claudeCommand, ["auth", "status"], { timeout: 4000 });
       authMethod = parseAuthMethod(`${stdout}\n${stderr}`);
     } catch {
-      authMethod = "unknown";
+      try {
+        const { stdout, stderr } = await execFileAsync(claudeCommand, ["/status"], { timeout: 4000 });
+        authMethod = parseAuthMethod(`${stdout}\n${stderr}`);
+      } catch {
+        authMethod = process.env.ANTHROPIC_API_KEY ? "api-key" : "unknown";
+      }
     }
   }
 
   const versionOk = cliVersion ? compareVersions(cliVersion, "2.1.51") >= 0 : false;
-  const supportsRemoteControl = versionOk && authMethod === "claude.ai";
-  const reason = !versionOk
+  const supportsRemoteControl = claudeAvailable && versionOk && authMethod === "claude.ai";
+  const reason = !claudeAvailable
+    ? "Claude Code CLI was not found."
+    : !versionOk
     ? "Remote Control requires Claude Code CLI 2.1.51 or newer."
     : authMethod !== "claude.ai"
       ? "Remote Control requires claude.ai authentication."
       : undefined;
 
+  const providers: ProviderCapability[] = [
+    {
+      provider: "claude",
+      label: "Claude Code",
+      available: claudeAvailable,
+      version: cliVersion,
+      authMethod,
+      command: claudeCommand,
+      reason: claudeAvailable ? undefined : "Claude Code CLI was not found.",
+      supportsRemoteControl,
+      supportsStreaming: true,
+      supportsImages: true,
+      supportsTools: true,
+      supportsMcp: true,
+      supportsPlugins: true,
+      supportsResume: true
+    },
+    await detectCodexCapability(),
+    {
+      provider: "openai",
+      label: "OpenAI API",
+      available: Boolean(process.env.OPENAI_API_KEY),
+      authMethod: process.env.OPENAI_API_KEY ? "openai-api" : "unknown",
+      reason: process.env.OPENAI_API_KEY ? undefined : "OPENAI_API_KEY is not set.",
+      supportsStreaming: true,
+      supportsImages: true,
+      supportsTools: true,
+      supportsMcp: false,
+      supportsPlugins: false,
+      supportsResume: false
+    }
+  ];
+
   return {
     cliVersion,
     supportsRemoteControl,
     authMethod,
-    remoteControlReason: reason
+    remoteControlReason: reason,
+    providers
   };
+}
+
+async function detectCodexCapability(): Promise<ProviderCapability> {
+  const codexCommand = resolveCodexCommand();
+  try {
+    const { stdout, stderr } = await execFileAsync(codexCommand, ["--version"], { timeout: 4000 });
+    return {
+      provider: "codex",
+      label: "Codex CLI",
+      available: true,
+      version: parseVersion(`${stdout}\n${stderr}`),
+      authMethod: process.env.OPENAI_API_KEY ? "openai-api" : "chatgpt",
+      command: codexCommand,
+      supportsStreaming: true,
+      supportsImages: false,
+      supportsTools: true,
+      supportsMcp: true,
+      supportsPlugins: false,
+      supportsResume: false
+    };
+  } catch {
+    return {
+      provider: "codex",
+      label: "Codex CLI",
+      available: false,
+      command: codexCommand,
+      reason: "Codex CLI was not found or could not be executed.",
+      supportsStreaming: false
+    };
+  }
 }

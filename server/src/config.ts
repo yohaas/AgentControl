@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import type { AgentPermissionMode, AutoApproveMode } from "@agent-control/shared";
+import type { AgentPermissionMode, AutoApproveMode, ModelProfile } from "@agent-control/shared";
 
 export const DEFAULT_MODELS = [
   "claude-opus-4-7",
@@ -10,10 +10,24 @@ export const DEFAULT_MODELS = [
   "claude-haiku-4-5"
 ];
 
+export const DEFAULT_MODEL_PROFILES: ModelProfile[] = [
+  { id: "claude-opus-4-7", provider: "claude", default: false, supportsThinking: true, supportedEfforts: ["low", "medium", "high", "xhigh", "max"] },
+  { id: "claude-opus-4-6", provider: "claude", supportsThinking: true, supportedEfforts: ["low", "medium", "high", "xhigh", "max"] },
+  { id: "claude-sonnet-4-6", provider: "claude", default: true, supportsThinking: true, supportedEfforts: ["low", "medium", "high", "xhigh", "max"] },
+  { id: "claude-haiku-4-5", provider: "claude", supportsThinking: true, supportedEfforts: ["low", "medium", "high", "xhigh", "max"] },
+  { id: "gpt-5.4", provider: "openai", default: true, supportedEfforts: ["low", "medium", "high"] },
+  { id: "gpt-5.3-codex", provider: "codex", default: true, supportedEfforts: ["low", "medium", "high", "xhigh"] },
+  { id: "gpt-5.4-mini", provider: "openai", supportedEfforts: ["low", "medium", "high"] }
+];
+
 export interface DashboardConfig {
   projectsRoot?: string;
   projectPaths?: string[];
   models?: string[];
+  modelProfiles?: ModelProfile[];
+  gitPath?: string;
+  claudePath?: string;
+  codexPath?: string;
   autoApprove?: AutoApproveMode;
   defaultAgentMode?: AgentPermissionMode;
   tileHeight?: number;
@@ -27,6 +41,12 @@ export type TerminalDockPosition = "float" | "left" | "bottom" | "right";
 
 const configDir = path.join(os.homedir(), ".agent-dashboard");
 const configPath = path.join(configDir, "config.json");
+const secretsPath = path.join(configDir, "secrets.json");
+
+export interface DashboardSecrets {
+  anthropicApiKey?: string;
+  openaiApiKey?: string;
+}
 
 export function expandHome(input: string): string {
   if (input === "~") return os.homedir();
@@ -51,6 +71,21 @@ export async function writeConfig(config: DashboardConfig): Promise<DashboardCon
   return config;
 }
 
+export async function readSecrets(): Promise<DashboardSecrets> {
+  try {
+    const raw = await readFile(secretsPath, "utf8");
+    return JSON.parse(raw) as DashboardSecrets;
+  } catch {
+    return {};
+  }
+}
+
+export async function writeSecrets(secrets: DashboardSecrets): Promise<DashboardSecrets> {
+  await mkdir(configDir, { recursive: true });
+  await writeFile(secretsPath, `${JSON.stringify(secrets, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
+  return secrets;
+}
+
 export function resolveProjectsRoot(config: DashboardConfig): string {
   return path.resolve(expandHome(config.projectsRoot || process.env.PROJECTS_ROOT || "~/projects"));
 }
@@ -58,6 +93,27 @@ export function resolveProjectsRoot(config: DashboardConfig): string {
 export function resolveModels(config: DashboardConfig): string[] {
   const models = config.models?.map((model) => model.trim()).filter(Boolean);
   return models?.length ? models : DEFAULT_MODELS;
+}
+
+export function resolveModelProfiles(config: DashboardConfig): ModelProfile[] {
+  const profiles = Array.isArray(config.modelProfiles)
+    ? config.modelProfiles
+        .filter((profile): profile is ModelProfile =>
+          Boolean(profile) &&
+          typeof profile.id === "string" &&
+          profile.id.trim().length > 0 &&
+          (profile.provider === "claude" || profile.provider === "codex" || profile.provider === "openai")
+        )
+        .map((profile) => ({ ...profile, id: profile.id.trim(), label: profile.label?.trim() || undefined }))
+    : [];
+  if (profiles.length) return profiles;
+  return resolveModels(config).map((model, index) => ({
+    id: model,
+    provider: "claude",
+    default: index === 0,
+    supportsThinking: true,
+    supportedEfforts: ["low", "medium", "high", "xhigh", "max"]
+  }));
 }
 
 function clampNumber(value: unknown, fallback: number, min: number, max: number): number {

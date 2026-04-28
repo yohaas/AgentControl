@@ -2,7 +2,7 @@ import { readdir, readFile, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import matter from "gray-matter";
-import type { AgentDef, Project } from "@agent-control/shared";
+import type { AgentDef, AgentProvider, Project } from "@agent-control/shared";
 
 function colorForName(name: string): string {
   let hash = 5381;
@@ -43,6 +43,11 @@ function toolsValue(value: unknown): string[] {
     : [];
 }
 
+function providerValue(value: unknown): AgentProvider | undefined {
+  if (value === "claude" || value === "codex" || value === "openai") return value;
+  return undefined;
+}
+
 function modelValue(data: Record<string, unknown>): string | undefined {
   return stringValue(data.defaultModel) || stringValue(data.default_model) || stringValue(data.model);
 }
@@ -59,6 +64,7 @@ async function parseAgentFile(filePath: string): Promise<AgentDef | null> {
     name,
     description: stringValue(data.description),
     color: stringValue(data.color) || colorForName(name),
+    provider: providerValue(data.provider),
     defaultModel: modelValue(data),
     tools: toolsValue(data.tools),
     plugins: toolsValue(data.plugins),

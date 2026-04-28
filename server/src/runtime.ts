@@ -8,6 +8,7 @@ import QRCode from "qrcode";
 import type {
   AgentDef,
   AgentEffort,
+  AgentProvider,
   ClaudeMcpServer,
   AgentSnapshot,
   AgentStatus,
@@ -25,7 +26,7 @@ import type {
   WsServerEvent
 } from "@agent-control/shared";
 import { createStateWriter, readPersistedState, type PersistedState } from "./persistence.js";
-import { resolveClaudeCommand } from "./capabilities.js";
+import { resolveClaudeCommand, resolveCodexCommand } from "./capabilities.js";
 import { listPlugins } from "./plugins.js";
 import { mergeSlashCommands, normalizeSlashCommandInfo, scanSlashCommands } from "./slash-commands.js";
 
@@ -53,6 +54,7 @@ interface AgentProcessState {
   permissionToken?: string;
   pendingPermissions?: Map<string, PendingPermissionRequest>;
   rcLastDiagnostic?: string;
+  apiAbort?: AbortController;
 }
 
 const RAW_LINE_LIMIT = 5000;
@@ -115,6 +117,13 @@ function stringifyUnknown(value: unknown): string {
   } catch {
     return String(value);
   }
+}
+
+function providerForModel(model: string): AgentProvider {
+  const lower = model.toLowerCase();
+  if (lower.includes("codex")) return "codex";
+  if (lower.startsWith("gpt") || lower.startsWith("o")) return "openai";
+  return "claude";
 }
 
 function isTextLikeAttachment(attachment: MessageAttachment): boolean {
@@ -208,6 +217,10 @@ export class AgentRuntimeManager {
     if (request.remoteControl && !this.getCapabilities().supportsRemoteControl) {
       throw new Error(this.getCapabilities().remoteControlReason || "Remote Control is not available.");
     }
+    const provider = request.remoteControl ? "claude" : request.provider || def.provider || providerForModel(request.model);
+    if (provider !== "claude" && request.remoteControl) {
+      throw new Error("Remote Control is only available for Claude Code sessions.");
+    }
 
     const displayName = this.uniqueDisplayName(request.displayName?.trim() || def.name);
     const timestamp = now();
@@ -216,6 +229,7 @@ export class AgentRuntimeManager {
     const slashCommands = await scanSlashCommands(project.path, installedPlugins, def.plugins || []).catch(() => []);
     const agent: RunningAgent = {
       id: nanoid(),
+      provider,
       projectId: project.id,
       projectName: project.name,
       projectPath: project.path,
@@ -253,7 +267,11 @@ export class AgentRuntimeManager {
     this.broadcast({ type: "agent.launched", agent });
     this.persist();
 
-    if (request.remoteControl) {
+    if (provider === "openai") {
+      this.setStatus(state, process.env.OPENAI_API_KEY ? "idle" : "error", process.env.OPENAI_API_KEY ? undefined : "OPENAI_API_KEY is not set.");
+    } else if (provider === "codex") {
+      this.setStatus(state, "idle");
+    } else if (request.remoteControl) {
       await this.spawnRemoteControl(state);
     } else {
       this.spawnStandard(state);
@@ -273,6 +291,12 @@ export class AgentRuntimeManager {
   userMessage(id: string, text: string, sourceAgent?: TranscriptEvent["sourceAgent"], attachments: MessageAttachment[] = []): void {
     const state = this.requiredState(id);
     if (state.agent.remoteControl) throw new Error("Remote Control agents do not accept dashboard messages.");
+    if (state.agent.provider === "openai" || state.agent.provider === "codex") {
+      void this.providerUserMessage(state, text, sourceAgent, attachments).catch((error: unknown) => {
+        this.setStatus(state, "error", error instanceof Error ? error.message : String(error));
+      });
+      return;
+    }
     if (!state.child || state.child.killed) throw new Error("Agent process is not running.");
 
     const trimmed = text.trim();
@@ -356,6 +380,8 @@ export class AgentRuntimeManager {
     const state = this.requiredState(id);
     state.exiting = true;
     this.denyPendingPermissions(state);
+    state.apiAbort?.abort();
+    state.apiAbort = undefined;
     if (state.agent.remoteControl) {
       if (state.child && !state.child.killed) {
         this.stopProcessTree(state);
@@ -374,6 +400,11 @@ export class AgentRuntimeManager {
   setModel(id: string, model: string): void {
     const state = this.requiredState(id);
     if (state.agent.remoteControl) throw new Error("Remote Control agents cannot switch models from the dashboard.");
+    if (state.agent.provider === "openai" || state.agent.provider === "codex") {
+      this.updateModel(state, model);
+      this.setStatus(state, "idle");
+      return;
+    }
     if (!state.child || state.child.killed) throw new Error("Agent process is not running.");
 
     this.setStatus(state, "switching-model", `Switching to ${model}...`);
@@ -403,7 +434,7 @@ export class AgentRuntimeManager {
     state.agent.planMode = permissionMode === "plan";
     state.agent.updatedAt = now();
     const deferredRestart = Boolean(state.activeTurn);
-    const restarted = this.requestConfigRestart(state);
+    const restarted = state.agent.provider === "claude" ? this.requestConfigRestart(state) : false;
     this.pushTranscript(state, {
       ...eventBase(state.agent.id, state.agent.currentModel),
       kind: "system",
@@ -433,7 +464,7 @@ export class AgentRuntimeManager {
 
     state.agent.effort = effort;
     state.agent.updatedAt = now();
-    if (state.child && !state.child.killed) {
+    if (state.agent.provider === "claude" && state.child && !state.child.killed) {
       this.sendCliSlashCommand(state, `/effort ${effort}`);
     }
     this.pushTranscript(state, {
@@ -457,7 +488,7 @@ export class AgentRuntimeManager {
     state.agent.thinking = thinking;
     state.agent.updatedAt = now();
     const deferredRestart = Boolean(state.activeTurn);
-    const restarted = this.requestConfigRestart(state);
+    const restarted = state.agent.provider === "claude" ? this.requestConfigRestart(state) : false;
     this.pushTranscript(state, {
       ...eventBase(state.agent.id, state.agent.currentModel),
       kind: "system",
@@ -544,6 +575,214 @@ export class AgentRuntimeManager {
     this.setStatus(state, "running");
   }
 
+  private async providerUserMessage(
+    state: AgentProcessState,
+    text: string,
+    sourceAgent?: TranscriptEvent["sourceAgent"],
+    attachments: MessageAttachment[] = []
+  ): Promise<void> {
+    const trimmed = text.trim();
+    if (!trimmed && attachments.length === 0) return;
+    if (state.activeTurn) throw new Error("Agent is still responding.");
+
+    const imageAttachments = attachments.filter((attachment) => attachment.mimeType.startsWith("image/"));
+    const contextAttachments = attachments.filter((attachment) => !attachment.mimeType.startsWith("image/"));
+    const fallbackText =
+      imageAttachments.length && contextAttachments.length
+        ? "Please inspect the attached image(s) and use the attached context file(s)."
+        : imageAttachments.length
+          ? "Please inspect the attached image(s)."
+          : contextAttachments.length
+            ? "Please use the attached context file(s)."
+            : "";
+    const attachmentNote = imageAttachments.length
+      ? ["Attached image file(s):", ...imageAttachments.map((attachment) => `- ${attachment.name}: ${attachment.path || attachment.url || attachment.id}`)].join("\n")
+      : "";
+    const contextNote = contextAttachments.length
+      ? ["Attached context file(s):", ...contextAttachments.map((attachment) => `- ${attachment.relativePath || attachment.name}`)].join("\n")
+      : "";
+    const contextPayload = contextAttachments.length
+      ? ["Context file contents:", ...contextAttachments.map(readAttachmentContext)].join("\n\n")
+      : "";
+    const displayText = [trimmed || fallbackText, attachmentNote, contextNote].filter(Boolean).join("\n\n");
+    const payloadText = [trimmed || fallbackText, attachmentNote, contextPayload].filter(Boolean).join("\n\n");
+
+    this.pushTranscript(state, {
+      ...eventBase(state.agent.id, state.agent.currentModel),
+      kind: "user",
+      text: displayText,
+      sourceAgent,
+      attachments
+    });
+    state.activeTurn = true;
+    this.setStatus(state, "running");
+
+    if (state.agent.provider === "codex") {
+      await this.runCodexTurn(state, payloadText);
+    } else {
+      await this.runOpenAiTurn(state, payloadText, imageAttachments);
+    }
+  }
+
+  private async runCodexTurn(state: AgentProcessState, prompt: string): Promise<void> {
+    const args = ["exec", "--json", "-m", state.agent.currentModel, prompt];
+    const child = spawn(resolveCodexCommand(), args, {
+      cwd: state.agent.projectPath,
+      env: { ...process.env },
+      windowsHide: true
+    });
+    state.child = child;
+    state.agent.pid = child.pid;
+    state.agent.updatedAt = now();
+    this.persist();
+
+    await new Promise<void>((resolve, reject) => {
+      child.stdout.on("data", (chunk: Buffer) => {
+        state.stdoutBuffer = this.consumeLines(`${state.stdoutBuffer}${chunk.toString("utf8")}`, (line) => {
+          this.storeRawLine(state, line);
+          this.handleCodexLine(state, line);
+        });
+      });
+      child.stderr.on("data", (chunk: Buffer) => {
+        state.stderrBuffer = this.consumeLines(`${state.stderrBuffer}${chunk.toString("utf8")}`, (line) => {
+          this.storeRawLine(state, `[stderr] ${line}`);
+          this.pushTranscript(state, {
+            ...eventBase(state.agent.id, state.agent.currentModel),
+            kind: "system",
+            text: line
+          });
+        });
+      });
+      child.on("error", reject);
+      child.on("exit", (code) => {
+        state.child = undefined;
+        state.agent.pid = undefined;
+        state.activeTurn = false;
+        this.finishAssistantStream(state, false);
+        if (state.interrupting) {
+          state.interrupting = false;
+          this.setStatus(state, "interrupted");
+        } else if (code && code !== 0) this.setStatus(state, "error", `Codex exited with code ${code}.`);
+        else this.setStatus(state, "idle");
+        resolve();
+      });
+    });
+  }
+
+  private handleCodexLine(state: AgentProcessState, line: string): void {
+    try {
+      const payload = JSON.parse(line) as Record<string, unknown>;
+      const text = this.extractTextDelta(payload) || this.textField(payload.message);
+      if (text) {
+        this.appendAssistantText(state, text);
+        return;
+      }
+      const type = String(payload.type || "");
+      if (type.includes("tool") || payload.tool || payload.command) {
+        const toolUseId = this.trimmedStringField(payload.id) || transcriptId();
+        this.pushTranscript(state, {
+          ...eventBase(state.agent.id, state.agent.currentModel),
+          kind: "tool_use",
+          toolUseId,
+          name: this.trimmedStringField(payload.name) || this.trimmedStringField(payload.tool) || "codex",
+          input: payload.input ?? payload.command ?? payload
+        });
+      }
+    } catch {
+      this.appendAssistantText(state, `${line}\n`);
+    }
+  }
+
+  private async runOpenAiTurn(state: AgentProcessState, prompt: string, images: MessageAttachment[]): Promise<void> {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) throw new Error("OPENAI_API_KEY is not set.");
+    const controller = new AbortController();
+    state.apiAbort = controller;
+    const content: Record<string, unknown>[] = [{ type: "input_text", text: prompt }];
+    for (const attachment of images) {
+      if (!attachment.path) continue;
+      content.push({
+        type: "input_image",
+        image_url: `data:${attachment.mimeType};base64,${readFileSync(attachment.path).toString("base64")}`
+      });
+    }
+
+    try {
+      const response = await fetch("https://api.openai.com/v1/responses", {
+        method: "POST",
+        signal: controller.signal,
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          model: state.agent.currentModel,
+          instructions: state.def?.systemPrompt || undefined,
+          input: [{ role: "user", content }],
+          stream: true
+        })
+      });
+      if (!response.ok || !response.body) throw new Error(await response.text());
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const parts = buffer.split(/\n\n/);
+        buffer = parts.pop() || "";
+        for (const part of parts) this.handleOpenAiSse(state, part);
+      }
+      if (buffer.trim()) this.handleOpenAiSse(state, buffer);
+      this.finishAssistantStream(state, false);
+      state.activeTurn = false;
+      this.setStatus(state, "idle");
+    } catch (error) {
+      if ((error as { name?: string }).name === "AbortError") {
+        state.activeTurn = false;
+        this.finishAssistantStream(state, false);
+        this.setStatus(state, "interrupted");
+        return;
+      }
+      throw error;
+    } finally {
+      state.apiAbort = undefined;
+    }
+  }
+
+  private handleOpenAiSse(state: AgentProcessState, chunk: string): void {
+    for (const line of chunk.split(/\r?\n/)) {
+      if (!line.startsWith("data:")) continue;
+      const data = line.slice(5).trim();
+      if (!data || data === "[DONE]") continue;
+      this.storeRawLine(state, data);
+      let payload: Record<string, unknown>;
+      try {
+        payload = JSON.parse(data) as Record<string, unknown>;
+      } catch {
+        continue;
+      }
+      const type = String(payload.type || "");
+      if (type === "response.output_text.delta" && typeof payload.delta === "string") {
+        this.appendAssistantText(state, payload.delta);
+      } else if (type === "response.completed") {
+        this.finishAssistantStream(state, false);
+      } else if (type === "response.failed" || type === "error") {
+        this.setStatus(state, "error", stringifyUnknown(payload.error || payload));
+      } else if (type.includes("tool") || type.includes("function_call")) {
+        this.pushTranscript(state, {
+          ...eventBase(state.agent.id, state.agent.currentModel),
+          kind: "tool_use",
+          toolUseId: this.trimmedStringField(payload.item_id) || this.trimmedStringField(payload.output_index) || transcriptId(),
+          name: type,
+          input: payload
+        });
+      }
+    }
+  }
+
   async requestPermission(id: string, request: PermissionPromptRequest): Promise<PermissionPromptResult> {
     const state = this.requiredState(id);
     if (!state.permissionToken || request.token !== state.permissionToken) {
@@ -600,6 +839,19 @@ export class AgentRuntimeManager {
 
   interrupt(id: string): void {
     const state = this.requiredState(id);
+    if (state.apiAbort) {
+      state.apiAbort.abort();
+      state.apiAbort = undefined;
+      state.activeTurn = false;
+      this.finishAssistantStream(state, false);
+      this.pushTranscript(state, {
+        ...eventBase(state.agent.id, state.agent.currentModel),
+        kind: "system",
+        text: "Interrupted current response."
+      });
+      this.setStatus(state, "interrupted");
+      return;
+    }
     if (!state.child || state.child.killed) return;
     state.interrupting = true;
     state.activeTurn = false;

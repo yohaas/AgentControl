@@ -4,6 +4,7 @@ import type {
   AgentPermissionMode,
   AutoApproveMode,
   Capabilities,
+  ModelProfile,
   MessageAttachment,
   Project,
   RunningAgent,
@@ -16,6 +17,18 @@ export interface SettingsState {
   projectsRoot: string;
   projectPaths?: string[];
   models: string[];
+  modelProfiles?: ModelProfile[];
+  gitPath?: string;
+  claudePath?: string;
+  codexPath?: string;
+  anthropicKeySaved?: boolean;
+  openaiKeySaved?: boolean;
+  anthropicKeySource?: "env" | "local" | "missing";
+  openaiKeySource?: "env" | "local" | "missing";
+  anthropicApiKey?: string;
+  openaiApiKey?: string;
+  clearAnthropicApiKey?: boolean;
+  clearOpenaiApiKey?: boolean;
   autoApprove: AutoApproveMode;
   defaultAgentMode: AgentPermissionMode;
   tileHeight: number;
@@ -109,6 +122,14 @@ interface AppState {
 const defaultSettings: SettingsState = {
   projectsRoot: "",
   models: ["claude-opus-4-7", "claude-opus-4-6", "claude-sonnet-4-6", "claude-haiku-4-5"],
+  modelProfiles: [
+    { id: "claude-opus-4-7", provider: "claude" },
+    { id: "claude-opus-4-6", provider: "claude" },
+    { id: "claude-sonnet-4-6", provider: "claude", default: true },
+    { id: "claude-haiku-4-5", provider: "claude" },
+    { id: "gpt-5.3-codex", provider: "codex", default: true },
+    { id: "gpt-5.4", provider: "openai", default: true }
+  ],
   autoApprove: "off",
   defaultAgentMode: "acceptEdits",
   tileHeight: 460,
@@ -134,6 +155,7 @@ function normalizeSettings(settings: SettingsState): SettingsState {
   return {
     ...defaultSettings,
     ...settings,
+    modelProfiles: Array.isArray(settings.modelProfiles) && settings.modelProfiles.length ? settings.modelProfiles : defaultSettings.modelProfiles,
     defaultAgentMode,
     tileHeight: clampNumber(settings.tileHeight, defaultSettings.tileHeight, 320, 760),
     tileColumns: clampNumber(settings.tileColumns, defaultSettings.tileColumns, 1, 6),

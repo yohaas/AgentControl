@@ -11,6 +11,7 @@ export type AgentStatus =
   | "interrupted";
 
 export type AuthMethod = "claude.ai" | "api-key" | "unknown";
+export type AgentProvider = "claude" | "codex" | "openai";
 
 export type AutoApproveMode = "off" | "session" | "always";
 export type AgentPermissionMode = "default" | "acceptEdits" | "plan" | "bypassPermissions";
@@ -21,6 +22,7 @@ export interface AgentDef {
   name: string;
   description?: string;
   color: string;
+  provider?: AgentProvider;
   defaultModel?: string;
   tools: string[];
   plugins?: string[];
@@ -109,6 +111,7 @@ export interface GitWorktreeRemoveRequest {
 
 export interface RunningAgent {
   id: string;
+  provider?: AgentProvider;
   projectId: string;
   projectName: string;
   projectPath: string;
@@ -213,6 +216,7 @@ export type TranscriptEvent =
 export interface LaunchRequest {
   projectId: string;
   defName: string;
+  provider?: AgentProvider;
   displayName?: string;
   model: string;
   initialPrompt?: string;
@@ -245,6 +249,33 @@ export interface Capabilities {
   supportsRemoteControl: boolean;
   authMethod: AuthMethod;
   remoteControlReason?: string;
+  providers?: ProviderCapability[];
+}
+
+export interface ProviderCapability {
+  provider: AgentProvider;
+  label: string;
+  available: boolean;
+  version?: string;
+  authMethod?: AuthMethod | "chatgpt" | "openai-api";
+  command?: string;
+  reason?: string;
+  supportsRemoteControl?: boolean;
+  supportsStreaming?: boolean;
+  supportsImages?: boolean;
+  supportsTools?: boolean;
+  supportsMcp?: boolean;
+  supportsPlugins?: boolean;
+  supportsResume?: boolean;
+}
+
+export interface ModelProfile {
+  id: string;
+  label?: string;
+  provider: AgentProvider;
+  default?: boolean;
+  supportsThinking?: boolean;
+  supportedEfforts?: AgentEffort[];
 }
 
 export interface ClaudePlugin {

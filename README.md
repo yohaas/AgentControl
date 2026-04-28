@@ -1,15 +1,16 @@
 # Agent Control
 
-Agent Control is a local multi-agent dashboard for Claude Code. It lets you add projects, discover `.claude/agents` definitions, launch multiple Claude sessions, monitor streaming responses and tools, route context between agents, manage plugins, and keep project terminals beside the chats.
+Agent Control is a local multi-agent dashboard for Claude Code, Codex CLI, and OpenAI API-backed ChatGPT sessions. It lets you add projects, discover `.claude/agents` definitions, launch multiple agent sessions, monitor streaming responses and tools, route context between agents, manage plugins, and keep project terminals beside the chats.
 
-The app is built for local development workflows. It starts an Express/WebSocket server, a Vite/React UI, and Claude Code CLI child processes in the selected project folders.
+The app is built for local development workflows. It starts an Express/WebSocket server, a Vite/React UI, and provider processes/API streams in the selected project folders.
 
 ## What It Does
 
-- Launch Claude agents from project `.claude/agents/*.md` files or a generic fallback agent when no agent files exist.
+- Launch Claude, Codex, or OpenAI API agents from project `.claude/agents/*.md` files or a generic fallback agent when no agent files exist.
 - Run multiple agents as resizable tiles, with maximize, drag/drop ordering, configurable tile height, and configurable tile columns.
 - Switch between projects. Each project keeps its own open agents and terminal sessions.
 - Stream Claude responses from `--output-format stream-json`, including live assistant text, tool activity, tool results, and raw stream export.
+- Stream OpenAI Responses API sessions and run Codex CLI sessions through the provider selector.
 - Show prominent permission prompts for gated Claude tools, then send Approve/Deny back to the running Claude process.
 - Control mode per agent: Ask before edits, Edit automatically, Plan mode, or Bypass permissions.
 - Control effort per agent: low, medium, high, xhigh, or max.
@@ -36,6 +37,9 @@ Runtime requirements:
 - Node.js 20 or newer.
 - npm.
 - Claude Code CLI available on `PATH`, or configured with `CLAUDE_CODE_CLI`.
+- Codex CLI available on `PATH`, or configured with `CODEX_CLI`, if you want Codex sessions.
+- `OPENAI_API_KEY`, if you want OpenAI API sessions.
+- `ANTHROPIC_API_KEY`, if you want Claude Code API-key auth instead of interactive Claude auth.
 - Git, if you want Git status/push integration.
 - Git for Windows is recommended on native Windows so Claude Code can use Bash tools; otherwise Claude Code may fall back to PowerShell.
 
@@ -323,6 +327,7 @@ Settings include:
 Stored local files:
 
 - `~/.agent-dashboard/config.json`: app settings and project paths.
+- `~/.agent-dashboard/secrets.json`: optional locally saved Anthropic/OpenAI API keys. This file is not included in settings export.
 - `~/.agent-dashboard/state.json`: persisted agents and recent transcripts.
 - `~/.agent-dashboard/attachments`: uploaded/pasted attachments.
 - `~/.agent-dashboard/terminal-history`: shell history per project.
@@ -333,6 +338,10 @@ Stored local files:
 
 - `PORT`: server port. Defaults to `4317`.
 - `CLAUDE_CODE_CLI`: path to the Claude Code CLI executable or shim.
+- `CODEX_CLI`: path to the Codex CLI executable or shim.
+- `OPENAI_API_KEY`: OpenAI API key used by OpenAI API sessions and Codex where applicable.
+- `ANTHROPIC_API_KEY`: Anthropic API key available to Claude Code.
+- `GIT_PATH`: path to the Git executable.
 - `PROJECTS_ROOT`: fallback projects root used before projects are added manually. Defaults to `~/projects`.
 - `FORCE_FALLBACK_MODEL_SWITCH=1`: forces resume-based model switching for testing.
 - `AGENT_CONTROL_SHELL`: shell used for embedded terminals.
