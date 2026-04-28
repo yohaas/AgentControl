@@ -21,7 +21,6 @@ import {
   resolveTerminalDock,
   resolveTileColumns,
   resolveTileHeight,
-  resolveTileWidth,
   writeConfig
 } from "./config.js";
 import { addMarketplace, enablePlugin, installPlugin, listPlugins, pluginCatalog } from "./plugins.js";
@@ -373,7 +372,6 @@ app.get("/api/settings", (_request, response) => {
     autoApprove: config.autoApprove || "off",
     defaultAgentMode: resolveDefaultAgentMode(config),
     tileHeight: resolveTileHeight(config),
-    tileWidth: resolveTileWidth(config),
     tileColumns: resolveTileColumns(config),
     pinLastSentMessage: resolvePinLastSentMessage(config),
     terminalDock: resolveTerminalDock(config),
@@ -440,7 +438,6 @@ app.put("/api/settings", async (request, response) => {
     autoApprove: body.autoApprove || config.autoApprove,
     defaultAgentMode: resolveDefaultAgentMode(body.defaultAgentMode ? body : config),
     tileHeight: typeof body.tileHeight === "number" ? resolveTileHeight(body) : resolveTileHeight(config),
-    tileWidth: typeof body.tileWidth === "number" ? resolveTileWidth(body) : resolveTileWidth(config),
     tileColumns: typeof body.tileColumns === "number" ? resolveTileColumns(body) : resolveTileColumns(config),
     pinLastSentMessage: typeof body.pinLastSentMessage === "boolean" ? body.pinLastSentMessage : resolvePinLastSentMessage(config),
     terminalDock: resolveTerminalDock(body.terminalDock ? body : config)
@@ -454,7 +451,6 @@ app.put("/api/settings", async (request, response) => {
     autoApprove: config.autoApprove || "off",
     defaultAgentMode: resolveDefaultAgentMode(config),
     tileHeight: resolveTileHeight(config),
-    tileWidth: resolveTileWidth(config),
     tileColumns: resolveTileColumns(config),
     pinLastSentMessage: resolvePinLastSentMessage(config),
     terminalDock: resolveTerminalDock(config),

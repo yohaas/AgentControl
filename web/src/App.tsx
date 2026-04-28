@@ -2119,7 +2119,6 @@ function SettingsDialog() {
   const setProjects = useAppStore((state) => state.setProjects);
   const addError = useAppStore((state) => state.addError);
   const currentTileHeight = useAppStore((state) => state.currentTileHeight);
-  const currentTileWidth = useAppStore((state) => state.currentTileWidth);
   const [open, setOpen] = useState(false);
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const [projectPathsText, setProjectPathsText] = useState((settings.projectPaths || []).join("\n"));
@@ -2127,7 +2126,7 @@ function SettingsDialog() {
   const [autoApprove, setAutoApprove] = useState(settings.autoApprove);
   const [defaultAgentMode, setDefaultAgentMode] = useState<AgentPermissionMode>(settings.defaultAgentMode);
   const [tileHeight, setTileHeight] = useState(settings.tileHeight);
-  const [tileWidth, setTileWidth] = useState(settings.tileWidth);
+  const [tileColumns, setTileColumns] = useState(settings.tileColumns);
   const [pinLastSentMessage, setPinLastSentMessage] = useState(settings.pinLastSentMessage);
   const [terminalDock, setTerminalDock] = useState(settings.terminalDock);
 
@@ -2138,7 +2137,7 @@ function SettingsDialog() {
     setAutoApprove(settings.autoApprove);
     setDefaultAgentMode(settings.defaultAgentMode);
     setTileHeight(settings.tileHeight);
-    setTileWidth(settings.tileWidth);
+    setTileColumns(settings.tileColumns);
     setPinLastSentMessage(settings.pinLastSentMessage);
     setTerminalDock(settings.terminalDock);
   }, [open, settings]);
@@ -2152,7 +2151,7 @@ function SettingsDialog() {
         autoApprove,
         defaultAgentMode,
         tileHeight,
-        tileWidth,
+        tileColumns,
         pinLastSentMessage,
         terminalDock
       });
@@ -2175,7 +2174,7 @@ function SettingsDialog() {
         autoApprove,
         defaultAgentMode,
         tileHeight,
-        tileWidth,
+        tileColumns,
         pinLastSentMessage,
         terminalDock
       }
@@ -2196,7 +2195,7 @@ function SettingsDialog() {
       setAutoApprove(next.autoApprove);
       setDefaultAgentMode(next.defaultAgentMode);
       setTileHeight(next.tileHeight);
-      setTileWidth(next.tileWidth);
+      setTileColumns(next.tileColumns);
       setPinLastSentMessage(next.pinLastSentMessage);
       setTerminalDock(next.terminalDock);
     } catch (error) {
@@ -2284,20 +2283,15 @@ function SettingsDialog() {
               </div>
             </label>
             <label className="grid gap-1.5 text-sm">
-              Tile width
-              <div className="flex gap-2">
-                <Input
-                  type="number"
-                  min={320}
-                  max={1200}
-                  step={20}
-                  value={tileWidth}
-                  onChange={(event) => setTileWidth(Number(event.target.value))}
-                />
-                <Button type="button" variant="outline" onClick={() => setTileWidth(currentTileWidth || settings.tileWidth)}>
-                  Current
-                </Button>
-              </div>
+              Columns
+              <Input
+                type="number"
+                min={1}
+                max={6}
+                step={1}
+                value={tileColumns}
+                onChange={(event) => setTileColumns(Number(event.target.value))}
+              />
             </label>
           </div>
           <label className="flex items-start gap-2 rounded-md border border-border p-3 text-sm">
@@ -2374,11 +2368,9 @@ function AgentTileGrid({ agents }: { agents: RunningAgent[] }) {
   const setTileOrder = useAppStore((state) => state.setTileOrder);
   const settings = useAppStore((state) => state.settings);
   const currentTileHeight = useAppStore((state) => state.currentTileHeight);
-  const currentTileWidth = useAppStore((state) => state.currentTileWidth);
   const setCurrentTileHeight = useAppStore((state) => state.setCurrentTileHeight);
-  const setCurrentTileWidth = useAppStore((state) => state.setCurrentTileWidth);
   const tileHeight = currentTileHeight || settings.tileHeight;
-  const tileWidth = currentTileWidth || settings.tileWidth;
+  const tileColumns = settings.tileColumns || 2;
   const tileWidths = useAppStore((state) => state.tileWidths);
   const orderedAgents = useMemo(() => {
     const byId = new Map(agents.map((agent) => [agent.id, agent]));
@@ -2412,10 +2404,9 @@ function AgentTileGrid({ agents }: { agents: RunningAgent[] }) {
             agent={agent}
             height={tileHeight}
             width={tileWidths[agent.id]}
-            defaultWidth={`${tileWidth}px`}
+            defaultWidth={`calc((100% - ${(tileColumns - 1) * 1}rem) / ${tileColumns})`}
             onMove={moveTile}
             onHeightChange={setCurrentTileHeight}
-            onWidthChange={setCurrentTileWidth}
           />
         ))}
       </div>
@@ -2429,8 +2420,7 @@ function AgentTile({
   width,
   defaultWidth,
   onMove,
-  onHeightChange,
-  onWidthChange
+  onHeightChange
 }: {
   agent: RunningAgent;
   height: number;
@@ -2438,7 +2428,6 @@ function AgentTile({
   defaultWidth: string;
   onMove: (sourceId: string, targetId: string) => void;
   onHeightChange: (height: number) => void;
-  onWidthChange: (width: number) => void;
 }) {
   const transcript = useAppStore((state) => state.transcripts[agent.id] || EMPTY_TRANSCRIPT);
   const draft = useAppStore((state) => state.drafts[agent.id] || "");
@@ -2626,9 +2615,7 @@ function AgentTile({
 
     const onMove = (moveEvent: PointerEvent) => {
       const nextWidth = Math.min(1200, Math.max(320, startWidth + moveEvent.clientX - startX));
-      const roundedWidth = Math.round(nextWidth);
-      setTileWidth(agent.id, roundedWidth);
-      onWidthChange(roundedWidth);
+      setTileWidth(agent.id, Math.round(nextWidth));
     };
     const onUp = () => {
       window.removeEventListener("pointermove", onMove);
