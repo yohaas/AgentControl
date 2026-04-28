@@ -19,6 +19,9 @@ import { TerminalManager } from "./terminal.js";
 const PORT = Number(process.env.PORT || 4317);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const attachmentsDir = path.join(os.homedir(), ".agent-dashboard", "attachments");
+const controlDir = path.join(os.homedir(), ".agent-dashboard");
+const controlPath = path.join(controlDir, "control.json");
+const supervised = process.env.AGENT_CONTROL_SUPERVISED === "1";
 
 let config = await readConfig();
 let projectsRoot = resolveProjectsRoot(config);
@@ -57,6 +60,11 @@ async function filesystemRoots(): Promise<DirectoryEntry[]> {
 function normalizedProjectPath(projectPath: string): string {
   const resolved = path.resolve(expandHome(projectPath));
   return process.platform === "win32" ? resolved.toLowerCase() : resolved;
+}
+
+async function requestSupervisor(command: "restart" | "shutdown"): Promise<void> {
+  await mkdir(controlDir, { recursive: true });
+  await writeFile(controlPath, `${JSON.stringify({ command, requestedAt: new Date().toISOString(), pid: process.pid }, null, 2)}\n`, "utf8");
 }
 
 const runtime = new AgentRuntimeManager(
@@ -209,6 +217,26 @@ app.get("/api/agents/:id/raw-stream", (request, response) => {
 
 app.get("/api/capabilities", (_request, response) => {
   response.json(capabilities);
+});
+
+app.get("/api/admin/status", (_request, response) => {
+  response.json({ supervised, pid: process.pid });
+});
+
+app.post("/api/admin/restart", async (_request, response) => {
+  if (!supervised) {
+    response.status(409).json({ error: "Restart requires starting AgentControl with npm run dev:supervised." });
+    return;
+  }
+  await requestSupervisor("restart");
+  response.json({ ok: true });
+  setTimeout(() => process.exit(0), 300);
+});
+
+app.post("/api/admin/shutdown", async (_request, response) => {
+  if (supervised) await requestSupervisor("shutdown");
+  response.json({ ok: true });
+  setTimeout(() => process.exit(0), 300);
 });
 
 app.get("/api/settings", (_request, response) => {

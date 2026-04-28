@@ -253,6 +253,7 @@ export const useAppStore = create<AppState>((set, get) => ({
               status: event.status,
               statusMessage: event.statusMessage,
               restorable: event.restorable,
+              pid: event.pid,
               updatedAt: event.updatedAt
             })
           )

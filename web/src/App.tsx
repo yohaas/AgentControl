@@ -394,6 +394,10 @@ function isNpmDevTerminal(session: TerminalSession) {
   return session.title === "npm run dev";
 }
 
+function agentHasProcess(agent: RunningAgent) {
+  return Boolean(agent.pid) && agent.status !== "killed" && agent.status !== "error" && agent.status !== "paused" && !agent.restorable;
+}
+
 function orderedAgentsForTiles(agents: RunningAgent[], tileOrder: string[]) {
   const byId = new Map(agents.map((agent) => [agent.id, agent]));
   return [
@@ -549,6 +553,7 @@ function Header() {
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+        <AppAdminMenu />
         <PluginsDialog />
         <SettingsDialog />
         <Badge className={wsConnected ? "border-teal-400/40 text-teal-200" : "border-red-400/40 text-red-200"}>
@@ -630,6 +635,64 @@ function AddProjectDialog() {
         }}
       />
     </Dialog>
+  );
+}
+
+function AppAdminMenu() {
+  const addError = useAppStore((state) => state.addError);
+  const [supervised, setSupervised] = useState<boolean | undefined>();
+
+  async function refreshStatus() {
+    try {
+      const status = await api.adminStatus();
+      setSupervised(status.supervised);
+    } catch (error) {
+      addError(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  async function restart() {
+    if (!window.confirm("Restart AgentControl? The dashboard will disconnect briefly.")) return;
+    try {
+      await api.restartApp();
+    } catch (error) {
+      addError(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  async function shutdown() {
+    if (!window.confirm("Shutdown AgentControl? You will need to start it again from a terminal unless supervised.")) return;
+    try {
+      await api.shutdownApp();
+    } catch (error) {
+      addError(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  useEffect(() => {
+    void refreshStatus();
+  }, []);
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="outline" title="AgentControl process controls">
+          <Settings className="h-4 w-4" />
+          App
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onClick={restart} disabled={supervised === false}>
+          Restart AgentControl
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={shutdown}>Shutdown AgentControl</DropdownMenuItem>
+        {supervised === false && (
+          <div className="max-w-64 px-2 py-1.5 text-xs text-muted-foreground">
+            Restart is available after launching with npm run dev:supervised.
+          </div>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -989,17 +1052,18 @@ function ModelText({ agent }: { agent: RunningAgent }) {
 
 function ModelMenu({ agent, compact = false }: { agent: RunningAgent; compact?: boolean }) {
   const settings = useAppStore((state) => state.settings);
+  const canSwitch = !agent.remoteControl && agent.status !== "switching-model" && agentHasProcess(agent);
 
   return (
     <Popover>
       <PopoverTrigger asChild>
         <button
-          disabled={agent.remoteControl || agent.status === "switching-model"}
+          disabled={!canSwitch}
           className={cn(
             "truncate rounded-sm text-left text-xs text-muted-foreground hover:text-foreground disabled:hover:text-muted-foreground",
             compact ? "max-w-40" : "max-w-full"
           )}
-          title={agent.remoteControl ? "Last known model. May have changed in claude.ai/code." : "Switch model"}
+          title={agent.remoteControl ? "Last known model. May have changed in claude.ai/code." : canSwitch ? "Switch model" : "Agent process is not running."}
         >
           {agent.status === "switching-model" ? agent.statusMessage || "Switching model..." : agent.currentModel}
         </button>
@@ -1392,7 +1456,7 @@ function AgentTile({
   const rootRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const isBusy = agent.status === "running" || agent.status === "switching-model" || agent.status === "awaiting-permission";
-  const canType = !agent.remoteControl && agent.status !== "killed" && agent.status !== "error" && !agent.restorable;
+  const canType = !agent.remoteControl && agentHasProcess(agent);
 
   useEffect(() => {
     const root = rootRef.current;
@@ -1776,7 +1840,7 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
   const selection = useTextSelection(`#${transcriptRootId}`);
   const [attachments, setAttachments] = useState<MessageAttachment[]>([]);
   const isBusy = agent.status === "running" || agent.status === "switching-model" || agent.status === "awaiting-permission";
-  const canType = agent.status !== "killed" && agent.status !== "error" && !agent.restorable;
+  const canType = agentHasProcess(agent);
 
   useEffect(() => {
     const root = rootRef.current;
@@ -2189,10 +2253,10 @@ function ToolCard({
             {commandText ? `: ${commandText}` : pathText ? ` on ${pathText}` : ""}.
           </p>
           <div className="flex gap-2">
-          <Button size="sm" onClick={() => sendCommand({ type: "permission", id: agent.id, toolUseId: event.toolUseId, decision: "approve" })}>
+          <Button size="sm" disabled={!agentHasProcess(agent)} onClick={() => sendCommand({ type: "permission", id: agent.id, toolUseId: event.toolUseId, decision: "approve" })}>
             Approve
           </Button>
-          <Button size="sm" variant="outline" onClick={() => sendCommand({ type: "permission", id: agent.id, toolUseId: event.toolUseId, decision: "deny" })}>
+          <Button size="sm" variant="outline" disabled={!agentHasProcess(agent)} onClick={() => sendCommand({ type: "permission", id: agent.id, toolUseId: event.toolUseId, decision: "deny" })}>
             Deny
           </Button>
           </div>

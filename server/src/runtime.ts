@@ -742,6 +742,7 @@ export class AgentRuntimeManager {
       status,
       statusMessage,
       restorable: state.agent.restorable,
+      pid: state.agent.pid,
       updatedAt: state.agent.updatedAt
     });
     this.persist();

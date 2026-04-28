@@ -207,6 +207,7 @@ export type WsServerEvent =
       status: AgentStatus;
       statusMessage?: string;
       restorable?: boolean;
+      pid?: number;
       updatedAt: string;
     }
   | {
