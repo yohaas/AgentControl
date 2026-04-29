@@ -253,12 +253,13 @@ export class AgentRuntimeManager {
       const currentModel = isSyntheticModel(agent.currentModel)
         ? this.defaultModelForDefinition(def, provider)
         : agent.currentModel;
+      const restorableProcess = Boolean(agent.sessionId && provider === "claude");
       const restored: RunningAgent = {
         ...agent,
         provider,
         currentModel,
-        status: agent.sessionId ? "paused" : persistedStatus === "restorable" ? "paused" : persistedStatus,
-        restorable: Boolean(agent.sessionId),
+        status: restorableProcess ? "paused" : persistedStatus === "restorable" ? "paused" : persistedStatus,
+        restorable: restorableProcess,
         updatedAt: now()
       };
       this.states.set(restored.id, {
@@ -1071,6 +1072,7 @@ export class AgentRuntimeManager {
         reasoning: { effort: this.providerReasoningEffort(state) },
         stream: true
       };
+      if (state.agent.sessionId) body.previous_response_id = state.agent.sessionId;
       const response = await fetch("https://api.openai.com/v1/responses", {
         method: "POST",
         signal: controller.signal,
@@ -1127,6 +1129,8 @@ export class AgentRuntimeManager {
       if (type === "response.output_text.delta" && typeof payload.delta === "string") {
         this.appendAssistantText(state, payload.delta);
       } else if (type === "response.completed") {
+        const responseId = this.openAiResponseId(payload);
+        if (responseId) state.agent.sessionId = responseId;
         this.finishAssistantStream(state, false);
       } else if (type === "response.failed" || type === "error") {
         this.setStatus(state, "error", stringifyUnknown(payload.error || payload));
@@ -1140,6 +1144,11 @@ export class AgentRuntimeManager {
         });
       }
     }
+  }
+
+  private openAiResponseId(payload: Record<string, unknown>): string | undefined {
+    const response = payload.response && typeof payload.response === "object" ? (payload.response as Record<string, unknown>) : undefined;
+    return this.trimmedStringField(response?.id) || this.trimmedStringField(payload.response_id) || this.trimmedStringField(payload.id);
   }
 
   async requestPermission(id: string, request: PermissionPromptRequest): Promise<PermissionPromptResult> {
