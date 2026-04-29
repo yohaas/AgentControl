@@ -1809,6 +1809,18 @@ function modelProfilesForSettings(settings: { models: string[]; modelProfiles?: 
   return settings.models.map((model, index) => ({ id: model, provider: "claude", default: index === 0 }));
 }
 
+function defaultModelForAgentDef(settings: { models: string[]; modelProfiles?: ModelProfile[] }, def: AgentDef): string {
+  const provider = def.provider || "claude";
+  const profiles = modelProfilesForSettings(settings);
+  if (def.defaultModel && profiles.some((profile) => profile.provider === provider && profile.id === def.defaultModel)) return def.defaultModel;
+  return (
+    profiles.find((profile) => profile.provider === provider && profile.default)?.id ||
+    profiles.find((profile) => profile.provider === provider)?.id ||
+    (provider === "claude" ? settings.models[0] : undefined) ||
+    DEFAULT_MODEL
+  );
+}
+
 function providerModelsText(settings: { models: string[]; modelProfiles?: ModelProfile[] }, provider: AgentProvider) {
   return modelProfilesForSettings(settings)
     .filter((profile) => profile.provider === provider)
@@ -6619,9 +6631,21 @@ function QuestionCard({ event, agent, compact = false }: { event: QuestionsEvent
 }
 
 function PlanCard({ event, agent, compact = false }: { event: PlanEvent; agent: RunningAgent; compact?: boolean }) {
+  const projects = useAppStore((state) => state.projects);
+  const settings = useAppStore((state) => state.settings);
+  const addError = useAppStore((state) => state.addError);
   const [otherText, setOtherText] = useState(event.response || "");
   const [activeDecision, setActiveDecision] = useState<PlanEvent["decision"] | "">("");
   const [showOther, setShowOther] = useState(event.decision === "other");
+  const project = projects.find((candidate) => candidate.id === agent.projectId);
+  const agentOptionGroups = useMemo(() => groupedAgentDefsWithBuiltIns(project), [project]);
+  const launchAgentOptions = useMemo(
+    () => [
+      ...agentOptionGroups.projectAgents.map((def) => ({ source: "project" as const, def })),
+      ...agentOptionGroups.builtInAgents.map((def) => ({ source: "builtIn" as const, def }))
+    ],
+    [agentOptionGroups.builtInAgents, agentOptionGroups.projectAgents]
+  );
 
   useEffect(() => {
     setOtherText(event.response || "");
@@ -6640,6 +6664,44 @@ function PlanCard({ event, agent, compact = false }: { event: PlanEvent; agent: 
     });
   }
 
+  function launchApprovedPlan(target: { source: AgentDefSource; def: AgentDef }) {
+    if (!project) {
+      addError("Project not found for this plan.");
+      return;
+    }
+    const provider = target.def.provider || "claude";
+    const prompt = [
+      "This plan was approved. Please implement it.",
+      "",
+      "Plan:",
+      "",
+      event.plan
+    ].join("\n");
+    setActiveDecision("other");
+    sendCommand({
+      type: "launch",
+      request: {
+        projectId: project.id,
+        defName: target.def.name,
+        agentSource: target.source,
+        displayName: "",
+        provider,
+        model: defaultModelForAgentDef(settings, target.def),
+        initialPrompt: prompt,
+        remoteControl: false,
+        permissionMode: settings.defaultAgentMode,
+        autoApprove: settings.autoApprove
+      }
+    });
+    sendCommand({
+      type: "answerPlan",
+      id: agent.id,
+      eventId: event.id,
+      decision: "other",
+      response: `Approved. Implementation has been handed off to a new ${target.def.name} agent; do not build it in this chat.`
+    });
+  }
+
   const options: Array<{
     decision: NonNullable<PlanEvent["decision"]>;
     label: string;
@@ -6648,8 +6710,8 @@ function PlanCard({ event, agent, compact = false }: { event: PlanEvent; agent: 
   }> = [
     {
       decision: "approve",
-      label: "Approve",
-      description: "Let Claude proceed with this plan.",
+      label: "Approve and build here",
+      description: "Let this Claude chat implement the plan.",
       icon: Check
     },
     {
@@ -6722,6 +6784,34 @@ function PlanCard({ event, agent, compact = false }: { event: PlanEvent; agent: 
                 </button>
               );
             })}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="flex min-w-0 items-start gap-3 rounded-md border border-border bg-background/55 px-3 py-2 text-left hover:border-primary/60 hover:bg-primary/10"
+                  disabled={launchAgentOptions.length === 0}
+                >
+                  <Bot className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-medium">Approve and launch agent</span>
+                    <span className="block text-xs text-muted-foreground">Start another agent with this plan.</span>
+                  </span>
+                  <ChevronDown className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="max-h-72 min-w-56 overflow-y-auto">
+                {launchAgentOptions.map((option) => (
+                  <DropdownMenuItem
+                    key={`${option.source}:${option.def.name}`}
+                    onClick={() => launchApprovedPlan(option)}
+                  >
+                    <AgentDot color={option.def.color} />
+                    <span className="ml-2">{option.def.name}</span>
+                    <Badge className="ml-2 text-[10px]">{option.source === "builtIn" ? "Built-in" : "Project"}</Badge>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
           {showOther && (
             <div className="grid gap-2 rounded-md border border-border bg-background/50 p-2">
