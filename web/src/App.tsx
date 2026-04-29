@@ -34,6 +34,7 @@ import {
   CodeXml,
   Columns2,
   Copy,
+  CornerDownRight,
   ExternalLink,
   FileText,
   FolderDown,
@@ -1313,13 +1314,14 @@ function QueuedMessageList({
                     variant="ghost"
                     size="icon"
                     className="h-7 w-7"
-                    title="Steer active response with this queued message"
+                    aria-label="Steer"
+                    title="Steer"
                     onClick={() => {
                       sendCommand({ type: "injectMessage", id: agentId, text: message.text, attachments: message.attachments });
                       removeQueuedMessage(agentId, message.id);
                     }}
                   >
-                    <Waypoints className="h-3.5 w-3.5" />
+                    <CornerDownRight className="h-3.5 w-3.5" />
                   </Button>
                   <Button
                     type="button"
