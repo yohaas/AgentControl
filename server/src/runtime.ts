@@ -61,6 +61,7 @@ interface AgentProcessState {
   permissionMcpConfigPath?: string;
   pendingPermissions?: Map<string, PendingPermissionRequest>;
   pendingQuestions?: Map<string, PendingQuestionRequest>;
+  pendingPlans?: Map<string, PendingPlanRequest>;
   rcLastDiagnostic?: string;
   apiAbort?: AbortController;
 }
@@ -85,6 +86,12 @@ interface PendingPermissionRequest {
 interface PendingQuestionRequest {
   toolUseId: string;
   resolve: (message: string) => void;
+  timeout: NodeJS.Timeout;
+}
+
+interface PendingPlanRequest {
+  toolUseId: string;
+  resolve: (result: PermissionPromptResult) => void;
   timeout: NodeJS.Timeout;
 }
 
@@ -325,6 +332,7 @@ export class AgentRuntimeManager {
       permissionToken: nanoid(32),
       pendingPermissions: new Map(),
       pendingQuestions: new Map(),
+      pendingPlans: new Map(),
       pendingInitialPrompt: request.initialPrompt?.trim() || undefined,
       autoApprove: request.autoApprove
     };
@@ -731,6 +739,10 @@ export class AgentRuntimeManager {
     });
     if (decision === "approve" && state.agent.permissionMode === "plan") {
       this.setPermissionMode(id, "default");
+    }
+    if (event.toolUseId) {
+      const answeredViaTool = this.answerPlanToolUse(state, event.toolUseId, decision, this.formatPlanAnswer(decision, normalizedResponse));
+      if (answeredViaTool) return;
     }
     this.userMessage(id, this.formatPlanAnswer(decision, normalizedResponse));
   }
@@ -1139,6 +1151,22 @@ export class AgentRuntimeManager {
         behavior: "deny",
         message
       };
+    }
+
+    const planRequest = this.extractExitPlanModeRequest(request.toolName || "tool", request.input ?? {});
+    if (planRequest) {
+      this.pushPlanRequest(state, planRequest, toolUseId);
+      return await new Promise<PermissionPromptResult>((resolve) => {
+        const timeout = setTimeout(() => {
+          state.pendingPlans?.delete(toolUseId);
+          resolve({
+            behavior: "deny",
+            message: "No plan decision was provided before the AgentControl plan prompt timed out."
+          });
+        }, PERMISSION_REQUEST_TIMEOUT_MS);
+        state.pendingPlans ??= new Map();
+        state.pendingPlans.set(toolUseId, { toolUseId, resolve, timeout });
+      });
     }
 
     this.markToolAwaitingPermission(state, {
@@ -1764,7 +1792,7 @@ export class AgentRuntimeManager {
         return;
       }
       if (this.isExitPlanModeToolUse(value)) {
-        this.pushPlanRequest(state, this.extractPlanText(value));
+        this.pushPlanRequest(state, this.extractPlanText(value), toolUseId);
         return;
       }
       const awaitingPermission = this.isAwaitingPermissionToolUse(value);
@@ -1788,6 +1816,10 @@ export class AgentRuntimeManager {
         this.setStatus(state, "running");
         return;
       }
+      if (this.hasPlanForToolUseId(state, toolUseId)) {
+        this.setStatus(state, "running");
+        return;
+      }
       this.pushTranscript(state, {
         ...eventBase(state.agent.id, state.agent.currentModel),
         kind: "tool_result",
@@ -1806,6 +1838,12 @@ export class AgentRuntimeManager {
   private extractAskUserQuestionRequest(name: string, input: unknown): AgentQuestion[] | undefined {
     if (!this.isAskUserQuestionToolName(name) || !input || typeof input !== "object") return undefined;
     return this.extractQuestionRequest(input as Record<string, unknown>);
+  }
+
+  private extractExitPlanModeRequest(name: string, input: unknown): string | undefined {
+    if (!this.isExitPlanModeToolName(name) || !input || typeof input !== "object") return undefined;
+    const plan = this.extractPlanText({ name, input });
+    return plan.trim() ? plan : undefined;
   }
 
   private answerQuestionToolUse(state: AgentProcessState, toolUseId: string, message: string): boolean {
@@ -1831,9 +1869,46 @@ export class AgentRuntimeManager {
     return false;
   }
 
+  private answerPlanToolUse(state: AgentProcessState, toolUseId: string, decision: AgentPlanDecision, message: string): boolean {
+    this.resolveToolPermission(state, toolUseId);
+    state.activeTurn = true;
+    this.setStatus(state, "running");
+    const pendingPlan = state.pendingPlans?.get(toolUseId);
+    if (pendingPlan) {
+      clearTimeout(pendingPlan.timeout);
+      state.pendingPlans?.delete(toolUseId);
+      pendingPlan.resolve(
+        decision === "approve"
+          ? { behavior: "allow" }
+          : {
+              behavior: "deny",
+              message
+            }
+      );
+      return true;
+    }
+    const pending = state.pendingPermissions?.get(toolUseId);
+    if (pending) {
+      clearTimeout(pending.timeout);
+      state.pendingPermissions?.delete(toolUseId);
+      pending.resolve(decision === "approve" ? "approve" : "deny");
+      return true;
+    }
+    if (state.child && !state.child.killed && state.child.stdin.writable) {
+      const toolDecision = decision === "approve" ? "approve" : "deny";
+      state.child.stdin.write(`${JSON.stringify({ type: "control", subtype: "tool_permission", tool_use_id: toolUseId, decision: toolDecision })}\n`);
+      return true;
+    }
+    return false;
+  }
+
   private isExitPlanModeToolUse(value: Record<string, unknown>): boolean {
-    const name = this.trimmedStringField(value.name)?.toLowerCase();
-    return name === "exitplanmode" || name === "exit_plan_mode";
+    return this.isExitPlanModeToolName(this.trimmedStringField(value.name) || "");
+  }
+
+  private isExitPlanModeToolName(name: string): boolean {
+    const normalized = name.trim().toLowerCase();
+    return normalized === "exitplanmode" || normalized === "exit_plan_mode";
   }
 
   private extractPlanText(value: Record<string, unknown>): string {
@@ -1847,12 +1922,25 @@ export class AgentRuntimeManager {
     );
   }
 
-  private pushPlanRequest(state: AgentProcessState, plan: string): void {
+  private pushPlanRequest(state: AgentProcessState, plan: string, toolUseId?: string): void {
     state.activeTurn = false;
     this.finishAssistantStream(state, false);
+    const existing = toolUseId
+      ? state.transcript.find((event) => event.kind === "plan" && event.toolUseId === toolUseId)
+      : undefined;
+    if (existing?.kind === "plan") {
+      this.updateTranscript(state, {
+        ...existing,
+        plan,
+        timestamp: now()
+      });
+      this.setStatus(state, "awaiting-input");
+      return;
+    }
     this.pushTranscript(state, {
       ...eventBase(state.agent.id, state.agent.currentModel),
       kind: "plan",
+      ...(toolUseId ? { toolUseId } : {}),
       plan
     });
     this.setStatus(state, "awaiting-input");
@@ -1925,6 +2013,10 @@ export class AgentRuntimeManager {
 
   private hasQuestionForToolUseId(state: AgentProcessState, toolUseId: string): boolean {
     return state.transcript.some((event) => event.kind === "questions" && event.toolUseId === toolUseId);
+  }
+
+  private hasPlanForToolUseId(state: AgentProcessState, toolUseId: string): boolean {
+    return state.transcript.some((event) => event.kind === "plan" && event.toolUseId === toolUseId);
   }
 
   private normalizeQuestionAnswers(questions: AgentQuestion[], answers: AgentQuestionAnswer[]): AgentQuestionAnswer[] {
@@ -2037,6 +2129,14 @@ export class AgentRuntimeManager {
       pending.resolve("Question prompt closed before an answer was provided.");
     }
     state.pendingQuestions?.clear();
+    for (const pending of state.pendingPlans?.values() || []) {
+      clearTimeout(pending.timeout);
+      pending.resolve({
+        behavior: "deny",
+        message: "Plan prompt closed before a decision was provided."
+      });
+    }
+    state.pendingPlans?.clear();
     for (const pending of state.pendingPermissions?.values() || []) {
       clearTimeout(pending.timeout);
       this.resolveToolPermission(state, pending.toolUseId);

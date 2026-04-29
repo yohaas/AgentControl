@@ -239,6 +239,7 @@ export type TranscriptEvent =
     })
   | (TranscriptBase & {
       kind: "plan";
+      toolUseId?: string;
       plan: string;
       answered?: boolean;
       decision?: AgentPlanDecision;

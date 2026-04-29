@@ -654,8 +654,9 @@ function transcriptToPlainText(agent: RunningAgent, transcripts: TranscriptEvent
   }
 
   const questionToolUseIds = questionToolUseIdSet(transcripts);
+  const planToolUseIds = planToolUseIdSet(transcripts);
   return transcripts
-    .filter((event) => event.kind !== "tool_result" || !questionToolUseIds.has(event.toolUseId))
+    .filter((event) => event.kind !== "tool_result" || (!questionToolUseIds.has(event.toolUseId) && !planToolUseIds.has(event.toolUseId)))
     .map((event) => {
       if (event.kind === "assistant_text") return `Assistant (${event.model || agent.currentModel}):\n${event.text}`;
       if (event.kind === "user") return `User:\n${event.text}`;
@@ -731,6 +732,7 @@ function contextCopyTargetFromEvent(
 function pairedTranscriptItems(transcript: TranscriptEvent[]): ToolTranscriptItem[] {
   const usedResults = new Set<string>();
   const questionToolUseIds = questionToolUseIdSet(transcript);
+  const planToolUseIds = planToolUseIdSet(transcript);
   return transcript
     .map((event, index): ToolTranscriptItem | undefined => {
       if (event.kind === "tool_use") {
@@ -743,7 +745,7 @@ function pairedTranscriptItems(transcript: TranscriptEvent[]): ToolTranscriptIte
         if (result) usedResults.add(result.id);
         return { kind: "tool_pair", event, result };
       }
-      if (event.kind === "tool_result" && (usedResults.has(event.id) || questionToolUseIds.has(event.toolUseId))) return undefined;
+      if (event.kind === "tool_result" && (usedResults.has(event.id) || questionToolUseIds.has(event.toolUseId) || planToolUseIds.has(event.toolUseId))) return undefined;
       return { kind: "single", event };
     })
     .filter((item): item is ToolTranscriptItem => Boolean(item));
@@ -753,6 +755,14 @@ function questionToolUseIdSet(transcript: TranscriptEvent[]) {
   return new Set(
     transcript
       .filter((event): event is QuestionsEvent => event.kind === "questions" && Boolean(event.toolUseId))
+      .map((event) => event.toolUseId as string)
+  );
+}
+
+function planToolUseIdSet(transcript: TranscriptEvent[]) {
+  return new Set(
+    transcript
+      .filter((event): event is PlanEvent => event.kind === "plan" && Boolean(event.toolUseId))
       .map((event) => event.toolUseId as string)
   );
 }
@@ -6583,10 +6593,12 @@ function QuestionCard({ event, agent, compact = false }: { event: QuestionsEvent
 function PlanCard({ event, agent, compact = false }: { event: PlanEvent; agent: RunningAgent; compact?: boolean }) {
   const [otherText, setOtherText] = useState(event.response || "");
   const [activeDecision, setActiveDecision] = useState<PlanEvent["decision"] | "">("");
+  const [showOther, setShowOther] = useState(event.decision === "other");
 
   useEffect(() => {
     setOtherText(event.response || "");
     setActiveDecision(event.decision || "");
+    setShowOther(event.decision === "other");
   }, [event]);
 
   function answer(decision: NonNullable<PlanEvent["decision"]>) {
@@ -6600,22 +6612,55 @@ function PlanCard({ event, agent, compact = false }: { event: PlanEvent; agent: 
     });
   }
 
+  const options: Array<{
+    decision: NonNullable<PlanEvent["decision"]>;
+    label: string;
+    description: string;
+    icon: ComponentType<{ className?: string }>;
+  }> = [
+    {
+      decision: "approve",
+      label: "Approve",
+      description: "Let Claude proceed with this plan.",
+      icon: Check
+    },
+    {
+      decision: "deny",
+      label: "Deny",
+      description: "Reject the plan and stop this planning request.",
+      icon: X
+    },
+    {
+      decision: "keepPlanning",
+      label: "Keep planning",
+      description: "Ask Claude to revise the plan before implementing.",
+      icon: Pencil
+    },
+    {
+      decision: "other",
+      label: "Other",
+      description: "Send your own response.",
+      icon: MessageSquare
+    }
+  ];
+
   return (
     <div
-      className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm"
+      className="relative rounded-md border border-border bg-card p-3 pr-11 text-sm"
       data-copy-block="true"
       data-copy-event-id={event.id}
       style={{ borderLeftColor: agentAccentColor(agent.color), borderLeftWidth: 4 }}
     >
+      <ChatBlockPopoutButton source={agent} text={event.plan} compact={compact} />
       <div className="mb-3 flex items-center justify-between gap-2">
         <div>
-          <h3 className={cn("font-semibold", compact ? "text-sm" : "text-base")}>Claude returned a plan</h3>
-          <p className="text-xs text-muted-foreground">{event.answered ? "Plan response sent." : "Review the plan before implementation starts."}</p>
+          <h3 className={cn("font-semibold", compact ? "text-sm" : "text-base")}>Plan</h3>
+          <p className="text-xs text-muted-foreground">{event.answered ? "Plan response sent." : "Choose how Claude should continue."}</p>
         </div>
         {event.answered && <Badge>Answered</Badge>}
       </div>
-      <div className="rounded-md border border-border bg-background/70 p-3">
-        <ReactMarkdown remarkPlugins={[remarkGfm]}>{event.plan}</ReactMarkdown>
+      <div className="max-w-none rounded-md border border-border bg-background/70 p-3 text-sm leading-6">
+        <ChatMarkdown text={event.plan} query="" />
       </div>
       {event.response && (
         <div className="mt-3 rounded-md border border-border bg-background/60 px-3 py-2 text-xs text-muted-foreground">
@@ -6624,30 +6669,45 @@ function PlanCard({ event, agent, compact = false }: { event: PlanEvent; agent: 
       )}
       {!event.answered && (
         <div className="mt-3 grid gap-2">
-          <Textarea
-            value={otherText}
-            onChange={(inputEvent) => setOtherText(inputEvent.target.value)}
-            placeholder="Optional feedback for Deny, Keep planning, or Other"
-            className="min-h-20 text-sm"
-          />
-          <div className="flex flex-wrap justify-end gap-2">
-            <Button size="sm" variant="outline" onClick={() => answer("deny")}>
-              <X className="h-4 w-4" />
-              Deny
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => answer("keepPlanning")}>
-              <Pencil className="h-4 w-4" />
-              Keep planning
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => answer("other")} disabled={!otherText.trim()}>
-              <MessageSquare className="h-4 w-4" />
-              Other
-            </Button>
-            <Button size="sm" onClick={() => answer("approve")}>
-              <Check className="h-4 w-4" />
-              Approve
-            </Button>
+          <div className="grid gap-2">
+            {options.map((option) => {
+              const Icon = option.icon;
+              return (
+                <button
+                  key={option.decision}
+                  type="button"
+                  className="flex min-w-0 items-start gap-3 rounded-md border border-border bg-background/55 px-3 py-2 text-left hover:border-primary/60 hover:bg-primary/10"
+                  onClick={() => {
+                    if (option.decision === "other") {
+                      setShowOther(true);
+                      setActiveDecision("other");
+                      return;
+                    }
+                    answer(option.decision);
+                  }}
+                >
+                  <Icon className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-medium">{option.label}</span>
+                    <span className="block text-xs text-muted-foreground">{option.description}</span>
+                  </span>
+                </button>
+              );
+            })}
           </div>
+          {showOther && (
+            <div className="grid gap-2 rounded-md border border-border bg-background/50 p-2">
+              <Textarea
+                value={otherText}
+                onChange={(inputEvent) => setOtherText(inputEvent.target.value)}
+                placeholder="Type your response to Claude"
+                className="min-h-20 text-sm"
+              />
+              <Button size="sm" className="justify-self-end" onClick={() => answer("other")} disabled={!otherText.trim()}>
+                Send Other
+              </Button>
+            </div>
+          )}
         </div>
       )}
       {activeDecision && event.answered && <div className="mt-2 text-xs text-muted-foreground">Decision: {activeDecision}</div>}
