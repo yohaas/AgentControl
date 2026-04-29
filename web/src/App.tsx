@@ -1907,17 +1907,50 @@ function isDevTerminal(session: TerminalSession) {
   return session.title?.startsWith("Dev: ") || session.title === "npm run dev";
 }
 
-function permissionAllowRuleKey(rule: Pick<PermissionAllowRule, "provider" | "model" | "toolName">) {
-  return `${rule.provider || ""}:${rule.model.trim().toLowerCase()}:${rule.toolName.trim().toLowerCase()}`;
+function isShellPermissionTool(toolName: string) {
+  return /^(bash|shell|sh|cmd|powershell)$/i.test(toolName.trim());
 }
 
-function createPermissionAllowRule(agent: RunningAgent, toolName: string): PermissionAllowRule {
+function permissionCommandSignature(command?: string) {
+  const normalized = command?.trim().replace(/\s+/g, " ");
+  if (!normalized) return undefined;
+  const commandSegments = normalized.split(/\s*(?:&&|\|\||;)\s*/).filter(Boolean);
+  const segment = commandSegments.find((item) => /\b(?:npm|pnpm|yarn|bun)(?:\.(?:cmd|exe))?\b/i.test(item)) || commandSegments[0];
+  const tokens = segment
+    .split(/\s+/)
+    .map((token) => token.replace(/^["']|["']$/g, ""))
+    .filter(Boolean);
+  const packageManagerIndex = tokens.findIndex((token) => /^(npm|pnpm|yarn|bun)(?:\.(?:cmd|exe))?$/i.test(token));
+  if (packageManagerIndex >= 0) {
+    const packageManager = tokens[packageManagerIndex].replace(/\.(?:cmd|exe)$/i, "").toLowerCase();
+    const args = tokens.slice(packageManagerIndex + 1);
+    const commandIndex = args.findIndex((token) => !token.startsWith("-"));
+    const packageCommand = commandIndex >= 0 ? args[commandIndex].toLowerCase() : "";
+    if (!packageCommand) return packageManager;
+    if (packageCommand === "run") {
+      const script = args.slice(commandIndex + 1).find((token) => !token.startsWith("-"));
+      return script ? `${packageManager} run ${script}` : `${packageManager} run`;
+    }
+    return `${packageManager} ${packageCommand}`;
+  }
+  return segment.toLowerCase();
+}
+
+function permissionAllowRuleKey(rule: Pick<PermissionAllowRule, "provider" | "model" | "toolName" | "command">) {
+  return `${rule.provider || ""}:${rule.model.trim().toLowerCase()}:${rule.toolName.trim().toLowerCase()}:${rule.command?.trim().toLowerCase() || ""}`;
+}
+
+function createPermissionAllowRule(agent: RunningAgent, toolName: string, input?: unknown): PermissionAllowRule | undefined {
   const cryptoId = typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const shellTool = isShellPermissionTool(toolName);
+  const command = shellTool ? permissionCommandSignature(fieldText(input, ["command"])) : undefined;
+  if (shellTool && !command) return undefined;
   return {
     id: cryptoId,
     provider: agent.provider || "claude",
     model: agent.currentModel,
     toolName,
+    ...(command ? { command } : {}),
     createdAt: new Date().toISOString()
   };
 }
@@ -5671,7 +5704,7 @@ function SettingsDialog() {
               <section className="grid gap-2 rounded-md border border-border p-3">
                 <div>
                   <h3 className="text-sm font-medium">Always-allowed tools</h3>
-                  <p className="text-xs text-muted-foreground">Rules are matched by provider, model, and tool name.</p>
+                  <p className="text-xs text-muted-foreground">Rules are matched by provider, model, tool name, and command for shell tools.</p>
                 </div>
                 {permissionAllowRules.length === 0 ? (
                   <p className="rounded-md border border-dashed border-border px-3 py-4 text-center text-sm text-muted-foreground">
@@ -5682,8 +5715,12 @@ function SettingsDialog() {
                     {permissionAllowRules.map((rule) => (
                       <div key={rule.id} className="flex min-w-0 items-center gap-2 rounded-md border border-border bg-background/50 px-2 py-2 text-sm">
                         <Badge className="shrink-0">{rule.toolName}</Badge>
-                        <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground" title={`${rule.provider || "any"} / ${rule.model}`}>
+                        <span
+                          className="min-w-0 flex-1 truncate text-xs text-muted-foreground"
+                          title={`${rule.provider || "any"} / ${rule.model}${rule.command ? ` / ${rule.command}` : ""}`}
+                        >
                           {rule.provider || "any"} / {rule.model}
+                          {rule.command ? ` / ${rule.command}` : ""}
                         </span>
                         <Button
                           type="button"
@@ -8517,10 +8554,11 @@ function ToolCard({
   const activity = isUse ? toolActivityText(event, result) : toolSummary(event) || "Tool finished";
   const statusText = awaitingPermission ? "permission required" : resultIsError ? "error" : "";
   const permissionRule =
-    isUse && event.name ? createPermissionAllowRule(agent, event.name) : undefined;
+    isUse && event.name ? createPermissionAllowRule(agent, event.name, event.input) : undefined;
   const permissionRuleExists = Boolean(
     permissionRule && (settings.permissionAllowRules || []).some((rule) => permissionAllowRuleKey(rule) === permissionAllowRuleKey(permissionRule))
   );
+  const permissionRuleLabel = permissionRule?.command || (isUse ? event.name : "tool");
 
   useEffect(() => {
     if (awaitingPermission || resultIsError) setOpen(true);
@@ -8596,7 +8634,7 @@ function ToolCard({
             </Button>
             {permissionRule && (
               <Button size="sm" variant="outline" disabled={!agentHasProcess(agent)} onClick={() => void alwaysAllowAndApprove()}>
-                {permissionRuleExists ? "Approve with saved rule" : `Always allow ${event.name}`}
+                {permissionRuleExists ? "Approve with saved rule" : `Always allow ${permissionRuleLabel}`}
               </Button>
             )}
             <Button size="sm" variant="outline" disabled={!agentHasProcess(agent)} onClick={() => sendCommand({ type: "permission", id: agent.id, toolUseId: event.toolUseId, decision: "deny" })}>

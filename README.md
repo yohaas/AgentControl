@@ -17,7 +17,7 @@ See [CHANGELOG.md](CHANGELOG.md) for a date-grouped history of changes with comm
 - See provider icons, model, status, and last activity in the left nav and chat headers.
 - Stream Claude responses from `--output-format stream-json`, including live assistant text, thinking timers, token usage when the provider reports it, simplified tool activity, and a raw stream view for diagnostics.
 - Stream OpenAI Responses API sessions and run Codex CLI sessions through the provider selector.
-- Show prominent permission prompts for gated Claude tools, then send Approve/Deny back to the running Claude process. Normal tool prompts can be remembered as model-specific always-allow rules that you can review and remove in Settings.
+- Show prominent permission prompts for gated Claude tools, then send Approve/Deny back to the running Claude process. Normal tool prompts can be remembered as model-specific always-allow rules that you can review and remove in Settings; shell tool rules are scoped to the command signature, such as `npm test` or `pnpm run build`.
 - Show Claude clarification questions with tabbed selectable answers, including an Other response, then send the chosen answers back to the session.
 - Show Claude plan-mode results as formatted plan cards, with options to approve and build in the same chat, delegate the approved plan to another agent, deny, keep planning, or send a custom response.
 - After approving a plan, show small optional next-step suggestions based on available project agents first, then built-in agents. You can dismiss them, check them off, or launch/reuse a matching agent for QA, security, docs, performance, or product follow-up.

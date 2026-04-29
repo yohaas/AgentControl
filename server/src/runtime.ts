@@ -1180,7 +1180,7 @@ export class AgentRuntimeManager {
       });
     }
 
-    if (this.isPermissionAutoAllowed(state, request.toolName || "tool")) {
+    if (this.isPermissionAutoAllowed(state, request.toolName || "tool", request.input)) {
       return {
         behavior: "allow",
         updatedInput: request.input ?? {}
@@ -2216,17 +2216,57 @@ export class AgentRuntimeManager {
     this.persist();
   }
 
-  private isPermissionAutoAllowed(state: AgentProcessState, toolName: string): boolean {
+  private isPermissionAutoAllowed(state: AgentProcessState, toolName: string, input?: unknown): boolean {
     const normalizedToolName = toolName.trim().toLowerCase();
     const normalizedModel = state.agent.currentModel.trim().toLowerCase();
     const normalizedProvider = (state.agent.provider || "claude").toLowerCase();
+    const shellTool = this.isShellPermissionTool(toolName);
+    const normalizedCommand = shellTool ? this.permissionCommandSignature(this.commandFromPermissionInput(input))?.toLowerCase() : undefined;
     if (!normalizedToolName || !normalizedModel) return false;
     return this.getPermissionAllowRules().some((rule) => {
       const ruleToolName = rule.toolName?.trim().toLowerCase();
       const ruleModel = rule.model?.trim().toLowerCase();
       const ruleProvider = rule.provider?.trim().toLowerCase();
-      return ruleToolName === normalizedToolName && ruleModel === normalizedModel && (!ruleProvider || ruleProvider === normalizedProvider);
+      const ruleCommand = rule.command?.trim().toLowerCase();
+      if (ruleToolName !== normalizedToolName || ruleModel !== normalizedModel || (ruleProvider && ruleProvider !== normalizedProvider)) return false;
+      if (shellTool) return Boolean(ruleCommand && normalizedCommand && ruleCommand === normalizedCommand);
+      return !ruleCommand || ruleCommand === normalizedCommand;
     });
+  }
+
+  private isShellPermissionTool(toolName: string): boolean {
+    return /^(bash|shell|sh|cmd|powershell)$/i.test(toolName.trim());
+  }
+
+  private commandFromPermissionInput(input: unknown): string | undefined {
+    if (!input || typeof input !== "object") return undefined;
+    const command = (input as Record<string, unknown>).command;
+    return typeof command === "string" ? command : undefined;
+  }
+
+  private permissionCommandSignature(command?: string): string | undefined {
+    const normalized = command?.trim().replace(/\s+/g, " ");
+    if (!normalized) return undefined;
+    const commandSegments = normalized.split(/\s*(?:&&|\|\||;)\s*/).filter(Boolean);
+    const segment = commandSegments.find((item) => /\b(?:npm|pnpm|yarn|bun)(?:\.(?:cmd|exe))?\b/i.test(item)) || commandSegments[0];
+    const tokens = segment
+      .split(/\s+/)
+      .map((token) => token.replace(/^["']|["']$/g, ""))
+      .filter(Boolean);
+    const packageManagerIndex = tokens.findIndex((token) => /^(npm|pnpm|yarn|bun)(?:\.(?:cmd|exe))?$/i.test(token));
+    if (packageManagerIndex >= 0) {
+      const packageManager = tokens[packageManagerIndex].replace(/\.(?:cmd|exe)$/i, "").toLowerCase();
+      const args = tokens.slice(packageManagerIndex + 1);
+      const commandIndex = args.findIndex((token) => !token.startsWith("-"));
+      const packageCommand = commandIndex >= 0 ? args[commandIndex].toLowerCase() : "";
+      if (!packageCommand) return packageManager;
+      if (packageCommand === "run") {
+        const script = args.slice(commandIndex + 1).find((token) => !token.startsWith("-"));
+        return script ? `${packageManager} run ${script}` : `${packageManager} run`;
+      }
+      return `${packageManager} ${packageCommand}`;
+    }
+    return segment.toLowerCase();
   }
 
   private extractTextDelta(payload: Record<string, unknown>): string | undefined {

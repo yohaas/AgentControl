@@ -32,6 +32,7 @@ export interface PermissionAllowRule {
   provider?: AgentProvider;
   model: string;
   toolName: string;
+  command?: string;
   createdAt: string;
 }
 
