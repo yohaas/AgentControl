@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+
 type JsonRpcMessage = {
   jsonrpc?: string;
   id?: string | number | null;
@@ -44,19 +46,14 @@ async function requestPermission(args: Record<string, unknown>): Promise<Record<
     };
   }
 
-  const response = await fetch(permissionUrl, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json"
-    },
-    body: JSON.stringify({
-      agentId,
-      token,
-      toolName,
-      toolUseId,
-      input
-    })
+  const body = JSON.stringify({
+    agentId,
+    token,
+    toolName,
+    toolUseId,
+    input
   });
+  const response = await postPermissionRequest(body);
   if (!response.ok) {
     return {
       behavior: "deny",
@@ -64,6 +61,53 @@ async function requestPermission(args: Record<string, unknown>): Promise<Record<
     };
   }
   return (await response.json()) as Record<string, unknown>;
+}
+
+async function postPermissionRequest(body: string): Promise<Response> {
+  const urls = permissionRequestUrls(permissionUrl);
+  const errors: string[] = [];
+  for (const url of urls) {
+    try {
+      return await fetch(url, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json"
+        },
+        body
+      });
+    } catch (error) {
+      errors.push(`${url}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+  throw new Error(`AgentControl permission callback failed. Tried ${errors.join("; ")}`);
+}
+
+function permissionRequestUrls(primary: string): string[] {
+  const urls = new Set<string>([primary]);
+  let parsed: URL;
+  try {
+    parsed = new URL(primary);
+  } catch {
+    return [...urls];
+  }
+
+  const hosts = ["127.0.0.1", "localhost", "::1", "host.docker.internal", wslHostIp()].filter((host): host is string => Boolean(host));
+  for (const host of hosts) {
+    const next = new URL(parsed);
+    next.hostname = host.includes(":") && !host.startsWith("[") ? `[${host}]` : host;
+    urls.add(next.toString());
+  }
+  return [...urls];
+}
+
+function wslHostIp(): string | undefined {
+  if (process.platform !== "linux") return undefined;
+  try {
+    const resolv = readFileSync("/etc/resolv.conf", "utf8");
+    return resolv.match(/^nameserver\s+([^\s]+)/m)?.[1];
+  } catch {
+    return undefined;
+  }
 }
 
 async function handle(message: JsonRpcMessage): Promise<void> {
