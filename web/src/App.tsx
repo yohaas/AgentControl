@@ -11,6 +11,7 @@ import {
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
   type CSSProperties,
+  type ReactNode,
   type UIEvent as ReactUIEvent
 } from "react";
 import { FitAddon } from "@xterm/addon-fit";
@@ -2481,7 +2482,7 @@ function Header({
     return (
       <header
         className={cn(
-          "flex h-14 shrink-0 items-center border-b border-r border-border bg-background",
+          "flex h-14 shrink-0 items-center border-b border-border bg-background",
           sidebarCollapsed ? "justify-center px-2" : "gap-2 px-3"
         )}
       >
@@ -3684,7 +3685,7 @@ function PluginManagementPanel({ provider }: { provider: Extract<AgentProvider, 
   );
 }
 
-function Sidebar() {
+function Sidebar({ topSlot }: { topSlot?: ReactNode }) {
   const projects = useAppStore((state) => state.projects);
   const selectedProjectId = useAppStore((state) => state.selectedProjectId);
   const agentsById = useAppStore((state) => state.agents);
@@ -3788,44 +3789,47 @@ function Sidebar() {
 
   if (collapsed) {
     return (
-      <aside className="flex w-14 shrink-0 flex-col items-center gap-2 overflow-x-hidden border-r border-border bg-card/45 py-3">
-        <Button variant="ghost" size="icon" onClick={() => setCollapsed(false)} title="Expand sidebar">
-          <PanelLeftOpen className="h-4 w-4" />
-        </Button>
-        <Button
-          size="icon"
-          className="h-9 w-9"
-          disabled={!selectedProjectId}
-          onClick={() => selectedProjectId && openLaunchModal({ projectId: selectedProjectId })}
-          title="Launch agent"
-        >
-          <Plus className="h-4 w-4" />
-        </Button>
-        <div className="h-px w-8 bg-border" />
-        <div className="flex min-h-0 flex-1 flex-col items-center gap-2 overflow-y-auto overflow-x-hidden px-1">
-          {running.map((agent) => (
-            <div key={agent.id} className="relative h-9 w-9">
-              <button
-                className={cn(
-                  "grid h-9 w-9 place-items-center rounded-md hover:bg-accent",
-                  activeAgentId === agent.id && "bg-accent"
-                )}
-                onClick={() => focusRunningAgent(agent.id)}
-                title={`${agent.displayName}\n${agent.currentModel}\n${fullLastActivity(agent.updatedAt || agent.launchedAt)}`}
-              >
-                <ActiveAgentDot agent={agent} />
-              </button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="absolute right-0 top-0 h-4 w-4 rounded-full bg-background/90 p-0 text-muted-foreground shadow-sm hover:text-foreground"
-                title={`Close Chat ${agent.displayName}`}
-                onClick={() => sendCommand({ type: "kill", id: agent.id })}
-              >
-                <X className="h-3 w-3" />
-              </Button>
-            </div>
-          ))}
+      <aside className="relative flex w-14 shrink-0 flex-col overflow-x-hidden border-r border-border bg-card/45">
+        {topSlot}
+        <div className="flex min-h-0 flex-1 flex-col items-center gap-2 py-3">
+          <Button variant="ghost" size="icon" onClick={() => setCollapsed(false)} title="Expand sidebar">
+            <PanelLeftOpen className="h-4 w-4" />
+          </Button>
+          <Button
+            size="icon"
+            className="h-9 w-9"
+            disabled={!selectedProjectId}
+            onClick={() => selectedProjectId && openLaunchModal({ projectId: selectedProjectId })}
+            title="Launch agent"
+          >
+            <Plus className="h-4 w-4" />
+          </Button>
+          <div className="h-px w-8 bg-border" />
+          <div className="flex min-h-0 flex-1 flex-col items-center gap-2 overflow-y-auto overflow-x-hidden px-1">
+            {running.map((agent) => (
+              <div key={agent.id} className="relative h-9 w-9">
+                <button
+                  className={cn(
+                    "grid h-9 w-9 place-items-center rounded-md hover:bg-accent",
+                    activeAgentId === agent.id && "bg-accent"
+                  )}
+                  onClick={() => focusRunningAgent(agent.id)}
+                  title={`${agent.displayName}\n${agent.currentModel}\n${fullLastActivity(agent.updatedAt || agent.launchedAt)}`}
+                >
+                  <ActiveAgentDot agent={agent} />
+                </button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="absolute right-0 top-0 h-4 w-4 rounded-full bg-background/90 p-0 text-muted-foreground shadow-sm hover:text-foreground"
+                  title={`Close Chat ${agent.displayName}`}
+                  onClick={() => sendCommand({ type: "kill", id: agent.id })}
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              </div>
+            ))}
+          </div>
         </div>
       </aside>
     );
@@ -3836,6 +3840,7 @@ function Sidebar() {
       className="relative flex shrink-0 flex-col overflow-x-hidden border-r border-border bg-card/45"
       style={{ width: sidebarWidth }}
     >
+      {topSlot}
       <section className="flex min-h-0 flex-1 flex-col p-3">
         <div className="mb-2 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -9724,12 +9729,7 @@ export function App() {
           {terminalSideDocked && terminalDock === "left" && (
             <TerminalPanel poppedOutTerminalIds={poppedOutTerminalIds} />
           )}
-          <div className="flex min-h-0 shrink-0 flex-col">
-            <Header docked onUndock={() => setTopBarDocked(false)} />
-            <div className="flex min-h-0 flex-1">
-              <Sidebar />
-            </div>
-          </div>
+          <Sidebar topSlot={<Header docked onUndock={() => setTopBarDocked(false)} />} />
           <div className="flex min-w-0 flex-1 flex-col">
             <WorktreeTabs />
             <div className="flex min-h-0 flex-1">
