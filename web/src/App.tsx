@@ -6095,6 +6095,7 @@ function AgentTile({
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const suppressAutoFocusRef = useRef(false);
+  const suppressScrollIntoViewRef = useRef(false);
   const [showPinnedMessage, setShowPinnedMessage] = useState(false);
   const [contextOpen, setContextOpen] = useState(false);
   const [contextCopyTarget, setContextCopyTarget] = useState<ContextCopyTarget | undefined>();
@@ -6141,7 +6142,11 @@ function AgentTile({
 
   useEffect(() => {
     if (focusedAgentId !== agent.id) return;
-    tileRef.current?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    if (suppressScrollIntoViewRef.current) {
+      suppressScrollIntoViewRef.current = false;
+    } else {
+      tileRef.current?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    }
     if (suppressAutoFocusRef.current) {
       suppressAutoFocusRef.current = false;
       return;
@@ -6173,8 +6178,9 @@ function AgentTile({
     return () => window.removeEventListener("resize", measure);
   }, [draft]);
 
-  function activateTile(focusInput = false) {
+  function activateTile(focusInput = false, scrollIntoView = true) {
     suppressAutoFocusRef.current = !focusInput;
+    suppressScrollIntoViewRef.current = !scrollIntoView;
     setSelectedAgent(undefined);
     setFocusedAgent(agent.id);
   }
@@ -6444,7 +6450,7 @@ function AgentTile({
       style={{ height: tileMinimized ? undefined : height, flex: `0 0 ${width ? `${width}px` : defaultWidth}` }}
       onDragOver={(event) => event.preventDefault()}
       onPointerDown={(event) => {
-        activateTile(false);
+        activateTile(false, false);
         if (event.button === 0) selection.clearSelection();
       }}
       onDrop={(event) => {
@@ -9412,10 +9418,10 @@ function TerminalMinimizedDock({ poppedOutTerminalIds }: { poppedOutTerminalIds:
       <SquareTerminal className="h-4 w-4 text-emerald-300" />
       <span className="text-sm font-medium">Terminal</span>
       <Badge className="border-emerald-400/40 bg-emerald-500/15 text-emerald-100">{sessions.length}</Badge>
-      <span className="min-w-0 flex-1 truncate font-mono text-xs text-emerald-200/85">
+      <span className="min-w-0 flex-1 truncate font-mono text-xs text-[#e5e5e5]">
         {line?.text ? (
           <>
-            <span>{terminalLabel}: </span>
+            <span className="text-emerald-200/85">{terminalLabel}: </span>
             {line.segments.map((segment, index) => (
               <span key={`${index}-${segment.text}`} style={segment.style}>
                 {segment.text}
