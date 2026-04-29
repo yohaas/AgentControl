@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-04-29
 
+- [de7963b](https://github.com/yohaas/AgentControl/commit/de7963b) Allow lower agent rows to expand upward
 - [b9ba937](https://github.com/yohaas/AgentControl/commit/b9ba937) Add terminal clear control and tighten dock sizing
 - [69eaf7d](https://github.com/yohaas/AgentControl/commit/69eaf7d) Constrain terminal host width
 - [d8df76e](https://github.com/yohaas/AgentControl/commit/d8df76e) Merge docked top bar into sidebar
