@@ -1,0 +1,303 @@
+# Changelog
+
+All notable repository changes are listed newest-first and grouped by commit date.
+
+## 2026-04-29
+
+- [31c4447](https://github.com/yohaas/AgentControl/commit/31c4447) Improve pinned and long message controls
+- [c66365e](https://github.com/yohaas/AgentControl/commit/c66365e) Delegate approved plans to new agents
+- [894b307](https://github.com/yohaas/AgentControl/commit/894b307) Simplify tool output in chat view
+- [e937bc6](https://github.com/yohaas/AgentControl/commit/e937bc6) Ignore mid-stream Claude model reports
+- [fa3e7ae](https://github.com/yohaas/AgentControl/commit/fa3e7ae) Retry permission callbacks across local hosts
+
+## 2026-04-28
+
+- [7fa3283](https://github.com/yohaas/AgentControl/commit/7fa3283) Constrain tool cards to chat width
+- [04089cc](https://github.com/yohaas/AgentControl/commit/04089cc) Render Claude plans as chat decisions
+- [aba48b0](https://github.com/yohaas/AgentControl/commit/aba48b0) Hide handled question tool results
+- [ac7e2cc](https://github.com/yohaas/AgentControl/commit/ac7e2cc) Use tabbed question cards
+- [48ec3d4](https://github.com/yohaas/AgentControl/commit/48ec3d4) Handle AskUserQuestion permission prompts
+- [d2e1ac9](https://github.com/yohaas/AgentControl/commit/d2e1ac9) Render AskUserQuestion as question cards
+- [063717e](https://github.com/yohaas/AgentControl/commit/063717e) Expand composer on wrapped lines
+- [93f4155](https://github.com/yohaas/AgentControl/commit/93f4155) Support Claude plan approvals
+- [65b9e47](https://github.com/yohaas/AgentControl/commit/65b9e47) Support custom question answers
+- [4465a43](https://github.com/yohaas/AgentControl/commit/4465a43) Support Claude clarification questions
+- [be98af2](https://github.com/yohaas/AgentControl/commit/be98af2) Disable remote control launch again
+- [3d6f07f](https://github.com/yohaas/AgentControl/commit/3d6f07f) Restore experimental remote control launch
+- [6e527db](https://github.com/yohaas/AgentControl/commit/6e527db) Use right click paste in terminal
+- [16c4173](https://github.com/yohaas/AgentControl/commit/16c4173) Add terminal clipboard shortcuts
+- [ccf3fba](https://github.com/yohaas/AgentControl/commit/ccf3fba) Set built-in agent default models
+- [c104ad1](https://github.com/yohaas/AgentControl/commit/c104ad1) Recommend browser app install
+- [7636c9b](https://github.com/yohaas/AgentControl/commit/7636c9b) Prefer Linux paths for WSL launches
+- [e95c157](https://github.com/yohaas/AgentControl/commit/e95c157) Document Claude and Codex CLI setup
+- [1028c99](https://github.com/yohaas/AgentControl/commit/1028c99) Use backend server wording for disconnected websocket
+- [feb8bc4](https://github.com/yohaas/AgentControl/commit/feb8bc4) Resolve Codex from PATH before cmd fallback
+- [e6349d5](https://github.com/yohaas/AgentControl/commit/e6349d5) Scope agent name suffixes to project
+- [849ecd2](https://github.com/yohaas/AgentControl/commit/849ecd2) Speed up launch feedback and collapse available agents
+- [a98efb2](https://github.com/yohaas/AgentControl/commit/a98efb2) Improve WSL project add dialog
+- [2a905f2](https://github.com/yohaas/AgentControl/commit/2a905f2) Show WSL tag in project selector
+- [195c987](https://github.com/yohaas/AgentControl/commit/195c987) Resolve Claude from PATH before cmd fallback
+- [7948cbf](https://github.com/yohaas/AgentControl/commit/7948cbf) Resolve Claude launch commands across Windows and WSL
+- [2149ee0](https://github.com/yohaas/AgentControl/commit/2149ee0) Fix WSL browsing and command launch
+- [22abf20](https://github.com/yohaas/AgentControl/commit/22abf20) Add WSL runtime support and terminal UX fixes
+- [22f61f9](https://github.com/yohaas/AgentControl/commit/22f61f9) Allow folder browsing within home
+- [176234c](https://github.com/yohaas/AgentControl/commit/176234c) Clarify and build production startup
+- [5809e7d](https://github.com/yohaas/AgentControl/commit/5809e7d) Update .gitignore
+- [f989938](https://github.com/yohaas/AgentControl/commit/f989938) Temporarily disable Remote Control launch
+- [3db03d0](https://github.com/yohaas/AgentControl/commit/3db03d0) Experiment with Remote Control stdin bridge
+- [62b5e40](https://github.com/yohaas/AgentControl/commit/62b5e40) Improve activity wave contrast
+- [0a08cc1](https://github.com/yohaas/AgentControl/commit/0a08cc1) Remove chat block popout title
+- [f9de432](https://github.com/yohaas/AgentControl/commit/f9de432) Harden local auth and persisted secrets
+- [f0fb276](https://github.com/yohaas/AgentControl/commit/f0fb276) Replace synthetic Claude model with defaults
+- [77eddac](https://github.com/yohaas/AgentControl/commit/77eddac) Show startup instructions when server is unavailable
+- [87bd2da](https://github.com/yohaas/AgentControl/commit/87bd2da) Fix OS path opening for folders and agent files
+- [223d9dd](https://github.com/yohaas/AgentControl/commit/223d9dd) Clarify and tighten Remote Control lifecycle
+- [8199df8](https://github.com/yohaas/AgentControl/commit/8199df8) Update README for recent AgentControl features
+- [dd4b799](https://github.com/yohaas/AgentControl/commit/dd4b799) Fix Windows project folder opening
+- [6332ec4](https://github.com/yohaas/AgentControl/commit/6332ec4) Clear transient websocket error on reconnect
+- [17f5c5b](https://github.com/yohaas/AgentControl/commit/17f5c5b) Improve error toast contrast in light mode
+- [6eef69b](https://github.com/yohaas/AgentControl/commit/6eef69b) Improve slash TUI badge contrast
+- [7507cf4](https://github.com/yohaas/AgentControl/commit/7507cf4) Improve white agent color contrast
+- [6179caa](https://github.com/yohaas/AgentControl/commit/6179caa) Show Remote Control launch option only for Claude
+- [a527959](https://github.com/yohaas/AgentControl/commit/a527959) Filter slash commands by provider
+- [ad4270d](https://github.com/yohaas/AgentControl/commit/ad4270d) Fix OpenAI logo color in dark mode
+- [63d9f1b](https://github.com/yohaas/AgentControl/commit/63d9f1b) Add minimizable agent tiles
+- [224692f](https://github.com/yohaas/AgentControl/commit/224692f) Adapt modes for OpenAI and Codex providers
+- [ffe9ce2](https://github.com/yohaas/AgentControl/commit/ffe9ce2) Use official OpenAI provider icon
+- [1f1d880](https://github.com/yohaas/AgentControl/commit/1f1d880) Use official Codex provider icon
+- [df94912](https://github.com/yohaas/AgentControl/commit/df94912) Open slash menu above composer
+- [cbb7350](https://github.com/yohaas/AgentControl/commit/cbb7350) Fix Codex exec response handling
+- [92b7da3](https://github.com/yohaas/AgentControl/commit/92b7da3) Fix slash command picker behavior
+- [9e46960](https://github.com/yohaas/AgentControl/commit/9e46960) Fix Codex spawn on Windows
+- [fd8e3dc](https://github.com/yohaas/AgentControl/commit/fd8e3dc) Close worktrees dialog after switching
+- [8eab6ed](https://github.com/yohaas/AgentControl/commit/8eab6ed) Use consistent plugin install wording
+- [412e2d5](https://github.com/yohaas/AgentControl/commit/412e2d5) Move composer expand caret away from scrollbar
+- [bcbcf16](https://github.com/yohaas/AgentControl/commit/bcbcf16) Clarify Codex plugin enable placeholder
+- [a57e40a](https://github.com/yohaas/AgentControl/commit/a57e40a) Show available Codex marketplace plugins
+- [880b623](https://github.com/yohaas/AgentControl/commit/880b623) Show Codex plugins in launch modal
+- [8dd23fb](https://github.com/yohaas/AgentControl/commit/8dd23fb) Add Codex plugin support
+- [0501f3f](https://github.com/yohaas/AgentControl/commit/0501f3f) Use Windows shell start for opening paths
+- [4a72d31](https://github.com/yohaas/AgentControl/commit/4a72d31) Fix Windows folder opener
+- [47b2ff1](https://github.com/yohaas/AgentControl/commit/47b2ff1) Show active wave on expanded agent dots
+- [f3cfcf7](https://github.com/yohaas/AgentControl/commit/f3cfcf7) Add active wave to collapsed agent dot
+- [c6ef636](https://github.com/yohaas/AgentControl/commit/c6ef636) Show model in collapsed agent tooltip
+- [69a28e4](https://github.com/yohaas/AgentControl/commit/69a28e4) Show launch button in collapsed sidebar
+- [20fc006](https://github.com/yohaas/AgentControl/commit/20fc006) Align appearance controls in one row
+- [64f672b](https://github.com/yohaas/AgentControl/commit/64f672b) Group appearance settings
+- [927bc1e](https://github.com/yohaas/AgentControl/commit/927bc1e) Update backend.md
+- [0e455a2](https://github.com/yohaas/AgentControl/commit/0e455a2) Show built-in agent color preview
+- [5995d94](https://github.com/yohaas/AgentControl/commit/5995d94) Move built-in agent management to settings
+- [a29b9b0](https://github.com/yohaas/AgentControl/commit/a29b9b0) Assign distinct generated agent colors
+- [3a3ff59](https://github.com/yohaas/AgentControl/commit/3a3ff59) Default new launches to built-in general agent
+- [c6ecdef](https://github.com/yohaas/AgentControl/commit/c6ecdef) Make paused status resumable and resize error toasts
+- [e275cd1](https://github.com/yohaas/AgentControl/commit/e275cd1) Disambiguate launch agent source
+- [e930eeb](https://github.com/yohaas/AgentControl/commit/e930eeb) Use general agent instead of generic fallback
+- [a09ee9f](https://github.com/yohaas/AgentControl/commit/a09ee9f) Group launch agent options by source
+- [89a6765](https://github.com/yohaas/AgentControl/commit/89a6765) Add raw text toggle to chat popout
+- [84837ae](https://github.com/yohaas/AgentControl/commit/84837ae) Set general built-in agent color
+- [bbc66d3](https://github.com/yohaas/AgentControl/commit/bbc66d3) Place provider icon after agent dot
+- [a85136d](https://github.com/yohaas/AgentControl/commit/a85136d) Promote provider icon in agent headers
+- [8702f15](https://github.com/yohaas/AgentControl/commit/8702f15) Refresh launch models when provider changes
+- [cdf8502](https://github.com/yohaas/AgentControl/commit/cdf8502) Update shipped built-in agents
+- [17314e1](https://github.com/yohaas/AgentControl/commit/17314e1) Prevent horizontal error toast scroll
+- [3abae77](https://github.com/yohaas/AgentControl/commit/3abae77) Pad expanded chat composers
+- [41e673a](https://github.com/yohaas/AgentControl/commit/41e673a) Show repo built-in agents path in settings
+- [6414174](https://github.com/yohaas/AgentControl/commit/6414174) Ship universal built-in agents
+- [2d4d54c](https://github.com/yohaas/AgentControl/commit/2d4d54c) Remove maximized action menu border
+- [f7ede78](https://github.com/yohaas/AgentControl/commit/f7ede78) Keep settings content top aligned
+- [8d87ce3](https://github.com/yohaas/AgentControl/commit/8d87ce3) Add provider icons to agent model displays
+- [befd1a3](https://github.com/yohaas/AgentControl/commit/befd1a3) Keep settings dialog height stable
+- [847bd47](https://github.com/yohaas/AgentControl/commit/847bd47) Disable settings save until changes
+- [5acdf7e](https://github.com/yohaas/AgentControl/commit/5acdf7e) Tighten Claude fallback model list
+- [a2369dd](https://github.com/yohaas/AgentControl/commit/a2369dd) Fix Claude model source parsing
+- [42403ab](https://github.com/yohaas/AgentControl/commit/42403ab) Improve provider model refresh controls
+- [69e0e45](https://github.com/yohaas/AgentControl/commit/69e0e45) Update worktree defaults and agent file copying
+- [ff38e7d](https://github.com/yohaas/AgentControl/commit/ff38e7d) Add project folder opener
+- [13c7cb1](https://github.com/yohaas/AgentControl/commit/13c7cb1) Move model refresh into provider settings
+- [9f30914](https://github.com/yohaas/AgentControl/commit/9f30914) Remove working prefix from thinking text
+- [c499172](https://github.com/yohaas/AgentControl/commit/c499172) Keep settings actions visible
+- [6787b43](https://github.com/yohaas/AgentControl/commit/6787b43) Use icon button for closing all agents
+- [ad19b71](https://github.com/yohaas/AgentControl/commit/ad19b71) Restructure settings dialog layout
+- [e1ccc80](https://github.com/yohaas/AgentControl/commit/e1ccc80) Add Claude API runtime option
+- [caf54ac](https://github.com/yohaas/AgentControl/commit/caf54ac) Render markdown in text block popouts
+- [fede748](https://github.com/yohaas/AgentControl/commit/fede748) Remove settings model pills
+- [2d5eaf6](https://github.com/yohaas/AgentControl/commit/2d5eaf6) Add settings model updater
+- [fee30f5](https://github.com/yohaas/AgentControl/commit/fee30f5) Update OpenAI and Codex model catalogs
+- [6c9538f](https://github.com/yohaas/AgentControl/commit/6c9538f) Render chat markdown
+- [d40fb78](https://github.com/yohaas/AgentControl/commit/d40fb78) Expand composers on multiline paste
+- [fac6eee](https://github.com/yohaas/AgentControl/commit/fac6eee) Set maximized composer to three lines
+- [25ed6b0](https://github.com/yohaas/AgentControl/commit/25ed6b0) Scope popout context menu to text blocks
+- [68be269](https://github.com/yohaas/AgentControl/commit/68be269) Support selected text in chat block popouts
+- [75e57d6](https://github.com/yohaas/AgentControl/commit/75e57d6) Expand composer on multiline paste
+- [633dc71](https://github.com/yohaas/AgentControl/commit/633dc71) Group chat export menu options
+- [432c70e](https://github.com/yohaas/AgentControl/commit/432c70e) Add multiline composer collapse toggle
+- [ff0ca59](https://github.com/yohaas/AgentControl/commit/ff0ca59) Expose provider models for Codex and OpenAI
+- [4cd13ab](https://github.com/yohaas/AgentControl/commit/4cd13ab) Keep long errors dismissible
+- [2ba30bb](https://github.com/yohaas/AgentControl/commit/2ba30bb) Make worktree strip closable tabs
+- [9c10f6b](https://github.com/yohaas/AgentControl/commit/9c10f6b) Indent worktrees in project selector
+- [87eedb5](https://github.com/yohaas/AgentControl/commit/87eedb5) Default worktrees inside project folder
+- [27e36d4](https://github.com/yohaas/AgentControl/commit/27e36d4) Inherit project agents for nested worktrees
+- [0beea5b](https://github.com/yohaas/AgentControl/commit/0beea5b) Open descendant worktrees from dialog
+- [6e7c1e0](https://github.com/yohaas/AgentControl/commit/6e7c1e0) Use global default for built-in agents
+- [23944c2](https://github.com/yohaas/AgentControl/commit/23944c2) Add tabs for open worktrees
+- [96be063](https://github.com/yohaas/AgentControl/commit/96be063) Move built-in agent directory to general settings
+- [c28fa75](https://github.com/yohaas/AgentControl/commit/c28fa75) Use stop icon for response stop controls
+- [a120270](https://github.com/yohaas/AgentControl/commit/a120270) Use folder tree icon for worktrees
+- [c3049b8](https://github.com/yohaas/AgentControl/commit/c3049b8) Apply dark class in auto theme mode
+- [c6a1ccd](https://github.com/yohaas/AgentControl/commit/c6a1ccd) Improve status contrast in light mode
+- [bc7e769](https://github.com/yohaas/AgentControl/commit/bc7e769) Keep git status button unhighlighted
+- [f594f4d](https://github.com/yohaas/AgentControl/commit/f594f4d) Show config controls only in general settings
+- [3f83810](https://github.com/yohaas/AgentControl/commit/3f83810) Move plugin management into Claude settings
+- [d3227eb](https://github.com/yohaas/AgentControl/commit/d3227eb) Organize settings into provider tabs
+- [4a6a35f](https://github.com/yohaas/AgentControl/commit/4a6a35f) Remove duplicate models settings field
+- [bbed67b](https://github.com/yohaas/AgentControl/commit/bbed67b) Use folder picker for project settings
+- [02f00ec](https://github.com/yohaas/AgentControl/commit/02f00ec) Add editable queued message list
+- [de46cce](https://github.com/yohaas/AgentControl/commit/de46cce) Add long chat block popout
+- [f20b6c1](https://github.com/yohaas/AgentControl/commit/f20b6c1) Reconnect Claude agents before command errors
+- [2acf6f6](https://github.com/yohaas/AgentControl/commit/2acf6f6) Fix context copy target selection
+- [848f946](https://github.com/yohaas/AgentControl/commit/848f946) Add appearance theme setting
+- [744a7e8](https://github.com/yohaas/AgentControl/commit/744a7e8) Improve transcript copy and send targets
+- [fbb0517](https://github.com/yohaas/AgentControl/commit/fbb0517) Add built-in agent management
+- [78dc454](https://github.com/yohaas/AgentControl/commit/78dc454) Add Codex and OpenAI provider support
+- [4a9777d](https://github.com/yohaas/AgentControl/commit/4a9777d) Add git worktree management
+- [a6723e7](https://github.com/yohaas/AgentControl/commit/a6723e7) Secure local API and websocket controls
+- [1ff62da](https://github.com/yohaas/AgentControl/commit/1ff62da) Update README for current Agent Control features
+- [7bae0a9](https://github.com/yohaas/AgentControl/commit/7bae0a9) Close remote control sessions with chats
+- [cc4bc70](https://github.com/yohaas/AgentControl/commit/cc4bc70) Show remote control QR in tiles
+- [3b84dd4](https://github.com/yohaas/AgentControl/commit/3b84dd4) Fix remote control link parsing
+- [4467fde](https://github.com/yohaas/AgentControl/commit/4467fde) Disable TUI-only slash commands
+- [e3688b2](https://github.com/yohaas/AgentControl/commit/e3688b2) Remove maximized session info button
+- [8dbce74](https://github.com/yohaas/AgentControl/commit/8dbce74) Remove tile session info button
+- [62d12dc](https://github.com/yohaas/AgentControl/commit/62d12dc) Clarify selected launch plugins
+- [90d8f96](https://github.com/yohaas/AgentControl/commit/90d8f96) Show more slash command suggestions
+- [565b1cd](https://github.com/yohaas/AgentControl/commit/565b1cd) Defer launch plugin catalog loading
+- [0c0c519](https://github.com/yohaas/AgentControl/commit/0c0c519) Handle status slash command natively
+- [7d99150](https://github.com/yohaas/AgentControl/commit/7d99150) Scan slash commands for autocomplete
+- [415857f](https://github.com/yohaas/AgentControl/commit/415857f) Add agent plugin picker
+- [19e5497](https://github.com/yohaas/AgentControl/commit/19e5497) Move connection dot beside app title
+- [0512d3d](https://github.com/yohaas/AgentControl/commit/0512d3d) Open agent files with default app
+- [9718666](https://github.com/yohaas/AgentControl/commit/9718666) Clarify agent file modal
+- [b39c3d3](https://github.com/yohaas/AgentControl/commit/b39c3d3) Apply Claude mode changes to live sessions
+- [b8c072a](https://github.com/yohaas/AgentControl/commit/b8c072a) Move agent file link to agent type row
+- [c721a6b](https://github.com/yohaas/AgentControl/commit/c721a6b) Remove project row from launch dialog
+- [4b83046](https://github.com/yohaas/AgentControl/commit/4b83046) Show agent file from launch dialog
+- [6da35de](https://github.com/yohaas/AgentControl/commit/6da35de) Focus newly launched agent chat
+- [029f2c0](https://github.com/yohaas/AgentControl/commit/029f2c0) Show unpushed commit count on git button
+- [abe88b3](https://github.com/yohaas/AgentControl/commit/abe88b3) Remove chat input focus highlight
+- [fac032f](https://github.com/yohaas/AgentControl/commit/fac032f) Replace connection label with status dot
+- [c74a2df](https://github.com/yohaas/AgentControl/commit/c74a2df) Rename close action to close chat
+- [ce988de](https://github.com/yohaas/AgentControl/commit/ce988de) Sort slash commands alphabetically
+- [f21a23d](https://github.com/yohaas/AgentControl/commit/f21a23d) Add Claude thinking toggle
+- [a0e8bd9](https://github.com/yohaas/AgentControl/commit/a0e8bd9) Show drop target for chat attachments
+- [ee7927f](https://github.com/yohaas/AgentControl/commit/ee7927f) Make generic agent color white
+- [6bc6152](https://github.com/yohaas/AgentControl/commit/6bc6152) Persist agent plugin selections
+- [b97c268](https://github.com/yohaas/AgentControl/commit/b97c268) Improve slash and resume workflows
+- [24d32c2](https://github.com/yohaas/AgentControl/commit/24d32c2) Show remote control diagnostics
+- [58b3412](https://github.com/yohaas/AgentControl/commit/58b3412) Support drag drop chat attachments
+- [5c5e2fc](https://github.com/yohaas/AgentControl/commit/5c5e2fc) Pair tool results and show session capabilities
+- [265af47](https://github.com/yohaas/AgentControl/commit/265af47) Implement Claude permission prompts
+- [db4fc19](https://github.com/yohaas/AgentControl/commit/db4fc19) Make generic agent color black
+- [2bc138e](https://github.com/yohaas/AgentControl/commit/2bc138e) Auto scroll active chat output
+- [b723df9](https://github.com/yohaas/AgentControl/commit/b723df9) Always offer generic launch type
+- [a36fca1](https://github.com/yohaas/AgentControl/commit/a36fca1) Show folders in context picker
+- [6ff0cdc](https://github.com/yohaas/AgentControl/commit/6ff0cdc) Add resizable sidebar width
+- [ade77c0](https://github.com/yohaas/AgentControl/commit/ade77c0) Activate nav item from tile interaction
+- [c8cd699](https://github.com/yohaas/AgentControl/commit/c8cd699) Separate settings config import export
+- [097f00e](https://github.com/yohaas/AgentControl/commit/097f00e) Remove terminal dock from settings
+- [1481685](https://github.com/yohaas/AgentControl/commit/1481685) Deduplicate visible error messages
+- [8fb1ee8](https://github.com/yohaas/AgentControl/commit/8fb1ee8) Polish collapsed sidebar activity
+- [a48b602](https://github.com/yohaas/AgentControl/commit/a48b602) Move git menu next to play control
+- [4041e42](https://github.com/yohaas/AgentControl/commit/4041e42) Remove browse web context option
+- [f19c4cb](https://github.com/yohaas/AgentControl/commit/f19c4cb) Add composer context picker
+- [9a4c0c9](https://github.com/yohaas/AgentControl/commit/9a4c0c9) Restore tile column setting
+- [d37e9e8](https://github.com/yohaas/AgentControl/commit/d37e9e8) Make tile size changes explicitly saved
+- [bbe2fd3](https://github.com/yohaas/AgentControl/commit/bbe2fd3) Show available agents as sidebar tiles
+- [0327fac](https://github.com/yohaas/AgentControl/commit/0327fac) Update shutdown confirmation copy
+- [c1c7712](https://github.com/yohaas/AgentControl/commit/c1c7712) Hide process not running errors
+- [15717ae](https://github.com/yohaas/AgentControl/commit/15717ae) Add send to submenu chevron
+- [517c611](https://github.com/yohaas/AgentControl/commit/517c611) Add project git status menu
+
+## 2026-04-27
+
+- [75c8d11](https://github.com/yohaas/AgentControl/commit/75c8d11) Move AgentControl actions to status menu
+- [e7fd9c6](https://github.com/yohaas/AgentControl/commit/e7fd9c6) Add running agent list sort
+- [b8873f7](https://github.com/yohaas/AgentControl/commit/b8873f7) Allow dragging tile height
+- [3baae85](https://github.com/yohaas/AgentControl/commit/3baae85) Show last active terminal in dock strip
+- [97b1e10](https://github.com/yohaas/AgentControl/commit/97b1e10) Disable send to existing agent when unavailable
+- [6168154](https://github.com/yohaas/AgentControl/commit/6168154) Remove project refresh button
+- [cf6c650](https://github.com/yohaas/AgentControl/commit/cf6c650) Clarify agent file prompt source
+- [737e883](https://github.com/yohaas/AgentControl/commit/737e883) Enable shift tab mode switching
+- [e539c75](https://github.com/yohaas/AgentControl/commit/e539c75) Add collapsed sidebar agent close buttons
+- [a019fa5](https://github.com/yohaas/AgentControl/commit/a019fa5) Refine launch and dev controls
+- [bcd24ee](https://github.com/yohaas/AgentControl/commit/bcd24ee) Move project add and launch controls
+- [91a9fa4](https://github.com/yohaas/AgentControl/commit/91a9fa4) Move close action into agent menus
+- [0956c25](https://github.com/yohaas/AgentControl/commit/0956c25) Add sidebar close buttons for agents
+- [e375556](https://github.com/yohaas/AgentControl/commit/e375556) Rename clear and exit actions
+- [e837df5](https://github.com/yohaas/AgentControl/commit/e837df5) Add default agent mode setting
+- [d296e7e](https://github.com/yohaas/AgentControl/commit/d296e7e) Show agent file prompt in launch dialog
+- [465c66a](https://github.com/yohaas/AgentControl/commit/465c66a) Remove auto slash when closing menu
+- [0d08ab3](https://github.com/yohaas/AgentControl/commit/0d08ab3) Make composer one line high
+- [39ce688](https://github.com/yohaas/AgentControl/commit/39ce688) Update composer placeholder
+- [22724ea](https://github.com/yohaas/AgentControl/commit/22724ea) Use stable status labels
+- [acb4cd6](https://github.com/yohaas/AgentControl/commit/acb4cd6) Shorten composer text area
+- [f205e8e](https://github.com/yohaas/AgentControl/commit/f205e8e) Place activity time before status
+- [ae48f6e](https://github.com/yohaas/AgentControl/commit/ae48f6e) Move titlebar activity under status
+- [d4324ac](https://github.com/yohaas/AgentControl/commit/d4324ac) Toggle slash menu from composer button
+- [e535eff](https://github.com/yohaas/AgentControl/commit/e535eff) Use Waypoints for bypass icon
+- [33c2d48](https://github.com/yohaas/AgentControl/commit/33c2d48) Format composer like Claude
+- [255af98](https://github.com/yohaas/AgentControl/commit/255af98) Expose xhigh effort and nodes bypass icon
+- [8509e12](https://github.com/yohaas/AgentControl/commit/8509e12) Use dot effort selector
+- [e2715fc](https://github.com/yohaas/AgentControl/commit/e2715fc) Make agent effort selectable
+- [190fa72](https://github.com/yohaas/AgentControl/commit/190fa72) Use Claude-style bypass mode icon
+- [3cd3e17](https://github.com/yohaas/AgentControl/commit/3cd3e17) Match Claude bypass permissions icon
+- [78f7f20](https://github.com/yohaas/AgentControl/commit/78f7f20) Reposition agent last activity time
+- [b442904](https://github.com/yohaas/AgentControl/commit/b442904) Add Claude-style composer mode picker
+- [a8a5d46](https://github.com/yohaas/AgentControl/commit/a8a5d46) Use arrow send button and dropdown mode menu
+- [fea1c73](https://github.com/yohaas/AgentControl/commit/fea1c73) Keep terminal tab clicks single pane
+- [b3cbbf7](https://github.com/yohaas/AgentControl/commit/b3cbbf7) Move plan mode to send menu
+- [0e8a6ee](https://github.com/yohaas/AgentControl/commit/0e8a6ee) Keep new terminals as tabs
+- [d6872c7](https://github.com/yohaas/AgentControl/commit/d6872c7) Add per-agent plan mode toggle
+- [b85534c](https://github.com/yohaas/AgentControl/commit/b85534c) Use two-pane terminal split icon
+- [6025668](https://github.com/yohaas/AgentControl/commit/6025668) Improve question selection highlight
+- [549b085](https://github.com/yohaas/AgentControl/commit/549b085) Use standard split terminal icon
+- [9e0a14f](https://github.com/yohaas/AgentControl/commit/9e0a14f) Hide pinned message while original is visible
+- [0817be2](https://github.com/yohaas/AgentControl/commit/0817be2) Show agent last activity
+- [5598c69](https://github.com/yohaas/AgentControl/commit/5598c69) Use icons for terminal dock menu
+- [2bc8b1a](https://github.com/yohaas/AgentControl/commit/2bc8b1a) Add terminal dock menu
+- [dee16e1](https://github.com/yohaas/AgentControl/commit/dee16e1) Keep streaming activity visible
+- [72f2e41](https://github.com/yohaas/AgentControl/commit/72f2e41) Add terminal dock setting
+- [abca339](https://github.com/yohaas/AgentControl/commit/abca339) Toggle collapsed responses on click
+- [ec3307f](https://github.com/yohaas/AgentControl/commit/ec3307f) Add pinned message setting
+- [f93a68d](https://github.com/yohaas/AgentControl/commit/f93a68d) Colorize minimized terminal dock
+- [2061330](https://github.com/yohaas/AgentControl/commit/2061330) Show terminal output in minimized dock
+- [461dda1](https://github.com/yohaas/AgentControl/commit/461dda1) Move app controls into settings
+- [d4a0625](https://github.com/yohaas/AgentControl/commit/d4a0625) Add settings config import export
+- [6a69304](https://github.com/yohaas/AgentControl/commit/6a69304) Remove agents after explicit exit
+- [c3cf8ff](https://github.com/yohaas/AgentControl/commit/c3cf8ff) Add slash command autocomplete
+- [ae108b3](https://github.com/yohaas/AgentControl/commit/ae108b3) Handle empty tool fields safely
+- [65e8813](https://github.com/yohaas/AgentControl/commit/65e8813) Move popped terminals out of dock
+- [b68b26e](https://github.com/yohaas/AgentControl/commit/b68b26e) Add terminal dock minimize caret
+- [825c8b1](https://github.com/yohaas/AgentControl/commit/825c8b1) Pin last user message while scrolling
+- [60ad9dd](https://github.com/yohaas/AgentControl/commit/60ad9dd) Dock pop-out terminal window
+- [cde0786](https://github.com/yohaas/AgentControl/commit/cde0786) Browse and install Claude plugins
+- [df7bf49](https://github.com/yohaas/AgentControl/commit/df7bf49) Use composer button to stop busy agents
+- [35bd52f](https://github.com/yohaas/AgentControl/commit/35bd52f) Show agent activity while waiting
+- [2265dcb](https://github.com/yohaas/AgentControl/commit/2265dcb) Customize project dev command
+- [3bad156](https://github.com/yohaas/AgentControl/commit/3bad156) Fix supervised dev launch on Windows
+- [71daa3c](https://github.com/yohaas/AgentControl/commit/71daa3c) Add supervised app restart controls
+- [08be5b2](https://github.com/yohaas/AgentControl/commit/08be5b2) Add rotating thinking phrases
+- [4b1bcd6](https://github.com/yohaas/AgentControl/commit/4b1bcd6) Add project dev command controls
+- [81feb15](https://github.com/yohaas/AgentControl/commit/81feb15) Allow dismissing error messages
+- [f17d025](https://github.com/yohaas/AgentControl/commit/f17d025) Fix queue selector render loop
+- [0a75280](https://github.com/yohaas/AgentControl/commit/0a75280) Implement Claude CLI parity features
+- [b7dbf80](https://github.com/yohaas/AgentControl/commit/b7dbf80) Make clear preserve open agent
+- [8915fad](https://github.com/yohaas/AgentControl/commit/8915fad) Add terminal popout window
+- [8d35bd5](https://github.com/yohaas/AgentControl/commit/8d35bd5) Make detached terminal movable and resizable
+- [e842888](https://github.com/yohaas/AgentControl/commit/e842888) Persist terminal command history by project
+- [844a07c](https://github.com/yohaas/AgentControl/commit/844a07c) Allow generic agents without definition files
+- [bc300f1](https://github.com/yohaas/AgentControl/commit/bc300f1) Add close project action
+- [9c0f57d](https://github.com/yohaas/AgentControl/commit/9c0f57d) Scope dashboard environment by project
+- [7c11daf](https://github.com/yohaas/AgentControl/commit/7c11daf) Add project folder browser
+- [0ef4cbe](https://github.com/yohaas/AgentControl/commit/0ef4cbe) Enhance agent dashboard and terminal
+- [1782816](https://github.com/yohaas/AgentControl/commit/1782816) Implement multi-agent dashboard
+- [80eddf7](https://github.com/yohaas/AgentControl/commit/80eddf7) Initial commit

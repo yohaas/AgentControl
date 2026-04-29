@@ -4,6 +4,8 @@ Agent Control is a local multi-agent dashboard for Claude Code, Codex CLI, and O
 
 The app is built for local development workflows. It starts an Express/WebSocket server, a Vite/React UI, and provider processes/API streams in the selected project folders.
 
+See [CHANGELOG.md](CHANGELOG.md) for a date-grouped history of changes with commit links.
+
 ## What It Does
 
 - Launch Claude, Codex, or OpenAI API agents from project agent files or shipped built-in agents such as `general`, `frontend`, `backend`, `security`, and `qa`.
@@ -11,15 +13,16 @@ The app is built for local development workflows. It starts an Express/WebSocket
 - Switch between projects. Each project keeps its own open agents and terminal sessions.
 - Open the current project folder from the top bar in Explorer/Finder/xdg-open.
 - See provider icons, model, status, and last activity in the left nav and chat headers.
-- Stream Claude responses from `--output-format stream-json`, including live assistant text, tool activity, tool results, and raw stream export.
+- Stream Claude responses from `--output-format stream-json`, including live assistant text, simplified tool activity, and a raw stream view for diagnostics.
 - Stream OpenAI Responses API sessions and run Codex CLI sessions through the provider selector.
 - Show prominent permission prompts for gated Claude tools, then send Approve/Deny back to the running Claude process.
-- Show Claude clarification questions with selectable answers, then send the chosen answers back to the session.
+- Show Claude clarification questions with tabbed selectable answers, including an Other response, then send the chosen answers back to the session.
+- Show Claude plan-mode results as formatted plan cards, with options to approve and build in the same chat, delegate the approved plan to another agent, deny, keep planning, or send a custom response.
 - Control mode per agent: Ask before edits, Edit automatically, Plan mode, or Bypass permissions.
 - Control effort per agent: low, medium, high, xhigh, or max.
 - Toggle Claude thinking for a session.
 - Use provider-aware slash command autocomplete from AgentControl commands, Claude built-ins, project commands, user commands, plugin commands, and session-reported commands. Commands that require the Claude TUI are shown disabled.
-- Add context from local files, drag/drop files into chat, paste images, and send selected transcript/tool text to another agent.
+- Add context from local files, drag/drop files into chat, paste images, and send selected transcript text to another agent.
 - Run project terminals with tabs, command history, rename, split panes, resize, pop out, dock left/right/bottom/float, and kill-on-close behavior.
 - Show Git status for the selected project, including changed files, unpushed commit count, and a Push action.
 - Browse, install, enable, and persist Claude/Codex plugins per agent definition when the provider exposes a local plugin catalog.
@@ -100,6 +103,8 @@ You can also run `claude` interactively and use `/login` if prompted.
 Claude Code supports several auth methods, including Claude.ai subscription login, Claude Console/API credentials, and enterprise cloud providers. Standard Agent Control agents can use whatever Claude Code can use in your terminal environment. See Anthropic's auth reference for current details: https://code.claude.com/docs/en/authentication
 
 Remote Control is temporarily unavailable in Agent Control. Claude Code can start `claude remote-control`, but Agent Control cannot reliably mirror the live chat transcript from the current CLI. Use claude.ai/code or the Claude mobile app directly for Remote Control sessions until Claude exposes more CLI control.
+
+Agent Control requests the selected Claude model on launch. If Claude later reports a different model in stream metadata, Agent Control keeps the selected model visible and adds a system note so you can inspect the raw stream and investigate the mismatch.
 
 ## Install Codex CLI
 
@@ -296,16 +301,36 @@ Standard agents launch Claude with a small AgentControl MCP permission tool:
 
 This is used for gated write/edit/tool calls in modes that require approval.
 
+The helper retries permission callbacks across common local hostnames so WSL and native Windows launches can still reach the Agent Control backend when `127.0.0.1` resolves differently inside the provider process.
+
+## Plans And Questions
+
+Claude clarification questions and plan-mode prompts are rendered as first-class chat cards instead of raw tool output.
+
+Question cards:
+
+- Show one question at a time in a tabbed interface.
+- Advance automatically after single-choice answers.
+- Support multi-select questions.
+- Support an Other option with custom text.
+
+Plan cards:
+
+- Render Markdown plans as normal chat content with a popout button.
+- Offer Approve and build here, Deny, Keep planning, and Other.
+- Offer Approve and launch agent, which starts a new project or built-in agent with the approved plan as its initial prompt and tells the planning chat not to implement it there.
+- Hide the handled plan/question tool plumbing from the main chat.
+
 ## Chat And Transcript UX
 
 - Enter sends the message.
 - The send button becomes Stop while Claude is active.
 - Queued messages can be expanded, edited, deleted, and reordered before they are sent.
-- Long questions, responses, and tool output can collapse/expand.
+- Tool output is summarized as one-line activity in normal chat view; use the agent menu's View Raw Stream option for provider JSONL and detailed tool payloads.
+- Long questions and responses can collapse/expand.
 - Streaming output auto-scrolls.
-- Last sent message can pin while scrolling; this is enabled by default in Settings.
-- Claude clarification questions render as selectable answer cards in the transcript, including an Other option for custom answers.
-- Claude plan-mode results render as formatted plan cards with Approve, Deny, Keep planning, and Other responses.
+- Last sent message can pin while scrolling; clicking the pinned message jumps back to the original message, and long pinned messages can expand/collapse.
+- Long chat responses include popout and expand/collapse controls when needed.
 - Right-click selected text to copy or send it to another agent. If nothing is selected, the current message/tool card under the pointer is used; outside a block, the whole chat is used.
 - Long chat blocks include a popout button. The popout supports Markdown view, raw-text view, copy, and send-to-agent, including selected text.
 - Clear Chat clears only the transcript. Close Chat exits the agent and removes the tile.
