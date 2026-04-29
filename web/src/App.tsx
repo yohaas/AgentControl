@@ -2593,9 +2593,7 @@ function Header({
   }
 
   function useFullHeight() {
-    const main = document.querySelector("main");
-    const availableHeight = main instanceof HTMLElement ? main.clientHeight - 32 : window.innerHeight - 120;
-    setCurrentTileHeight(Math.min(TILE_MAX_HEIGHT, Math.max(TILE_MIN_HEIGHT, Math.round(availableHeight))));
+    setCurrentTileHeight(0);
   }
 
   function resetLayout() {
@@ -2627,12 +2625,12 @@ function Header({
         <DropdownMenuItem onClick={useFullHeight}>
           <Maximize2 className="mr-2 h-4 w-4" />
           Full Height
-          {currentTileHeight && currentTileHeight !== settings.tileHeight && <Check className="ml-auto h-4 w-4" />}
+          {(currentTileHeight === 0 || (currentTileHeight === undefined && settings.tileHeight === 0)) && <Check className="ml-auto h-4 w-4" />}
         </DropdownMenuItem>
         <DropdownMenuItem onClick={resetLayout}>
           <RefreshCw className="mr-2 h-4 w-4" />
           Use Settings
-          {!currentTileHeight && <Check className="ml-auto h-4 w-4" />}
+          {currentTileHeight === undefined && <Check className="ml-auto h-4 w-4" />}
         </DropdownMenuItem>
         <div className="mt-1 grid gap-2 border-t border-border px-2 py-2" onClick={(event) => event.stopPropagation()}>
           <div className="grid grid-cols-[1fr_0.8fr_auto] items-end gap-2">
@@ -6423,6 +6421,7 @@ function AgentTileGrid({ agents }: { agents: RunningAgent[] }) {
   const setTileOrder = useAppStore((state) => state.setTileOrder);
   const settings = useAppStore((state) => state.settings);
   const currentTileHeight = useAppStore((state) => state.currentTileHeight);
+  const terminalOpen = useAppStore((state) => state.terminalOpen);
   const configuredTileHeight = currentTileHeight ?? settings.tileHeight;
   const tileColumns = settings.tileColumns || 2;
   const horizontalScrolling = settings.tileScrolling === "horizontal";
@@ -6455,7 +6454,7 @@ function AgentTileGrid({ agents }: { agents: RunningAgent[] }) {
       observer?.disconnect();
       window.removeEventListener("resize", updateFullTileHeight);
     };
-  }, [configuredTileHeight]);
+  }, [configuredTileHeight, settings.terminalDock, terminalOpen]);
 
   useEffect(() => {
     const clamped = Math.min(TILE_MAX_HEIGHT, Math.max(TILE_MIN_HEIGHT, tileHeight));

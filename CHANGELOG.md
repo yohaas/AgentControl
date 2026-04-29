@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-04-29
 
+- Keep full-height tiles sized to the remaining space when the terminal docks or minimizes
 - [db090d5](https://github.com/yohaas/AgentControl/commit/db090d5) Fix terminal pane clipping
 - Show a Git credential modal that can open the built-in terminal with `git push`
 - Support steering active chats from queued messages and `/btw` Claude injections
