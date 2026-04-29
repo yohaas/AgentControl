@@ -57,7 +57,16 @@ async function authedFetch(input: RequestInfo, init?: RequestInit, retry = true)
 
 async function json<T>(input: RequestInfo, init?: RequestInit): Promise<T> {
   const response = await authedFetch(input, init);
-  if (!response.ok) throw new Error(await response.text());
+  if (!response.ok) {
+    const text = await response.text();
+    try {
+      const body = JSON.parse(text) as { error?: string };
+      throw new Error(body.error || text);
+    } catch (error) {
+      if (error instanceof SyntaxError) throw new Error(text);
+      throw error;
+    }
+  }
   return response.json() as Promise<T>;
 }
 

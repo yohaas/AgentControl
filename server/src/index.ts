@@ -76,6 +76,7 @@ let config = await readConfig();
 let secrets = await readSecrets();
 if (config.claudePath) process.env.AGENTCONTROL_CLAUDE_PATH = config.claudePath;
 if (config.codexPath) process.env.AGENTCONTROL_CODEX_PATH = config.codexPath;
+if (config.gitPath) process.env.GIT_PATH = config.gitPath;
 if (!process.env.ANTHROPIC_API_KEY && secrets.anthropicApiKey) process.env.ANTHROPIC_API_KEY = secrets.anthropicApiKey;
 if (!process.env.OPENAI_API_KEY && secrets.openaiApiKey) process.env.OPENAI_API_KEY = secrets.openaiApiKey;
 let agentDirs = resolveAgentDirs(config);
@@ -590,14 +591,21 @@ function parseGitWorktrees(output: string, currentPath: string): GitWorktree[] {
   });
 }
 
-function gitCommand(target: string | Project, args: string[], timeout = 15000): Promise<string> {
+interface GitCommandOptions {
+  env?: NodeJS.ProcessEnv;
+  timeoutMessage?: string;
+}
+
+function gitCommand(target: string | Project, args: string[], timeout = 15000, options: GitCommandOptions = {}): Promise<string> {
   return new Promise((resolve, reject) => {
     const command = typeof target !== "string" && isWslProject(target) ? "wsl.exe" : process.env.GIT_PATH || "git";
     const commandArgs = typeof target !== "string" && isWslProject(target) ? wslCommandArgs(target, "git", args) : args;
     const cwd = typeof target === "string" ? target : target.path;
-    execFile(command, commandArgs, { cwd, timeout, windowsHide: true }, (error, stdout, stderr) => {
+    execFile(command, commandArgs, { cwd, timeout, windowsHide: true, env: { ...process.env, ...options.env } }, (error, stdout, stderr) => {
       if (error) {
-        reject(new Error((stderr || error.message || "Git command failed.").trim()));
+        const timedOut = "killed" in error && error.killed;
+        const output = [stderr, stdout].filter(Boolean).join("\n").trim();
+        reject(new Error(timedOut ? options.timeoutMessage || output || error.message || "Git command timed out." : output || error.message || "Git command failed."));
         return;
       }
       resolve(stdout);
@@ -1145,7 +1153,10 @@ app.post("/api/projects/:id/git/push", async (request, response) => {
   }
 
   try {
-    await gitCommand(project, ["push"], 120000);
+    await gitCommand(project, ["push", "--porcelain"], 120000, {
+      env: { GIT_TERMINAL_PROMPT: "0" },
+      timeoutMessage: "Git push timed out. Git may be waiting for credentials or remote interaction that AgentControl cannot display."
+    });
     response.json(await projectGitStatus(project));
   } catch (error) {
     response.status(500).json({ error: error instanceof Error ? error.message : String(error) });
