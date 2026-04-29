@@ -630,6 +630,16 @@ function gitCommand(target: string | Project, args: string[], timeout = 15000, o
   });
 }
 
+function gitCredentialPromptMessage(error: unknown): string | undefined {
+  const message = error instanceof Error ? error.message : String(error);
+  if (!/terminal prompts (have been )?disabled|could not read Username|Authentication failed/i.test(message)) return undefined;
+  return [
+    "Git push needs credentials, but AgentControl cannot show interactive Git prompts.",
+    "Configure Git credentials in a terminal, then retry push.",
+    "For HTTPS remotes on Windows, use Git Credential Manager or run `gh auth login`; SSH remotes also work once your key is configured."
+  ].join(" ");
+}
+
 function wslExec(project: Project, command: string, args: string[] = [], timeout = 15000): Promise<string> {
   return new Promise((resolve, reject) => {
     execFile("wsl.exe", wslCommandArgs(project, command, args), { cwd: project.path, timeout, windowsHide: true }, (error, stdout, stderr) => {
@@ -1182,7 +1192,7 @@ app.post("/api/projects/:id/git/push", async (request, response) => {
     });
     response.json(await projectGitStatus(project));
   } catch (error) {
-    response.status(500).json({ error: error instanceof Error ? error.message : String(error) });
+    response.status(500).json({ error: gitCredentialPromptMessage(error) || (error instanceof Error ? error.message : String(error)) });
   }
 });
 
