@@ -1521,9 +1521,12 @@ app.put("/api/settings", async (request, response) => {
     if (body.clearAnthropicApiKey) delete process.env.ANTHROPIC_API_KEY;
     if (body.clearOpenaiApiKey) delete process.env.OPENAI_API_KEY;
   }
+  const requestedProjectPaths = Array.isArray(body.projectPaths) ? body.projectPaths : config.projectPaths;
+  const openProjectPaths = projects.map((project) => project.path).filter(Boolean);
+  const projectPaths = Array.from(new Set([...(requestedProjectPaths || []), ...openProjectPaths]));
   config = await writeConfig({
     projectsRoot: typeof body.projectsRoot === "string" ? body.projectsRoot : config.projectsRoot,
-    projectPaths: Array.isArray(body.projectPaths) ? body.projectPaths : config.projectPaths,
+    projectPaths,
     models: Array.isArray(body.models) ? body.models : config.models,
     modelProfiles: Array.isArray(body.modelProfiles) ? body.modelProfiles : config.modelProfiles,
     gitPath: typeof body.gitPath === "string" ? body.gitPath.trim() : config.gitPath,
