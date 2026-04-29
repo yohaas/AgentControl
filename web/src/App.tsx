@@ -6384,12 +6384,29 @@ function QuestionCard({ event, agent, compact = false }: { event: QuestionsEvent
   const [selections, setSelections] = useState<string[][]>(initialSelections);
   const [otherSelected, setOtherSelected] = useState<boolean[]>(initialOtherTexts.map((text) => Boolean(text)));
   const [otherTexts, setOtherTexts] = useState<string[]>(initialOtherTexts);
+  const [activeQuestionIndex, setActiveQuestionIndex] = useState(0);
 
   useEffect(() => {
     setSelections(initialSelections);
     setOtherSelected(initialOtherTexts.map((text) => Boolean(text)));
     setOtherTexts(initialOtherTexts);
+    setActiveQuestionIndex(0);
   }, [initialOtherTexts, initialSelections]);
+
+  const activeQuestion = event.questions[activeQuestionIndex] || event.questions[0];
+  const allAnswered = event.questions.every((question, index) =>
+    question.multiSelect ? selections[index].length > 0 || Boolean(otherSelected[index] && otherTexts[index].trim()) : selections[index].length > 0 || Boolean(otherSelected[index] && otherTexts[index].trim())
+  );
+
+  function questionAnswered(questionIndex: number) {
+    return selections[questionIndex].length > 0 || Boolean(otherSelected[questionIndex] && otherTexts[questionIndex].trim());
+  }
+
+  function goNext(questionIndex: number) {
+    if (questionIndex < event.questions.length - 1) {
+      setActiveQuestionIndex(questionIndex + 1);
+    }
+  }
 
   function toggle(questionIndex: number, label: string, multiSelect?: boolean) {
     if (event.answered) return;
@@ -6400,6 +6417,7 @@ function QuestionCard({ event, agent, compact = false }: { event: QuestionsEvent
         return labels.includes(label) ? labels.filter((item) => item !== label) : [...labels, label];
       })
     );
+    if (!multiSelect) goNext(questionIndex);
   }
 
   function toggleOther(questionIndex: number, multiSelect?: boolean) {
@@ -6423,13 +6441,9 @@ function QuestionCard({ event, agent, compact = false }: { event: QuestionsEvent
     });
   }
 
-  const missingAnswer = event.questions.some(
-    (question, index) => !question.multiSelect && selections[index].length === 0 && !(otherSelected[index] && otherTexts[index].trim())
-  );
-
   return (
     <div
-      className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm"
+      className="rounded-md border border-cyan-500/40 bg-cyan-500/10 p-3 text-sm"
       data-copy-block="true"
       data-copy-event-id={event.id}
       style={{ borderLeftColor: agentAccentColor(agent.color), borderLeftWidth: 4 }}
@@ -6437,85 +6451,118 @@ function QuestionCard({ event, agent, compact = false }: { event: QuestionsEvent
       <div className="mb-3 flex items-center justify-between gap-2">
         <div>
           <h3 className={cn("font-semibold", compact ? "text-sm" : "text-base")}>Claude has questions</h3>
-          <p className="text-xs text-muted-foreground">{event.answered ? "Answered" : "Choose answers to continue this agent."}</p>
+          <p className="text-xs text-muted-foreground">
+            {event.answered ? "Answered" : `Question ${activeQuestionIndex + 1} of ${event.questions.length}`}
+          </p>
         </div>
         {event.answered && <Badge>Answered</Badge>}
       </div>
-      <div className="grid gap-3">
+      <div className="mb-3 flex gap-1 overflow-x-auto border-b border-cyan-400/25">
         {event.questions.map((question, questionIndex) => (
-          <section key={`${event.id}:${questionIndex}`} className="grid gap-2 rounded-md border border-border bg-background/60 p-3">
-            <div>
-              {question.header && <div className="text-xs font-medium uppercase text-muted-foreground">{question.header}</div>}
-              <div className="font-medium">{question.question}</div>
-            </div>
-            <div className="grid gap-2">
-              {question.options.map((option) => {
-                const selected = selections[questionIndex]?.includes(option.label);
-                return (
-                  <label
-                    key={option.label}
-                    className={cn(
-                      "flex cursor-pointer items-start gap-2 rounded-md border border-border px-3 py-2",
-                      selected && "border-primary/60 bg-primary/10",
-                      event.answered && "cursor-default opacity-80"
-                    )}
-                  >
-                    <input
-                      className="mt-1"
-                      type={question.multiSelect ? "checkbox" : "radio"}
-                      name={`${event.id}:${questionIndex}`}
-                      checked={selected}
-                      disabled={event.answered}
-                      onChange={() => {
-                        toggle(questionIndex, option.label, question.multiSelect);
-                        if (!question.multiSelect) setOtherSelected((current) => current.map((selected, index) => (index === questionIndex ? false : selected)));
-                      }}
-                    />
-                    <span className="min-w-0">
-                      <span className="block font-medium">{option.label}</span>
-                      {option.description && <span className="mt-1 block text-xs leading-5 text-muted-foreground">{option.description}</span>}
-                    </span>
-                  </label>
-                );
-              })}
-              <label
-                className={cn(
-                  "flex cursor-pointer items-start gap-2 rounded-md border border-border px-3 py-2",
-                  otherSelected[questionIndex] && "border-primary/60 bg-primary/10",
-                  event.answered && "cursor-default opacity-80"
-                )}
-              >
-                <input
-                  className="mt-1"
-                  type={question.multiSelect ? "checkbox" : "radio"}
-                  name={`${event.id}:${questionIndex}`}
-                  checked={Boolean(otherSelected[questionIndex])}
-                  disabled={event.answered}
-                  onChange={() => toggleOther(questionIndex, question.multiSelect)}
-                />
-                <span className="min-w-0 flex-1">
-                  <span className="block font-medium">Other</span>
-                  <Input
-                    className="mt-2"
-                    value={otherTexts[questionIndex] || ""}
-                    disabled={event.answered || !otherSelected[questionIndex]}
-                    placeholder="Type your answer"
-                    onChange={(inputEvent) =>
-                      setOtherTexts((current) => current.map((text, index) => (index === questionIndex ? inputEvent.target.value : text)))
-                    }
-                  />
-                </span>
-              </label>
-            </div>
-          </section>
+          <button
+            key={`${event.id}:tab:${questionIndex}`}
+            type="button"
+            className={cn(
+              "min-w-0 rounded-t-md border border-b-0 px-3 py-2 text-left text-xs",
+              questionIndex === activeQuestionIndex
+                ? "border-cyan-400/50 bg-background text-foreground"
+                : "border-transparent text-muted-foreground hover:bg-cyan-500/10 hover:text-foreground"
+            )}
+            onClick={() => setActiveQuestionIndex(questionIndex)}
+          >
+            <span className="flex min-w-0 items-center gap-2">
+              <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full border border-cyan-400/40 text-[11px]">{questionIndex + 1}</span>
+              <span className="truncate">{question.header || question.question}</span>
+              {questionAnswered(questionIndex) && <Check className="h-3.5 w-3.5 shrink-0 text-cyan-300" />}
+            </span>
+          </button>
         ))}
       </div>
+      {activeQuestion && (
+        <section className="grid gap-2 rounded-md border border-cyan-400/25 bg-background/60 p-3">
+          <div>
+            {activeQuestion.header && <div className="text-xs font-medium uppercase text-cyan-300">{activeQuestion.header}</div>}
+            <div className="font-medium">{activeQuestion.question}</div>
+          </div>
+          <div className="grid gap-2">
+            {activeQuestion.options.map((option) => {
+              const selected = selections[activeQuestionIndex]?.includes(option.label);
+              return (
+                <label
+                  key={option.label}
+                  className={cn(
+                    "flex cursor-pointer items-start gap-2 rounded-md border border-border px-3 py-2",
+                    selected && "border-cyan-400/60 bg-cyan-500/10",
+                    event.answered && "cursor-default opacity-80"
+                  )}
+                >
+                  <input
+                    className="mt-1"
+                    type={activeQuestion.multiSelect ? "checkbox" : "radio"}
+                    name={`${event.id}:${activeQuestionIndex}`}
+                    checked={selected}
+                    disabled={event.answered}
+                    onChange={() => {
+                      toggle(activeQuestionIndex, option.label, activeQuestion.multiSelect);
+                      if (!activeQuestion.multiSelect) setOtherSelected((current) => current.map((selected, index) => (index === activeQuestionIndex ? false : selected)));
+                    }}
+                  />
+                  <span className="min-w-0">
+                    <span className="block font-medium">{option.label}</span>
+                    {option.description && <span className="mt-1 block text-xs leading-5 text-muted-foreground">{option.description}</span>}
+                  </span>
+                </label>
+              );
+            })}
+            <label
+              className={cn(
+                "flex cursor-pointer items-start gap-2 rounded-md border border-border px-3 py-2",
+                otherSelected[activeQuestionIndex] && "border-cyan-400/60 bg-cyan-500/10",
+                event.answered && "cursor-default opacity-80"
+              )}
+            >
+              <input
+                className="mt-1"
+                type={activeQuestion.multiSelect ? "checkbox" : "radio"}
+                name={`${event.id}:${activeQuestionIndex}`}
+                checked={Boolean(otherSelected[activeQuestionIndex])}
+                disabled={event.answered}
+                onChange={() => toggleOther(activeQuestionIndex, activeQuestion.multiSelect)}
+              />
+              <span className="min-w-0 flex-1">
+                <span className="block font-medium">Other</span>
+                <Input
+                  className="mt-2"
+                  value={otherTexts[activeQuestionIndex] || ""}
+                  disabled={event.answered || !otherSelected[activeQuestionIndex]}
+                  placeholder="Type your answer"
+                  onChange={(inputEvent) =>
+                    setOtherTexts((current) => current.map((text, index) => (index === activeQuestionIndex ? inputEvent.target.value : text)))
+                  }
+                  onBlur={() => {
+                    if (otherSelected[activeQuestionIndex] && otherTexts[activeQuestionIndex]?.trim()) goNext(activeQuestionIndex);
+                  }}
+                />
+              </span>
+            </label>
+          </div>
+        </section>
+      )}
       {!event.answered && (
-        <div className="mt-3 flex justify-end">
-          <Button size="sm" onClick={submit} disabled={missingAnswer}>
-            <Check className="h-4 w-4" />
-            Send Answers
+        <div className="mt-3 flex justify-between gap-2">
+          <Button size="sm" variant="outline" disabled={activeQuestionIndex === 0} onClick={() => setActiveQuestionIndex((index) => Math.max(0, index - 1))}>
+            Previous
           </Button>
+          {activeQuestionIndex < event.questions.length - 1 ? (
+            <Button size="sm" variant="outline" disabled={!questionAnswered(activeQuestionIndex)} onClick={() => goNext(activeQuestionIndex)}>
+              Next
+            </Button>
+          ) : (
+            <Button size="sm" onClick={submit} disabled={!allAnswered}>
+              <Check className="h-4 w-4" />
+              Send Answers
+            </Button>
+          )}
         </div>
       )}
     </div>
