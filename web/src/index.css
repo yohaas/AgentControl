@@ -206,7 +206,6 @@
 
 .terminal-host {
   box-sizing: border-box;
-  padding: 8px;
 }
 
 .terminal-host .xterm {

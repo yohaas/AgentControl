@@ -9522,7 +9522,7 @@ function TerminalPane({
 
   return (
     <div
-      className={cn("relative min-h-0 min-w-0 overflow-hidden border border-border bg-zinc-950", active && "ring-1 ring-primary")}
+      className={cn("relative min-h-0 min-w-0 overflow-hidden border border-border bg-zinc-950 p-2", active && "ring-1 ring-primary")}
       onMouseDown={onActivate}
     >
       {onClosePane && (
