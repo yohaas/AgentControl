@@ -811,7 +811,9 @@ export class AgentRuntimeManager {
   }
 
   private async runCodexTurn(state: AgentProcessState, prompt: string): Promise<void> {
-    const args = ["exec", "--json", "-m", state.agent.currentModel];
+    const args = state.agent.sessionId
+      ? ["exec", "resume", "--json", "-m", state.agent.currentModel]
+      : ["exec", "--json", "-m", state.agent.currentModel];
     args.push("-c", `model_reasoning_effort=${tomlBasicString(this.providerReasoningEffort(state))}`);
     const selectedPlugins = new Set(state.def?.plugins || []);
     const installedPlugins = await listPlugins("codex").catch(() => []);
@@ -821,6 +823,7 @@ export class AgentRuntimeManager {
     for (const plugin of selectedPlugins) {
       if (!installedPlugins.some((installed) => installed.name === plugin)) args.push("-c", `plugins.${tomlBasicString(plugin)}.enabled=true`);
     }
+    if (state.agent.sessionId) args.push(state.agent.sessionId);
     args.push("-");
     const codexInvocation = resolveCodexInvocation();
     const command = this.spawnCommand(state, codexInvocation.command, [...codexInvocation.args, ...args]);
