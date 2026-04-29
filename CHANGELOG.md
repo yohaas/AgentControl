@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-04-29
 
+- [bd85456](https://github.com/yohaas/AgentControl/commit/bd85456) Fix tile activation clicks and terminal defaults
 - [47366ae](https://github.com/yohaas/AgentControl/commit/47366ae) Preserve ANSI colors in terminal dock
 - [fc90481](https://github.com/yohaas/AgentControl/commit/fc90481) Show pinned messages as hover tooltip
 - [740de92](https://github.com/yohaas/AgentControl/commit/740de92) Orient pinned minimize caret
