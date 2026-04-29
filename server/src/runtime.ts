@@ -62,6 +62,7 @@ interface AgentProcessState {
   pendingPermissions?: Map<string, PendingPermissionRequest>;
   pendingQuestions?: Map<string, PendingQuestionRequest>;
   pendingPlans?: Map<string, PendingPlanRequest>;
+  reportedModelWarnings?: Set<string>;
   rcLastDiagnostic?: string;
   apiAbort?: AbortController;
 }
@@ -261,7 +262,8 @@ export class AgentRuntimeManager {
         transcript: persisted.transcripts[restored.id] || [],
         rawLines: [],
         stdoutBuffer: "",
-        stderrBuffer: ""
+        stderrBuffer: "",
+        reportedModelWarnings: new Set()
       });
     }
   }
@@ -333,6 +335,7 @@ export class AgentRuntimeManager {
       pendingPermissions: new Map(),
       pendingQuestions: new Map(),
       pendingPlans: new Map(),
+      reportedModelWarnings: new Set(),
       pendingInitialPrompt: request.initialPrompt?.trim() || undefined,
       autoApprove: request.autoApprove
     };
@@ -1739,9 +1742,7 @@ export class AgentRuntimeManager {
 
     const message = (payload.message || payload) as Record<string, unknown>;
     const messageModel = this.modelOrDefault(state, this.trimmedStringField(message.model) || this.trimmedStringField(payload.model));
-    if (messageModel && messageModel !== state.agent.currentModel) {
-      this.updateModel(state, messageModel);
-    }
+    if (messageModel && messageModel !== state.agent.currentModel) this.noteIgnoredModelReport(state, messageModel);
 
     const content = Array.isArray(message.content) ? message.content : Array.isArray(payload.content) ? payload.content : [];
     if (type === "assistant" || content.length > 0) {
@@ -2351,6 +2352,19 @@ export class AgentRuntimeManager {
       updatedAt: state.agent.updatedAt
     });
     this.persist();
+  }
+
+  private noteIgnoredModelReport(state: AgentProcessState, reportedModel: string): void {
+    const selectedModel = state.agent.currentModel;
+    const key = `${selectedModel}->${reportedModel}`;
+    state.reportedModelWarnings ??= new Set();
+    if (state.reportedModelWarnings.has(key)) return;
+    state.reportedModelWarnings.add(key);
+    this.pushTranscript(state, {
+      ...eventBase(state.agent.id, selectedModel),
+      kind: "system",
+      text: `Claude reported ${reportedModel} in stream metadata, but AgentControl kept the selected model ${selectedModel}.`
+    });
   }
 
   private findAgentDef(agent: RunningAgent): AgentDef | undefined {
