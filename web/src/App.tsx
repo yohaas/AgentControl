@@ -9358,6 +9358,7 @@ function TerminalPanel({
     .filter((item): item is TerminalSession => Boolean(item));
   const terminalDockOption = TERMINAL_DOCK_OPTIONS.find((option) => option.value === terminalDock) || TERMINAL_DOCK_OPTIONS[2];
   const CurrentDockIcon = terminalDockOption.icon;
+  const PopoutDockIcon = terminalDock === "float" ? PanelBottom : CurrentDockIcon;
   const panelStyle: CSSProperties | undefined = popout
     ? undefined
     : floating
@@ -9493,7 +9494,7 @@ function TerminalPanel({
         )}
         {popout && (
           <Button variant="outline" size="sm" onClick={dockPopout} title="Return terminal to the docked panel">
-            <Minimize2 className="h-4 w-4" />
+            <PopoutDockIcon className="h-4 w-4" />
             Dock
           </Button>
         )}
