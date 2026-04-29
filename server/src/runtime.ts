@@ -1783,10 +1783,15 @@ export class AgentRuntimeManager {
 
     if (type === "tool_result") {
       state.activeTurn = true;
+      const toolUseId = this.trimmedStringField(value.tool_use_id) || this.trimmedStringField(value.toolUseId) || transcriptId();
+      if (this.hasQuestionForToolUseId(state, toolUseId)) {
+        this.setStatus(state, "running");
+        return;
+      }
       this.pushTranscript(state, {
         ...eventBase(state.agent.id, state.agent.currentModel),
         kind: "tool_result",
-        toolUseId: this.trimmedStringField(value.tool_use_id) || this.trimmedStringField(value.toolUseId) || transcriptId(),
+        toolUseId,
         output: value.content ?? value.output ?? "",
         isError: Boolean(value.is_error || value.isError)
       });
@@ -1916,6 +1921,10 @@ export class AgentRuntimeManager {
       questions
     });
     this.setStatus(state, "awaiting-input");
+  }
+
+  private hasQuestionForToolUseId(state: AgentProcessState, toolUseId: string): boolean {
+    return state.transcript.some((event) => event.kind === "questions" && event.toolUseId === toolUseId);
   }
 
   private normalizeQuestionAnswers(questions: AgentQuestion[], answers: AgentQuestionAnswer[]): AgentQuestionAnswer[] {

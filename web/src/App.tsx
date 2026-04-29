@@ -653,7 +653,9 @@ function transcriptToPlainText(agent: RunningAgent, transcripts: TranscriptEvent
       .join("\n");
   }
 
+  const questionToolUseIds = questionToolUseIdSet(transcripts);
   return transcripts
+    .filter((event) => event.kind !== "tool_result" || !questionToolUseIds.has(event.toolUseId))
     .map((event) => {
       if (event.kind === "assistant_text") return `Assistant (${event.model || agent.currentModel}):\n${event.text}`;
       if (event.kind === "user") return `User:\n${event.text}`;
@@ -728,6 +730,7 @@ function contextCopyTargetFromEvent(
 
 function pairedTranscriptItems(transcript: TranscriptEvent[]): ToolTranscriptItem[] {
   const usedResults = new Set<string>();
+  const questionToolUseIds = questionToolUseIdSet(transcript);
   return transcript
     .map((event, index): ToolTranscriptItem | undefined => {
       if (event.kind === "tool_use") {
@@ -740,10 +743,18 @@ function pairedTranscriptItems(transcript: TranscriptEvent[]): ToolTranscriptIte
         if (result) usedResults.add(result.id);
         return { kind: "tool_pair", event, result };
       }
-      if (event.kind === "tool_result" && usedResults.has(event.id)) return undefined;
+      if (event.kind === "tool_result" && (usedResults.has(event.id) || questionToolUseIds.has(event.toolUseId))) return undefined;
       return { kind: "single", event };
     })
     .filter((item): item is ToolTranscriptItem => Boolean(item));
+}
+
+function questionToolUseIdSet(transcript: TranscriptEvent[]) {
+  return new Set(
+    transcript
+      .filter((event): event is QuestionsEvent => event.kind === "questions" && Boolean(event.toolUseId))
+      .map((event) => event.toolUseId as string)
+  );
 }
 
 function toolValueText(value: unknown): string {
