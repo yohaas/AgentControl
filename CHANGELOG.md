@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-04-29
 
+- [fc90481](https://github.com/yohaas/AgentControl/commit/fc90481) Show pinned messages as hover tooltip
 - [740de92](https://github.com/yohaas/AgentControl/commit/740de92) Orient pinned minimize caret
 - [5e06aea](https://github.com/yohaas/AgentControl/commit/5e06aea) Minimize pinned messages to one line
 - [d1adfe5](https://github.com/yohaas/AgentControl/commit/d1adfe5) Clamp long pinned messages
