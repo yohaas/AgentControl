@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-04-29
 
+- [a50fa24](https://github.com/yohaas/AgentControl/commit/a50fa24) Close layout menu after saving
 - [e1e04ba](https://github.com/yohaas/AgentControl/commit/e1e04ba) Make tool rows expandable
 - [302fc08](https://github.com/yohaas/AgentControl/commit/302fc08) Show unpushed commits in git menu
 - [2263c2d](https://github.com/yohaas/AgentControl/commit/2263c2d) Add status pill chat controls
