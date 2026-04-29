@@ -897,6 +897,7 @@ export class AgentRuntimeManager {
         if (threadId) state.agent.sessionId = threadId;
         return;
       }
+      if (this.handleCodexCommandExecution(state, payload)) return;
       if (type.includes("tool") || payload.tool || payload.command) {
         const toolUseId = this.trimmedStringField(payload.id) || transcriptId();
         this.pushTranscript(state, {
@@ -910,6 +911,51 @@ export class AgentRuntimeManager {
     } catch {
       this.appendAssistantText(state, `${line}\n`);
     }
+  }
+
+  private handleCodexCommandExecution(state: AgentProcessState, payload: Record<string, unknown>): boolean {
+    const item = payload.item && typeof payload.item === "object" ? (payload.item as Record<string, unknown>) : undefined;
+    if (!item || item.type !== "command_execution") return false;
+    const command = this.textField(item.command);
+    if (!command) return false;
+
+    const type = String(payload.type || "");
+    const toolUseId = this.trimmedStringField(item.id) || this.trimmedStringField(payload.id) || transcriptId();
+    const existingUse = state.transcript.find((event) => event.kind === "tool_use" && event.toolUseId === toolUseId);
+    if (!existingUse) {
+      this.pushTranscript(state, {
+        ...eventBase(state.agent.id, state.agent.currentModel),
+        kind: "tool_use",
+        toolUseId,
+        name: "Bash",
+        input: {
+          command,
+          status: this.trimmedStringField(item.status) || undefined
+        }
+      });
+    }
+
+    if (type === "item.completed") {
+      const exitCode = typeof item.exit_code === "number" ? item.exit_code : undefined;
+      const status = this.trimmedStringField(item.status);
+      const output = this.textField(item.aggregated_output);
+      const existingResult = state.transcript.find((event) => event.kind === "tool_result" && event.toolUseId === toolUseId);
+      if (!existingResult) {
+        this.pushTranscript(state, {
+          ...eventBase(state.agent.id, state.agent.currentModel),
+          kind: "tool_result",
+          toolUseId,
+          output: {
+            stdout: output,
+            exit_code: exitCode,
+            status
+          },
+          isError: Boolean((typeof exitCode === "number" && exitCode !== 0) || status === "failed")
+        });
+      }
+    }
+
+    return true;
   }
 
   private extractCodexText(payload: Record<string, unknown>): string | undefined {
