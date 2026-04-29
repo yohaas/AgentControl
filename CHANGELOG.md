@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-04-29
 
+- [ced2f46](https://github.com/yohaas/AgentControl/commit/ced2f46) Resume Codex sessions between turns
 - [1053350](https://github.com/yohaas/AgentControl/commit/1053350) Preserve open projects when saving settings
 - [1b5fd5a](https://github.com/yohaas/AgentControl/commit/1b5fd5a) Keep selected model during Claude turns
 - [de7963b](https://github.com/yohaas/AgentControl/commit/de7963b) Allow lower agent rows to expand upward
