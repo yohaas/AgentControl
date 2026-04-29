@@ -6713,13 +6713,14 @@ function PinnedUserMessage({
   compact?: boolean;
   onJump?: () => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const [minimized, setMinimized] = useState(false);
   const [canExpand, setCanExpand] = useState(false);
   const textRef = useRef<HTMLDivElement | null>(null);
   const collapsedMaxHeight = compact ? 48 : 60;
+  const minimizedMaxHeight = compact ? 16 : 20;
 
   useEffect(() => {
-    setExpanded(false);
+    setMinimized(false);
   }, [event.id]);
 
   useEffect(() => {
@@ -6727,7 +6728,7 @@ function PinnedUserMessage({
     if (!node) return;
     const hasMoreThanThreeExplicitLines = event.text.split(/\r?\n/).length > 3;
     setCanExpand(hasMoreThanThreeExplicitLines || node.scrollHeight > collapsedMaxHeight + 1);
-  }, [collapsedMaxHeight, event.text, expanded]);
+  }, [collapsedMaxHeight, event.text, minimized]);
 
   return (
     <div className="sticky top-0 z-20 mb-3 flex justify-end">
@@ -6754,7 +6755,7 @@ function PinnedUserMessage({
           <div
             ref={textRef}
             className="min-w-0 flex-1 whitespace-pre-wrap break-words [overflow-wrap:anywhere]"
-            style={canExpand && !expanded ? { maxHeight: collapsedMaxHeight, overflow: "hidden" } : undefined}
+            style={canExpand ? { maxHeight: minimized ? minimizedMaxHeight : collapsedMaxHeight, overflow: "hidden" } : undefined}
           >
             {event.text || "Attachment"}
           </div>
@@ -6762,13 +6763,13 @@ function PinnedUserMessage({
             <button
               type="button"
               className="grid h-5 w-5 shrink-0 place-items-center rounded-sm text-primary-foreground/85 hover:bg-primary-foreground/15 hover:text-primary-foreground"
-              title={expanded ? "Collapse message" : "Expand message"}
+              title={minimized ? "Show 3 lines" : "Minimize message"}
               onClick={(event) => {
                 event.stopPropagation();
-                setExpanded((value) => !value);
+                setMinimized((value) => !value);
               }}
             >
-              <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", expanded && "rotate-180")} />
+              <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", minimized && "rotate-180")} />
             </button>
           )}
         </div>
