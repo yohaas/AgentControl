@@ -1389,9 +1389,10 @@ export class AgentRuntimeManager {
         .map((state) => state.agent.displayName)
     );
     if (!existing.has(base)) return base;
+    const root = base.replace(/\s+#\d+$/, "");
     let suffix = 2;
-    while (existing.has(`${base} #${suffix}`)) suffix += 1;
-    return `${base} #${suffix}`;
+    while (existing.has(`${root} #${suffix}`)) suffix += 1;
+    return `${root} #${suffix}`;
   }
 
   private requiredState(id: string): AgentProcessState {
