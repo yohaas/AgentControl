@@ -6714,7 +6714,20 @@ function PinnedUserMessage({
   onJump?: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const multiline = event.text.split(/\r?\n/).length > 3;
+  const [canExpand, setCanExpand] = useState(false);
+  const textRef = useRef<HTMLDivElement | null>(null);
+  const collapsedMaxHeight = compact ? 48 : 60;
+
+  useEffect(() => {
+    setExpanded(false);
+  }, [event.id]);
+
+  useEffect(() => {
+    const node = textRef.current;
+    if (!node) return;
+    const hasMoreThanThreeExplicitLines = event.text.split(/\r?\n/).length > 3;
+    setCanExpand(hasMoreThanThreeExplicitLines || node.scrollHeight > collapsedMaxHeight + 1);
+  }, [collapsedMaxHeight, event.text, expanded]);
 
   return (
     <div className="sticky top-0 z-20 mb-3 flex justify-end">
@@ -6738,8 +6751,14 @@ function PinnedUserMessage({
         }}
       >
         <div className="flex min-w-0 items-start gap-2">
-          <div className={cn("min-w-0 flex-1 whitespace-pre-wrap break-words [overflow-wrap:anywhere]", multiline && !expanded && "line-clamp-1")}>{event.text || "Attachment"}</div>
-          {multiline && (
+          <div
+            ref={textRef}
+            className="min-w-0 flex-1 whitespace-pre-wrap break-words [overflow-wrap:anywhere]"
+            style={canExpand && !expanded ? { maxHeight: collapsedMaxHeight, overflow: "hidden" } : undefined}
+          >
+            {event.text || "Attachment"}
+          </div>
+          {canExpand && (
             <button
               type="button"
               className="grid h-5 w-5 shrink-0 place-items-center rounded-sm text-primary-foreground/85 hover:bg-primary-foreground/15 hover:text-primary-foreground"
