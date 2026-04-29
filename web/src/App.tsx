@@ -2342,6 +2342,9 @@ function Header({
   const setTerminalOpen = useAppStore((state) => state.setTerminalOpen);
   const wsConnected = useAppStore((state) => state.wsConnected);
   const setProjects = useAppStore((state) => state.setProjects);
+  const setSettings = useAppStore((state) => state.setSettings);
+  const currentTileHeight = useAppStore((state) => state.currentTileHeight);
+  const setCurrentTileHeight = useAppStore((state) => state.setCurrentTileHeight);
   const addError = useAppStore((state) => state.addError);
   const settings = useAppStore((state) => state.settings);
   const sidebarCollapsed = useAppStore((state) => state.sidebarCollapsed);
@@ -2465,6 +2468,25 @@ function Header({
     const trimmed = nextCommand.trim() || "npm run dev";
     window.localStorage.setItem(devCommandStorageKey(selectedProjectId), trimmed);
     setDevCommand(trimmed);
+  }
+
+  async function saveDisplaySettings(patch: Partial<Pick<typeof settings, "tileHeight" | "tileColumns">>) {
+    try {
+      const next = await api.saveSettings({ ...settings, ...patch });
+      setSettings(next);
+    } catch (error) {
+      addError(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  function useFullHeight() {
+    const main = document.querySelector("main");
+    const availableHeight = main instanceof HTMLElement ? main.clientHeight - 32 : window.innerHeight - 120;
+    setCurrentTileHeight(Math.min(TILE_MAX_HEIGHT, Math.max(TILE_MIN_HEIGHT, Math.round(availableHeight))));
+  }
+
+  function useSettingsHeight() {
+    setCurrentTileHeight(undefined);
   }
 
   async function closeSelectedProject() {
@@ -2608,6 +2630,60 @@ function Header({
               <FolderPlus className="h-4 w-4" />
               Add Project
             </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" className="gap-2" title="Display options">
+              <Columns2 className="h-4 w-4" />
+              Display
+              <ChevronDown className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-64">
+            <DropdownMenuItem onClick={useFullHeight}>
+              <Maximize2 className="mr-2 h-4 w-4" />
+              Full Height
+              {currentTileHeight && currentTileHeight !== settings.tileHeight && <Check className="ml-auto h-4 w-4" />}
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={useSettingsHeight}>
+              <Settings className="mr-2 h-4 w-4" />
+              Use Settings
+              {!currentTileHeight && <Check className="ml-auto h-4 w-4" />}
+            </DropdownMenuItem>
+            <div className="mt-1 grid gap-3 border-t border-border px-2 py-2" onClick={(event) => event.stopPropagation()}>
+              <label className="grid gap-1 text-xs text-muted-foreground">
+                Height
+                <Input
+                  type="number"
+                  min={TILE_MIN_HEIGHT}
+                  max={TILE_MAX_HEIGHT}
+                  value={settings.tileHeight}
+                  onKeyDown={(event) => event.stopPropagation()}
+                  onChange={(event) => {
+                    const tileHeight = Number(event.target.value);
+                    if (!Number.isFinite(tileHeight)) return;
+                    setCurrentTileHeight(undefined);
+                    void saveDisplaySettings({ tileHeight });
+                  }}
+                />
+              </label>
+              <label className="grid gap-1 text-xs text-muted-foreground">
+                Columns
+                <Input
+                  type="number"
+                  min={1}
+                  max={6}
+                  value={settings.tileColumns}
+                  onKeyDown={(event) => event.stopPropagation()}
+                  onChange={(event) => {
+                    const tileColumns = Number(event.target.value);
+                    if (!Number.isFinite(tileColumns)) return;
+                    void saveDisplaySettings({ tileColumns });
+                  }}
+                />
+              </label>
+            </div>
           </DropdownMenuContent>
         </DropdownMenu>
         <div className="flex items-center">
