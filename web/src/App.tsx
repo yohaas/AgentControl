@@ -265,6 +265,8 @@ const TERMINAL_DOCK_OPTIONS = [
   { value: "bottom", label: "Dock bottom", icon: PanelBottom },
   { value: "right", label: "Dock right", icon: PanelRight }
 ] as const;
+const TILE_MIN_HEIGHT = 240;
+const TILE_MAX_HEIGHT = 760;
 
 function applyThemeMode(themeMode: ThemeMode) {
   const root = document.documentElement;
@@ -6067,6 +6069,7 @@ function AgentTileGrid({ agents }: { agents: RunningAgent[] }) {
   const tileHeight = currentTileHeight || settings.tileHeight;
   const tileColumns = settings.tileColumns || 2;
   const tileWidths = useAppStore((state) => state.tileWidths);
+  const [rowHeights, setRowHeights] = useState<number[]>([]);
   const orderedAgents = useMemo(() => {
     const byId = new Map(agents.map((agent) => [agent.id, agent]));
     return [
@@ -6074,6 +6077,15 @@ function AgentTileGrid({ agents }: { agents: RunningAgent[] }) {
       ...agents.filter((agent) => !tileOrder.includes(agent.id))
     ];
   }, [agents, tileOrder]);
+  const rowCount = Math.max(1, Math.ceil(orderedAgents.length / tileColumns));
+
+  useEffect(() => {
+    setRowHeights((current) =>
+      Array.from({ length: rowCount }, (_, index) =>
+        Math.min(TILE_MAX_HEIGHT, Math.max(TILE_MIN_HEIGHT, current[index] ?? tileHeight))
+      )
+    );
+  }, [rowCount, tileHeight]);
 
   function moveTile(sourceId: string, targetId: string) {
     if (sourceId === targetId) return;
@@ -6086,6 +6098,31 @@ function AgentTileGrid({ agents }: { agents: RunningAgent[] }) {
     setTileOrder(ids);
   }
 
+  function setRowHeight(rowIndex: number, nextHeight: number) {
+    const clamped = Math.min(TILE_MAX_HEIGHT, Math.max(TILE_MIN_HEIGHT, nextHeight));
+    setRowHeights((current) => {
+      const next = [...current];
+      next[rowIndex] = Math.round(clamped);
+      return next;
+    });
+    setCurrentTileHeight(Math.round(clamped));
+  }
+
+  function setRowBoundary(currentRowIndex: number, nextCurrentHeight: number, totalHeight: number) {
+    if (currentRowIndex <= 0) return;
+    const maxCurrent = Math.min(TILE_MAX_HEIGHT, totalHeight - TILE_MIN_HEIGHT);
+    const minCurrent = Math.max(TILE_MIN_HEIGHT, totalHeight - TILE_MAX_HEIGHT);
+    const currentHeight = Math.round(Math.min(maxCurrent, Math.max(minCurrent, nextCurrentHeight)));
+    const previousHeight = Math.round(totalHeight - currentHeight);
+    setRowHeights((current) => {
+      const next = [...current];
+      next[currentRowIndex - 1] = previousHeight;
+      next[currentRowIndex] = currentHeight;
+      return next;
+    });
+    setCurrentTileHeight(currentHeight);
+  }
+
   if (agents.length === 0) {
     return <div className="grid flex-1 place-items-center text-sm text-muted-foreground">No agents open.</div>;
   }
@@ -6093,17 +6130,26 @@ function AgentTileGrid({ agents }: { agents: RunningAgent[] }) {
   return (
     <main className="min-w-0 flex-1 overflow-auto">
       <div className="flex flex-wrap items-start gap-4 p-4">
-        {orderedAgents.map((agent) => (
-          <AgentTile
-            key={agent.id}
-            agent={agent}
-            height={tileHeight}
-            width={tileWidths[agent.id]}
-            defaultWidth={`calc((100% - ${(tileColumns - 1) * 1}rem) / ${tileColumns})`}
-            onMove={moveTile}
-            onHeightChange={setCurrentTileHeight}
-          />
-        ))}
+        {orderedAgents.map((agent, index) => {
+          const rowIndex = Math.floor(index / tileColumns);
+          const rowHeight = rowHeights[rowIndex] ?? tileHeight;
+          return (
+            <AgentTile
+              key={agent.id}
+              agent={agent}
+              height={rowHeight}
+              previousRowHeight={rowIndex > 0 ? rowHeights[rowIndex - 1] ?? tileHeight : undefined}
+              rowIndex={rowIndex}
+              width={tileWidths[agent.id]}
+              defaultWidth={`calc((100% - ${(tileColumns - 1) * 1}rem) / ${tileColumns})`}
+              onMove={moveTile}
+              onHeightChange={(nextHeight) => setRowHeight(rowIndex, nextHeight)}
+              onHeightChangeFromTop={
+                rowIndex > 0 ? (nextHeight, totalHeight) => setRowBoundary(rowIndex, nextHeight, totalHeight) : undefined
+              }
+            />
+          );
+        })}
       </div>
     </main>
   );
@@ -6112,17 +6158,23 @@ function AgentTileGrid({ agents }: { agents: RunningAgent[] }) {
 function AgentTile({
   agent,
   height,
+  previousRowHeight,
+  rowIndex,
   width,
   defaultWidth,
   onMove,
-  onHeightChange
+  onHeightChange,
+  onHeightChangeFromTop
 }: {
   agent: RunningAgent;
   height: number;
+  previousRowHeight?: number;
+  rowIndex: number;
   width?: number;
   defaultWidth: string;
   onMove: (sourceId: string, targetId: string) => void;
   onHeightChange: (height: number) => void;
+  onHeightChangeFromTop?: (height: number, totalHeight: number) => void;
 }) {
   const transcript = useAppStore((state) => state.transcripts[agent.id] || EMPTY_TRANSCRIPT);
   const transcriptItems = useMemo(() => pairedTranscriptItems(transcript), [transcript]);
@@ -6481,8 +6533,31 @@ function AgentTile({
     event.currentTarget.setPointerCapture(pointerId);
 
     const onMove = (moveEvent: PointerEvent) => {
-      nextHeight = Math.min(760, Math.max(320, startHeight + moveEvent.clientY - startY));
+      nextHeight = Math.min(TILE_MAX_HEIGHT, Math.max(TILE_MIN_HEIGHT, startHeight + moveEvent.clientY - startY));
       onHeightChange(Math.round(nextHeight));
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp, { once: true });
+  }
+
+  function startTopHeightResize(event: ReactPointerEvent<HTMLDivElement>) {
+    if (!onHeightChangeFromTop || previousRowHeight === undefined) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const startY = event.clientY;
+    const startHeight = height;
+    const totalHeight = previousRowHeight + height;
+    const pointerId = event.pointerId;
+    event.currentTarget.setPointerCapture(pointerId);
+
+    const onMove = (moveEvent: PointerEvent) => {
+      const nextHeight = startHeight + startY - moveEvent.clientY;
+      onHeightChangeFromTop(Math.round(nextHeight), totalHeight);
     };
     const onUp = () => {
       window.removeEventListener("pointermove", onMove);
@@ -6576,6 +6651,13 @@ function AgentTile({
       </div>
       {!tileMinimized && (
         <>
+          {rowIndex > 0 && (
+            <div
+              className="absolute left-0 right-0 top-0 z-20 h-2 cursor-ns-resize rounded-t-md hover:bg-primary/20"
+              onPointerDown={startTopHeightResize}
+              title="Drag up to expand this row and shrink the row above"
+            />
+          )}
           <ContextMenu>
             <ContextMenuTrigger asChild>
               <div
