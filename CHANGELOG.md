@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-04-29
 
+- [f7c721b](https://github.com/yohaas/AgentControl/commit/f7c721b) Dock top bar to left nav
 - [bd85456](https://github.com/yohaas/AgentControl/commit/bd85456) Fix tile activation clicks and terminal defaults
 - [47366ae](https://github.com/yohaas/AgentControl/commit/47366ae) Preserve ANSI colors in terminal dock
 - [fc90481](https://github.com/yohaas/AgentControl/commit/fc90481) Show pinned messages as hover tooltip
