@@ -2508,7 +2508,12 @@ function Header({
   }
 
   return (
-    <header className="relative flex h-14 shrink-0 items-center gap-3 border-b border-border px-4">
+    <header
+      className={cn(
+        "relative flex h-14 shrink-0 items-center gap-3 border-b border-border pr-4",
+        sidebarCollapsed ? "pl-16" : "pl-4"
+      )}
+    >
       <div className="flex min-w-0 items-center gap-2">
         <Bot className="h-5 w-5 text-primary" />
         <h1 className="truncate text-base font-semibold">Agent Control</h1>
