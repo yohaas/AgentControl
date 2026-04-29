@@ -450,8 +450,8 @@ function shouldShowPinnedUserMessage(root: HTMLDivElement, pinnedMessageId?: str
   if (!original) return true;
   const rootRect = root.getBoundingClientRect();
   const originalRect = original.getBoundingClientRect();
-  if (originalRect.top >= rootRect.top && originalRect.top < rootRect.bottom) return false;
-  return originalRect.top < rootRect.top;
+  if (originalRect.bottom > rootRect.top && originalRect.top < rootRect.bottom) return false;
+  return originalRect.bottom <= rootRect.top;
 }
 
 function scrollToLatestUserMessage(root: HTMLDivElement | null) {
