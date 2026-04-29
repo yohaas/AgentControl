@@ -136,17 +136,21 @@ const TERMINAL_DOCK_MESSAGE = "agent-control:dock-terminal";
 const TERMINAL_DOCK_STORAGE_KEY = "agent-control-terminal-dock-request";
 const TERMINAL_POPOUT_STORAGE_KEY = "agent-control-popped-out-terminals";
 const DEFAULT_BUILT_IN_AGENT_DIR = ".agent-control/built-in-agents";
-const THINKING_PHRASES = [
-  "Discombobulating",
-  "Cogitating",
-  "Triangulating",
-  "Untangling",
-  "Percolating",
-  "Recalibrating",
-  "Synthesizing",
-  "Mulling",
-  "Connecting dots"
-];
+const THINKING_PHRASES: Record<AgentProvider, string[]> = {
+  claude: [
+    "Discombobulating",
+    "Cogitating",
+    "Triangulating",
+    "Untangling",
+    "Percolating",
+    "Recalibrating",
+    "Synthesizing",
+    "Mulling",
+    "Connecting dots"
+  ],
+  codex: ["Inspecting", "Planning", "Patching", "Tracing", "Refactoring", "Testing", "Verifying", "Reviewing", "Applying changes"],
+  openai: ["Reasoning", "Analyzing", "Researching", "Drafting", "Checking", "Synthesizing", "Evaluating", "Composing", "Reviewing"]
+};
 
 const GENERAL_AGENT_DEF: AgentDef = {
   name: "general",
@@ -334,18 +338,51 @@ function notifyTerminalDock(terminalId?: string, focusOpener = false, dock = fal
   window.localStorage.setItem(TERMINAL_DOCK_STORAGE_KEY, JSON.stringify({ terminalId, dock, nextDock, at: Date.now() }));
 }
 
-function useThinkingPhrase(active = true) {
-  const [index, setIndex] = useState(() => Math.floor(Date.now() / 1800) % THINKING_PHRASES.length);
+function hashString(value: string) {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+function seededRandom(seed: number) {
+  let value = seed || 1;
+  return () => {
+    value = Math.imul(value ^ (value >>> 15), 1 | value);
+    value ^= value + Math.imul(value ^ (value >>> 7), 61 | value);
+    return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function shuffledThinkingPhrases(provider: AgentProvider | undefined, agentId: string) {
+  const phrases = [...THINKING_PHRASES[provider || "claude"]];
+  const random = seededRandom(hashString(`${provider || "claude"}:${agentId}`));
+  for (let index = phrases.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(random() * (index + 1));
+    [phrases[index], phrases[swapIndex]] = [phrases[swapIndex], phrases[index]];
+  }
+  return phrases;
+}
+
+function useThinkingPhrase(agent: RunningAgent, active = true) {
+  const phrases = useMemo(() => shuffledThinkingPhrases(agent.provider, agent.id), [agent.id, agent.provider]);
+  const [index, setIndex] = useState(() => hashString(`${agent.id}:${agent.turnStartedAt || ""}`) % phrases.length);
+
+  useEffect(() => {
+    setIndex(hashString(`${agent.id}:${agent.turnStartedAt || ""}`) % phrases.length);
+  }, [agent.id, agent.turnStartedAt, phrases.length]);
 
   useEffect(() => {
     if (!active) return;
     const timer = window.setInterval(() => {
-      setIndex((value) => (value + 1) % THINKING_PHRASES.length);
+      setIndex((value) => (value + 1) % phrases.length);
     }, 1800);
     return () => window.clearInterval(timer);
-  }, [active]);
+  }, [active, phrases.length]);
 
-  return THINKING_PHRASES[index];
+  return phrases[index];
 }
 
 function useElapsedSeconds(startedAt?: string) {
@@ -389,8 +426,8 @@ function formatTokenUsage(usage?: TokenUsage) {
   return parts.join(" / ");
 }
 
-function ThinkingText({ prefix, startedAt, usage }: { prefix?: string; startedAt?: string; usage?: TokenUsage }) {
-  const phrase = useThinkingPhrase();
+function ThinkingText({ agent, prefix, startedAt, usage }: { agent: RunningAgent; prefix?: string; startedAt?: string; usage?: TokenUsage }) {
+  const phrase = useThinkingPhrase(agent);
   const elapsed = useElapsedSeconds(startedAt);
   const tokenUsage = formatTokenUsage(usage);
   return (
@@ -479,7 +516,7 @@ function AgentActivityIndicator({ agent, compact = false, phaseLabel }: { agent:
         style={{ borderLeftColor: agentAccentColor(agent.color), borderLeftWidth: 4 }}
       >
         {phaseLabel && <span className="text-[11px] font-medium uppercase tracking-normal text-muted-foreground">{phaseLabel}</span>}
-        <ThinkingText startedAt={agent.turnStartedAt} usage={agent.lastTokenUsage} />
+        <ThinkingText agent={agent} startedAt={agent.turnStartedAt} usage={agent.lastTokenUsage} />
       </div>
     </div>
   );
@@ -7176,7 +7213,7 @@ function TranscriptPreview({
         {event.kind === "assistant_text" && event.streaming && (
           <span className="mt-2 grid gap-1">
             {phaseLabel && <span className="text-[11px] font-medium uppercase tracking-normal text-muted-foreground">{phaseLabel}</span>}
-            <ThinkingText prefix="Streaming" startedAt={agent.turnStartedAt} usage={agent.lastTokenUsage} />
+            <ThinkingText agent={agent} prefix="Streaming" startedAt={agent.turnStartedAt} usage={agent.lastTokenUsage} />
           </span>
         )}
       </div>
@@ -8619,7 +8656,7 @@ function TranscriptItem({
         {event.kind === "assistant_text" && event.streaming && (
           <span className="mt-2 grid gap-1">
             {phaseLabel && <span className="text-[11px] font-medium uppercase tracking-normal text-muted-foreground">{phaseLabel}</span>}
-            <ThinkingText prefix="Streaming" startedAt={agent.turnStartedAt} usage={agent.lastTokenUsage} />
+            <ThinkingText agent={agent} prefix="Streaming" startedAt={agent.turnStartedAt} usage={agent.lastTokenUsage} />
           </span>
         )}
         {event.kind === "user" && event.attachments && event.attachments.length > 0 && (
