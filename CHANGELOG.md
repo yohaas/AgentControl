@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-04-29
 
+- Show a Git credential modal that can open the built-in terminal with `git push`
 - Support steering active chats from queued messages and `/btw` Claude injections
 - [148bd6b](https://github.com/yohaas/AgentControl/commit/148bd6b) Clarify git push credential errors
 - [a50fa24](https://github.com/yohaas/AgentControl/commit/a50fa24) Close layout menu after saving

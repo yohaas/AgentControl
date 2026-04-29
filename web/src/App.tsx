@@ -152,6 +152,11 @@ const THINKING_PHRASES: Record<AgentProvider, string[]> = {
   openai: ["Reasoning", "Analyzing", "Researching", "Drafting", "Checking", "Synthesizing", "Evaluating", "Composing", "Reviewing"]
 };
 
+function isGitCredentialPromptError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return /Git push needs credentials|terminal prompts (have been )?disabled|could not read Username|Authentication failed/i.test(message);
+}
+
 const GENERAL_AGENT_DEF: AgentDef = {
   name: "general",
   description: "General-purpose engineering assistant",
@@ -2994,6 +2999,7 @@ function GitStatusMenu({ projectId }: { projectId?: string }) {
   const [status, setStatus] = useState<GitStatus | undefined>();
   const [loading, setLoading] = useState(false);
   const [pushing, setPushing] = useState(false);
+  const [credentialPromptOpen, setCredentialPromptOpen] = useState(false);
 
   useEffect(() => {
     if (!open || !projectId) return;
@@ -3026,11 +3032,22 @@ function GitStatusMenu({ projectId }: { projectId?: string }) {
     try {
       setStatus(await api.gitPush(projectId));
     } catch (error) {
-      addError(error instanceof Error ? error.message : String(error));
+      if (isGitCredentialPromptError(error)) {
+        setOpen(false);
+        setCredentialPromptOpen(true);
+      } else {
+        addError(error instanceof Error ? error.message : String(error));
+      }
       void refresh();
     } finally {
       setPushing(false);
     }
+  }
+
+  function openPushTerminal() {
+    if (!projectId) return;
+    sendCommand({ type: "terminalStart", projectId, command: "git push", title: "Git push" });
+    setCredentialPromptOpen(false);
   }
 
   const changedCount = status?.files.length || 0;
@@ -3039,116 +3056,140 @@ function GitStatusMenu({ projectId }: { projectId?: string }) {
   const hasWork = changedCount > 0 || aheadCount > 0;
 
   return (
-    <DropdownMenu open={open} onOpenChange={setOpen}>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="outline"
-          size={showMenuText ? undefined : "icon"}
-          disabled={!projectId}
-          title="Git status"
-          className={cn("relative", showMenuText && "gap-2 px-3")}
-        >
-          <GitBranch className="h-4 w-4" />
-          {showMenuText && <span>Git</span>}
-          {aheadCount > 0 && (
-            <span className="absolute -right-1.5 -top-1.5 grid min-h-4 min-w-4 place-items-center rounded-full border border-background bg-red-500 px-1 text-[10px] font-semibold leading-none text-white">
-              {aheadCount > 99 ? "99+" : aheadCount}
-            </span>
-          )}
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-80">
-        <div className="grid gap-3 p-2">
-          <div className="flex items-center justify-between gap-2">
-            <div className="min-w-0">
-              <div className="text-sm font-medium">Git</div>
-              <div className="truncate text-xs text-muted-foreground">
-                {loading ? "Checking..." : status?.isRepo ? status.branch || "Repository" : status?.message || "Not a Git repository"}
-              </div>
-            </div>
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => void refresh()} disabled={!projectId || loading}>
-              <RefreshCw className="h-4 w-4" />
-            </Button>
-          </div>
-
-          {status?.isRepo && (
-            <>
-              <div className="grid gap-1 rounded-md border border-border p-2 text-xs">
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">Pending pushes</span>
-                  <span>{aheadCount > 0 ? `${aheadCount} commit${aheadCount === 1 ? "" : "s"}` : "None"}</span>
+    <>
+      <DropdownMenu open={open} onOpenChange={setOpen}>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="outline"
+            size={showMenuText ? undefined : "icon"}
+            disabled={!projectId}
+            title="Git status"
+            className={cn("relative", showMenuText && "gap-2 px-3")}
+          >
+            <GitBranch className="h-4 w-4" />
+            {showMenuText && <span>Git</span>}
+            {aheadCount > 0 && (
+              <span className="absolute -right-1.5 -top-1.5 grid min-h-4 min-w-4 place-items-center rounded-full border border-background bg-red-500 px-1 text-[10px] font-semibold leading-none text-white">
+                {aheadCount > 99 ? "99+" : aheadCount}
+              </span>
+            )}
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-80">
+          <div className="grid gap-3 p-2">
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <div className="text-sm font-medium">Git</div>
+                <div className="truncate text-xs text-muted-foreground">
+                  {loading ? "Checking..." : status?.isRepo ? status.branch || "Repository" : status?.message || "Not a Git repository"}
                 </div>
-                {status.behind > 0 && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Behind upstream</span>
-                    <span>{status.behind} commit{status.behind === 1 ? "" : "s"}</span>
-                  </div>
-                )}
-                {status.upstream && (
-                  <div className="truncate text-muted-foreground" title={status.upstream}>
-                    upstream: {status.upstream}
-                  </div>
-                )}
               </div>
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => void refresh()} disabled={!projectId || loading}>
+                <RefreshCw className="h-4 w-4" />
+              </Button>
+            </div>
 
-              {aheadCount > 0 && (
+            {status?.isRepo && (
+              <>
+                <div className="grid gap-1 rounded-md border border-border p-2 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Pending pushes</span>
+                    <span>{aheadCount > 0 ? `${aheadCount} commit${aheadCount === 1 ? "" : "s"}` : "None"}</span>
+                  </div>
+                  {status.behind > 0 && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">Behind upstream</span>
+                      <span>{status.behind} commit{status.behind === 1 ? "" : "s"}</span>
+                    </div>
+                  )}
+                  {status.upstream && (
+                    <div className="truncate text-muted-foreground" title={status.upstream}>
+                      upstream: {status.upstream}
+                    </div>
+                  )}
+                </div>
+
+                {aheadCount > 0 && (
+                  <div className="grid gap-1">
+                    <div className="text-xs font-medium text-muted-foreground">Commits not pushed</div>
+                    {unpushedCommits.length === 0 ? (
+                      <div className="rounded-md border border-dashed border-border px-2 py-3 text-center text-xs text-muted-foreground">
+                        Commit details unavailable
+                      </div>
+                    ) : (
+                      <div className="max-h-44 overflow-y-auto rounded-md border border-border">
+                        {unpushedCommits.map((commit) => (
+                          <div key={commit.hash} className="grid gap-0.5 border-b border-border px-2 py-1.5 last:border-b-0">
+                            <div className="flex min-w-0 items-center gap-2">
+                              <Badge className="shrink-0 px-1.5 py-0 font-mono text-[10px]">{commit.hash}</Badge>
+                              <span className="min-w-0 truncate text-xs" title={commit.subject}>
+                                {commit.subject}
+                              </span>
+                            </div>
+                            {commit.authorName && (
+                              <div className="truncate pl-[3.25rem] text-[11px] text-muted-foreground" title={commit.authorName}>
+                                {commit.authorName}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div className="grid gap-1">
-                  <div className="text-xs font-medium text-muted-foreground">Commits not pushed</div>
-                  {unpushedCommits.length === 0 ? (
+                  <div className="text-xs font-medium text-muted-foreground">Uncommitted files</div>
+                  {status.files.length === 0 ? (
                     <div className="rounded-md border border-dashed border-border px-2 py-3 text-center text-xs text-muted-foreground">
-                      Commit details unavailable
+                      None
                     </div>
                   ) : (
-                    <div className="max-h-44 overflow-y-auto rounded-md border border-border">
-                      {unpushedCommits.map((commit) => (
-                        <div key={commit.hash} className="grid gap-0.5 border-b border-border px-2 py-1.5 last:border-b-0">
-                          <div className="flex min-w-0 items-center gap-2">
-                            <Badge className="shrink-0 px-1.5 py-0 font-mono text-[10px]">{commit.hash}</Badge>
-                            <span className="min-w-0 truncate text-xs" title={commit.subject}>
-                              {commit.subject}
-                            </span>
-                          </div>
-                          {commit.authorName && (
-                            <div className="truncate pl-[3.25rem] text-[11px] text-muted-foreground" title={commit.authorName}>
-                              {commit.authorName}
-                            </div>
-                          )}
+                    <div className="max-h-56 overflow-y-auto rounded-md border border-border">
+                      {status.files.map((file) => (
+                        <div key={`${file.status}-${file.path}`} className="flex items-center gap-2 border-b border-border px-2 py-1.5 last:border-b-0">
+                          <Badge className="shrink-0 px-1.5 py-0 text-[10px]">{file.status}</Badge>
+                          <span className="min-w-0 truncate font-mono text-xs" title={file.path}>
+                            {file.path}
+                          </span>
                         </div>
                       ))}
                     </div>
                   )}
                 </div>
-              )}
 
-              <div className="grid gap-1">
-                <div className="text-xs font-medium text-muted-foreground">Uncommitted files</div>
-                {status.files.length === 0 ? (
-                  <div className="rounded-md border border-dashed border-border px-2 py-3 text-center text-xs text-muted-foreground">
-                    None
-                  </div>
-                ) : (
-                  <div className="max-h-56 overflow-y-auto rounded-md border border-border">
-                    {status.files.map((file) => (
-                      <div key={`${file.status}-${file.path}`} className="flex items-center gap-2 border-b border-border px-2 py-1.5 last:border-b-0">
-                        <Badge className="shrink-0 px-1.5 py-0 text-[10px]">{file.status}</Badge>
-                        <span className="min-w-0 truncate font-mono text-xs" title={file.path}>
-                          {file.path}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <Button onClick={() => void push()} disabled={pushing || aheadCount <= 0}>
-                <GitBranch className="h-4 w-4" />
-                {pushing ? "Pushing..." : "Push"}
+                <Button onClick={() => void push()} disabled={pushing || aheadCount <= 0}>
+                  <GitBranch className="h-4 w-4" />
+                  {pushing ? "Pushing..." : "Push"}
+                </Button>
+              </>
+            )}
+          </div>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <Dialog open={credentialPromptOpen} onOpenChange={setCredentialPromptOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Git Credentials Needed</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-3 text-sm">
+            <p className="text-muted-foreground">
+              Git needs an interactive credential prompt before AgentControl can push from this repo.
+            </p>
+            <div className="rounded-md border border-border bg-muted p-3 font-mono text-xs">git push</div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setCredentialPromptOpen(false)}>
+                Cancel
               </Button>
-            </>
-          )}
-        </div>
-      </DropdownMenuContent>
-    </DropdownMenu>
+              <Button onClick={openPushTerminal} disabled={!projectId}>
+                <SquareTerminal className="h-4 w-4" />
+                Open Terminal
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
