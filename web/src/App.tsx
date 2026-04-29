@@ -54,7 +54,7 @@ import {
   MessageCircle,
   MessageSquare,
   Minimize2,
-  MoreHorizontal,
+  EllipsisVertical,
   PanelLeftClose,
   PanelLeftOpen,
   PanelBottom,
@@ -1598,7 +1598,7 @@ function AgentActionsMenu({
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="icon" title="Agent actions">
-          <MoreHorizontal className="h-4 w-4" />
+          <EllipsisVertical className="h-4 w-4" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
