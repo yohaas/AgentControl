@@ -6769,7 +6769,7 @@ function PinnedUserMessage({
                 setMinimized((value) => !value);
               }}
             >
-              <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", minimized && "rotate-180")} />
+              <ChevronDown className={cn("h-3.5 w-3.5 rotate-180 transition-transform", minimized && "rotate-0")} />
             </button>
           )}
         </div>
