@@ -2519,6 +2519,68 @@ function Header({
     (Math.round(layoutHeightValue) !== settings.tileHeight || Math.round(layoutColumnsValue) !== settings.tileColumns);
   const showMenuText = settings.menuDisplay === "iconText";
   const menuButtonClass = showMenuText ? "gap-2 px-3" : undefined;
+  const layoutMenu = (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="outline" size={showMenuText ? undefined : "icon"} className={menuButtonClass} title="Layout options">
+          <LayoutGrid className="h-4 w-4" />
+          {showMenuText && (
+            <>
+              <span>Layout</span>
+              <ChevronDown className="h-4 w-4" />
+            </>
+          )}
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-64">
+        <DropdownMenuItem onClick={useFullHeight}>
+          <Maximize2 className="mr-2 h-4 w-4" />
+          Full Height
+          {currentTileHeight && currentTileHeight !== settings.tileHeight && <Check className="ml-auto h-4 w-4" />}
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={resetLayout}>
+          <RefreshCw className="mr-2 h-4 w-4" />
+          Reset
+          {!currentTileHeight && <Check className="ml-auto h-4 w-4" />}
+        </DropdownMenuItem>
+        <div className="mt-1 grid gap-2 border-t border-border px-2 py-2" onClick={(event) => event.stopPropagation()}>
+          <div className="grid grid-cols-[1fr_0.8fr_auto] items-end gap-2">
+            <label className="grid gap-1 text-xs text-muted-foreground">
+              Height
+              <Input
+                type="number"
+                min={TILE_MIN_HEIGHT}
+                max={TILE_MAX_HEIGHT}
+                value={layoutHeightDraft}
+                onKeyDown={(event) => event.stopPropagation()}
+                onChange={(event) => setLayoutHeightDraft(event.target.value)}
+              />
+            </label>
+            <label className="grid gap-1 text-xs text-muted-foreground">
+              Columns
+              <Input
+                type="number"
+                min={1}
+                max={6}
+                value={layoutColumnsDraft}
+                onKeyDown={(event) => event.stopPropagation()}
+                onChange={(event) => setLayoutColumnsDraft(event.target.value)}
+              />
+            </label>
+            <Button
+              type="button"
+              size="icon"
+              disabled={!layoutSettingsDirty}
+              title="Save layout settings"
+              onClick={() => void saveLayoutSettings()}
+            >
+              <Save className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
 
   async function closeSelectedProject() {
     if (!selectedProjectId || !selectedProject) return;
@@ -2663,66 +2725,6 @@ function Header({
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" size={showMenuText ? undefined : "icon"} className={menuButtonClass} title="Layout options">
-              <LayoutGrid className="h-4 w-4" />
-              {showMenuText && (
-                <>
-                  <span>Layout</span>
-                  <ChevronDown className="h-4 w-4" />
-                </>
-              )}
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-64">
-            <DropdownMenuItem onClick={useFullHeight}>
-              <Maximize2 className="mr-2 h-4 w-4" />
-              Full Height
-              {currentTileHeight && currentTileHeight !== settings.tileHeight && <Check className="ml-auto h-4 w-4" />}
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={resetLayout}>
-              <RefreshCw className="mr-2 h-4 w-4" />
-              Reset
-              {!currentTileHeight && <Check className="ml-auto h-4 w-4" />}
-            </DropdownMenuItem>
-            <div className="mt-1 grid gap-2 border-t border-border px-2 py-2" onClick={(event) => event.stopPropagation()}>
-              <div className="grid grid-cols-[1fr_0.8fr_auto] items-end gap-2">
-              <label className="grid gap-1 text-xs text-muted-foreground">
-                Height
-                <Input
-                  type="number"
-                  min={TILE_MIN_HEIGHT}
-                  max={TILE_MAX_HEIGHT}
-                  value={layoutHeightDraft}
-                  onKeyDown={(event) => event.stopPropagation()}
-                  onChange={(event) => setLayoutHeightDraft(event.target.value)}
-                />
-              </label>
-              <label className="grid gap-1 text-xs text-muted-foreground">
-                Columns
-                <Input
-                  type="number"
-                  min={1}
-                  max={6}
-                  value={layoutColumnsDraft}
-                  onKeyDown={(event) => event.stopPropagation()}
-                  onChange={(event) => setLayoutColumnsDraft(event.target.value)}
-                />
-              </label>
-              <Button
-                type="button"
-                size="icon"
-                disabled={!layoutSettingsDirty}
-                title="Save layout settings"
-                onClick={() => void saveLayoutSettings()}
-              >
-                <Save className="h-4 w-4" />
-              </Button>
-              </div>
-            </div>
-          </DropdownMenuContent>
-        </DropdownMenu>
         <div className="flex items-center">
           <Button
             variant="outline"
@@ -2769,6 +2771,7 @@ function Header({
           <X className="h-4 w-4" />
           {showMenuText && <span>Close</span>}
         </Button>
+        {layoutMenu}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
