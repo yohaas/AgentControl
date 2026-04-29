@@ -4,6 +4,8 @@ Agent Control is a local multi-agent dashboard for Claude Code, Codex CLI, and O
 
 The app is built for local development workflows. It starts an Express/WebSocket server, a Vite/React UI, and provider processes/API streams in the selected project folders.
 
+![Agent Control dashboard](docs/screenshots/dashboard.png)
+
 See [CHANGELOG.md](CHANGELOG.md) for a date-grouped history of changes with commit links.
 
 ## What It Does
