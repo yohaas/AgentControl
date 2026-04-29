@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-04-29
 
+- [f1ffa3f](https://github.com/yohaas/AgentControl/commit/f1ffa3f) Add display controls to top bar
 - [dc597c8](https://github.com/yohaas/AgentControl/commit/dc597c8) Add duplicate action to agent menu
 - [27632a3](https://github.com/yohaas/AgentControl/commit/27632a3) Surface Codex turn completion errors
 - [8ede0bc](https://github.com/yohaas/AgentControl/commit/8ede0bc) Show Codex command executions in chat
