@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-04-29
 
+- [282bf92](https://github.com/yohaas/AgentControl/commit/282bf92) Scope shell permission allow rules
 - [a52286d](https://github.com/yohaas/AgentControl/commit/a52286d) Show executing plan phase while thinking
 - [886d308](https://github.com/yohaas/AgentControl/commit/886d308) Suggest next steps after approved plans
 - [c1acee1](https://github.com/yohaas/AgentControl/commit/c1acee1) Add remembered tool permission allowlist
