@@ -169,6 +169,7 @@ type ToolTranscriptItem =
   | { kind: "single"; event: TranscriptEvent }
   | { kind: "tool_pair"; event: ToolUseEvent; result?: ToolResultEvent };
 type ContextCopyTarget = { scope: "block" | "chat"; text: string };
+type TranscriptViewMode = "chat" | "raw";
 
 const COMMON_SLASH_COMMANDS: SlashCommandSuggestion[] = [
   { value: "/clear", label: "/clear", description: "Clear this chat history", source: "agentcontrol" },
@@ -818,6 +819,25 @@ function fieldText(value: unknown, keys: string[]) {
 
 function toolPath(value: unknown) {
   return fieldText(value, ["file_path", "path", "notebook_path", "url"]);
+}
+
+function displayPathName(value: string) {
+  return value.split(/[\\/]/).filter(Boolean).pop() || value;
+}
+
+function toolActivityText(event: ToolUseEvent, result?: ToolResultEvent) {
+  const name = event.name.toLowerCase();
+  const pathText = toolPath(event.input);
+  const commandText = fieldText(event.input, ["command"]);
+  const target = pathText ? displayPathName(pathText) : "";
+  if (name.includes("edit")) return target ? `Edited ${target}` : "Edited a file";
+  if (name.includes("write")) return target ? `Wrote ${target}` : "Wrote a file";
+  if (name.includes("read")) return target ? `Read ${target}` : "Read a file";
+  if (name.includes("bash")) return commandText ? `Ran ${commandText}` : "Ran a shell command";
+  if (name.includes("grep") || name.includes("search")) return fieldText(event.input, ["pattern", "query"]) || "Searched files";
+  if (name.includes("glob")) return fieldText(event.input, ["pattern"]) || "Matched files";
+  const summary = result ? toolSummary(result) : toolUseSummary(event);
+  return summary || `Used ${event.name}`;
 }
 
 function toolSummary(event: Extract<TranscriptEvent, { kind: "tool_use" | "tool_result" }>) {
@@ -5643,6 +5663,7 @@ function AgentTile({
   const [contextCopyTarget, setContextCopyTarget] = useState<ContextCopyTarget | undefined>();
   const [composerDropActive, setComposerDropActive] = useState(false);
   const [composerCollapsed, setComposerCollapsed] = useState(false);
+  const [transcriptViewMode, setTranscriptViewMode] = useState<TranscriptViewMode>("chat");
   const [slashMenuOpen, setSlashMenuOpen] = useState(false);
   const [slashMenuSuppressed, setSlashMenuSuppressed] = useState(false);
   const composerDragDepthRef = useRef(0);
@@ -6031,6 +6052,11 @@ function AgentTile({
               <DropdownMenuItem onClick={() => sendCommand({ type: "resume", id: agent.id })}>Resume</DropdownMenuItem>
             )}
             {isBusy && <DropdownMenuItem onClick={() => sendCommand({ type: "interrupt", id: agent.id })}>Stop response</DropdownMenuItem>}
+            {!agent.remoteControl && (
+              <DropdownMenuItem onClick={() => setTranscriptViewMode((mode) => (mode === "chat" ? "raw" : "chat"))}>
+                {transcriptViewMode === "chat" ? "View Raw Stream" : "View Chat"}
+              </DropdownMenuItem>
+            )}
             <ExportChatMenu agent={agent} transcripts={transcript} addError={addError} />
             <DropdownMenuItem onClick={() => sendCommand({ type: "clear", id: agent.id })}>Clear Chat</DropdownMenuItem>
             <DropdownMenuItem onClick={() => sendCommand({ type: "kill", id: agent.id })}>Close Chat</DropdownMenuItem>
@@ -6064,7 +6090,7 @@ function AgentTile({
                 onKeyUp={() => selection.captureSelection()}
                 onContextMenuCapture={prepareContextMenu}
               >
-                {pinLastSentMessage && pinnedMessage && showPinnedMessage && <PinnedUserMessage event={pinnedMessage} compact />}
+                {transcriptViewMode === "chat" && pinLastSentMessage && pinnedMessage && showPinnedMessage && <PinnedUserMessage event={pinnedMessage} compact />}
                 {agent.statusMessage && (
                   <p className="mb-3 rounded-md border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
                     {agent.statusMessage}
@@ -6116,6 +6142,8 @@ function AgentTile({
                       </div>
                     )}
                   </div>
+                ) : transcriptViewMode === "raw" ? (
+                  <RawStreamView agent={agent} transcript={transcript} compact />
                 ) : transcript.length === 0 ? (
                   showActivityIndicator ? (
                     <AgentActivityIndicator agent={agent} compact />
@@ -6715,6 +6743,48 @@ function PlanCard({ event, agent, compact = false }: { event: PlanEvent; agent: 
   );
 }
 
+function RawStreamView({ agent, transcript, compact = false }: { agent: RunningAgent; transcript: TranscriptEvent[]; compact?: boolean }) {
+  const addError = useAppStore((state) => state.addError);
+  const [raw, setRaw] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    void api.rawAgentStream(agent.id)
+      .then((text) => {
+        if (!cancelled) setRaw(text);
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setRaw("");
+          addError(error instanceof Error ? error.message : String(error));
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [addError, agent.id, transcript.length]);
+
+  const fallback = transcript.map((event) => JSON.stringify(event)).join("\n");
+  const text = raw.trim() ? raw : fallback;
+
+  return (
+    <div className="min-w-0 rounded-md border border-border bg-background/70" data-copy-block="true">
+      <div className="flex items-center justify-between gap-3 border-b border-border px-3 py-2">
+        <span className={cn("font-medium", compact ? "text-xs" : "text-sm")}>Raw stream</span>
+        {loading && <span className="text-xs text-muted-foreground">Loading...</span>}
+      </div>
+      <pre className={cn("max-h-[60vh] overflow-auto whitespace-pre-wrap break-words p-3 font-mono text-muted-foreground [overflow-wrap:anywhere]", compact ? "text-[11px]" : "text-xs")}>
+        {text || "No raw stream yet."}
+      </pre>
+    </div>
+  );
+}
+
 function RemoteControlPanel({ agent }: { agent: RunningAgent }) {
   const [, setTick] = useState(0);
   useEffect(() => {
@@ -6728,7 +6798,7 @@ function RemoteControlPanel({ agent }: { agent: RunningAgent }) {
 
   return (
     <main className="flex flex-1 flex-col">
-      <AgentPanelHeader agent={agent} />
+      <AgentPanelHeader agent={agent} viewMode="chat" onToggleViewMode={() => undefined} />
       <div className="grid flex-1 place-items-center p-6">
         <div className="grid max-w-xl gap-4 text-center">
           <div className="mx-auto flex items-center gap-2 text-lg font-semibold">
@@ -6769,7 +6839,15 @@ function RemoteControlPanel({ agent }: { agent: RunningAgent }) {
   );
 }
 
-function AgentPanelHeader({ agent }: { agent: RunningAgent }) {
+function AgentPanelHeader({
+  agent,
+  viewMode,
+  onToggleViewMode
+}: {
+  agent: RunningAgent;
+  viewMode: TranscriptViewMode;
+  onToggleViewMode: () => void;
+}) {
   const transcripts = useAppStore((state) => state.transcripts[agent.id] || EMPTY_TRANSCRIPT);
   const setSelectedAgent = useAppStore((state) => state.setSelectedAgent);
   const addError = useAppStore((state) => state.addError);
@@ -6804,6 +6882,11 @@ function AgentPanelHeader({ agent }: { agent: RunningAgent }) {
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
+          {!agent.remoteControl && (
+            <DropdownMenuItem onClick={onToggleViewMode}>
+              {viewMode === "chat" ? "View Raw Stream" : "View Chat"}
+            </DropdownMenuItem>
+          )}
           <ExportChatMenu agent={agent} transcripts={transcripts} addError={addError} />
           <DropdownMenuItem onClick={() => sendCommand({ type: "clear", id: agent.id })}>Clear Chat</DropdownMenuItem>
           <DropdownMenuItem onClick={() => sendCommand({ type: "kill", id: agent.id })}>Close Chat</DropdownMenuItem>
@@ -6848,6 +6931,7 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
   const [contextCopyTarget, setContextCopyTarget] = useState<ContextCopyTarget | undefined>();
   const [composerDropActive, setComposerDropActive] = useState(false);
   const [composerCollapsed, setComposerCollapsed] = useState(false);
+  const [transcriptViewMode, setTranscriptViewMode] = useState<TranscriptViewMode>("chat");
   const [activeSlashIndex, setActiveSlashIndex] = useState(0);
   const [slashMenuOpen, setSlashMenuOpen] = useState(false);
   const [slashMenuSuppressed, setSlashMenuSuppressed] = useState(false);
@@ -7134,7 +7218,11 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
 
   return (
     <main className="flex min-w-0 flex-1 flex-col">
-      <AgentPanelHeader agent={agent} />
+      <AgentPanelHeader
+        agent={agent}
+        viewMode={transcriptViewMode}
+        onToggleViewMode={() => setTranscriptViewMode((mode) => (mode === "chat" ? "raw" : "chat"))}
+      />
       {searchOpen && (
         <div className="flex items-center gap-2 border-b border-border px-4 py-2">
           <Search className="h-4 w-4 text-muted-foreground" />
@@ -7156,8 +7244,10 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
             onContextMenuCapture={prepareContextMenu}
           >
             <div className="mx-auto grid w-full min-w-0 max-w-4xl gap-3">
-              {pinLastSentMessage && pinnedMessage && showPinnedMessage && <PinnedUserMessage event={pinnedMessage} />}
-              {transcript.length === 0 ? (
+              {transcriptViewMode === "chat" && pinLastSentMessage && pinnedMessage && showPinnedMessage && <PinnedUserMessage event={pinnedMessage} />}
+              {transcriptViewMode === "raw" ? (
+                <RawStreamView agent={agent} transcript={transcript} />
+              ) : transcript.length === 0 ? (
                 showActivityIndicator ? (
                   <AgentActivityIndicator agent={agent} />
                 ) : (
@@ -7895,12 +7985,13 @@ function ToolCard({
   const addError = useAppStore((state) => state.addError);
   const isUse = event.kind === "tool_use";
   const [open, setOpen] = useState((isUse && event.awaitingPermission) || (!isUse && event.isError));
-  const summary = result ? toolSummary(result) || toolSummary(event) : toolSummary(event);
   const detail = result ? toolPairDetail(event, result) : toolDetail(event);
   const pathText = isUse ? toolPath(event.input) : "";
   const commandText = isUse ? fieldText(event.input, ["command"]) : "";
   const awaitingPermission = isUse && event.awaitingPermission;
   const resultIsError = Boolean(result?.isError || (!isUse && event.isError));
+  const activity = isUse ? toolActivityText(event, result) : toolSummary(event) || "Tool finished";
+  const statusText = awaitingPermission ? "permission required" : resultIsError ? "error" : "";
 
   useEffect(() => {
     if (awaitingPermission || resultIsError) setOpen(true);
@@ -7923,22 +8014,30 @@ function ToolCard({
       data-copy-block="true"
       data-copy-event-id={event.id}
     >
-      <button className={cn("flex w-full min-w-0 max-w-full items-center justify-between gap-2 overflow-hidden text-left", compact ? "px-2 py-2" : "px-3 py-2")} onClick={() => setOpen((value) => !value)}>
-        <span className="min-w-0 flex-1">
-          <span className="flex min-w-0 max-w-full flex-wrap items-center gap-1.5">
-            <span className="min-w-0 max-w-full flex-1 truncate">
-              {isUse ? `Tool: ${event.name}` : `Tool result: ${event.toolUseId}`}
-            </span>
-            {awaitingPermission && <Badge className="shrink-0 border-amber-300/60 bg-amber-500/15 text-amber-100">permission required</Badge>}
-            {result && <Badge className="shrink-0 border-border text-muted-foreground">result paired</Badge>}
-            {resultIsError && <Badge className="shrink-0 border-red-400/40 text-red-200">error</Badge>}
-          </span>
-          {summary && <span className="mt-1 block truncate text-xs text-muted-foreground">{summary}</span>}
+      <button
+        className={cn("flex w-full min-w-0 max-w-full items-center justify-between gap-2 overflow-hidden text-left", compact ? "px-2 py-2" : "px-3 py-2")}
+        onClick={() => (awaitingPermission || resultIsError ? setOpen((value) => !value) : undefined)}
+      >
+        <span className="flex min-w-0 flex-1 items-center gap-2">
+          <span className="min-w-0 flex-1 truncate">{activity}</span>
+          {statusText && (
+            <Badge
+              className={cn(
+                "shrink-0",
+                awaitingPermission && "border-amber-300/60 bg-amber-500/15 text-amber-100",
+                resultIsError && "border-red-400/40 text-red-200"
+              )}
+            >
+              {statusText}
+            </Badge>
+          )}
         </span>
-        <Badge className="shrink-0 gap-1">
-          {open ? "Hide" : "Show"}
-          <ChevronDown className={cn("h-3 w-3 transition-transform", open && "rotate-180")} />
-        </Badge>
+        {(awaitingPermission || resultIsError) && (
+          <Badge className="shrink-0 gap-1">
+            {open ? "Hide" : "Show"}
+            <ChevronDown className={cn("h-3 w-3 transition-transform", open && "rotate-180")} />
+          </Badge>
+        )}
       </button>
       {awaitingPermission && (
         <div className="grid gap-3 border-t border-amber-300/30 bg-amber-500/10 px-3 py-3">
@@ -7962,21 +8061,9 @@ function ToolCard({
       {open && (
         <div className="border-t border-border">
           <div className="flex flex-wrap gap-2 px-3 py-2">
-            {commandText && (
-              <Button size="sm" variant="outline" onClick={() => copyText(commandText)}>
-                <Clipboard className="h-3.5 w-3.5" />
-                Command
-              </Button>
-            )}
-            {pathText && (
-              <Button size="sm" variant="outline" onClick={() => copyText(pathText)}>
-                <Clipboard className="h-3.5 w-3.5" />
-                Path
-              </Button>
-            )}
             <Button size="sm" variant="outline" onClick={() => copyText(detail)}>
               <Clipboard className="h-3.5 w-3.5" />
-              {result ? "Tool + Result" : "Output"}
+              Copy details
             </Button>
           </div>
           <pre className="max-h-80 overflow-y-auto overflow-x-hidden whitespace-pre-wrap break-words [overflow-wrap:anywhere] border-t border-border p-3 text-xs text-muted-foreground">{detail}</pre>
