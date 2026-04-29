@@ -368,6 +368,10 @@ function shouldShowPinnedUserMessage(root: HTMLDivElement, pinnedMessageId?: str
   return originalRect.bottom <= rootRect.top;
 }
 
+function scrollToLatestUserMessage(root: HTMLDivElement | null) {
+  root?.querySelector<HTMLElement>('[data-latest-user-message="true"]')?.scrollIntoView({ block: "center", behavior: "smooth" });
+}
+
 function AgentActivityIndicator({ agent, compact = false }: { agent: RunningAgent; compact?: boolean }) {
   return (
     <div className="flex">
@@ -6102,7 +6106,9 @@ function AgentTile({
                 onKeyUp={() => selection.captureSelection()}
                 onContextMenuCapture={prepareContextMenu}
               >
-                {transcriptViewMode === "chat" && pinLastSentMessage && pinnedMessage && showPinnedMessage && <PinnedUserMessage event={pinnedMessage} compact />}
+                {transcriptViewMode === "chat" && pinLastSentMessage && pinnedMessage && showPinnedMessage && (
+                  <PinnedUserMessage event={pinnedMessage} compact onJump={() => scrollToLatestUserMessage(rootRef.current)} />
+                )}
                 {agent.statusMessage && (
                   <p className="mb-3 rounded-md border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
                     {agent.statusMessage}
@@ -6373,14 +6379,14 @@ function TranscriptPreview({
         className={cn(
           "relative max-w-[86%] whitespace-pre-wrap break-words rounded-md border border-border px-3 py-2 text-sm leading-5",
           isUser ? "user-question bg-primary text-primary-foreground" : "bg-background/60",
-          showPopout && "pr-10"
+          showPopout && "pr-16"
         )}
         data-copy-block="true"
         data-copy-event-id={event.id}
         style={!isUser ? { borderLeftColor: agentAccentColor(agent.color), borderLeftWidth: 4 } : undefined}
       >
         {showPopout && <ChatBlockPopoutButton source={agent} text={event.text} compact />}
-        <CollapsibleText text={event.text} compact />
+        <CollapsibleText text={event.text} compact inlineToggle={showPopout} />
         {event.kind === "user" && event.attachments && event.attachments.length > 0 && (
           <span className="mt-2 flex flex-wrap gap-2">
             {event.attachments.map((attachment) =>
@@ -6402,23 +6408,53 @@ function TranscriptPreview({
 
 function PinnedUserMessage({
   event,
-  compact = false
+  compact = false,
+  onJump
 }: {
   event: Extract<TranscriptEvent, { kind: "user" }>;
   compact?: boolean;
+  onJump?: () => void;
 }) {
+  const [expanded, setExpanded] = useState(false);
+  const multiline = event.text.split(/\r?\n/).length > 3;
+
   return (
     <div className="sticky top-0 z-20 mb-3 flex justify-end">
       <div
+        role="button"
+        tabIndex={0}
         className={cn(
-          "max-w-full rounded-md border border-primary/40 bg-primary/95 px-3 py-2 text-primary-foreground shadow-lg backdrop-blur",
+          "max-w-full cursor-pointer rounded-md border border-primary/40 bg-primary/95 px-3 py-2 text-primary-foreground shadow-lg outline-none backdrop-blur focus-visible:ring-2 focus-visible:ring-ring",
           "user-question",
           compact ? "text-xs leading-4" : "text-sm leading-5"
         )}
         data-copy-block="true"
         data-copy-event-id={event.id}
+        title="Jump to message"
+        onClick={onJump}
+        onKeyDown={(keyEvent) => {
+          if (keyEvent.key === "Enter" || keyEvent.key === " ") {
+            keyEvent.preventDefault();
+            onJump?.();
+          }
+        }}
       >
-        <div className="line-clamp-2 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{event.text || "Attachment"}</div>
+        <div className="flex min-w-0 items-start gap-2">
+          <div className={cn("min-w-0 flex-1 whitespace-pre-wrap break-words [overflow-wrap:anywhere]", multiline && !expanded && "line-clamp-1")}>{event.text || "Attachment"}</div>
+          {multiline && (
+            <button
+              type="button"
+              className="grid h-5 w-5 shrink-0 place-items-center rounded-sm text-primary-foreground/85 hover:bg-primary-foreground/15 hover:text-primary-foreground"
+              title={expanded ? "Collapse message" : "Expand message"}
+              onClick={(event) => {
+                event.stopPropagation();
+                setExpanded((value) => !value);
+              }}
+            >
+              <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", expanded && "rotate-180")} />
+            </button>
+          )}
+        </div>
         {event.attachments && event.attachments.length > 0 && (
           <div className="mt-1 text-[11px] opacity-80">{event.attachments.length} attachment(s)</div>
         )}
@@ -7334,7 +7370,9 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
             onContextMenuCapture={prepareContextMenu}
           >
             <div className="mx-auto grid w-full min-w-0 max-w-4xl gap-3">
-              {transcriptViewMode === "chat" && pinLastSentMessage && pinnedMessage && showPinnedMessage && <PinnedUserMessage event={pinnedMessage} />}
+              {transcriptViewMode === "chat" && pinLastSentMessage && pinnedMessage && showPinnedMessage && (
+                <PinnedUserMessage event={pinnedMessage} onJump={() => scrollToLatestUserMessage(rootRef.current)} />
+              )}
               {transcriptViewMode === "raw" ? (
                 <RawStreamView agent={agent} transcript={transcript} />
               ) : transcript.length === 0 ? (
@@ -7673,7 +7711,7 @@ function TranscriptItem({
         className={cn(
           "relative min-w-0 max-w-[78%] whitespace-pre-wrap break-words [overflow-wrap:anywhere] rounded-lg border border-border px-3 py-2 text-sm leading-6",
           isUser ? "user-question bg-primary text-primary-foreground" : "bg-card",
-          showPopout && "pr-12"
+          showPopout && "pr-16"
         )}
         data-copy-block="true"
         data-copy-event-id={event.id}
@@ -7685,7 +7723,7 @@ function TranscriptItem({
             from {event.sourceAgent.displayName}
           </Badge>
         )}
-        <CollapsibleText text={event.text} query={query} />
+        <CollapsibleText text={event.text} query={query} inlineToggle={showPopout} />
         {event.kind === "assistant_text" && event.streaming && (
           <span className="mt-2 block">
             <ThinkingText prefix="Streaming" />
@@ -7707,7 +7745,17 @@ function TranscriptItem({
   );
 }
 
-function CollapsibleText({ text, query = "", compact = false }: { text: string; query?: string; compact?: boolean }) {
+function CollapsibleText({
+  text,
+  query = "",
+  compact = false,
+  inlineToggle = false
+}: {
+  text: string;
+  query?: string;
+  compact?: boolean;
+  inlineToggle?: boolean;
+}) {
   const shouldCollapse = isLongTextBlock(text, compact);
   const [expanded, setExpanded] = useState(false);
 
@@ -7727,7 +7775,20 @@ function CollapsibleText({ text, query = "", compact = false }: { text: string; 
   }
 
   return (
-    <div className="grid gap-2">
+    <div className="relative grid gap-2">
+      {inlineToggle && (
+        <button
+          type="button"
+          className={cn(
+            "absolute top-0 z-10 grid place-items-center rounded-md text-muted-foreground opacity-70 hover:bg-accent hover:text-foreground hover:opacity-100",
+            compact ? "-right-8 h-6 w-6" : "-right-9 h-7 w-7"
+          )}
+          title={expanded ? "Collapse response" : "Expand response"}
+          onClick={toggleExpanded}
+        >
+          <ChevronDown className={cn(compact ? "h-3.5 w-3.5" : "h-4 w-4", "transition-transform", expanded && "rotate-180")} />
+        </button>
+      )}
       <div
         role="button"
         tabIndex={0}
@@ -7746,17 +7807,19 @@ function CollapsibleText({ text, query = "", compact = false }: { text: string; 
       >
         <ChatMarkdown text={text} query={query} />
       </div>
-      <button
-        type="button"
-        className={cn(
-          "inline-flex w-fit items-center gap-1 rounded-sm text-xs font-medium opacity-80 hover:opacity-100",
-          compact ? "text-muted-foreground" : "text-current"
-        )}
-        onClick={toggleExpanded}
-      >
-        {expanded ? "Show less" : "Show more"}
-        <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", expanded && "rotate-180")} />
-      </button>
+      {!inlineToggle && (
+        <button
+          type="button"
+          className={cn(
+            "inline-flex w-fit items-center gap-1 rounded-sm text-xs font-medium opacity-80 hover:opacity-100",
+            compact ? "text-muted-foreground" : "text-current"
+          )}
+          onClick={toggleExpanded}
+        >
+          {expanded ? "Show less" : "Show more"}
+          <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", expanded && "rotate-180")} />
+        </button>
+      )}
     </div>
   );
 }
