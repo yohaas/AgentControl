@@ -172,6 +172,17 @@ type ToolTranscriptItem =
   | { kind: "tool_pair"; event: ToolUseEvent; result?: ToolResultEvent };
 type ContextCopyTarget = { scope: "block" | "chat"; text: string };
 type TranscriptViewMode = "chat" | "raw";
+type PlanNextStepRole = "qa" | "security" | "docs" | "performance" | "product";
+type PlanNextStep = {
+  id: string;
+  role: PlanNextStepRole;
+  title: string;
+  description: string;
+  prompt: string;
+  source: AgentDefSource;
+  def: AgentDef;
+};
+type PlanNextStepState = { dismissed: boolean; completed: string[] };
 
 const COMMON_SLASH_COMMANDS: SlashCommandSuggestion[] = [
   { value: "/clear", label: "/clear", description: "Clear this chat history", source: "agentcontrol" },
@@ -1647,6 +1658,120 @@ function defaultLaunchAgentOption(groups: { projectAgents: AgentDef[]; builtInAg
   if (projectGeneral) return { source: "project" as const, def: projectGeneral };
   if (groups.projectAgents[0]) return { source: "project" as const, def: groups.projectAgents[0] };
   return { source: "builtIn" as const, def: groups.builtInAgents[0] };
+}
+
+const PLAN_NEXT_STEP_ROLES: Array<{
+  role: PlanNextStepRole;
+  matches: RegExp[];
+  title: string;
+  description: string;
+  prompt: string;
+}> = [
+  {
+    role: "qa",
+    matches: [/\bqa\b/i, /\bquality\b/i, /\btest/i],
+    title: "Check with QA",
+    description: "Look for test gaps, broken flows, and verification work.",
+    prompt: "Please review this approved plan and the resulting implementation for QA risk. Focus on test coverage, regression cases, and what should be manually verified."
+  },
+  {
+    role: "security",
+    matches: [/\bsecurity\b/i, /\bsec\b/i, /\baudit\b/i, /\bauth\b/i],
+    title: "Review security",
+    description: "Check permissions, data handling, and risky edge cases.",
+    prompt: "Please review this approved plan and the resulting implementation for security risk. Focus on authorization, secrets, data exposure, command execution, and unsafe defaults."
+  },
+  {
+    role: "docs",
+    matches: [/\bdocs?\b/i, /\bdocument/i, /\breadme\b/i],
+    title: "Update docs",
+    description: "Capture behavior changes in the right user-facing docs.",
+    prompt: "Please review this approved plan and update any relevant docs or README sections. Keep the documentation concise and focused on behavior users need to know."
+  },
+  {
+    role: "performance",
+    matches: [/\bperformance\b/i, /\bperf\b/i, /\bspeed\b/i, /\blatency\b/i],
+    title: "Check performance",
+    description: "Look for slow paths, unnecessary work, and scaling risk.",
+    prompt: "Please review this approved plan and the resulting implementation for performance risk. Focus on latency, repeated work, scaling behavior, and simple measurements worth running."
+  },
+  {
+    role: "product",
+    matches: [/\bproduct\b/i, /\bux\b/i, /\bui\b/i, /\bdesign\b/i],
+    title: "Product pass",
+    description: "Check user flow, copy, and expected edge cases.",
+    prompt: "Please review this approved plan from a product and UX angle. Focus on whether the flow is clear, complete, and aligned with what users will expect."
+  }
+];
+
+function planNextStepStorageKey(planId: string) {
+  return `agent-control-plan-next-steps:${planId}`;
+}
+
+function usePlanNextStepState(planId: string): [PlanNextStepState, (next: PlanNextStepState) => void] {
+  const storageKey = planNextStepStorageKey(planId);
+  const [state, setState] = useState<PlanNextStepState>(() => {
+    try {
+      const raw = window.localStorage.getItem(storageKey);
+      if (!raw) return { dismissed: false, completed: [] };
+      const parsed = JSON.parse(raw) as Partial<PlanNextStepState>;
+      return {
+        dismissed: Boolean(parsed.dismissed),
+        completed: Array.isArray(parsed.completed) ? parsed.completed.filter((item): item is string => typeof item === "string") : []
+      };
+    } catch {
+      return { dismissed: false, completed: [] };
+    }
+  });
+
+  function update(next: PlanNextStepState) {
+    setState(next);
+    window.localStorage.setItem(storageKey, JSON.stringify(next));
+  }
+
+  return [state, update];
+}
+
+function agentMatchesRole(def: AgentDef, role: typeof PLAN_NEXT_STEP_ROLES[number]) {
+  const text = [def.name, def.description || "", def.systemPrompt || ""].join("\n");
+  return role.matches.some((pattern) => pattern.test(text));
+}
+
+function buildPlanNextSteps(groups: { projectAgents: AgentDef[]; builtInAgents: AgentDef[] }, currentAgent: RunningAgent): PlanNextStep[] {
+  const orderedAgents = [
+    ...groups.projectAgents.map((def) => ({ source: "project" as const, def })),
+    ...groups.builtInAgents.map((def) => ({ source: "builtIn" as const, def }))
+  ].filter((candidate) => candidate.def.name.toLowerCase() !== currentAgent.defName.toLowerCase());
+
+  const steps: PlanNextStep[] = [];
+  const usedAgents = new Set<string>();
+  for (const role of PLAN_NEXT_STEP_ROLES) {
+    const match = orderedAgents.find((candidate) => {
+      const key = `${candidate.source}:${candidate.def.name.toLowerCase()}`;
+      return !usedAgents.has(key) && agentMatchesRole(candidate.def, role);
+    });
+    if (!match) continue;
+    usedAgents.add(`${match.source}:${match.def.name.toLowerCase()}`);
+    steps.push({
+      id: `${role.role}:${match.source}:${match.def.name}`,
+      role: role.role,
+      title: role.title,
+      description: `${role.description} Use ${match.def.name}.`,
+      prompt: role.prompt,
+      source: match.source,
+      def: match.def
+    });
+    if (steps.length >= 3) break;
+  }
+  return steps;
+}
+
+function planWasApproved(event: PlanEvent) {
+  return event.answered && (event.decision === "approve" || /^approved\b/i.test(event.response || ""));
+}
+
+function planNextStepPrompt(event: PlanEvent, step: PlanNextStep) {
+  return [step.prompt, "", "Approved plan:", "", event.plan].join("\n");
 }
 
 function terminalsForProject(sessionsById: Record<string, TerminalSession>, projectId?: string) {
@@ -6767,6 +6892,107 @@ function QuestionCard({ event, agent, compact = false }: { event: QuestionsEvent
   );
 }
 
+function PlanNextSteps({ event, agent, steps }: { event: PlanEvent; agent: RunningAgent; steps: PlanNextStep[] }) {
+  const agentsById = useAppStore((state) => state.agents);
+  const settings = useAppStore((state) => state.settings);
+  const setSelectedAgent = useAppStore((state) => state.setSelectedAgent);
+  const setFocusedAgent = useAppStore((state) => state.setFocusedAgent);
+  const [state, setState] = usePlanNextStepState(event.id);
+  if (state.dismissed || steps.length === 0) return null;
+
+  function setCompleted(step: PlanNextStep, completed: boolean) {
+    const completedSet = new Set(state.completed);
+    if (completed) completedSet.add(step.id);
+    else completedSet.delete(step.id);
+    setState({ ...state, completed: [...completedSet] });
+  }
+
+  function sendToExisting(target: RunningAgent, step: PlanNextStep) {
+    sendCommand({ type: "userMessage", id: target.id, text: planNextStepPrompt(event, step), attachments: [] });
+    setSelectedAgent(target.id);
+    setFocusedAgent(target.id);
+  }
+
+  function launchNew(step: PlanNextStep) {
+    const provider = step.def.provider || "claude";
+    sendCommand({
+      type: "launch",
+      request: {
+        projectId: agent.projectId,
+        defName: step.def.name,
+        agentSource: step.source,
+        displayName: "",
+        provider,
+        model: defaultModelForAgentDef(settings, step.def),
+        initialPrompt: planNextStepPrompt(event, step),
+        remoteControl: false,
+        permissionMode: settings.defaultAgentMode,
+        autoApprove: settings.autoApprove
+      }
+    });
+  }
+
+  return (
+    <section className="mt-3 rounded-md border border-border bg-background/55 p-3">
+      <div className="mb-2 flex items-start justify-between gap-3">
+        <div>
+          <h4 className="text-sm font-medium">Next steps</h4>
+          <p className="text-xs text-muted-foreground">Optional follow-ups based on your available agents.</p>
+        </div>
+        <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" title="Dismiss next steps" onClick={() => setState({ ...state, dismissed: true })}>
+          <X className="h-4 w-4" />
+        </Button>
+      </div>
+      <div className="grid gap-2">
+        {steps.map((step) => {
+          const completed = state.completed.includes(step.id);
+          const matchingAgents = Object.values(agentsById).filter(
+            (candidate) => candidate.projectId === agent.projectId && candidate.defName.toLowerCase() === step.def.name.toLowerCase()
+          );
+          return (
+            <div
+              key={step.id}
+              className={cn("grid gap-2 rounded-md border border-border bg-card/70 p-2 sm:grid-cols-[1fr_auto] sm:items-center", completed && "opacity-60")}
+            >
+              <label className="flex min-w-0 items-start gap-2">
+                <input className="mt-1" type="checkbox" checked={completed} onChange={(inputEvent) => setCompleted(step, inputEvent.target.checked)} />
+                <span className="min-w-0">
+                  <span className={cn("block text-sm font-medium", completed && "line-through")}>{step.title}</span>
+                  <span className="mt-0.5 block text-xs leading-5 text-muted-foreground">{step.description}</span>
+                </span>
+              </label>
+              {matchingAgents.length > 0 ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button type="button" variant="outline" size="sm">
+                      <Bot className="h-4 w-4" />
+                      Launch
+                      <ChevronDown className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="min-w-56">
+                    {matchingAgents.map((target) => (
+                      <DropdownMenuItem key={target.id} onClick={() => sendToExisting(target, step)}>
+                        Use {target.displayName}
+                      </DropdownMenuItem>
+                    ))}
+                    <DropdownMenuItem onClick={() => launchNew(step)}>Launch new {step.def.name}</DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : (
+                <Button type="button" variant="outline" size="sm" onClick={() => launchNew(step)}>
+                  <Bot className="h-4 w-4" />
+                  Launch
+                </Button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 function PlanCard({ event, agent, compact = false }: { event: PlanEvent; agent: RunningAgent; compact?: boolean }) {
   const projects = useAppStore((state) => state.projects);
   const settings = useAppStore((state) => state.settings);
@@ -6783,6 +7009,7 @@ function PlanCard({ event, agent, compact = false }: { event: PlanEvent; agent: 
     ],
     [agentOptionGroups.builtInAgents, agentOptionGroups.projectAgents]
   );
+  const nextSteps = useMemo(() => buildPlanNextSteps(agentOptionGroups, agent), [agent, agentOptionGroups]);
 
   useEffect(() => {
     setOtherText(event.response || "");
@@ -6966,6 +7193,7 @@ function PlanCard({ event, agent, compact = false }: { event: PlanEvent; agent: 
         </div>
       )}
       {activeDecision && event.answered && <div className="mt-2 text-xs text-muted-foreground">Decision: {activeDecision}</div>}
+      {planWasApproved(event) && <PlanNextSteps event={event} agent={agent} steps={nextSteps} />}
     </div>
   );
 }
