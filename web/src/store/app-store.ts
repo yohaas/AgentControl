@@ -40,6 +40,7 @@ export interface SettingsState {
   defaultAgentMode: AgentPermissionMode;
   tileHeight: number;
   tileColumns: number;
+  menuDisplay: MenuDisplayMode;
   sidebarWidth: number;
   pinLastSentMessage: boolean;
   terminalDock: TerminalDockPosition;
@@ -49,6 +50,7 @@ export interface SettingsState {
 export type TerminalDockPosition = "float" | "left" | "bottom" | "right";
 export type ThemeMode = "auto" | "light" | "dark";
 export type ClaudeRuntime = "cli" | "api";
+export type MenuDisplayMode = "iconOnly" | "iconText";
 
 interface SendDialogState {
   open: boolean;
@@ -162,6 +164,7 @@ const defaultSettings: SettingsState = {
   defaultAgentMode: "acceptEdits",
   tileHeight: 460,
   tileColumns: 2,
+  menuDisplay: "iconOnly",
   sidebarWidth: 280,
   pinLastSentMessage: true,
   terminalDock: "bottom",
@@ -188,18 +191,20 @@ function normalizeSettings(settings: SettingsState): SettingsState {
     : defaultSettings.defaultAgentMode;
   const themeMode = ["auto", "light", "dark"].includes(settings.themeMode) ? settings.themeMode : defaultSettings.themeMode;
   const claudeRuntime = settings.claudeRuntime === "api" ? "api" : "cli";
+  const menuDisplay = settings.menuDisplay === "iconText" ? "iconText" : "iconOnly";
   return {
     ...defaultSettings,
     ...settings,
     modelProfiles: Array.isArray(settings.modelProfiles) && settings.modelProfiles.length ? settings.modelProfiles : defaultSettings.modelProfiles,
     permissionAllowRules: Array.isArray(settings.permissionAllowRules) ? settings.permissionAllowRules : defaultSettings.permissionAllowRules,
     defaultAgentMode,
-    tileHeight: clampNumber(settings.tileHeight, defaultSettings.tileHeight, 320, 760),
+    tileHeight: clampNumber(settings.tileHeight, defaultSettings.tileHeight, 320, 2000),
     tileColumns: clampNumber(settings.tileColumns, defaultSettings.tileColumns, 1, 6),
     sidebarWidth: clampNumber(settings.sidebarWidth, defaultSettings.sidebarWidth, 240, 420),
     terminalDock,
     themeMode,
-    claudeRuntime
+    claudeRuntime,
+    menuDisplay
   };
 }
 

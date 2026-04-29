@@ -50,6 +50,7 @@ export interface DashboardConfig {
   defaultAgentMode?: AgentPermissionMode;
   tileHeight?: number;
   tileColumns?: number;
+  menuDisplay?: MenuDisplayMode;
   sidebarWidth?: number;
   pinLastSentMessage?: boolean;
   terminalDock?: TerminalDockPosition;
@@ -59,6 +60,7 @@ export interface DashboardConfig {
 export type TerminalDockPosition = "float" | "left" | "bottom" | "right";
 export type ThemeMode = "auto" | "light" | "dark";
 export type ClaudeRuntime = "cli" | "api";
+export type MenuDisplayMode = "iconOnly" | "iconText";
 
 const configDir = path.join(os.homedir(), ".agent-dashboard");
 const configPath = path.join(configDir, "config.json");
@@ -172,7 +174,7 @@ function clampNumber(value: unknown, fallback: number, min: number, max: number)
 }
 
 export function resolveTileHeight(config: DashboardConfig): number {
-  return clampNumber(config.tileHeight, 460, 320, 760);
+  return clampNumber(config.tileHeight, 460, 320, 2000);
 }
 
 export function resolveTileColumns(config: DashboardConfig): number {
@@ -181,6 +183,10 @@ export function resolveTileColumns(config: DashboardConfig): number {
 
 export function resolveSidebarWidth(config: DashboardConfig): number {
   return clampNumber(config.sidebarWidth, 280, 240, 420);
+}
+
+export function resolveMenuDisplay(config: DashboardConfig): MenuDisplayMode {
+  return config.menuDisplay === "iconText" ? "iconText" : "iconOnly";
 }
 
 export function resolvePinLastSentMessage(config: DashboardConfig): boolean {

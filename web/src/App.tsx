@@ -45,6 +45,7 @@ import {
   Hand,
   Home,
   Image as ImageIcon,
+  LayoutGrid,
   Loader2,
   Maximize2,
   MessageSquare,
@@ -62,6 +63,7 @@ import {
   Puzzle,
   RefreshCw,
   Search,
+  Save,
   Settings,
   Sparkles,
   Square,
@@ -122,7 +124,7 @@ import { getSelectionInRoot, useTextSelection } from "./hooks/use-text-selection
 import { api } from "./lib/api";
 import { cn, downloadText, formatDuration, prettyJson } from "./lib/utils";
 import { connectWebSocket, disconnectWebSocket, sendCommand } from "./lib/ws-client";
-import { useAppStore, type ClaudeRuntime, type QueuedMessage, type ThemeMode } from "./store/app-store";
+import { useAppStore, type ClaudeRuntime, type MenuDisplayMode, type QueuedMessage, type ThemeMode } from "./store/app-store";
 
 const DEFAULT_MODEL = "claude-sonnet-4-6";
 const EMPTY_TRANSCRIPT: TranscriptEvent[] = [];
@@ -266,7 +268,7 @@ const TERMINAL_DOCK_OPTIONS = [
   { value: "right", label: "Dock right", icon: PanelRight }
 ] as const;
 const TILE_MIN_HEIGHT = 240;
-const TILE_MAX_HEIGHT = 760;
+const TILE_MAX_HEIGHT = 2000;
 
 function applyThemeMode(themeMode: ThemeMode) {
   const root = document.documentElement;
@@ -2352,6 +2354,8 @@ function Header({
   const [addProjectOpen, setAddProjectOpen] = useState(false);
   const [connectionMenuOpen, setConnectionMenuOpen] = useState(false);
   const [supervised, setSupervised] = useState<boolean | undefined>();
+  const [layoutHeightDraft, setLayoutHeightDraft] = useState(String(settings.tileHeight));
+  const [layoutColumnsDraft, setLayoutColumnsDraft] = useState(String(settings.tileColumns));
   const selectedProject = projects.find((project) => project.id === selectedProjectId);
   const projectRows = useMemo(() => projectSelectorRows(projects), [projects]);
   const projectAgents = useMemo(() => agentsForProject(agentsById, selectedProjectId), [agentsById, selectedProjectId]);
@@ -2381,6 +2385,11 @@ function Header({
   useEffect(() => {
     void refreshAdminStatus();
   }, []);
+
+  useEffect(() => {
+    setLayoutHeightDraft(String(settings.tileHeight));
+    setLayoutColumnsDraft(String(settings.tileColumns));
+  }, [settings.tileColumns, settings.tileHeight]);
 
   async function refreshAdminStatus() {
     try {
@@ -2474,9 +2483,17 @@ function Header({
     try {
       const next = await api.saveSettings({ ...settings, ...patch });
       setSettings(next);
+      setCurrentTileHeight(undefined);
     } catch (error) {
       addError(error instanceof Error ? error.message : String(error));
     }
+  }
+
+  async function saveLayoutSettings() {
+    const tileHeight = Number(layoutHeightDraft);
+    const tileColumns = Number(layoutColumnsDraft);
+    if (!Number.isFinite(tileHeight) || !Number.isFinite(tileColumns)) return;
+    await saveDisplaySettings({ tileHeight, tileColumns });
   }
 
   function useFullHeight() {
@@ -2485,9 +2502,18 @@ function Header({
     setCurrentTileHeight(Math.min(TILE_MAX_HEIGHT, Math.max(TILE_MIN_HEIGHT, Math.round(availableHeight))));
   }
 
-  function useSettingsHeight() {
+  function resetLayout() {
     setCurrentTileHeight(undefined);
   }
+
+  const layoutHeightValue = Number(layoutHeightDraft);
+  const layoutColumnsValue = Number(layoutColumnsDraft);
+  const layoutSettingsDirty =
+    Number.isFinite(layoutHeightValue) &&
+    Number.isFinite(layoutColumnsValue) &&
+    (Math.round(layoutHeightValue) !== settings.tileHeight || Math.round(layoutColumnsValue) !== settings.tileColumns);
+  const showMenuText = settings.menuDisplay === "iconText";
+  const menuButtonClass = showMenuText ? "gap-2 px-3" : undefined;
 
   async function closeSelectedProject() {
     if (!selectedProjectId || !selectedProject) return;
@@ -2634,10 +2660,14 @@ function Header({
         </DropdownMenu>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="gap-2" title="Display options">
-              <Columns2 className="h-4 w-4" />
-              Display
-              <ChevronDown className="h-4 w-4" />
+            <Button variant="outline" size={showMenuText ? undefined : "icon"} className={menuButtonClass} title="Layout options">
+              <LayoutGrid className="h-4 w-4" />
+              {showMenuText && (
+                <>
+                  <span>Layout</span>
+                  <ChevronDown className="h-4 w-4" />
+                </>
+              )}
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-64">
@@ -2646,26 +2676,22 @@ function Header({
               Full Height
               {currentTileHeight && currentTileHeight !== settings.tileHeight && <Check className="ml-auto h-4 w-4" />}
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={useSettingsHeight}>
-              <Settings className="mr-2 h-4 w-4" />
-              Use Settings
+            <DropdownMenuItem onClick={resetLayout}>
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Reset
               {!currentTileHeight && <Check className="ml-auto h-4 w-4" />}
             </DropdownMenuItem>
-            <div className="mt-1 grid gap-3 border-t border-border px-2 py-2" onClick={(event) => event.stopPropagation()}>
+            <div className="mt-1 grid gap-2 border-t border-border px-2 py-2" onClick={(event) => event.stopPropagation()}>
+              <div className="grid grid-cols-[1fr_0.8fr_auto] items-end gap-2">
               <label className="grid gap-1 text-xs text-muted-foreground">
                 Height
                 <Input
                   type="number"
                   min={TILE_MIN_HEIGHT}
                   max={TILE_MAX_HEIGHT}
-                  value={settings.tileHeight}
+                  value={layoutHeightDraft}
                   onKeyDown={(event) => event.stopPropagation()}
-                  onChange={(event) => {
-                    const tileHeight = Number(event.target.value);
-                    if (!Number.isFinite(tileHeight)) return;
-                    setCurrentTileHeight(undefined);
-                    void saveDisplaySettings({ tileHeight });
-                  }}
+                  onChange={(event) => setLayoutHeightDraft(event.target.value)}
                 />
               </label>
               <label className="grid gap-1 text-xs text-muted-foreground">
@@ -2674,28 +2700,35 @@ function Header({
                   type="number"
                   min={1}
                   max={6}
-                  value={settings.tileColumns}
+                  value={layoutColumnsDraft}
                   onKeyDown={(event) => event.stopPropagation()}
-                  onChange={(event) => {
-                    const tileColumns = Number(event.target.value);
-                    if (!Number.isFinite(tileColumns)) return;
-                    void saveDisplaySettings({ tileColumns });
-                  }}
+                  onChange={(event) => setLayoutColumnsDraft(event.target.value)}
                 />
               </label>
+              <Button
+                type="button"
+                size="icon"
+                disabled={!layoutSettingsDirty}
+                title="Save layout settings"
+                onClick={() => void saveLayoutSettings()}
+              >
+                <Save className="h-4 w-4" />
+              </Button>
+              </div>
             </div>
           </DropdownMenuContent>
         </DropdownMenu>
         <div className="flex items-center">
           <Button
             variant="outline"
-            size="icon"
-            className="rounded-r-none"
+            size={showMenuText ? undefined : "icon"}
+            className={cn("rounded-r-none", showMenuText && "gap-2 px-3")}
             disabled={!selectedProjectId}
             onClick={runProjectDev}
             title={`Run ${devCommand}`}
           >
             <Play className="h-4 w-4" />
+            {showMenuText && <span>Run</span>}
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -2722,17 +2755,26 @@ function Header({
         <WorktreesDialog projectId={selectedProjectId} />
         <Button
           variant="outline"
-          size="icon"
+          size={showMenuText ? undefined : "icon"}
+          className={showMenuText ? "gap-2 px-3" : undefined}
           disabled={!selectedProjectId}
           onClick={() => void closeSelectedProject()}
           title="Close project"
         >
           <X className="h-4 w-4" />
+          {showMenuText && <span>Close</span>}
         </Button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="icon" disabled={agentCount < 2} title="Sort chats">
+            <Button
+              variant="outline"
+              size={showMenuText ? undefined : "icon"}
+              className={showMenuText ? "gap-2 px-3" : undefined}
+              disabled={agentCount < 2}
+              title="Sort chats"
+            >
               <ArrowDownAZ className="h-4 w-4" />
+              {showMenuText && <span>Sort</span>}
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
@@ -2741,8 +2783,15 @@ function Header({
           </DropdownMenuContent>
         </DropdownMenu>
         <AddProjectDialog open={addProjectOpen} onOpenChange={setAddProjectOpen} showTrigger={false} />
-        <Button variant={terminalOpen ? "default" : "outline"} size="icon" onClick={toggleTerminal} title="Terminal">
+        <Button
+          variant={terminalOpen ? "default" : "outline"}
+          size={showMenuText ? undefined : "icon"}
+          className={showMenuText ? "gap-2 px-3" : undefined}
+          onClick={toggleTerminal}
+          title="Terminal"
+        >
           <SquareTerminal className="h-4 w-4" />
+          {showMenuText && <span>Terminal</span>}
         </Button>
         <SettingsDialog />
       </div>
@@ -2846,6 +2895,7 @@ function WorktreeTabs() {
 
 function GitStatusMenu({ projectId }: { projectId?: string }) {
   const addError = useAppStore((state) => state.addError);
+  const showMenuText = useAppStore((state) => state.settings.menuDisplay === "iconText");
   const [open, setOpen] = useState(false);
   const [status, setStatus] = useState<GitStatus | undefined>();
   const [loading, setLoading] = useState(false);
@@ -2896,8 +2946,15 @@ function GitStatusMenu({ projectId }: { projectId?: string }) {
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="icon" disabled={!projectId} title="Git status" className="relative">
+        <Button
+          variant="outline"
+          size={showMenuText ? undefined : "icon"}
+          disabled={!projectId}
+          title="Git status"
+          className={cn("relative", showMenuText && "gap-2 px-3")}
+        >
           <GitBranch className="h-4 w-4" />
+          {showMenuText && <span>Git</span>}
           {aheadCount > 0 && (
             <span className="absolute -right-1.5 -top-1.5 grid min-h-4 min-w-4 place-items-center rounded-full border border-background bg-red-500 px-1 text-[10px] font-semibold leading-none text-white">
               {aheadCount > 99 ? "99+" : aheadCount}
@@ -2976,6 +3033,7 @@ function WorktreesDialog({ projectId }: { projectId?: string }) {
   const setProjects = useAppStore((state) => state.setProjects);
   const setSelectedProject = useAppStore((state) => state.setSelectedProject);
   const addError = useAppStore((state) => state.addError);
+  const showMenuText = useAppStore((state) => state.settings.menuDisplay === "iconText");
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<"worktrees" | "create">("worktrees");
   const [worktrees, setWorktrees] = useState<GitWorktreeList | undefined>();
@@ -3104,8 +3162,16 @@ function WorktreesDialog({ projectId }: { projectId?: string }) {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <Button variant="outline" size="icon" disabled={!projectId} onClick={() => setOpen(true)} title="Git worktrees">
+      <Button
+        variant="outline"
+        size={showMenuText ? undefined : "icon"}
+        className={showMenuText ? "gap-2 px-3" : undefined}
+        disabled={!projectId}
+        onClick={() => setOpen(true)}
+        title="Git worktrees"
+      >
         <FolderTree className="h-4 w-4" />
+        {showMenuText && <span>Worktrees</span>}
       </Button>
       <DialogContent>
         <DialogHeader>
@@ -5342,7 +5408,6 @@ function SettingsDialog() {
   const projects = useAppStore((state) => state.projects);
   const selectedProjectId = useAppStore((state) => state.selectedProjectId);
   const addError = useAppStore((state) => state.addError);
-  const currentTileHeight = useAppStore((state) => state.currentTileHeight);
   const [open, setOpen] = useState(false);
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const [projectPaths, setProjectPaths] = useState(settings.projectPaths || []);
@@ -5369,6 +5434,7 @@ function SettingsDialog() {
   const [autoApprove, setAutoApprove] = useState(settings.autoApprove);
   const [defaultAgentMode, setDefaultAgentMode] = useState<AgentPermissionMode>(settings.defaultAgentMode);
   const [themeMode, setThemeMode] = useState<ThemeMode>(settings.themeMode);
+  const [menuDisplay, setMenuDisplay] = useState<MenuDisplayMode>(settings.menuDisplay);
   const [claudeRuntime, setClaudeRuntime] = useState<ClaudeRuntime>(settings.claudeRuntime || "cli");
   const [tileHeight, setTileHeight] = useState(settings.tileHeight);
   const [tileColumns, setTileColumns] = useState(settings.tileColumns);
@@ -5398,6 +5464,7 @@ function SettingsDialog() {
     setAutoApprove(settings.autoApprove);
     setDefaultAgentMode(settings.defaultAgentMode);
     setThemeMode(settings.themeMode);
+    setMenuDisplay(settings.menuDisplay);
     setClaudeRuntime(settings.claudeRuntime || "cli");
     setTileHeight(settings.tileHeight);
     setTileColumns(settings.tileColumns);
@@ -5429,6 +5496,7 @@ function SettingsDialog() {
         autoApprove,
         defaultAgentMode,
         themeMode,
+        menuDisplay,
         claudeRuntime,
         tileHeight,
         tileColumns,
@@ -5486,6 +5554,7 @@ function SettingsDialog() {
         autoApprove,
         defaultAgentMode,
         themeMode,
+        menuDisplay,
         claudeRuntime,
         tileHeight,
         tileColumns,
@@ -5518,6 +5587,7 @@ function SettingsDialog() {
       setAutoApprove(next.autoApprove);
       setDefaultAgentMode(next.defaultAgentMode);
       setThemeMode(next.themeMode);
+      setMenuDisplay(next.menuDisplay);
       setClaudeRuntime(next.claudeRuntime || "cli");
       setTileHeight(next.tileHeight);
       setTileColumns(next.tileColumns);
@@ -5579,6 +5649,7 @@ function SettingsDialog() {
       autoApprove !== settings.autoApprove ||
       defaultAgentMode !== settings.defaultAgentMode ||
       themeMode !== settings.themeMode ||
+      menuDisplay !== settings.menuDisplay ||
       claudeRuntime !== (settings.claudeRuntime || "cli") ||
       tileHeight !== settings.tileHeight ||
       tileColumns !== settings.tileColumns ||
@@ -5599,6 +5670,7 @@ function SettingsDialog() {
       codexPath,
       defaultAgentMode,
       gitPath,
+      menuDisplay,
       openaiAgentDir,
       openaiApiKey,
       openaiModelsText,
@@ -5632,8 +5704,15 @@ function SettingsDialog() {
   return (
     <>
       <Dialog open={open} onOpenChange={setOpen}>
-        <Button variant="outline" size="icon" onClick={() => setOpen(true)} title="Settings">
+        <Button
+          variant="outline"
+          size={settings.menuDisplay === "iconText" ? undefined : "icon"}
+          className={settings.menuDisplay === "iconText" ? "gap-2 px-3" : undefined}
+          onClick={() => setOpen(true)}
+          title="Settings"
+        >
           <Settings className="h-4 w-4" />
+          {settings.menuDisplay === "iconText" && <span>Settings</span>}
         </Button>
         <DialogContent className="w-[min(96vw,1080px)] max-w-none">
         <DialogHeader>
@@ -5712,7 +5791,7 @@ function SettingsDialog() {
               <h3 className="text-sm font-medium">Appearance</h3>
               <p className="text-xs text-muted-foreground">Control the app theme and chat layout.</p>
             </div>
-            <div className="grid gap-3 sm:grid-cols-[1fr_1.4fr_0.8fr]">
+            <div className="grid gap-3 sm:grid-cols-4">
               <label className="grid gap-1.5 text-sm">
                 Color mode
                 <Select value={themeMode} onValueChange={(value) => setThemeMode(value as ThemeMode)}>
@@ -5727,20 +5806,26 @@ function SettingsDialog() {
                 </Select>
               </label>
               <label className="grid gap-1.5 text-sm">
+                Menu display
+                <Select value={menuDisplay} onValueChange={(value) => setMenuDisplay(value as MenuDisplayMode)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="iconOnly">Icon Only</SelectItem>
+                    <SelectItem value="iconText">Icon + Text</SelectItem>
+                  </SelectContent>
+                </Select>
+              </label>
+              <label className="grid gap-1.5 text-sm">
                 Tile height
-                <div className="flex gap-2">
-                  <Input
-                    type="number"
-                    min={320}
-                    max={760}
-                    step={20}
-                    value={tileHeight}
-                    onChange={(event) => setTileHeight(Number(event.target.value))}
-                  />
-                  <Button type="button" variant="outline" onClick={() => setTileHeight(currentTileHeight || settings.tileHeight)}>
-                    Current
-                  </Button>
-                </div>
+                <Input
+                  type="number"
+                  min={320}
+                  max={TILE_MAX_HEIGHT}
+                  value={tileHeight}
+                  onChange={(event) => setTileHeight(Number(event.target.value))}
+                />
               </label>
               <label className="grid gap-1.5 text-sm">
                 Columns
@@ -6146,7 +6231,6 @@ function AgentTileGrid({ agents }: { agents: RunningAgent[] }) {
   const setTileOrder = useAppStore((state) => state.setTileOrder);
   const settings = useAppStore((state) => state.settings);
   const currentTileHeight = useAppStore((state) => state.currentTileHeight);
-  const setCurrentTileHeight = useAppStore((state) => state.setCurrentTileHeight);
   const tileHeight = currentTileHeight || settings.tileHeight;
   const tileColumns = settings.tileColumns || 2;
   const tileWidths = useAppStore((state) => state.tileWidths);
@@ -6161,11 +6245,8 @@ function AgentTileGrid({ agents }: { agents: RunningAgent[] }) {
   const rowCount = Math.max(1, Math.ceil(orderedAgents.length / tileColumns));
 
   useEffect(() => {
-    setRowHeights((current) =>
-      Array.from({ length: rowCount }, (_, index) =>
-        Math.min(TILE_MAX_HEIGHT, Math.max(TILE_MIN_HEIGHT, current[index] ?? tileHeight))
-      )
-    );
+    const clamped = Math.min(TILE_MAX_HEIGHT, Math.max(TILE_MIN_HEIGHT, tileHeight));
+    setRowHeights(Array.from({ length: rowCount }, () => clamped));
   }, [rowCount, tileHeight]);
 
   function moveTile(sourceId: string, targetId: string) {
@@ -6186,7 +6267,6 @@ function AgentTileGrid({ agents }: { agents: RunningAgent[] }) {
       next[rowIndex] = Math.round(clamped);
       return next;
     });
-    setCurrentTileHeight(Math.round(clamped));
   }
 
   function setRowBoundary(currentRowIndex: number, nextCurrentHeight: number, totalHeight: number) {
@@ -6201,7 +6281,6 @@ function AgentTileGrid({ agents }: { agents: RunningAgent[] }) {
       next[currentRowIndex] = currentHeight;
       return next;
     });
-    setCurrentTileHeight(currentHeight);
   }
 
   if (agents.length === 0) {

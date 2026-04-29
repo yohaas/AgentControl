@@ -437,7 +437,7 @@ Settings include:
 - Built-in agent management.
 - Default mode for new agents.
 - Auto-approve tool use behavior.
-- Tile height and columns.
+- Layout defaults, including tile height, columns, and icon-only or icon-with-text top menu buttons.
 - Sidebar width.
 - Show last message pinned.
 
