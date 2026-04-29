@@ -6234,6 +6234,24 @@ function AgentTile({
   const selectedLines = selectedLineCount(selection.selectedText);
   const draftLines = draftLineCount(draft);
   const [composerWrapped, setComposerWrapped] = useState(false);
+
+  function duplicateAgent() {
+    sendCommand({
+      type: "launch",
+      request: {
+        projectId: agent.projectId,
+        defName: agent.defName,
+        displayName: agent.displayName,
+        provider: agent.provider,
+        model: agent.currentModel,
+        remoteControl: false,
+        permissionMode: agent.permissionMode || settings.defaultAgentMode,
+        effort: agent.effort,
+        thinking: agent.thinking,
+        autoApprove: settings.autoApprove
+      }
+    });
+  }
   const hasMultilineDraft = draftLines > 1 || composerWrapped;
   const composerExpanded = hasMultilineDraft && !composerCollapsed;
 
@@ -6629,6 +6647,7 @@ function AgentTile({
               <DropdownMenuItem onClick={() => sendCommand({ type: "resume", id: agent.id })}>Resume</DropdownMenuItem>
             )}
             {isBusy && <DropdownMenuItem onClick={() => sendCommand({ type: "interrupt", id: agent.id })}>Stop response</DropdownMenuItem>}
+            <DropdownMenuItem onClick={duplicateAgent}>Duplicate</DropdownMenuItem>
             {!agent.remoteControl && (
               <DropdownMenuItem onClick={() => setTranscriptViewMode((mode) => (mode === "chat" ? "raw" : "chat"))}>
                 {transcriptViewMode === "chat" ? "View Raw Stream" : "View Chat"}
