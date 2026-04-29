@@ -60,6 +60,7 @@ interface AgentProcessState {
   permissionToken?: string;
   permissionMcpConfigPath?: string;
   pendingPermissions?: Map<string, PendingPermissionRequest>;
+  pendingQuestions?: Map<string, PendingQuestionRequest>;
   rcLastDiagnostic?: string;
   apiAbort?: AbortController;
 }
@@ -78,6 +79,12 @@ interface PendingPermissionRequest {
   toolName: string;
   input: unknown;
   resolve: (decision: "approve" | "deny") => void;
+  timeout: NodeJS.Timeout;
+}
+
+interface PendingQuestionRequest {
+  toolUseId: string;
+  resolve: (message: string) => void;
   timeout: NodeJS.Timeout;
 }
 
@@ -317,6 +324,7 @@ export class AgentRuntimeManager {
       stderrBuffer: "",
       permissionToken: nanoid(32),
       pendingPermissions: new Map(),
+      pendingQuestions: new Map(),
       pendingInitialPrompt: request.initialPrompt?.trim() || undefined,
       autoApprove: request.autoApprove
     };
@@ -700,10 +708,12 @@ export class AgentRuntimeManager {
       answers: normalizedAnswers,
       timestamp: now()
     });
+    const answerText = this.formatQuestionAnswers(event.questions, normalizedAnswers);
     if (event.toolUseId) {
-      this.answerQuestionToolUse(state, event.toolUseId);
+      const answeredViaTool = this.answerQuestionToolUse(state, event.toolUseId, answerText);
+      if (answeredViaTool) return;
     }
-    this.userMessage(id, this.formatQuestionAnswers(event.questions, normalizedAnswers));
+    this.userMessage(id, answerText);
   }
 
   answerPlan(id: string, eventId: string, decision: AgentPlanDecision, response?: string): void {
@@ -1113,6 +1123,23 @@ export class AgentRuntimeManager {
     }
     const toolUseId = request.toolUseId.trim();
     if (!toolUseId) throw new Error("Permission request is missing a tool use id.");
+
+    const questionRequest = this.extractAskUserQuestionRequest(request.toolName || "tool", request.input ?? {});
+    if (questionRequest) {
+      this.pushQuestionRequest(state, questionRequest, toolUseId);
+      const message = await new Promise<string>((resolve) => {
+        const timeout = setTimeout(() => {
+          state.pendingQuestions?.delete(toolUseId);
+          resolve("No answer was provided before the AgentControl question prompt timed out.");
+        }, PERMISSION_REQUEST_TIMEOUT_MS);
+        state.pendingQuestions ??= new Map();
+        state.pendingQuestions.set(toolUseId, { toolUseId, resolve, timeout });
+      });
+      return {
+        behavior: "deny",
+        message
+      };
+    }
 
     this.markToolAwaitingPermission(state, {
       toolUseId,
@@ -1776,18 +1803,27 @@ export class AgentRuntimeManager {
     return this.extractQuestionRequest(input as Record<string, unknown>);
   }
 
-  private answerQuestionToolUse(state: AgentProcessState, toolUseId: string): void {
+  private answerQuestionToolUse(state: AgentProcessState, toolUseId: string, message: string): boolean {
     this.resolveToolPermission(state, toolUseId);
+    const pendingQuestion = state.pendingQuestions?.get(toolUseId);
+    if (pendingQuestion) {
+      clearTimeout(pendingQuestion.timeout);
+      state.pendingQuestions?.delete(toolUseId);
+      pendingQuestion.resolve(message);
+      return true;
+    }
     const pending = state.pendingPermissions?.get(toolUseId);
     if (pending) {
       clearTimeout(pending.timeout);
       state.pendingPermissions?.delete(toolUseId);
       pending.resolve("deny");
-      return;
+      return true;
     }
     if (state.child && !state.child.killed && state.child.stdin.writable) {
       state.child.stdin.write(`${JSON.stringify({ type: "control", subtype: "tool_permission", tool_use_id: toolUseId, decision: "deny" })}\n`);
+      return true;
     }
+    return false;
   }
 
   private isExitPlanModeToolUse(value: Record<string, unknown>): boolean {
@@ -1987,6 +2023,11 @@ export class AgentRuntimeManager {
   }
 
   private denyPendingPermissions(state: AgentProcessState): void {
+    for (const pending of state.pendingQuestions?.values() || []) {
+      clearTimeout(pending.timeout);
+      pending.resolve("Question prompt closed before an answer was provided.");
+    }
+    state.pendingQuestions?.clear();
     for (const pending of state.pendingPermissions?.values() || []) {
       clearTimeout(pending.timeout);
       this.resolveToolPermission(state, pending.toolUseId);
