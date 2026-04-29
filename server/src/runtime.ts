@@ -860,6 +860,7 @@ export class AgentRuntimeManager {
       });
       child.on("error", reject);
       child.on("exit", (code) => {
+        this.flushCodexBuffers(state);
         state.child = undefined;
         state.agent.pid = undefined;
         state.activeTurn = false;
@@ -868,11 +869,33 @@ export class AgentRuntimeManager {
           state.interrupting = false;
           this.setStatus(state, "interrupted");
         } else if (code && code !== 0) this.setStatus(state, "error", `Codex exited with code ${code}.`);
-        else this.setStatus(state, "idle");
+        else if (state.agent.status !== "error") this.setStatus(state, "idle");
         resolve();
       });
       child.stdin.end(prompt);
     });
+  }
+
+  private flushCodexBuffers(state: AgentProcessState): void {
+    const stdout = state.stdoutBuffer.trim();
+    state.stdoutBuffer = "";
+    if (stdout) {
+      this.storeRawLine(state, stdout);
+      this.handleCodexLine(state, stdout);
+    }
+
+    const stderr = state.stderrBuffer.trim();
+    state.stderrBuffer = "";
+    if (stderr) {
+      this.storeRawLine(state, `[stderr] ${stderr}`);
+      if (this.shouldShowCodexStderrLine(stderr)) {
+        this.pushTranscript(state, {
+          ...eventBase(state.agent.id, state.agent.currentModel),
+          kind: "system",
+          text: stderr
+        });
+      }
+    }
   }
 
   private handleCodexLine(state: AgentProcessState, line: string): void {
@@ -890,6 +913,18 @@ export class AgentRuntimeManager {
         this.finishAssistantStream(state, false);
         state.activeTurn = false;
         this.setStatus(state, "idle");
+        return;
+      }
+      if (type === "turn.failed" || type === "error") {
+        const message = stringifyUnknown(payload.error || payload);
+        this.pushTranscript(state, {
+          ...eventBase(state.agent.id, state.agent.currentModel),
+          kind: "system",
+          text: message
+        });
+        state.activeTurn = false;
+        this.finishAssistantStream(state, false);
+        this.setStatus(state, "error", message);
         return;
       }
       if (type === "thread.started") {
