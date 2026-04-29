@@ -408,6 +408,34 @@ function hasStreamingAssistantText(transcript: TranscriptEvent[]) {
   return transcript.some((event) => event.kind === "assistant_text" && event.streaming);
 }
 
+function executingPlanPhase(transcript: TranscriptEvent[]) {
+  let planIndex = -1;
+  for (let index = transcript.length - 1; index >= 0; index -= 1) {
+    const event = transcript[index];
+    if (event.kind === "plan" && event.answered && event.decision === "approve") {
+      planIndex = index;
+      break;
+    }
+  }
+  if (planIndex < 0) return undefined;
+  let phase = 1;
+  for (const event of transcript.slice(planIndex + 1)) {
+    const text =
+      event.kind === "assistant_text"
+        ? event.text
+        : event.kind === "tool_use"
+          ? `${event.name}\n${compactToolText(event.input, 1200)}`
+          : event.kind === "tool_result"
+            ? compactToolText(event.output, 1200)
+            : "";
+    for (const match of text.matchAll(/\bphase\s+(\d{1,2})\b/gi)) {
+      const parsed = Number(match[1]);
+      if (Number.isFinite(parsed) && parsed > 0) phase = parsed;
+    }
+  }
+  return `Executing Phase ${phase}`;
+}
+
 function latestUserMessage(transcript: TranscriptEvent[]) {
   for (let index = transcript.length - 1; index >= 0; index -= 1) {
     const event = transcript[index];
@@ -430,16 +458,17 @@ function scrollToLatestUserMessage(root: HTMLDivElement | null) {
   root?.querySelector<HTMLElement>('[data-latest-user-message="true"]')?.scrollIntoView({ block: "center", behavior: "smooth" });
 }
 
-function AgentActivityIndicator({ agent, compact = false }: { agent: RunningAgent; compact?: boolean }) {
+function AgentActivityIndicator({ agent, compact = false, phaseLabel }: { agent: RunningAgent; compact?: boolean; phaseLabel?: string }) {
   return (
     <div className="flex">
       <div
         className={cn(
-          "inline-flex min-w-0 items-center rounded-md border border-border bg-background/70 px-3 py-2",
+          "inline-flex min-w-0 flex-col items-start gap-1 rounded-md border border-border bg-background/70 px-3 py-2",
           compact ? "text-xs" : "text-sm"
         )}
         style={{ borderLeftColor: agentAccentColor(agent.color), borderLeftWidth: 4 }}
       >
+        {phaseLabel && <span className="text-[11px] font-medium uppercase tracking-normal text-muted-foreground">{phaseLabel}</span>}
         <ThinkingText startedAt={agent.turnStartedAt} usage={agent.lastTokenUsage} />
       </div>
     </div>
@@ -5913,6 +5942,7 @@ function AgentTile({
   const canType = agentHasProcess(agent);
   const canAttach = !agent.remoteControl;
   const showActivityIndicator = isBusy && agent.status !== "awaiting-input" && !hasStreamingAssistantText(transcript);
+  const phaseLabel = isBusy ? executingPlanPhase(transcript) : undefined;
   const pinnedMessage = latestUserMessage(transcript);
   const pinLastSentMessage = settings.pinLastSentMessage;
   const rawSlashSuggestions = useMemo(
@@ -6380,6 +6410,7 @@ function AgentTile({
                             key={item.kind === "tool_pair" ? item.event.id : item.event.id}
                             item={item}
                             agent={agent}
+                            phaseLabel={phaseLabel}
                             latestUserMessageId={pinnedMessage?.id}
                           />
                         ))}
@@ -6390,7 +6421,7 @@ function AgentTile({
                   <RawStreamView agent={agent} transcript={transcript} compact />
                 ) : transcript.length === 0 ? (
                   showActivityIndicator ? (
-                    <AgentActivityIndicator agent={agent} compact />
+                    <AgentActivityIndicator agent={agent} compact phaseLabel={phaseLabel} />
                   ) : (
                     <p className="rounded-md border border-dashed border-border px-3 py-10 text-center text-sm text-muted-foreground">
                       No transcript yet.
@@ -6403,10 +6434,11 @@ function AgentTile({
                         key={item.kind === "tool_pair" ? item.event.id : item.event.id}
                         item={item}
                         agent={agent}
+                        phaseLabel={phaseLabel}
                         latestUserMessageId={pinnedMessage?.id}
                       />
                     ))}
-                    {showActivityIndicator && <AgentActivityIndicator agent={agent} compact />}
+                    {showActivityIndicator && <AgentActivityIndicator agent={agent} compact phaseLabel={phaseLabel} />}
                   </div>
                 )}
               </div>
@@ -6560,10 +6592,12 @@ function AgentTile({
 function TranscriptPreview({
   item,
   agent,
+  phaseLabel,
   latestUserMessageId
 }: {
   item: ToolTranscriptItem;
   agent: RunningAgent;
+  phaseLabel?: string;
   latestUserMessageId?: string;
 }) {
   if (item.kind === "tool_pair") {
@@ -6623,7 +6657,8 @@ function TranscriptPreview({
           </span>
         )}
         {event.kind === "assistant_text" && event.streaming && (
-          <span className="mt-2 block">
+          <span className="mt-2 grid gap-1">
+            {phaseLabel && <span className="text-[11px] font-medium uppercase tracking-normal text-muted-foreground">{phaseLabel}</span>}
             <ThinkingText prefix="Streaming" startedAt={agent.turnStartedAt} usage={agent.lastTokenUsage} />
           </span>
         )}
@@ -7395,6 +7430,7 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
   const canType = agentHasProcess(agent);
   const canAttach = !agent.remoteControl;
   const showActivityIndicator = isBusy && !hasStreamingAssistantText(transcript);
+  const phaseLabel = isBusy ? executingPlanPhase(transcript) : undefined;
   const pinnedMessage = latestUserMessage(transcript);
   const pinLastSentMessage = settings.pinLastSentMessage;
   const rawSlashSuggestions = useMemo(
@@ -7706,7 +7742,7 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
                 <RawStreamView agent={agent} transcript={transcript} />
               ) : transcript.length === 0 ? (
                 showActivityIndicator ? (
-                  <AgentActivityIndicator agent={agent} />
+                  <AgentActivityIndicator agent={agent} phaseLabel={phaseLabel} />
                 ) : (
                   <p className="rounded-md border border-dashed border-border px-3 py-12 text-center text-sm text-muted-foreground">
                     No transcript yet.
@@ -7719,11 +7755,12 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
                       key={item.kind === "tool_pair" ? item.event.id : item.event.id}
                       item={item}
                       agent={agent}
+                      phaseLabel={phaseLabel}
                       query={searchQuery}
                       latestUserMessageId={pinnedMessage?.id}
                     />
                   ))}
-                  {showActivityIndicator && <AgentActivityIndicator agent={agent} />}
+                  {showActivityIndicator && <AgentActivityIndicator agent={agent} phaseLabel={phaseLabel} />}
                 </>
               )}
             </div>
@@ -7991,11 +8028,13 @@ function SendToMenu({
 function TranscriptItem({
   item,
   agent,
+  phaseLabel,
   query,
   latestUserMessageId
 }: {
   item: ToolTranscriptItem;
   agent: RunningAgent;
+  phaseLabel?: string;
   query: string;
   latestUserMessageId?: string;
 }) {
@@ -8054,7 +8093,8 @@ function TranscriptItem({
         )}
         <CollapsibleText text={event.text} query={query} inlineToggle={showPopout} />
         {event.kind === "assistant_text" && event.streaming && (
-          <span className="mt-2 block">
+          <span className="mt-2 grid gap-1">
+            {phaseLabel && <span className="text-[11px] font-medium uppercase tracking-normal text-muted-foreground">{phaseLabel}</span>}
             <ThinkingText prefix="Streaming" startedAt={agent.turnStartedAt} usage={agent.lastTokenUsage} />
           </span>
         )}
