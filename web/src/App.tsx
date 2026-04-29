@@ -645,7 +645,15 @@ function LastActivityText({
   );
 }
 
-function StatusPill({ status, onResume }: { status: RunningAgent["status"]; onResume?: () => void }) {
+function StatusPill({
+  status,
+  onResume,
+  onRestart
+}: {
+  status: RunningAgent["status"];
+  onResume?: () => void;
+  onRestart?: () => void;
+}) {
   const label =
     status === "running"
       ? "Active"
@@ -687,25 +695,36 @@ function StatusPill({ status, onResume }: { status: RunningAgent["status"]; onRe
                 ? "border-purple-500/50 bg-purple-500/15 text-purple-700 dark:border-purple-400/40 dark:text-purple-200"
                 : "border-teal-500/50 bg-teal-500/15 text-teal-700 dark:border-teal-400/40 dark:text-teal-200";
   const canResume = status === "paused" && Boolean(onResume);
+  const canRestart = status === "error" && Boolean(onRestart);
+  const interactive = canResume || canRestart;
+  const action = canResume ? onResume : canRestart ? onRestart : undefined;
+  const title = canResume ? "Resume chat" : canRestart ? "Restart chat" : undefined;
   return (
     <Badge
-      className={cn("capitalize", className, canResume && "cursor-pointer hover:bg-purple-500/25")}
-      role={canResume ? "button" : undefined}
-      tabIndex={canResume ? 0 : undefined}
-      title={canResume ? "Resume agent" : undefined}
+      className={cn(
+        "inline-flex items-center gap-1 capitalize",
+        className,
+        canResume && "cursor-pointer hover:bg-purple-500/25",
+        canRestart && "cursor-pointer hover:bg-red-500/25"
+      )}
+      role={interactive ? "button" : undefined}
+      tabIndex={interactive ? 0 : undefined}
+      title={title}
       onClick={(event) => {
-        if (!canResume) return;
+        if (!interactive) return;
         event.preventDefault();
         event.stopPropagation();
-        onResume?.();
+        action?.();
       }}
       onKeyDown={(event) => {
-        if (!canResume || (event.key !== "Enter" && event.key !== " ")) return;
+        if (!interactive || (event.key !== "Enter" && event.key !== " ")) return;
         event.preventDefault();
         event.stopPropagation();
-        onResume?.();
+        action?.();
       }}
     >
+      {canResume && <Play className="h-3 w-3" />}
+      {canRestart && <RefreshCw className="h-3 w-3" />}
       {label}
     </Badge>
   );
@@ -4117,7 +4136,11 @@ function Sidebar({ topSlot }: { topSlot?: ReactNode }) {
                     </span>
                   </span>
                   <span className="flex shrink-0 flex-col items-end gap-1">
-                    <StatusPill status={agent.status} onResume={() => sendCommand({ type: "resume", id: agent.id })} />
+                    <StatusPill
+                      status={agent.status}
+                      onResume={() => sendCommand({ type: "resume", id: agent.id })}
+                      onRestart={() => sendCommand({ type: "restart", id: agent.id })}
+                    />
                     <LastActivityText agent={agent} compact timeOnly />
                   </span>
                 </button>
@@ -6857,7 +6880,11 @@ function AgentTile({
         </div>
         <span className="flex shrink-0 items-center gap-2">
           <LastActivityText agent={agent} compact timeOnly />
-          <StatusPill status={agent.status} onResume={() => sendCommand({ type: "resume", id: agent.id })} />
+          <StatusPill
+            status={agent.status}
+            onResume={() => sendCommand({ type: "resume", id: agent.id })}
+            onRestart={() => sendCommand({ type: "restart", id: agent.id })}
+          />
         </span>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -7941,7 +7968,11 @@ function AgentPanelHeader({
       )}
       <span className="flex shrink-0 items-center gap-2">
         <LastActivityText agent={agent} compact timeOnly />
-        <StatusPill status={agent.status} onResume={() => sendCommand({ type: "resume", id: agent.id })} />
+        <StatusPill
+          status={agent.status}
+          onResume={() => sendCommand({ type: "resume", id: agent.id })}
+          onRestart={() => sendCommand({ type: "restart", id: agent.id })}
+        />
       </span>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>

@@ -634,6 +634,10 @@ export type WsClientCommand =
       id: string;
     }
   | {
+      type: "restart";
+      id: string;
+    }
+  | {
       type: "terminalStart";
       projectId?: string;
       command?: string;

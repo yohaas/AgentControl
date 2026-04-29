@@ -400,6 +400,42 @@ export class AgentRuntimeManager {
     this.reconnectStandard(state, "Resuming Claude session...");
   }
 
+  restart(id: string): void {
+    const state = this.requiredState(id);
+    if (state.agent.remoteControl) throw new Error("Remote Control agents cannot restart from the dashboard.");
+
+    this.denyPendingPermissions(state);
+    state.apiAbort?.abort();
+    state.apiAbort = undefined;
+    state.activeTurn = false;
+    state.interrupting = false;
+    state.exiting = false;
+    this.finishAssistantStream(state, false);
+
+    if (state.agent.provider === "openai" || state.agent.provider === "codex" || this.isClaudeApi(state)) {
+      if (state.child && !state.child.killed) this.stopProcessTree(state);
+      state.child = undefined;
+      state.agent.pid = undefined;
+      if (state.agent.provider === "openai" && !process.env.OPENAI_API_KEY) {
+        this.setStatus(state, "error", "OPENAI_API_KEY is not set.");
+      } else if (this.isClaudeApi(state) && !process.env.ANTHROPIC_API_KEY) {
+        this.setStatus(state, "error", "ANTHROPIC_API_KEY is not set.");
+      } else {
+        this.setStatus(state, "idle");
+      }
+      return;
+    }
+
+    if (state.child && !state.child.killed) {
+      state.restartConfig = true;
+      this.setStatus(state, "starting", "Restarting chat...");
+      this.stopProcessTree(state);
+      return;
+    }
+
+    this.reconnectStandard(state, "Restarting chat...");
+  }
+
   userMessage(id: string, text: string, sourceAgent?: TranscriptEvent["sourceAgent"], attachments: MessageAttachment[] = []): void {
     const state = this.requiredState(id);
     if (state.agent.remoteControl) {
