@@ -4,7 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-04-29
 
-- [1ac2f22](https://github.com/yohaas/AgentControl/commit/1ac2f22) Allow full-height tile setting
+- [027639e](https://github.com/yohaas/AgentControl/commit/027639e) Allow full-height tile setting
 - [5e18fe5](https://github.com/yohaas/AgentControl/commit/5e18fe5) Use provider-specific thinking phrases
 - [ed550f7](https://github.com/yohaas/AgentControl/commit/ed550f7) Refine layout menu controls
 - [358afe7](https://github.com/yohaas/AgentControl/commit/358afe7) Allow Codex tools in edit modes
