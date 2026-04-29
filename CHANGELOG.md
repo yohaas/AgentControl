@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-04-29
 
+- [5e06aea](https://github.com/yohaas/AgentControl/commit/5e06aea) Minimize pinned messages to one line
 - [d1adfe5](https://github.com/yohaas/AgentControl/commit/d1adfe5) Clamp long pinned messages
 - [282bf92](https://github.com/yohaas/AgentControl/commit/282bf92) Scope shell permission allow rules
 - [a52286d](https://github.com/yohaas/AgentControl/commit/a52286d) Show executing plan phase while thinking
