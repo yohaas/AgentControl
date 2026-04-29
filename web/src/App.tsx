@@ -24,6 +24,7 @@ import {
   Brain,
   Check,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   ChevronUp,
   Clipboard,
@@ -2317,7 +2318,15 @@ function orderedAgentsForTiles(agents: RunningAgent[], tileOrder: string[]) {
   ];
 }
 
-function Header() {
+function Header({
+  docked = false,
+  onDock,
+  onUndock
+}: {
+  docked?: boolean;
+  onDock?: () => void;
+  onUndock?: () => void;
+}) {
   const projects = useAppStore((state) => state.projects);
   const selectedProjectId = useAppStore((state) => state.selectedProjectId);
   const setSelectedProject = useAppStore((state) => state.setSelectedProject);
@@ -2331,6 +2340,8 @@ function Header() {
   const wsConnected = useAppStore((state) => state.wsConnected);
   const setProjects = useAppStore((state) => state.setProjects);
   const addError = useAppStore((state) => state.addError);
+  const settings = useAppStore((state) => state.settings);
+  const sidebarCollapsed = useAppStore((state) => state.sidebarCollapsed);
   const [devCommand, setDevCommand] = useState("npm run dev");
   const [addProjectOpen, setAddProjectOpen] = useState(false);
   const [connectionMenuOpen, setConnectionMenuOpen] = useState(false);
@@ -2466,8 +2477,35 @@ function Header() {
     }
   }
 
+  if (docked) {
+    return (
+      <header
+        className={cn(
+          "flex h-14 shrink-0 items-center border-b border-r border-border bg-background",
+          sidebarCollapsed ? "justify-center px-2" : "gap-2 px-3"
+        )}
+      >
+        {!sidebarCollapsed && (
+          <>
+            <Bot className="h-5 w-5 shrink-0 text-primary" />
+            <h1 className="min-w-0 flex-1 truncate text-base font-semibold">Agent Control</h1>
+          </>
+        )}
+        <button
+          type="button"
+          className="grid h-8 w-8 shrink-0 place-items-center rounded-md border border-border bg-background text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          onClick={onUndock}
+          title="Expand top bar"
+          aria-label="Expand top bar"
+        >
+          <ChevronRight className="h-4 w-4" />
+        </button>
+      </header>
+    );
+  }
+
   return (
-    <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border px-4">
+    <header className="relative flex h-14 shrink-0 items-center gap-3 border-b border-border px-4">
       <div className="flex min-w-0 items-center gap-2">
         <Bot className="h-5 w-5 text-primary" />
         <h1 className="truncate text-base font-semibold">Agent Control</h1>
@@ -2517,6 +2555,16 @@ function Header() {
           </span>
         )}
       </div>
+      <button
+        type="button"
+        className="absolute top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-md border border-border bg-background text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        style={{ left: Math.max(16, (sidebarCollapsed ? 56 : settings.sidebarWidth || 280) - 40) }}
+        onClick={onDock}
+        title="Dock top bar to left nav"
+        aria-label="Dock top bar to left nav"
+      >
+        <ChevronLeft className="h-4 w-4" />
+      </button>
       <div className="ml-auto flex items-center gap-2">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -9534,7 +9582,13 @@ export function App() {
   const [serverRetryCount, setServerRetryCount] = useState(0);
   const terminalSideDocked = terminalOpen && (terminalDock === "left" || terminalDock === "right");
   const terminalBottomDocked = terminalOpen && terminalDock === "bottom";
+  const [topBarDocked, setTopBarDockedState] = useState(() => window.localStorage.getItem("agent-control-top-bar-docked") === "true");
   useThemeMode(themeMode);
+
+  function setTopBarDocked(value: boolean) {
+    setTopBarDockedState(value);
+    window.localStorage.setItem("agent-control-top-bar-docked", String(value));
+  }
 
   const updatePoppedOutTerminalIds = useCallback((updater: (ids: Set<string>) => Set<string>) => {
     setPoppedOutTerminalIds((current) => {
@@ -9665,18 +9719,43 @@ export function App() {
 
   return (
     <div className="flex h-screen min-w-[900px] flex-col overflow-hidden bg-background text-foreground">
-      <Header />
-      <WorktreeTabs />
-      <div className="flex min-h-0 flex-1">
-        {terminalSideDocked && terminalDock === "left" && (
-          <TerminalPanel poppedOutTerminalIds={poppedOutTerminalIds} />
-        )}
-        <Sidebar />
-        <AgentPanel />
-        {terminalSideDocked && terminalDock === "right" && (
-          <TerminalPanel poppedOutTerminalIds={poppedOutTerminalIds} />
-        )}
-      </div>
+      {topBarDocked ? (
+        <div className="flex min-h-0 flex-1">
+          {terminalSideDocked && terminalDock === "left" && (
+            <TerminalPanel poppedOutTerminalIds={poppedOutTerminalIds} />
+          )}
+          <div className="flex min-h-0 shrink-0 flex-col">
+            <Header docked onUndock={() => setTopBarDocked(false)} />
+            <div className="flex min-h-0 flex-1">
+              <Sidebar />
+            </div>
+          </div>
+          <div className="flex min-w-0 flex-1 flex-col">
+            <WorktreeTabs />
+            <div className="flex min-h-0 flex-1">
+              <AgentPanel />
+              {terminalSideDocked && terminalDock === "right" && (
+                <TerminalPanel poppedOutTerminalIds={poppedOutTerminalIds} />
+              )}
+            </div>
+          </div>
+        </div>
+      ) : (
+        <>
+          <Header onDock={() => setTopBarDocked(true)} />
+          <WorktreeTabs />
+          <div className="flex min-h-0 flex-1">
+            {terminalSideDocked && terminalDock === "left" && (
+              <TerminalPanel poppedOutTerminalIds={poppedOutTerminalIds} />
+            )}
+            <Sidebar />
+            <AgentPanel />
+            {terminalSideDocked && terminalDock === "right" && (
+              <TerminalPanel poppedOutTerminalIds={poppedOutTerminalIds} />
+            )}
+          </div>
+        </>
+      )}
       {terminalBottomDocked && <TerminalPanel poppedOutTerminalIds={poppedOutTerminalIds} />}
       {!terminalOpen && <TerminalMinimizedDock poppedOutTerminalIds={poppedOutTerminalIds} />}
       <LaunchDialog />
