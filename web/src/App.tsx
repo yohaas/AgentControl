@@ -88,6 +88,7 @@ import type {
   DirectoryListing,
   GitStatus,
   GitWorktreeList,
+  LaunchRequest,
   MessageAttachment,
   ModelProfile,
   PermissionAllowRule,
@@ -128,7 +129,7 @@ import { getSelectionInRoot, useTextSelection } from "./hooks/use-text-selection
 import { api } from "./lib/api";
 import { cn, downloadText, formatDuration, prettyJson } from "./lib/utils";
 import { connectWebSocket, disconnectWebSocket, sendCommand } from "./lib/ws-client";
-import { useAppStore, type ClaudeRuntime, type MenuDisplayMode, type QueuedMessage, type ThemeMode, type TileScrollingMode } from "./store/app-store";
+import { useAppStore, type ClaudeRuntime, type MenuDisplayMode, type QueuedMessage, type SettingsState, type ThemeMode, type TileScrollingMode } from "./store/app-store";
 
 const DEFAULT_MODEL = "claude-sonnet-4-6";
 const EMPTY_TRANSCRIPT: TranscriptEvent[] = [];
@@ -1556,6 +1557,84 @@ function ExportChatMenu({
         <DropdownMenuItem onClick={() => void exportAgentRawStream(agent, addError)}>Raw Stream</DropdownMenuItem>
       </DropdownMenuSubContent>
     </DropdownMenuSub>
+  );
+}
+
+function duplicateAgentRequest(agent: RunningAgent, settings: SettingsState): LaunchRequest {
+  return {
+    projectId: agent.projectId,
+    defName: agent.defName,
+    displayName: agent.displayName,
+    provider: agent.provider,
+    model: agent.currentModel,
+    remoteControl: false,
+    permissionMode: agent.permissionMode || settings.defaultAgentMode,
+    effort: agent.effort,
+    thinking: agent.thinking,
+    autoApprove: settings.autoApprove
+  };
+}
+
+function AgentActionsMenu({
+  agent,
+  transcripts,
+  viewMode,
+  onToggleViewMode
+}: {
+  agent: RunningAgent;
+  transcripts: TranscriptEvent[];
+  viewMode: TranscriptViewMode;
+  onToggleViewMode: () => void;
+}) {
+  const addError = useAppStore((state) => state.addError);
+  const settings = useAppStore((state) => state.settings);
+  const isBusy = isAgentBusy(agent);
+
+  function duplicateAgent() {
+    sendCommand({ type: "launch", request: duplicateAgentRequest(agent, settings) });
+  }
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon" title="Agent actions">
+          <MoreHorizontal className="h-4 w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        {agent.restorable && (
+          <DropdownMenuItem onClick={() => sendCommand({ type: "resume", id: agent.id })}>
+            <Play className="mr-2 h-4 w-4" />
+            Resume
+          </DropdownMenuItem>
+        )}
+        {isBusy && (
+          <DropdownMenuItem onClick={() => sendCommand({ type: "interrupt", id: agent.id })}>
+            <Square className="mr-2 h-4 w-4" />
+            Stop response
+          </DropdownMenuItem>
+        )}
+        {!agent.remoteControl && (
+          <DropdownMenuItem onClick={onToggleViewMode}>
+            {viewMode === "chat" ? <CodeXml className="mr-2 h-4 w-4" /> : <MessageCircle className="mr-2 h-4 w-4" />}
+            {viewMode === "chat" ? "View Raw Stream" : "View Chat"}
+          </DropdownMenuItem>
+        )}
+        <ExportChatMenu agent={agent} transcripts={transcripts} addError={addError} />
+        <DropdownMenuItem onClick={duplicateAgent}>
+          <Copy className="mr-2 h-4 w-4" />
+          Duplicate
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => sendCommand({ type: "clear", id: agent.id })}>
+          <Trash2 className="mr-2 h-4 w-4" />
+          Clear Chat
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => sendCommand({ type: "kill", id: agent.id })}>
+          <X className="mr-2 h-4 w-4" />
+          Close Chat
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -6605,23 +6684,6 @@ function AgentTile({
   const draftLines = draftLineCount(draft);
   const [composerWrapped, setComposerWrapped] = useState(false);
 
-  function duplicateAgent() {
-    sendCommand({
-      type: "launch",
-      request: {
-        projectId: agent.projectId,
-        defName: agent.defName,
-        displayName: agent.displayName,
-        provider: agent.provider,
-        model: agent.currentModel,
-        remoteControl: false,
-        permissionMode: agent.permissionMode || settings.defaultAgentMode,
-        effort: agent.effort,
-        thinking: agent.thinking,
-        autoApprove: settings.autoApprove
-      }
-    });
-  }
   const hasMultilineDraft = draftLines > 1 || composerWrapped;
   const composerExpanded = hasMultilineDraft && !composerCollapsed;
 
@@ -7024,50 +7086,12 @@ function AgentTile({
             onRestart={() => sendCommand({ type: "restart", id: agent.id })}
           />
         </span>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" title="Agent actions">
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            {agent.restorable && (
-              <DropdownMenuItem onClick={() => sendCommand({ type: "resume", id: agent.id })}>
-                <Play className="mr-2 h-4 w-4" />
-                Resume
-              </DropdownMenuItem>
-            )}
-            {isBusy && (
-              <DropdownMenuItem onClick={() => sendCommand({ type: "interrupt", id: agent.id })}>
-                <Square className="mr-2 h-4 w-4" />
-                Stop response
-              </DropdownMenuItem>
-            )}
-            {!agent.remoteControl && (
-              <DropdownMenuItem onClick={() => setTranscriptViewMode((mode) => (mode === "chat" ? "raw" : "chat"))}>
-                {transcriptViewMode === "chat" ? (
-                  <CodeXml className="mr-2 h-4 w-4" />
-                ) : (
-                  <MessageCircle className="mr-2 h-4 w-4" />
-                )}
-                {transcriptViewMode === "chat" ? "View Raw Stream" : "View Chat"}
-              </DropdownMenuItem>
-            )}
-            <ExportChatMenu agent={agent} transcripts={transcript} addError={addError} />
-            <DropdownMenuItem onClick={duplicateAgent}>
-              <Copy className="mr-2 h-4 w-4" />
-              Duplicate
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => sendCommand({ type: "clear", id: agent.id })}>
-              <Trash2 className="mr-2 h-4 w-4" />
-              Clear Chat
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => sendCommand({ type: "kill", id: agent.id })}>
-              <X className="mr-2 h-4 w-4" />
-              Close Chat
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <AgentActionsMenu
+          agent={agent}
+          transcripts={transcript}
+          viewMode={transcriptViewMode}
+          onToggleViewMode={() => setTranscriptViewMode((mode) => (mode === "chat" ? "raw" : "chat"))}
+        />
         <Button
           variant="ghost"
           size="icon"
@@ -8083,8 +8107,6 @@ function AgentPanelHeader({
 }) {
   const transcripts = useAppStore((state) => state.transcripts[agent.id] || EMPTY_TRANSCRIPT);
   const setSelectedAgent = useAppStore((state) => state.setSelectedAgent);
-  const addError = useAppStore((state) => state.addError);
-  const isBusy = isAgentBusy(agent);
 
   return (
     <div className="flex h-14 shrink-0 items-center gap-3 border-b border-border px-4">
@@ -8099,11 +8121,6 @@ function AgentPanelHeader({
           <ModelMenu agent={agent} showProviderIcon={false} />
         </div>
       </div>
-      {agent.restorable && (
-        <Button variant="outline" onClick={() => sendCommand({ type: "resume", id: agent.id })}>
-          Resume
-        </Button>
-      )}
       <span className="flex shrink-0 items-center gap-2">
         <LastActivityText agent={agent} compact timeOnly />
         <StatusPill
@@ -8112,34 +8129,7 @@ function AgentPanelHeader({
           onRestart={() => sendCommand({ type: "restart", id: agent.id })}
         />
       </span>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon" title="Agent actions">
-            <MoreHorizontal className="h-4 w-4" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          {!agent.remoteControl && (
-            <DropdownMenuItem onClick={onToggleViewMode}>
-              {viewMode === "chat" ? (
-                <CodeXml className="mr-2 h-4 w-4" />
-              ) : (
-                <MessageCircle className="mr-2 h-4 w-4" />
-              )}
-              {viewMode === "chat" ? "View Raw Stream" : "View Chat"}
-            </DropdownMenuItem>
-          )}
-          <ExportChatMenu agent={agent} transcripts={transcripts} addError={addError} />
-          <DropdownMenuItem onClick={() => sendCommand({ type: "clear", id: agent.id })}>Clear Chat</DropdownMenuItem>
-          <DropdownMenuItem onClick={() => sendCommand({ type: "kill", id: agent.id })}>Close Chat</DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-      {isBusy && (
-        <Button variant="outline" onClick={() => sendCommand({ type: "interrupt", id: agent.id })}>
-          <Square className="h-4 w-4" />
-          Stop
-        </Button>
-      )}
+      <AgentActionsMenu agent={agent} transcripts={transcripts} viewMode={viewMode} onToggleViewMode={onToggleViewMode} />
       <Button variant="ghost" size="icon" onClick={() => setSelectedAgent(undefined)} title="Show tiles">
         <Minimize2 className="h-4 w-4" />
       </Button>
