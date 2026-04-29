@@ -700,6 +700,9 @@ export class AgentRuntimeManager {
       answers: normalizedAnswers,
       timestamp: now()
     });
+    if (event.toolUseId) {
+      this.answerQuestionToolUse(state, event.toolUseId);
+    }
     this.userMessage(id, this.formatQuestionAnswers(event.questions, normalizedAnswers));
   }
 
@@ -1692,6 +1695,11 @@ export class AgentRuntimeManager {
 
     const permissionRequest = this.extractPermissionToolRequest(payload);
     if (permissionRequest) {
+      const questionRequest = this.extractAskUserQuestionRequest(permissionRequest.name, permissionRequest.input);
+      if (questionRequest) {
+        this.pushQuestionRequest(state, questionRequest, permissionRequest.toolUseId);
+        return;
+      }
       this.markToolAwaitingPermission(state, permissionRequest);
       return;
     }
@@ -1722,6 +1730,12 @@ export class AgentRuntimeManager {
     if (type === "tool_use") {
       state.activeTurn = true;
       const toolUseId = this.trimmedStringField(value.id) || this.trimmedStringField(value.tool_use_id) || this.trimmedStringField(value.toolUseId) || transcriptId();
+      const toolName = this.trimmedStringField(value.name) || "tool";
+      const questionRequest = this.extractAskUserQuestionRequest(toolName, value.input ?? value);
+      if (questionRequest) {
+        this.pushQuestionRequest(state, questionRequest, toolUseId);
+        return;
+      }
       if (this.isExitPlanModeToolUse(value)) {
         this.pushPlanRequest(state, this.extractPlanText(value));
         return;
@@ -1731,7 +1745,7 @@ export class AgentRuntimeManager {
         ...eventBase(state.agent.id, state.agent.currentModel),
         kind: "tool_use",
         toolUseId,
-        name: this.trimmedStringField(value.name) || "tool",
+        name: toolName,
         input: value.input ?? {},
         awaitingPermission
       });
@@ -1750,6 +1764,29 @@ export class AgentRuntimeManager {
         isError: Boolean(value.is_error || value.isError)
       });
       this.setStatus(state, "running");
+    }
+  }
+
+  private isAskUserQuestionToolName(name: string): boolean {
+    return /^(askuserquestion|ask_user_question)$/i.test(name.trim());
+  }
+
+  private extractAskUserQuestionRequest(name: string, input: unknown): AgentQuestion[] | undefined {
+    if (!this.isAskUserQuestionToolName(name) || !input || typeof input !== "object") return undefined;
+    return this.extractQuestionRequest(input as Record<string, unknown>);
+  }
+
+  private answerQuestionToolUse(state: AgentProcessState, toolUseId: string): void {
+    this.resolveToolPermission(state, toolUseId);
+    const pending = state.pendingPermissions?.get(toolUseId);
+    if (pending) {
+      clearTimeout(pending.timeout);
+      state.pendingPermissions?.delete(toolUseId);
+      pending.resolve("deny");
+      return;
+    }
+    if (state.child && !state.child.killed && state.child.stdin.writable) {
+      state.child.stdin.write(`${JSON.stringify({ type: "control", subtype: "tool_permission", tool_use_id: toolUseId, decision: "deny" })}\n`);
     }
   }
 
@@ -1821,12 +1858,25 @@ export class AgentRuntimeManager {
     return questions.length ? questions : undefined;
   }
 
-  private pushQuestionRequest(state: AgentProcessState, questions: AgentQuestion[]): void {
+  private pushQuestionRequest(state: AgentProcessState, questions: AgentQuestion[], toolUseId?: string): void {
     state.activeTurn = false;
     this.finishAssistantStream(state, false);
+    const existing = toolUseId
+      ? state.transcript.find((event) => event.kind === "questions" && event.toolUseId === toolUseId)
+      : undefined;
+    if (existing?.kind === "questions") {
+      this.updateTranscript(state, {
+        ...existing,
+        questions,
+        timestamp: now()
+      });
+      this.setStatus(state, "awaiting-input");
+      return;
+    }
     this.pushTranscript(state, {
       ...eventBase(state.agent.id, state.agent.currentModel),
       kind: "questions",
+      ...(toolUseId ? { toolUseId } : {}),
       questions
     });
     this.setStatus(state, "awaiting-input");

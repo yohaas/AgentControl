@@ -232,6 +232,7 @@ export type TranscriptEvent =
     })
   | (TranscriptBase & {
       kind: "questions";
+      toolUseId?: string;
       questions: AgentQuestion[];
       answered?: boolean;
       answers?: AgentQuestionAnswer[];
