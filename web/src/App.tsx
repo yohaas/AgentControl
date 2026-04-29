@@ -3031,6 +3031,7 @@ function GitStatusMenu({ projectId }: { projectId?: string }) {
     setPushing(true);
     try {
       setStatus(await api.gitPush(projectId));
+      setOpen(false);
     } catch (error) {
       if (isGitCredentialPromptError(error)) {
         setOpen(false);
