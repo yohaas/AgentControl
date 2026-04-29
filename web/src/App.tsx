@@ -1315,7 +1315,7 @@ function QueuedMessageList({
                     size="icon"
                     className="h-7 w-7"
                     aria-label="Steer"
-                    title="Steer"
+                    title="Steer this queued message into the active response"
                     onClick={() => {
                       sendCommand({ type: "injectMessage", id: agentId, text: message.text, attachments: message.attachments });
                       removeQueuedMessage(agentId, message.id);
