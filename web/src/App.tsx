@@ -9180,6 +9180,7 @@ function ToolCard({
   const resultIsError = Boolean(result?.isError || (!isUse && event.isError));
   const activity = isUse ? toolActivityText(event, result) : toolSummary(event) || "Tool finished";
   const statusText = awaitingPermission ? "permission required" : resultIsError ? "error" : "";
+  const hasDetail = Boolean(detail.trim());
   const permissionRule =
     isUse && event.name ? createPermissionAllowRule(agent, event.name, event.input) : undefined;
   const permissionRuleExists = Boolean(
@@ -9223,7 +9224,10 @@ function ToolCard({
     >
       <button
         className={cn("flex w-full min-w-0 max-w-full items-center justify-between gap-2 overflow-hidden text-left", compact ? "px-2 py-2" : "px-3 py-2")}
-        onClick={() => (awaitingPermission || resultIsError ? setOpen((value) => !value) : undefined)}
+        onClick={() => {
+          if (hasDetail) setOpen((value) => !value);
+        }}
+        title={hasDetail ? (open ? "Collapse details" : "Expand details") : undefined}
       >
         <span className="flex min-w-0 flex-1 items-center gap-2">
           <span className="min-w-0 flex-1 truncate">{activity}</span>
@@ -9239,11 +9243,10 @@ function ToolCard({
             </Badge>
           )}
         </span>
-        {(awaitingPermission || resultIsError) && (
-          <Badge className="shrink-0 gap-1">
-            {open ? "Hide" : "Show"}
-            <ChevronDown className={cn("h-3 w-3 transition-transform", open && "rotate-180")} />
-          </Badge>
+        {hasDetail && (
+          <span className="grid h-5 w-5 shrink-0 place-items-center rounded-sm text-muted-foreground hover:bg-accent hover:text-foreground">
+            <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", open && "rotate-180")} />
+          </span>
         )}
       </button>
       {awaitingPermission && (
