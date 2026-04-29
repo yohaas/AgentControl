@@ -6,6 +6,7 @@ import type {
   Capabilities,
   ModelProfile,
   MessageAttachment,
+  PermissionAllowRule,
   Project,
   RunningAgent,
   TerminalSession,
@@ -35,6 +36,7 @@ export interface SettingsState {
   clearAnthropicApiKey?: boolean;
   clearOpenaiApiKey?: boolean;
   autoApprove: AutoApproveMode;
+  permissionAllowRules?: PermissionAllowRule[];
   defaultAgentMode: AgentPermissionMode;
   tileHeight: number;
   tileColumns: number;
@@ -156,6 +158,7 @@ const defaultSettings: SettingsState = {
     { id: "gpt-5-codex", provider: "codex", supportedEfforts: ["low", "medium", "high", "xhigh"] }
   ],
   autoApprove: "off",
+  permissionAllowRules: [],
   defaultAgentMode: "acceptEdits",
   tileHeight: 460,
   tileColumns: 2,
@@ -189,6 +192,7 @@ function normalizeSettings(settings: SettingsState): SettingsState {
     ...defaultSettings,
     ...settings,
     modelProfiles: Array.isArray(settings.modelProfiles) && settings.modelProfiles.length ? settings.modelProfiles : defaultSettings.modelProfiles,
+    permissionAllowRules: Array.isArray(settings.permissionAllowRules) ? settings.permissionAllowRules : defaultSettings.permissionAllowRules,
     defaultAgentMode,
     tileHeight: clampNumber(settings.tileHeight, defaultSettings.tileHeight, 320, 760),
     tileColumns: clampNumber(settings.tileColumns, defaultSettings.tileColumns, 1, 6),

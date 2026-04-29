@@ -27,6 +27,14 @@ export interface TokenUsage {
   totalTokens?: number;
 }
 
+export interface PermissionAllowRule {
+  id: string;
+  provider?: AgentProvider;
+  model: string;
+  toolName: string;
+  createdAt: string;
+}
+
 export interface AgentQuestionOption {
   label: string;
   description?: string;

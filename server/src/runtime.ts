@@ -21,6 +21,7 @@ import type {
   LaunchRequest,
   MessageAttachment,
   Project,
+  PermissionAllowRule,
   RemoteControlState,
   RunningAgent,
   SendToCommand,
@@ -38,6 +39,7 @@ import { isWslProject, windowsPathToWslPath, wslCommandArgs, wslProjectPath } fr
 
 type Broadcast = (event: WsServerEvent) => void;
 type ProjectProvider = () => Project[];
+type PermissionAllowRuleProvider = () => PermissionAllowRule[];
 type ClaudeRuntime = "cli" | "api";
 
 interface AgentProcessState {
@@ -192,7 +194,8 @@ export class AgentRuntimeManager {
     private readonly getProjects: ProjectProvider,
     private readonly broadcast: Broadcast,
     private readonly getCapabilities: () => Capabilities,
-    private readonly getClaudeRuntime: () => ClaudeRuntime = () => "cli"
+    private readonly getClaudeRuntime: () => ClaudeRuntime = () => "cli",
+    private readonly getPermissionAllowRules: PermissionAllowRuleProvider = () => []
   ) {
     this.cleanupStalePermissionMcpConfigs();
     this.persist = createStateWriter(() => this.persistedState());
@@ -1175,6 +1178,13 @@ export class AgentRuntimeManager {
         state.pendingPlans ??= new Map();
         state.pendingPlans.set(toolUseId, { toolUseId, resolve, timeout });
       });
+    }
+
+    if (this.isPermissionAutoAllowed(state, request.toolName || "tool")) {
+      return {
+        behavior: "allow",
+        updatedInput: request.input ?? {}
+      };
     }
 
     this.markToolAwaitingPermission(state, {
@@ -2204,6 +2214,19 @@ export class AgentRuntimeManager {
       updatedAt: state.agent.updatedAt
     });
     this.persist();
+  }
+
+  private isPermissionAutoAllowed(state: AgentProcessState, toolName: string): boolean {
+    const normalizedToolName = toolName.trim().toLowerCase();
+    const normalizedModel = state.agent.currentModel.trim().toLowerCase();
+    const normalizedProvider = (state.agent.provider || "claude").toLowerCase();
+    if (!normalizedToolName || !normalizedModel) return false;
+    return this.getPermissionAllowRules().some((rule) => {
+      const ruleToolName = rule.toolName?.trim().toLowerCase();
+      const ruleModel = rule.model?.trim().toLowerCase();
+      const ruleProvider = rule.provider?.trim().toLowerCase();
+      return ruleToolName === normalizedToolName && ruleModel === normalizedModel && (!ruleProvider || ruleProvider === normalizedProvider);
+    });
   }
 
   private extractTextDelta(payload: Record<string, unknown>): string | undefined {

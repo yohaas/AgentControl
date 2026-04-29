@@ -2,7 +2,7 @@ import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import type { AgentPermissionMode, AutoApproveMode, ModelProfile } from "@agent-control/shared";
+import type { AgentPermissionMode, AutoApproveMode, ModelProfile, PermissionAllowRule } from "@agent-control/shared";
 
 export const DEFAULT_MODELS = [
   "claude-opus-4-7",
@@ -46,6 +46,7 @@ export interface DashboardConfig {
   openaiAgentDir?: string;
   builtInAgentDir?: string;
   autoApprove?: AutoApproveMode;
+  permissionAllowRules?: PermissionAllowRule[];
   defaultAgentMode?: AgentPermissionMode;
   tileHeight?: number;
   tileColumns?: number;

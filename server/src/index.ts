@@ -880,7 +880,8 @@ const runtime = new AgentRuntimeManager(
   () => projects,
   broadcast,
   () => capabilities,
-  () => resolveClaudeRuntime(config)
+  () => resolveClaudeRuntime(config),
+  () => (Array.isArray(config.permissionAllowRules) ? config.permissionAllowRules : [])
 );
 await runtime.loadPersistedState();
 const terminals = new TerminalManager(() => projects, broadcast);
@@ -1448,6 +1449,7 @@ app.get("/api/settings", (_request, response) => {
     anthropicKeySource: process.env.ANTHROPIC_API_KEY ? (secrets.anthropicApiKey === process.env.ANTHROPIC_API_KEY ? "local" : "env") : "missing",
     openaiKeySource: process.env.OPENAI_API_KEY ? (secrets.openaiApiKey === process.env.OPENAI_API_KEY ? "local" : "env") : "missing",
     autoApprove: config.autoApprove || "off",
+    permissionAllowRules: Array.isArray(config.permissionAllowRules) ? config.permissionAllowRules : [],
     defaultAgentMode: resolveDefaultAgentMode(config),
     tileHeight: resolveTileHeight(config),
     tileColumns: resolveTileColumns(config),
@@ -1533,6 +1535,7 @@ app.put("/api/settings", async (request, response) => {
     openaiAgentDir: typeof body.openaiAgentDir === "string" ? body.openaiAgentDir.trim() : config.openaiAgentDir,
     builtInAgentDir: typeof body.builtInAgentDir === "string" ? body.builtInAgentDir.trim() : config.builtInAgentDir,
     autoApprove: body.autoApprove || config.autoApprove,
+    permissionAllowRules: Array.isArray(body.permissionAllowRules) ? body.permissionAllowRules : config.permissionAllowRules,
     defaultAgentMode: resolveDefaultAgentMode(body.defaultAgentMode ? body : config),
     tileHeight: typeof body.tileHeight === "number" ? resolveTileHeight(body) : resolveTileHeight(config),
     tileColumns: typeof body.tileColumns === "number" ? resolveTileColumns(body) : resolveTileColumns(config),
@@ -1576,6 +1579,7 @@ app.put("/api/settings", async (request, response) => {
     anthropicKeySource: process.env.ANTHROPIC_API_KEY ? (secrets.anthropicApiKey === process.env.ANTHROPIC_API_KEY ? "local" : "env") : "missing",
     openaiKeySource: process.env.OPENAI_API_KEY ? (secrets.openaiApiKey === process.env.OPENAI_API_KEY ? "local" : "env") : "missing",
     autoApprove: config.autoApprove || "off",
+    permissionAllowRules: Array.isArray(config.permissionAllowRules) ? config.permissionAllowRules : [],
     defaultAgentMode: resolveDefaultAgentMode(config),
     tileHeight: resolveTileHeight(config),
     tileColumns: resolveTileColumns(config),

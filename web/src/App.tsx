@@ -81,6 +81,7 @@ import type {
   GitWorktreeList,
   MessageAttachment,
   ModelProfile,
+  PermissionAllowRule,
   Project,
   ProjectFileEntry,
   RunningAgent,
@@ -1750,6 +1751,21 @@ function siblingWorktreePath(projectPath: string, branchName: string) {
 
 function isDevTerminal(session: TerminalSession) {
   return session.title?.startsWith("Dev: ") || session.title === "npm run dev";
+}
+
+function permissionAllowRuleKey(rule: Pick<PermissionAllowRule, "provider" | "model" | "toolName">) {
+  return `${rule.provider || ""}:${rule.model.trim().toLowerCase()}:${rule.toolName.trim().toLowerCase()}`;
+}
+
+function createPermissionAllowRule(agent: RunningAgent, toolName: string): PermissionAllowRule {
+  const cryptoId = typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return {
+    id: cryptoId,
+    provider: agent.provider || "claude",
+    model: agent.currentModel,
+    toolName,
+    createdAt: new Date().toISOString()
+  };
 }
 
 function stripAnsi(value: string) {
@@ -4905,6 +4921,7 @@ function SettingsDialog() {
   const [tileHeight, setTileHeight] = useState(settings.tileHeight);
   const [tileColumns, setTileColumns] = useState(settings.tileColumns);
   const [pinLastSentMessage, setPinLastSentMessage] = useState(settings.pinLastSentMessage);
+  const [permissionAllowRules, setPermissionAllowRules] = useState<PermissionAllowRule[]>(settings.permissionAllowRules || []);
   const [builtInEditor, setBuiltInEditor] = useState<{ open: boolean; agent?: AgentDef; originalName?: string }>({ open: false });
 
   useEffect(() => {
@@ -4933,6 +4950,7 @@ function SettingsDialog() {
     setTileHeight(settings.tileHeight);
     setTileColumns(settings.tileColumns);
     setPinLastSentMessage(settings.pinLastSentMessage);
+    setPermissionAllowRules(settings.permissionAllowRules || []);
   }, [open, settings]);
 
   async function save() {
@@ -4962,7 +4980,8 @@ function SettingsDialog() {
         claudeRuntime,
         tileHeight,
         tileColumns,
-        pinLastSentMessage
+        pinLastSentMessage,
+        permissionAllowRules
       });
       setSettings(next);
       setProjects(await api.refresh());
@@ -5018,7 +5037,8 @@ function SettingsDialog() {
         claudeRuntime,
         tileHeight,
         tileColumns,
-        pinLastSentMessage
+        pinLastSentMessage,
+        permissionAllowRules
       }
     };
     downloadText("agent-control-config.json", JSON.stringify(payload, null, 2), "application/json");
@@ -5050,6 +5070,7 @@ function SettingsDialog() {
       setTileHeight(next.tileHeight);
       setTileColumns(next.tileColumns);
       setPinLastSentMessage(next.pinLastSentMessage);
+      setPermissionAllowRules(next.permissionAllowRules || []);
     } catch (error) {
       addError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -5109,7 +5130,8 @@ function SettingsDialog() {
       claudeRuntime !== (settings.claudeRuntime || "cli") ||
       tileHeight !== settings.tileHeight ||
       tileColumns !== settings.tileColumns ||
-      pinLastSentMessage !== settings.pinLastSentMessage,
+      pinLastSentMessage !== settings.pinLastSentMessage ||
+      permissionAllowRules.map(permissionAllowRuleKey).join("\n") !== (settings.permissionAllowRules || []).map(permissionAllowRuleKey).join("\n"),
     [
       anthropicApiKey,
       autoApprove,
@@ -5129,6 +5151,7 @@ function SettingsDialog() {
       openaiApiKey,
       openaiModelsText,
       pinLastSentMessage,
+      permissionAllowRules,
       projectPaths,
       settings,
       themeMode,
@@ -5491,6 +5514,38 @@ function SettingsDialog() {
                   Always passes --dangerously-skip-permissions when launching Claude agents.
                 </p>
               )}
+              <section className="grid gap-2 rounded-md border border-border p-3">
+                <div>
+                  <h3 className="text-sm font-medium">Always-allowed tools</h3>
+                  <p className="text-xs text-muted-foreground">Rules are matched by provider, model, and tool name.</p>
+                </div>
+                {permissionAllowRules.length === 0 ? (
+                  <p className="rounded-md border border-dashed border-border px-3 py-4 text-center text-sm text-muted-foreground">
+                    No remembered tool approvals.
+                  </p>
+                ) : (
+                  <div className="grid gap-1.5">
+                    {permissionAllowRules.map((rule) => (
+                      <div key={rule.id} className="flex min-w-0 items-center gap-2 rounded-md border border-border bg-background/50 px-2 py-2 text-sm">
+                        <Badge className="shrink-0">{rule.toolName}</Badge>
+                        <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground" title={`${rule.provider || "any"} / ${rule.model}`}>
+                          {rule.provider || "any"} / {rule.model}
+                        </span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                          title="Remove always-allow rule"
+                          onClick={() => setPermissionAllowRules((current) => current.filter((candidate) => candidate.id !== rule.id))}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
               <PluginManagementPanel provider="claude" />
             </>
           )}
@@ -8182,6 +8237,8 @@ function ToolCard({
   compact?: boolean;
 }) {
   const addError = useAppStore((state) => state.addError);
+  const settings = useAppStore((state) => state.settings);
+  const setSettings = useAppStore((state) => state.setSettings);
   const isUse = event.kind === "tool_use";
   const [open, setOpen] = useState((isUse && event.awaitingPermission) || (!isUse && event.isError));
   const detail = result ? toolPairDetail(event, result) : toolDetail(event);
@@ -8191,6 +8248,11 @@ function ToolCard({
   const resultIsError = Boolean(result?.isError || (!isUse && event.isError));
   const activity = isUse ? toolActivityText(event, result) : toolSummary(event) || "Tool finished";
   const statusText = awaitingPermission ? "permission required" : resultIsError ? "error" : "";
+  const permissionRule =
+    isUse && event.name ? createPermissionAllowRule(agent, event.name) : undefined;
+  const permissionRuleExists = Boolean(
+    permissionRule && (settings.permissionAllowRules || []).some((rule) => permissionAllowRuleKey(rule) === permissionAllowRuleKey(permissionRule))
+  );
 
   useEffect(() => {
     if (awaitingPermission || resultIsError) setOpen(true);
@@ -8201,6 +8263,19 @@ function ToolCard({
     void navigator.clipboard.writeText(text).catch((error: unknown) => {
       addError(error instanceof Error ? error.message : String(error));
     });
+  }
+
+  async function alwaysAllowAndApprove() {
+    if (!permissionRule) return;
+    try {
+      const currentRules = settings.permissionAllowRules || [];
+      const nextRules = permissionRuleExists ? currentRules : [...currentRules, permissionRule];
+      const next = await api.saveSettings({ ...settings, permissionAllowRules: nextRules });
+      setSettings(next);
+      sendCommand({ type: "permission", id: agent.id, toolUseId: event.toolUseId, decision: "approve" });
+    } catch (error) {
+      addError(error instanceof Error ? error.message : String(error));
+    }
   }
 
   return (
@@ -8247,10 +8322,15 @@ function ToolCard({
             {commandText ? `: ${commandText}` : pathText ? ` on ${pathText}` : ""}.
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button size="sm" disabled={!agentHasProcess(agent)} onClick={() => sendCommand({ type: "permission", id: agent.id, toolUseId: event.toolUseId, decision: "approve" })}>
               Approve
             </Button>
+            {permissionRule && (
+              <Button size="sm" variant="outline" disabled={!agentHasProcess(agent)} onClick={() => void alwaysAllowAndApprove()}>
+                {permissionRuleExists ? "Approve with saved rule" : `Always allow ${event.name}`}
+              </Button>
+            )}
             <Button size="sm" variant="outline" disabled={!agentHasProcess(agent)} onClick={() => sendCommand({ type: "permission", id: agent.id, toolUseId: event.toolUseId, decision: "deny" })}>
               Deny
             </Button>
