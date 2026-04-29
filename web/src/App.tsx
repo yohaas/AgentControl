@@ -2416,6 +2416,7 @@ function Header({
   const [addProjectOpen, setAddProjectOpen] = useState(false);
   const [connectionMenuOpen, setConnectionMenuOpen] = useState(false);
   const [supervised, setSupervised] = useState<boolean | undefined>();
+  const [layoutMenuOpen, setLayoutMenuOpen] = useState(false);
   const [layoutHeightDraft, setLayoutHeightDraft] = useState(String(settings.tileHeight));
   const [layoutColumnsDraft, setLayoutColumnsDraft] = useState(String(settings.tileColumns));
   const selectedProject = projects.find((project) => project.id === selectedProjectId);
@@ -2546,8 +2547,10 @@ function Header({
       const next = await api.saveSettings({ ...settings, ...patch });
       setSettings(next);
       setCurrentTileHeight(undefined);
+      return true;
     } catch (error) {
       addError(error instanceof Error ? error.message : String(error));
+      return false;
     }
   }
 
@@ -2555,7 +2558,7 @@ function Header({
     const tileHeight = Number(layoutHeightDraft);
     const tileColumns = Number(layoutColumnsDraft);
     if (!Number.isFinite(tileHeight) || !Number.isFinite(tileColumns)) return;
-    await saveDisplaySettings({ tileHeight, tileColumns });
+    if (await saveDisplaySettings({ tileHeight, tileColumns })) setLayoutMenuOpen(false);
   }
 
   function useFullHeight() {
@@ -2577,7 +2580,7 @@ function Header({
   const showMenuText = settings.menuDisplay === "iconText";
   const menuButtonClass = showMenuText ? "gap-2 px-3" : undefined;
   const layoutMenu = (
-    <DropdownMenu>
+    <DropdownMenu open={layoutMenuOpen} onOpenChange={setLayoutMenuOpen}>
       <DropdownMenuTrigger asChild>
         <Button variant="outline" size={showMenuText ? undefined : "icon"} className={menuButtonClass} title="Layout options">
           <LayoutGrid className="h-4 w-4" />
@@ -2603,7 +2606,7 @@ function Header({
         <div className="mt-1 grid gap-2 border-t border-border px-2 py-2" onClick={(event) => event.stopPropagation()}>
           <div className="grid grid-cols-[1fr_0.8fr_auto] items-end gap-2">
             <label className="grid gap-1 text-xs text-muted-foreground">
-              Height
+              Height (0 = full)
               <Input
                 type="number"
                 min={0}
