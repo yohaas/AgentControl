@@ -33,8 +33,10 @@ import {
   Code2,
   CodeXml,
   Columns2,
+  Copy,
   ExternalLink,
   FileText,
+  FolderDown,
   FolderOpen,
   FolderPlus,
   FolderTree,
@@ -1464,7 +1466,10 @@ function ExportChatMenu({
   return (
     <DropdownMenuSub>
       <DropdownMenuSubTrigger className="justify-between gap-3">
-        <span>Export Chat</span>
+        <span className="flex items-center">
+          <FolderDown className="mr-2 h-4 w-4" />
+          Export Chat
+        </span>
         <ChevronRight className="h-4 w-4" />
       </DropdownMenuSubTrigger>
       <DropdownMenuSubContent>
@@ -6818,7 +6823,7 @@ function AgentTile({
             )}
             <ExportChatMenu agent={agent} transcripts={transcript} addError={addError} />
             <DropdownMenuItem onClick={duplicateAgent}>
-              <Columns2 className="mr-2 h-4 w-4" />
+              <Copy className="mr-2 h-4 w-4" />
               Duplicate
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => sendCommand({ type: "clear", id: agent.id })}>
