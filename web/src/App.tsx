@@ -5864,7 +5864,9 @@ function SettingsDialog() {
                 </Select>
               </label>
               <label className="grid gap-1.5 text-sm">
-                Tile height
+                <span>
+                  Tile height <span className="text-xs text-muted-foreground">(0 = full height)</span>
+                </span>
                 <Input
                   type="number"
                   min={0}
@@ -5872,7 +5874,6 @@ function SettingsDialog() {
                   value={tileHeight}
                   onChange={(event) => setTileHeight(Number(event.target.value))}
                 />
-                <span className="text-xs text-muted-foreground">Set to 0 to use the full available height.</span>
               </label>
               <label className="grid gap-1.5 text-sm">
                 Columns
