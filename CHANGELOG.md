@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-04-29
 
+- [27632a3](https://github.com/yohaas/AgentControl/commit/27632a3) Surface Codex turn completion errors
 - [8ede0bc](https://github.com/yohaas/AgentControl/commit/8ede0bc) Show Codex command executions in chat
 - [21e5899](https://github.com/yohaas/AgentControl/commit/21e5899) Resume ChatGPT responses between turns
 - [ced2f46](https://github.com/yohaas/AgentControl/commit/ced2f46) Resume Codex sessions between turns
