@@ -50,6 +50,7 @@ import {
   LayoutGrid,
   Loader2,
   Maximize2,
+  MessageCircle,
   MessageSquare,
   Minimize2,
   MoreHorizontal,
@@ -6820,7 +6821,11 @@ function AgentTile({
             )}
             {!agent.remoteControl && (
               <DropdownMenuItem onClick={() => setTranscriptViewMode((mode) => (mode === "chat" ? "raw" : "chat"))}>
-                <CodeXml className="mr-2 h-4 w-4" />
+                {transcriptViewMode === "chat" ? (
+                  <CodeXml className="mr-2 h-4 w-4" />
+                ) : (
+                  <MessageCircle className="mr-2 h-4 w-4" />
+                )}
                 {transcriptViewMode === "chat" ? "View Raw Stream" : "View Chat"}
               </DropdownMenuItem>
             )}
@@ -7888,6 +7893,11 @@ function AgentPanelHeader({
         <DropdownMenuContent align="end">
           {!agent.remoteControl && (
             <DropdownMenuItem onClick={onToggleViewMode}>
+              {viewMode === "chat" ? (
+                <CodeXml className="mr-2 h-4 w-4" />
+              ) : (
+                <MessageCircle className="mr-2 h-4 w-4" />
+              )}
               {viewMode === "chat" ? "View Raw Stream" : "View Chat"}
             </DropdownMenuItem>
           )}
