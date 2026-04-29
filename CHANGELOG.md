@@ -4,6 +4,11 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-04-29
 
+- [a52286d](https://github.com/yohaas/AgentControl/commit/a52286d) Show executing plan phase while thinking
+- [886d308](https://github.com/yohaas/AgentControl/commit/886d308) Suggest next steps after approved plans
+- [c1acee1](https://github.com/yohaas/AgentControl/commit/c1acee1) Add remembered tool permission allowlist
+- [dff3833](https://github.com/yohaas/AgentControl/commit/dff3833) Show turn timer and token usage
+- [c8e194d](https://github.com/yohaas/AgentControl/commit/c8e194d) Update docs and add changelog
 - [31c4447](https://github.com/yohaas/AgentControl/commit/31c4447) Improve pinned and long message controls
 - [c66365e](https://github.com/yohaas/AgentControl/commit/c66365e) Delegate approved plans to new agents
 - [894b307](https://github.com/yohaas/AgentControl/commit/894b307) Simplify tool output in chat view
