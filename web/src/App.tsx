@@ -2587,7 +2587,7 @@ function Header({
               Height
               <Input
                 type="number"
-                min={TILE_MIN_HEIGHT}
+                min={0}
                 max={TILE_MAX_HEIGHT}
                 value={layoutHeightDraft}
                 onKeyDown={(event) => event.stopPropagation()}
@@ -5867,11 +5867,12 @@ function SettingsDialog() {
                 Tile height
                 <Input
                   type="number"
-                  min={320}
+                  min={0}
                   max={TILE_MAX_HEIGHT}
                   value={tileHeight}
                   onChange={(event) => setTileHeight(Number(event.target.value))}
                 />
+                <span className="text-xs text-muted-foreground">Set to 0 to use the full available height.</span>
               </label>
               <label className="grid gap-1.5 text-sm">
                 Columns
@@ -6277,10 +6278,13 @@ function AgentTileGrid({ agents }: { agents: RunningAgent[] }) {
   const setTileOrder = useAppStore((state) => state.setTileOrder);
   const settings = useAppStore((state) => state.settings);
   const currentTileHeight = useAppStore((state) => state.currentTileHeight);
-  const tileHeight = currentTileHeight || settings.tileHeight;
+  const configuredTileHeight = currentTileHeight ?? settings.tileHeight;
   const tileColumns = settings.tileColumns || 2;
   const tileWidths = useAppStore((state) => state.tileWidths);
+  const mainRef = useRef<HTMLElement | null>(null);
+  const [fullTileHeight, setFullTileHeight] = useState(TILE_MIN_HEIGHT);
   const [rowHeights, setRowHeights] = useState<number[]>([]);
+  const tileHeight = configuredTileHeight === 0 ? fullTileHeight : configuredTileHeight;
   const orderedAgents = useMemo(() => {
     const byId = new Map(agents.map((agent) => [agent.id, agent]));
     return [
@@ -6289,6 +6293,23 @@ function AgentTileGrid({ agents }: { agents: RunningAgent[] }) {
     ];
   }, [agents, tileOrder]);
   const rowCount = Math.max(1, Math.ceil(orderedAgents.length / tileColumns));
+
+  useEffect(() => {
+    if (configuredTileHeight !== 0) return;
+    const updateFullTileHeight = () => {
+      const main = mainRef.current;
+      const availableHeight = main instanceof HTMLElement ? main.clientHeight - 32 : window.innerHeight - 120;
+      setFullTileHeight(Math.min(TILE_MAX_HEIGHT, Math.max(TILE_MIN_HEIGHT, Math.round(availableHeight))));
+    };
+    updateFullTileHeight();
+    const observer = typeof ResizeObserver !== "undefined" ? new ResizeObserver(updateFullTileHeight) : undefined;
+    if (mainRef.current) observer?.observe(mainRef.current);
+    window.addEventListener("resize", updateFullTileHeight);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", updateFullTileHeight);
+    };
+  }, [configuredTileHeight]);
 
   useEffect(() => {
     const clamped = Math.min(TILE_MAX_HEIGHT, Math.max(TILE_MIN_HEIGHT, tileHeight));
@@ -6334,7 +6355,7 @@ function AgentTileGrid({ agents }: { agents: RunningAgent[] }) {
   }
 
   return (
-    <main className="min-w-0 flex-1 overflow-auto">
+    <main ref={mainRef} className="min-w-0 flex-1 overflow-auto">
       <div className="flex flex-wrap items-start gap-4 p-4">
         {orderedAgents.map((agent, index) => {
           const rowIndex = Math.floor(index / tileColumns);

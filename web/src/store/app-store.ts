@@ -182,6 +182,11 @@ function clampNumber(value: unknown, fallback: number, min: number, max: number)
   return Math.min(max, Math.max(min, Math.round(parsed)));
 }
 
+function resolveTileHeight(value: unknown): number {
+  if (value === 0) return 0;
+  return clampNumber(value, defaultSettings.tileHeight, 320, 2000);
+}
+
 function normalizeSettings(settings: SettingsState): SettingsState {
   const terminalDock = ["float", "left", "bottom", "right"].includes(settings.terminalDock)
     ? settings.terminalDock
@@ -198,7 +203,7 @@ function normalizeSettings(settings: SettingsState): SettingsState {
     modelProfiles: Array.isArray(settings.modelProfiles) && settings.modelProfiles.length ? settings.modelProfiles : defaultSettings.modelProfiles,
     permissionAllowRules: Array.isArray(settings.permissionAllowRules) ? settings.permissionAllowRules : defaultSettings.permissionAllowRules,
     defaultAgentMode,
-    tileHeight: clampNumber(settings.tileHeight, defaultSettings.tileHeight, 320, 2000),
+    tileHeight: resolveTileHeight(settings.tileHeight),
     tileColumns: clampNumber(settings.tileColumns, defaultSettings.tileColumns, 1, 6),
     sidebarWidth: clampNumber(settings.sidebarWidth, defaultSettings.sidebarWidth, 240, 420),
     terminalDock,

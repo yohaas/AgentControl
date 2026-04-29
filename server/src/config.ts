@@ -174,6 +174,7 @@ function clampNumber(value: unknown, fallback: number, min: number, max: number)
 }
 
 export function resolveTileHeight(config: DashboardConfig): number {
+  if (config.tileHeight === 0) return 0;
   return clampNumber(config.tileHeight, 460, 320, 2000);
 }
 
