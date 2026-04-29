@@ -50,6 +50,7 @@ export interface DashboardConfig {
   defaultAgentMode?: AgentPermissionMode;
   tileHeight?: number;
   tileColumns?: number;
+  tileScrolling?: TileScrollingMode;
   menuDisplay?: MenuDisplayMode;
   sidebarWidth?: number;
   pinLastSentMessage?: boolean;
@@ -61,6 +62,7 @@ export type TerminalDockPosition = "float" | "left" | "bottom" | "right";
 export type ThemeMode = "auto" | "light" | "dark";
 export type ClaudeRuntime = "cli" | "api";
 export type MenuDisplayMode = "iconOnly" | "iconText";
+export type TileScrollingMode = "vertical" | "horizontal";
 
 const configDir = path.join(os.homedir(), ".agent-dashboard");
 const configPath = path.join(configDir, "config.json");
@@ -180,6 +182,10 @@ export function resolveTileHeight(config: DashboardConfig): number {
 
 export function resolveTileColumns(config: DashboardConfig): number {
   return clampNumber(config.tileColumns, 2, 1, 6);
+}
+
+export function resolveTileScrolling(config: DashboardConfig): TileScrollingMode {
+  return config.tileScrolling === "horizontal" ? "horizontal" : "vertical";
 }
 
 export function resolveSidebarWidth(config: DashboardConfig): number {

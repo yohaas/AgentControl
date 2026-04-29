@@ -40,6 +40,7 @@ export interface SettingsState {
   defaultAgentMode: AgentPermissionMode;
   tileHeight: number;
   tileColumns: number;
+  tileScrolling: TileScrollingMode;
   menuDisplay: MenuDisplayMode;
   sidebarWidth: number;
   pinLastSentMessage: boolean;
@@ -51,6 +52,7 @@ export type TerminalDockPosition = "float" | "left" | "bottom" | "right";
 export type ThemeMode = "auto" | "light" | "dark";
 export type ClaudeRuntime = "cli" | "api";
 export type MenuDisplayMode = "iconOnly" | "iconText";
+export type TileScrollingMode = "vertical" | "horizontal";
 
 interface SendDialogState {
   open: boolean;
@@ -164,6 +166,7 @@ const defaultSettings: SettingsState = {
   defaultAgentMode: "acceptEdits",
   tileHeight: 460,
   tileColumns: 2,
+  tileScrolling: "vertical",
   menuDisplay: "iconOnly",
   sidebarWidth: 280,
   pinLastSentMessage: true,
@@ -197,6 +200,7 @@ function normalizeSettings(settings: SettingsState): SettingsState {
   const themeMode = ["auto", "light", "dark"].includes(settings.themeMode) ? settings.themeMode : defaultSettings.themeMode;
   const claudeRuntime = settings.claudeRuntime === "api" ? "api" : "cli";
   const menuDisplay = settings.menuDisplay === "iconText" ? "iconText" : "iconOnly";
+  const tileScrolling = settings.tileScrolling === "horizontal" ? "horizontal" : "vertical";
   return {
     ...defaultSettings,
     ...settings,
@@ -209,7 +213,8 @@ function normalizeSettings(settings: SettingsState): SettingsState {
     terminalDock,
     themeMode,
     claudeRuntime,
-    menuDisplay
+    menuDisplay,
+    tileScrolling
   };
 }
 

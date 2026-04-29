@@ -127,7 +127,7 @@ import { getSelectionInRoot, useTextSelection } from "./hooks/use-text-selection
 import { api } from "./lib/api";
 import { cn, downloadText, formatDuration, prettyJson } from "./lib/utils";
 import { connectWebSocket, disconnectWebSocket, sendCommand } from "./lib/ws-client";
-import { useAppStore, type ClaudeRuntime, type MenuDisplayMode, type QueuedMessage, type ThemeMode } from "./store/app-store";
+import { useAppStore, type ClaudeRuntime, type MenuDisplayMode, type QueuedMessage, type ThemeMode, type TileScrollingMode } from "./store/app-store";
 
 const DEFAULT_MODEL = "claude-sonnet-4-6";
 const EMPTY_TRANSCRIPT: TranscriptEvent[] = [];
@@ -5534,6 +5534,7 @@ function SettingsDialog() {
   const [defaultAgentMode, setDefaultAgentMode] = useState<AgentPermissionMode>(settings.defaultAgentMode);
   const [themeMode, setThemeMode] = useState<ThemeMode>(settings.themeMode);
   const [menuDisplay, setMenuDisplay] = useState<MenuDisplayMode>(settings.menuDisplay);
+  const [tileScrolling, setTileScrolling] = useState<TileScrollingMode>(settings.tileScrolling);
   const [claudeRuntime, setClaudeRuntime] = useState<ClaudeRuntime>(settings.claudeRuntime || "cli");
   const [tileHeight, setTileHeight] = useState(settings.tileHeight);
   const [tileColumns, setTileColumns] = useState(settings.tileColumns);
@@ -5564,6 +5565,7 @@ function SettingsDialog() {
     setDefaultAgentMode(settings.defaultAgentMode);
     setThemeMode(settings.themeMode);
     setMenuDisplay(settings.menuDisplay);
+    setTileScrolling(settings.tileScrolling);
     setClaudeRuntime(settings.claudeRuntime || "cli");
     setTileHeight(settings.tileHeight);
     setTileColumns(settings.tileColumns);
@@ -5596,6 +5598,7 @@ function SettingsDialog() {
         defaultAgentMode,
         themeMode,
         menuDisplay,
+        tileScrolling,
         claudeRuntime,
         tileHeight,
         tileColumns,
@@ -5654,6 +5657,7 @@ function SettingsDialog() {
         defaultAgentMode,
         themeMode,
         menuDisplay,
+        tileScrolling,
         claudeRuntime,
         tileHeight,
         tileColumns,
@@ -5687,6 +5691,7 @@ function SettingsDialog() {
       setDefaultAgentMode(next.defaultAgentMode);
       setThemeMode(next.themeMode);
       setMenuDisplay(next.menuDisplay);
+      setTileScrolling(next.tileScrolling);
       setClaudeRuntime(next.claudeRuntime || "cli");
       setTileHeight(next.tileHeight);
       setTileColumns(next.tileColumns);
@@ -5749,6 +5754,7 @@ function SettingsDialog() {
       defaultAgentMode !== settings.defaultAgentMode ||
       themeMode !== settings.themeMode ||
       menuDisplay !== settings.menuDisplay ||
+      tileScrolling !== settings.tileScrolling ||
       claudeRuntime !== (settings.claudeRuntime || "cli") ||
       tileHeight !== settings.tileHeight ||
       tileColumns !== settings.tileColumns ||
@@ -5778,6 +5784,7 @@ function SettingsDialog() {
       projectPaths,
       settings,
       themeMode,
+      tileScrolling,
       tileColumns,
       tileHeight
     ]
@@ -5913,6 +5920,18 @@ function SettingsDialog() {
                   <SelectContent>
                     <SelectItem value="iconOnly">Icon Only</SelectItem>
                     <SelectItem value="iconText">Icon + Text</SelectItem>
+                  </SelectContent>
+                </Select>
+              </label>
+              <label className="grid gap-1.5 text-sm">
+                Scrolling
+                <Select value={tileScrolling} onValueChange={(value) => setTileScrolling(value as TileScrollingMode)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="vertical">Vertical</SelectItem>
+                    <SelectItem value="horizontal">Horizontal</SelectItem>
                   </SelectContent>
                 </Select>
               </label>
@@ -6334,6 +6353,7 @@ function AgentTileGrid({ agents }: { agents: RunningAgent[] }) {
   const currentTileHeight = useAppStore((state) => state.currentTileHeight);
   const configuredTileHeight = currentTileHeight ?? settings.tileHeight;
   const tileColumns = settings.tileColumns || 2;
+  const horizontalScrolling = settings.tileScrolling === "horizontal";
   const tileWidths = useAppStore((state) => state.tileWidths);
   const mainRef = useRef<HTMLElement | null>(null);
   const [fullTileHeight, setFullTileHeight] = useState(TILE_MIN_HEIGHT);
@@ -6346,7 +6366,7 @@ function AgentTileGrid({ agents }: { agents: RunningAgent[] }) {
       ...agents.filter((agent) => !tileOrder.includes(agent.id))
     ];
   }, [agents, tileOrder]);
-  const rowCount = Math.max(1, Math.ceil(orderedAgents.length / tileColumns));
+  const rowCount = horizontalScrolling ? 1 : Math.max(1, Math.ceil(orderedAgents.length / tileColumns));
 
   useEffect(() => {
     if (configuredTileHeight !== 0) return;
@@ -6410,9 +6430,9 @@ function AgentTileGrid({ agents }: { agents: RunningAgent[] }) {
 
   return (
     <main ref={mainRef} className="min-w-0 flex-1 overflow-auto">
-      <div className="flex flex-wrap items-start gap-4 p-4">
+      <div className={cn("flex items-start gap-4 p-4", horizontalScrolling ? "flex-nowrap" : "flex-wrap")}>
         {orderedAgents.map((agent, index) => {
-          const rowIndex = Math.floor(index / tileColumns);
+          const rowIndex = horizontalScrolling ? 0 : Math.floor(index / tileColumns);
           const rowHeight = rowHeights[rowIndex] ?? tileHeight;
           return (
             <AgentTile
