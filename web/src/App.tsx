@@ -7916,20 +7916,22 @@ function ToolCard({
   return (
     <div
       className={cn(
-        "min-w-0 max-w-full rounded-md border bg-card",
+        "min-w-0 w-full max-w-full overflow-hidden rounded-md border bg-card",
         awaitingPermission ? "border-amber-300/70 bg-amber-500/10 shadow-[0_0_0_1px_rgba(251,191,36,0.18)]" : resultIsError ? "border-red-400/50" : "border-border",
         compact ? "text-xs" : "text-sm"
       )}
       data-copy-block="true"
       data-copy-event-id={event.id}
     >
-      <button className={cn("flex w-full min-w-0 items-center justify-between gap-3 text-left", compact ? "px-2 py-2" : "px-3 py-2")} onClick={() => setOpen((value) => !value)}>
+      <button className={cn("flex w-full min-w-0 max-w-full items-center justify-between gap-2 overflow-hidden text-left", compact ? "px-2 py-2" : "px-3 py-2")} onClick={() => setOpen((value) => !value)}>
         <span className="min-w-0 flex-1">
-          <span className="block truncate">
-            {isUse ? `Tool: ${event.name}` : `Tool result: ${event.toolUseId}`}
-            {awaitingPermission && <Badge className="ml-2 border-amber-300/60 bg-amber-500/15 text-amber-100">permission required</Badge>}
-            {result && <Badge className="ml-2 border-border text-muted-foreground">result paired</Badge>}
-            {resultIsError && <Badge className="ml-2 border-red-400/40 text-red-200">error</Badge>}
+          <span className="flex min-w-0 max-w-full flex-wrap items-center gap-1.5">
+            <span className="min-w-0 max-w-full flex-1 truncate">
+              {isUse ? `Tool: ${event.name}` : `Tool result: ${event.toolUseId}`}
+            </span>
+            {awaitingPermission && <Badge className="shrink-0 border-amber-300/60 bg-amber-500/15 text-amber-100">permission required</Badge>}
+            {result && <Badge className="shrink-0 border-border text-muted-foreground">result paired</Badge>}
+            {resultIsError && <Badge className="shrink-0 border-red-400/40 text-red-200">error</Badge>}
           </span>
           {summary && <span className="mt-1 block truncate text-xs text-muted-foreground">{summary}</span>}
         </span>
@@ -7942,7 +7944,7 @@ function ToolCard({
         <div className="grid gap-3 border-t border-amber-300/30 bg-amber-500/10 px-3 py-3">
           <div className="grid gap-1">
             <p className="font-medium text-amber-50">Permission required</p>
-            <p className="text-xs text-amber-100">
+            <p className="break-words text-xs text-amber-100 [overflow-wrap:anywhere]">
               Claude wants to run {event.name}
             {commandText ? `: ${commandText}` : pathText ? ` on ${pathText}` : ""}.
             </p>
