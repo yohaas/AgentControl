@@ -1,6 +1,6 @@
 # Agent Control
 
-Agent Control is a local multi-agent dashboard for Claude Code, Codex CLI, and OpenAI API-backed ChatGPT sessions. It lets you add projects, discover project and built-in agent definitions, launch multiple agent sessions, monitor streaming responses and tools, route context between agents, manage plugins, and keep project terminals beside the chats.
+Agent Control is a local dashboard for working with multiple AI coding agents side by side. It supports Claude, Codex, and ChatGPT, with project-aware agent discovery, parallel chat sessions, live streaming output, tool and permission visibility, context handoff between agents, plugin management, and built-in project terminals.
 
 The app is built for local development workflows. It starts an Express/WebSocket server, a Vite/React UI, and provider processes/API streams in the selected project folders.
 
