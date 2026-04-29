@@ -101,6 +101,44 @@ export interface ProjectFileEntry {
   modifiedAt: string;
 }
 
+export interface ProjectPathInfo {
+  displayPath: string;
+  runtimePath: string;
+  hostOpenPath: string;
+}
+
+export interface ProjectTreeEntry extends ProjectPathInfo {
+  name: string;
+  type: "file" | "directory";
+  relativePath: string;
+  size?: number;
+  modifiedAt?: string;
+}
+
+export interface ProjectTreeResponse extends ProjectPathInfo {
+  relativePath: string;
+  entries: ProjectTreeEntry[];
+}
+
+export interface ProjectFileResponse extends ProjectPathInfo {
+  relativePath: string;
+  name: string;
+  size: number;
+  modifiedAt: string;
+  mimeType: string;
+  binary: boolean;
+  truncated: boolean;
+  content?: string;
+}
+
+export interface ProjectDiffResponse extends ProjectPathInfo {
+  relativePath: string;
+  status?: string;
+  binary: boolean;
+  diff?: string;
+  content?: string;
+}
+
 export interface GitChangedFile {
   path: string;
   status: string;

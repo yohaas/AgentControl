@@ -36,6 +36,9 @@ import {
   Copy,
   CornerDownRight,
   ExternalLink,
+  Eye,
+  File as FileIcon,
+  FileCode2,
   FileText,
   FolderDown,
   FolderOpen,
@@ -47,6 +50,7 @@ import {
   HardDrive,
   Hand,
   Home,
+  Info,
   Image as ImageIcon,
   LayoutGrid,
   Loader2,
@@ -93,7 +97,10 @@ import type {
   ModelProfile,
   PermissionAllowRule,
   Project,
+  ProjectDiffResponse,
   ProjectFileEntry,
+  ProjectFileResponse,
+  ProjectTreeEntry,
   RunningAgent,
   SlashCommandInfo,
   TerminalSession,
@@ -157,6 +164,25 @@ const THINKING_PHRASES: Record<AgentProvider, string[]> = {
 function isGitCredentialPromptError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
   return /Git push needs credentials|terminal prompts (have been )?disabled|could not read Username|Authentication failed/i.test(message);
+}
+
+function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes < 0) return "0 B";
+  if (bytes < 1024) return `${bytes} B`;
+  const units = ["KB", "MB", "GB", "TB"];
+  let value = bytes / 1024;
+  let index = 0;
+  while (value >= 1024 && index < units.length - 1) {
+    value /= 1024;
+    index += 1;
+  }
+  return `${value >= 10 ? value.toFixed(0) : value.toFixed(1)} ${units[index]}`;
+}
+
+function formatDateTime(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString();
 }
 
 const GENERAL_AGENT_DEF: AgentDef = {
@@ -6478,12 +6504,303 @@ function SettingsDialog() {
   );
 }
 
+function ProjectInspectorTile({ project, agents }: { project: Project; agents: RunningAgent[] }) {
+  const addError = useAppStore((state) => state.addError);
+  const enqueueMessage = useAppStore((state) => state.enqueueMessage);
+  const [collapsed, setCollapsed] = useState(false);
+  const [tree, setTree] = useState<Record<string, ProjectTreeEntry[]>>({});
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({ "": true });
+  const [filter, setFilter] = useState("");
+  const [mode, setMode] = useState<"preview" | "diff" | "details">("preview");
+  const [selectedPath, setSelectedPath] = useState("");
+  const [preview, setPreview] = useState<ProjectFileResponse | undefined>();
+  const [diff, setDiff] = useState<ProjectDiffResponse | undefined>();
+  const [status, setStatus] = useState<GitStatus | undefined>();
+  const [targetAgentId, setTargetAgentId] = useState(agents[0]?.id || "");
+  const [loading, setLoading] = useState(false);
+  const previewRootId = `project-inspector-preview-${project.id}`;
+  const targetAgent = agents.find((agent) => agent.id === targetAgentId) || agents[0];
+
+  useEffect(() => {
+    setTargetAgentId((current) => (current && agents.some((agent) => agent.id === current) ? current : agents[0]?.id || ""));
+  }, [agents]);
+
+  async function loadTree(pathValue = "") {
+    const listing = await api.projectTree(project.id, pathValue);
+    setTree((current) => ({ ...current, [listing.relativePath]: listing.entries }));
+    setExpanded((current) => ({ ...current, [listing.relativePath]: true }));
+  }
+
+  async function refresh() {
+    setLoading(true);
+    try {
+      const [root, nextStatus] = await Promise.all([api.projectTree(project.id), api.gitStatus(project.id)]);
+      setTree({ [root.relativePath]: root.entries });
+      setExpanded({ "": true });
+      setStatus(nextStatus);
+      if (selectedPath) {
+        await openPreview(selectedPath, false);
+        if (mode === "diff") setDiff(await api.projectDiff(project.id, selectedPath));
+      }
+    } catch (error) {
+      addError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void refresh();
+  }, [project.id]);
+
+  async function toggleDirectory(entry: ProjectTreeEntry) {
+    if (expanded[entry.relativePath]) {
+      setExpanded((current) => ({ ...current, [entry.relativePath]: false }));
+      return;
+    }
+    try {
+      if (!tree[entry.relativePath]) await loadTree(entry.relativePath);
+      else setExpanded((current) => ({ ...current, [entry.relativePath]: true }));
+    } catch (error) {
+      addError(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  async function openPreview(pathValue: string, switchMode = true) {
+    setSelectedPath(pathValue);
+    if (switchMode) setMode("preview");
+    setLoading(true);
+    try {
+      setPreview(await api.projectFile(project.id, pathValue));
+    } catch (error) {
+      addError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function openDiff(pathValue: string) {
+    setSelectedPath(pathValue);
+    setMode("diff");
+    setLoading(true);
+    try {
+      setDiff(await api.projectDiff(project.id, pathValue));
+    } catch (error) {
+      addError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function addFileToChat(pathValue = selectedPath) {
+    if (!targetAgent || !pathValue) return;
+    try {
+      const attachment = await api.addProjectContext(project.id, pathValue);
+      enqueueMessage(targetAgent.id, { text: `Review ${pathValue}`, attachments: [attachment] });
+    } catch (error) {
+      addError(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  function sendTextToChat(text: string, label: string) {
+    if (!targetAgent || !text.trim()) return;
+    const body = `Context from ${project.name}: ${label}\n\n${text}`;
+    if (isAgentBusy(targetAgent)) enqueueMessage(targetAgent.id, { text: body, attachments: [] });
+    else sendCommand({ type: "userMessage", id: targetAgent.id, text: body, attachments: [] });
+  }
+
+  function addSelectionToChat() {
+    const selected = getSelectionInRoot(`#${previewRootId}`);
+    if (selected) sendTextToChat(selected, selectedPath || "selection");
+  }
+
+  function renderEntries(pathValue = "", depth = 0): ReactNode {
+    const entries = tree[pathValue] || [];
+    const normalizedFilter = filter.trim().toLowerCase();
+    return entries
+      .filter((entry) => !normalizedFilter || entry.relativePath.toLowerCase().includes(normalizedFilter))
+      .map((entry) => {
+        const changed = status?.files.find((file) => file.path === entry.relativePath || file.path.endsWith(` -> ${entry.relativePath}`));
+        return (
+          <div key={entry.relativePath}>
+            <button
+              type="button"
+              className={cn(
+                "flex h-7 w-full min-w-0 items-center gap-1.5 rounded-sm px-2 text-left text-xs hover:bg-accent",
+                selectedPath === entry.relativePath && "bg-accent text-accent-foreground"
+              )}
+              style={{ paddingLeft: 8 + depth * 14 }}
+              onClick={() => (entry.type === "directory" ? void toggleDirectory(entry) : void openPreview(entry.relativePath))}
+              title={entry.runtimePath}
+            >
+              {entry.type === "directory" ? (
+                expanded[entry.relativePath] ? <ChevronDown className="h-3.5 w-3.5 shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0" />
+              ) : (
+                <span className="w-3.5 shrink-0" />
+              )}
+              {entry.type === "directory" ? <FolderOpen className="h-3.5 w-3.5 shrink-0" /> : <FileIcon className="h-3.5 w-3.5 shrink-0" />}
+              <span className="truncate">{entry.name}</span>
+              {changed && <Badge className="ml-auto h-5 px-1 text-[10px]">{changed.status}</Badge>}
+            </button>
+            {entry.type === "directory" && expanded[entry.relativePath] && renderEntries(entry.relativePath, depth + 1)}
+          </div>
+        );
+      });
+  }
+
+  const changedFiles = status?.files || [];
+  const selectedChanged = changedFiles.find((file) => file.path === selectedPath || file.path.endsWith(` -> ${selectedPath}`));
+
+  return (
+    <section className="relative flex min-h-0 min-w-80 max-w-full flex-col rounded-md border border-border bg-card/70" style={{ height: collapsed ? undefined : 520, flex: "0 0 min(720px, 100%)" }}>
+      <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-3">
+        <FolderTree className="h-5 w-5 text-primary" />
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-sm font-semibold">Project Inspector</div>
+          <div className="truncate text-xs text-muted-foreground">{project.name}</div>
+        </div>
+        <Button variant="ghost" size="icon" title="Refresh inspector" onClick={() => void refresh()}>
+          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+        </Button>
+        <Button variant="ghost" size="icon" title="Open project folder" onClick={() => void api.openFile(project.path).catch((error) => addError(error instanceof Error ? error.message : String(error)))}>
+          <FolderOpen className="h-4 w-4" />
+        </Button>
+        <Button variant="ghost" size="icon" onClick={() => setCollapsed((value) => !value)} title={collapsed ? "Restore inspector" : "Collapse inspector"}>
+          {collapsed ? <ChevronDown className="h-4 w-4" /> : <Minimize2 className="h-4 w-4" />}
+        </Button>
+      </div>
+      {!collapsed && (
+        <div className="grid min-h-0 flex-1 grid-cols-[240px_minmax(0,1fr)]">
+          <aside className="min-h-0 border-r border-border">
+            <div className="border-b border-border p-2">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-2 top-2 h-3.5 w-3.5 text-muted-foreground" />
+                <Input className="h-8 pl-7 text-xs" value={filter} onChange={(event) => setFilter(event.target.value)} placeholder="Filter files" />
+              </div>
+            </div>
+            <div className="h-full min-h-0 overflow-auto p-1">{renderEntries()}</div>
+          </aside>
+          <div className="flex min-w-0 flex-col">
+            <div className="flex shrink-0 flex-wrap items-center gap-1 border-b border-border px-2 py-2">
+              <Button variant={mode === "preview" ? "secondary" : "ghost"} size="sm" className="h-7 gap-1 px-2" onClick={() => selectedPath && void openPreview(selectedPath)}>
+                <Eye className="h-3.5 w-3.5" /> Preview
+              </Button>
+              <Button variant={mode === "diff" ? "secondary" : "ghost"} size="sm" className="h-7 gap-1 px-2" disabled={!selectedPath} onClick={() => selectedPath && void openDiff(selectedPath)}>
+                <GitBranch className="h-3.5 w-3.5" /> Diff
+              </Button>
+              <Button variant={mode === "details" ? "secondary" : "ghost"} size="sm" className="h-7 gap-1 px-2" disabled={!selectedPath} onClick={() => setMode("details")}>
+                <Info className="h-3.5 w-3.5" /> Details
+              </Button>
+              <div className="min-w-0 flex-1 truncate px-2 text-xs text-muted-foreground">{selectedPath || project.path}</div>
+              <Select value={targetAgent?.id || ""} onValueChange={setTargetAgentId}>
+                <SelectTrigger className="h-7 w-36 text-xs"><SelectValue placeholder="Target chat" /></SelectTrigger>
+                <SelectContent>
+                  {agents.map((agent) => <SelectItem key={agent.id} value={agent.id}>{agent.displayName}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <Button variant="outline" size="sm" className="h-7 px-2" disabled={!selectedPath || !targetAgent} onClick={() => void addFileToChat()}>
+                <MessageSquare className="h-3.5 w-3.5" />
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-7 w-7" disabled={!selectedPath} title="File actions">
+                    <EllipsisVertical className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => selectedPath && void api.openFile(preview?.hostOpenPath || diff?.hostOpenPath || selectedPath).catch((error) => addError(error instanceof Error ? error.message : String(error)))}>
+                    <ExternalLink className="mr-2 h-4 w-4" /> Open file
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => selectedPath && void api.openFile(preview?.hostOpenPath || diff?.hostOpenPath || selectedPath, "containingFolder").catch((error) => addError(error instanceof Error ? error.message : String(error)))}>
+                    <FolderOpen className="mr-2 h-4 w-4" /> Open containing folder
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => selectedPath && void navigator.clipboard.writeText(selectedPath)}>
+                    <Clipboard className="mr-2 h-4 w-4" /> Copy relative path
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={addSelectionToChat}>
+                    <MessageCircle className="mr-2 h-4 w-4" /> Add selection to chat
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+            <div id={previewRootId} className="min-h-0 flex-1 overflow-auto p-3">
+              {mode === "preview" ? (
+                preview ? preview.binary ? (
+                  <div className="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">
+                    Binary file. Size {formatBytes(preview.size)}. Use the file actions menu to open it externally.
+                  </div>
+                ) : (
+                  <div className="grid gap-2">
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <FileCode2 className="h-3.5 w-3.5" />
+                      <span>{preview.mimeType}</span>
+                      <span>{formatBytes(preview.size)}</span>
+                      <span>{formatDateTime(preview.modifiedAt)}</span>
+                      {preview.truncated && <Badge>truncated</Badge>}
+                    </div>
+                    <pre className="min-h-0 whitespace-pre-wrap break-words rounded-md bg-muted/40 p-3 font-mono text-xs leading-5">{preview.content}</pre>
+                    {preview.truncated && (
+                      <Button variant="outline" size="sm" onClick={() => void api.projectFile(project.id, preview.relativePath, true).then(setPreview).catch((error) => addError(error instanceof Error ? error.message : String(error)))}>
+                        Load full file
+                      </Button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="grid h-full place-items-center text-sm text-muted-foreground">Select a file to preview.</div>
+                )
+              ) : mode === "diff" ? (
+                diff ? diff.binary ? (
+                  <div className="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">Binary diff is not shown.</div>
+                ) : (
+                  <div className="grid gap-2">
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Badge>{diff.status || selectedChanged?.status || "changed"}</Badge>
+                      <Button variant="outline" size="sm" className="h-7" disabled={!targetAgent || !(diff.diff || diff.content)} onClick={() => sendTextToChat(diff.diff || diff.content || "", `diff for ${diff.relativePath}`)}>
+                        Add diff
+                      </Button>
+                    </div>
+                    <pre className="whitespace-pre-wrap break-words rounded-md bg-muted/40 p-3 font-mono text-xs leading-5">{diff.diff || diff.content || "No unstaged diff for this file."}</pre>
+                  </div>
+                ) : (
+                  <div className="grid h-full place-items-center text-sm text-muted-foreground">Open a changed file diff.</div>
+                )
+              ) : (
+                <div className="grid gap-2 text-sm">
+                  <div><span className="text-muted-foreground">Display path:</span> {preview?.displayPath || diff?.displayPath || selectedPath}</div>
+                  <div><span className="text-muted-foreground">Runtime path:</span> {preview?.runtimePath || diff?.runtimePath}</div>
+                  <div><span className="text-muted-foreground">Host open path:</span> {preview?.hostOpenPath || diff?.hostOpenPath}</div>
+                  {preview && <div><span className="text-muted-foreground">Size:</span> {formatBytes(preview.size)}</div>}
+                  {preview && <div><span className="text-muted-foreground">Modified:</span> {formatDateTime(preview.modifiedAt)}</div>}
+                </div>
+              )}
+            </div>
+            {changedFiles.length > 0 && (
+              <div className="max-h-28 shrink-0 overflow-auto border-t border-border p-2">
+                <div className="mb-1 text-xs font-medium text-muted-foreground">Changed files</div>
+                <div className="flex flex-wrap gap-1">
+                  {changedFiles.map((file) => (
+                    <button key={`${file.status}-${file.path}`} className="rounded-sm border border-border px-2 py-1 text-xs hover:bg-accent" onClick={() => void openDiff(file.path.includes(" -> ") ? file.path.split(" -> ").at(-1) || file.path : file.path)}>
+                      {file.status}: {file.path}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
 function AgentPanel() {
   const selectedAgentId = useAppStore((state) => state.selectedAgentId);
   const selectedProjectId = useAppStore((state) => state.selectedProjectId);
+  const projects = useAppStore((state) => state.projects);
   const agentsById = useAppStore((state) => state.agents);
   const selectedAgent = selectedAgentId ? agentsById[selectedAgentId] : undefined;
   const agent = selectedAgent && (!selectedProjectId || selectedAgent.projectId === selectedProjectId) ? selectedAgent : undefined;
+  const project = projects.find((candidate) => candidate.id === selectedProjectId) || projects[0];
   const agents = useMemo(
     () =>
       agentsForProject(agentsById, selectedProjectId).sort(
@@ -6495,10 +6812,10 @@ function AgentPanel() {
   if (agent) {
     return agent.remoteControl ? <RemoteControlPanel agent={agent} /> : <StandardAgentPanel agent={agent} />;
   }
-  return <AgentTileGrid agents={agents} />;
+  return <AgentTileGrid agents={agents} project={project} />;
 }
 
-function AgentTileGrid({ agents }: { agents: RunningAgent[] }) {
+function AgentTileGrid({ agents, project }: { agents: RunningAgent[]; project?: Project }) {
   const tileOrder = useAppStore((state) => state.tileOrder);
   const setTileOrder = useAppStore((state) => state.setTileOrder);
   const settings = useAppStore((state) => state.settings);
@@ -6519,7 +6836,8 @@ function AgentTileGrid({ agents }: { agents: RunningAgent[] }) {
       ...agents.filter((agent) => !tileOrder.includes(agent.id))
     ];
   }, [agents, tileOrder]);
-  const rowCount = horizontalScrolling ? 1 : Math.max(1, Math.ceil(orderedAgents.length / tileColumns));
+  const totalTiles = orderedAgents.length + (project ? 1 : 0);
+  const rowCount = horizontalScrolling ? 1 : Math.max(1, Math.ceil(totalTiles / tileColumns));
 
   useEffect(() => {
     if (configuredTileHeight !== 0) return;
@@ -6577,15 +6895,16 @@ function AgentTileGrid({ agents }: { agents: RunningAgent[] }) {
     });
   }
 
-  if (agents.length === 0) {
+  if (agents.length === 0 && !project) {
     return <div className="grid flex-1 place-items-center text-sm text-muted-foreground">No agents open.</div>;
   }
 
   return (
     <main ref={mainRef} className="min-w-0 flex-1 overflow-auto">
       <div className={cn("flex items-start gap-4 p-4", horizontalScrolling ? "flex-nowrap" : "flex-wrap")}>
+        {project && <ProjectInspectorTile project={project} agents={agents} />}
         {orderedAgents.map((agent, index) => {
-          const rowIndex = horizontalScrolling ? 0 : Math.floor(index / tileColumns);
+          const rowIndex = horizontalScrolling ? 0 : Math.floor((index + (project ? 1 : 0)) / tileColumns);
           const rowHeight = rowHeights[rowIndex] ?? tileHeight;
           return (
             <AgentTile

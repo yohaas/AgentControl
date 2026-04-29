@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-04-29
 
+- [pending] Add a read-only Project Inspector tile for browsing files, previewing content, reviewing diffs, and sending project context to chats
 - [44f657a](https://github.com/yohaas/AgentControl/commit/44f657a) Keep full-height tiles sized to the remaining space when the terminal docks or minimizes
 - [db090d5](https://github.com/yohaas/AgentControl/commit/db090d5) Fix terminal pane clipping
 - [d83f85e](https://github.com/yohaas/AgentControl/commit/d83f85e) Show a Git credential modal that can open the built-in terminal with `git push`

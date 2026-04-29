@@ -11,7 +11,10 @@ import type {
   MessageAttachment,
   ModelProfile,
   Project,
-  ProjectFileEntry
+  ProjectDiffResponse,
+  ProjectFileEntry,
+  ProjectFileResponse,
+  ProjectTreeResponse
 } from "@agent-control/shared";
 import type { SettingsState } from "../store/app-store";
 
@@ -109,6 +112,16 @@ export const api = {
     json<ProjectFileEntry[]>(
       `/api/projects/${encodeURIComponent(id)}/files${query?.trim() ? `?query=${encodeURIComponent(query.trim())}` : ""}`
     ),
+  projectTree: (id: string, path?: string) =>
+    json<ProjectTreeResponse>(
+      `/api/projects/${encodeURIComponent(id)}/tree${path?.trim() ? `?path=${encodeURIComponent(path.trim())}` : ""}`
+    ),
+  projectFile: (id: string, path: string, full = false) =>
+    json<ProjectFileResponse>(
+      `/api/projects/${encodeURIComponent(id)}/file?path=${encodeURIComponent(path)}${full ? "&full=1" : ""}`
+    ),
+  projectDiff: (id: string, path: string) =>
+    json<ProjectDiffResponse>(`/api/projects/${encodeURIComponent(id)}/diff?path=${encodeURIComponent(path)}`),
   saveAgentPlugins: (projectId: string, agentName: string, plugins: string[]) =>
     json<Project[]>(`/api/projects/${encodeURIComponent(projectId)}/agents/${encodeURIComponent(agentName)}/plugins`, {
       method: "PUT",
@@ -138,11 +151,11 @@ export const api = {
     return json<DirectoryListing>(`/api/filesystem/directories${query ? `?${query}` : ""}`);
   },
   wslDistros: () => json<{ defaultDistro: string; distros: string[] }>("/api/wsl/distros"),
-  openFile: (path: string) =>
+  openFile: (path: string, mode?: "containingFolder") =>
     json<{ ok: boolean }>("/api/filesystem/open", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ path })
+      body: JSON.stringify({ path, mode })
     }),
   refresh: () => json<Project[]>("/api/refresh", { method: "POST" }),
   capabilities: () => json<Capabilities>("/api/capabilities"),

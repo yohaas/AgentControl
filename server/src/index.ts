@@ -1,6 +1,6 @@
 import http from "node:http";
 import { execFile } from "node:child_process";
-import { chmod, cp, mkdir, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { chmod, cp, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -24,7 +24,12 @@ import type {
   MessageAttachment,
   ModelProfile,
   Project,
+  ProjectDiffResponse,
   ProjectFileEntry,
+  ProjectFileResponse,
+  ProjectPathInfo,
+  ProjectTreeEntry,
+  ProjectTreeResponse,
   WsClientCommand,
   WsServerEvent
 } from "@agent-control/shared";
@@ -498,6 +503,108 @@ async function listProjectFiles(project: Project, query = "", limit = 500): Prom
   return results;
 }
 
+function projectRootPath(project: Project): string {
+  return path.resolve(project.path);
+}
+
+function projectRuntimeRoot(project: Project): string {
+  return isWslProject(project) ? wslProjectPath(project) : project.path;
+}
+
+function projectHostRoot(project: Project): string {
+  return isWslProject(project) ? wslUncPath(project.wslDistro || parseWslUncPath(project.path)?.distro || "Ubuntu", wslProjectPath(project)) : project.path;
+}
+
+function normalizeProjectRelativePath(input: unknown): string {
+  const value = typeof input === "string" ? input.trim() : "";
+  if (!value || value === "." || value === "/") return "";
+  return path.posix.normalize(value.replace(/\\/g, "/")).replace(/^\/+/, "");
+}
+
+function projectAbsolutePath(project: Project, relativePath: string): string {
+  return path.resolve(projectRootPath(project), relativePath);
+}
+
+function assertProjectPath(project: Project, input: unknown): { relativePath: string; absolutePath: string } {
+  const relativePath = normalizeProjectRelativePath(input);
+  const absolutePath = projectAbsolutePath(project, relativePath);
+  if (!pathInsideOrEqual(projectRootPath(project), absolutePath)) throw new Error("Path must be inside the project.");
+  return { relativePath, absolutePath };
+}
+
+function pathInfoForProject(project: Project, relativePath: string): ProjectPathInfo {
+  const normalizedRelative = normalizeProjectRelativePath(relativePath);
+  const runtimeRoot = projectRuntimeRoot(project);
+  const hostRoot = projectHostRoot(project);
+  return {
+    displayPath: normalizedRelative || ".",
+    runtimePath: isWslProject(project) ? path.posix.join(runtimeRoot, normalizedRelative) : projectAbsolutePath(project, normalizedRelative),
+    hostOpenPath: isWslProject(project) ? path.win32.join(hostRoot, normalizedRelative.replace(/\//g, "\\")) : projectAbsolutePath(project, normalizedRelative)
+  };
+}
+
+function looksBinary(buffer: Buffer): boolean {
+  if (buffer.length === 0) return false;
+  const sample = buffer.subarray(0, Math.min(buffer.length, 8192));
+  if (sample.includes(0)) return true;
+  let suspicious = 0;
+  for (const byte of sample) {
+    if (byte < 7 || (byte > 13 && byte < 32)) suspicious += 1;
+  }
+  return suspicious / sample.length > 0.3;
+}
+
+async function projectTree(project: Project, input: unknown): Promise<ProjectTreeResponse> {
+  const { relativePath, absolutePath } = assertProjectPath(project, input);
+  const info = await stat(absolutePath);
+  if (!info.isDirectory()) throw new Error("Tree path must be a directory.");
+  const entries = await readdir(absolutePath, { withFileTypes: true });
+  const treeEntries: ProjectTreeEntry[] = [];
+  for (const entry of entries.sort((left, right) => {
+    if (left.isDirectory() !== right.isDirectory()) return left.isDirectory() ? -1 : 1;
+    return left.name.localeCompare(right.name, undefined, { sensitivity: "base" });
+  })) {
+    const childRelative = path.posix.join(relativePath, entry.name);
+    const childAbsolute = path.join(absolutePath, entry.name);
+    const childInfo = await stat(childAbsolute).catch(() => undefined);
+    if (!entry.isDirectory() && !entry.isFile()) continue;
+    treeEntries.push({
+      name: entry.name,
+      type: entry.isDirectory() ? "directory" : "file",
+      relativePath: childRelative,
+      size: childInfo?.isFile() ? childInfo.size : undefined,
+      modifiedAt: childInfo?.mtime.toISOString(),
+      ...pathInfoForProject(project, childRelative)
+    });
+  }
+  return {
+    relativePath,
+    ...pathInfoForProject(project, relativePath),
+    entries: treeEntries
+  };
+}
+
+async function projectFile(project: Project, input: unknown, full = false): Promise<ProjectFileResponse> {
+  const { relativePath, absolutePath } = assertProjectPath(project, input);
+  const info = await stat(absolutePath);
+  if (!info.isFile()) throw new Error("Preview path must be a file.");
+  const maxBytes = full ? 1024 * 1024 : 256 * 1024;
+  const buffer = await readFile(absolutePath);
+  const binary = looksBinary(buffer);
+  const truncated = !binary && buffer.length > maxBytes;
+  return {
+    relativePath,
+    name: path.basename(absolutePath),
+    size: info.size,
+    modifiedAt: info.mtime.toISOString(),
+    mimeType: mimeTypeForPath(absolutePath),
+    binary,
+    truncated,
+    content: binary ? undefined : buffer.subarray(0, maxBytes).toString("utf8"),
+    ...pathInfoForProject(project, relativePath)
+  };
+}
+
 async function requestSupervisor(command: "restart" | "shutdown"): Promise<void> {
   await mkdir(controlDir, { recursive: true });
   await writeFile(controlPath, `${JSON.stringify({ command, requestedAt: new Date().toISOString(), pid: process.pid }, null, 2)}\n`, "utf8");
@@ -840,9 +947,9 @@ function openWithDefaultApp(filePath: string): Promise<void> {
         "-ExecutionPolicy",
         "Bypass",
         "-Command",
-        "Invoke-Item -LiteralPath $args[0]",
-        filePath
+        "$target = $env:AGENTCONTROL_OPEN_PATH; if (-not $target) { throw 'Open path was not provided.' }; Invoke-Item -LiteralPath $target"
       ], {
+        env: { ...process.env, AGENTCONTROL_OPEN_PATH: filePath },
         windowsHide: true
       }, (error, _stdout, stderr) => {
         if (error) {
@@ -890,6 +997,38 @@ async function projectGitStatus(project: Project): Promise<GitStatus> {
       message: error instanceof Error ? error.message : String(error)
     };
   }
+}
+
+async function projectFileDiff(project: Project, input: unknown): Promise<ProjectDiffResponse> {
+  const relativePath = normalizeProjectRelativePath(input);
+  if (!relativePath) throw new Error("Diff file path is required.");
+  const absolutePath = projectAbsolutePath(project, relativePath);
+  if (!pathInsideOrEqual(projectRootPath(project), absolutePath)) throw new Error("Path must be inside the project.");
+  const status = await projectGitStatus(project);
+  if (!status.isRepo) throw new Error(status.message || "Project is not a Git repository.");
+  const fileStatus = status.files.find((file) => file.path === relativePath || file.path.endsWith(` -> ${relativePath}`))?.status;
+  const info = await stat(absolutePath).catch(() => undefined);
+  const binary = info?.isFile() ? looksBinary(await readFile(absolutePath)) : false;
+  if (fileStatus === "untracked") {
+    const preview = info?.isFile() ? await projectFile(project, relativePath) : undefined;
+    return {
+      relativePath,
+      status: fileStatus,
+      binary: preview?.binary || false,
+      content: preview?.content,
+      ...pathInfoForProject(project, relativePath)
+    };
+  }
+  const args = ["diff", "--", relativePath];
+  let diff = await gitCommand(project, args, 15000).catch(() => "");
+  if (!diff.trim()) diff = await gitCommand(project, ["diff", "--cached", "--", relativePath], 15000).catch(() => "");
+  return {
+    relativePath,
+    status: fileStatus,
+    binary,
+    diff,
+    ...pathInfoForProject(project, relativePath)
+  };
 }
 
 async function ensureLaunchPluginsEnabled(request: LaunchRequest): Promise<void> {
@@ -1062,6 +1201,48 @@ app.get("/api/projects/:id/files", async (request, response) => {
     response.json(await listProjectFiles(project, query));
   } catch (error) {
     response.status(500).json({ error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+app.get("/api/projects/:id/tree", async (request, response) => {
+  const project = projectById(request.params.id);
+  if (!project) {
+    response.status(404).json({ error: "Project not found." });
+    return;
+  }
+
+  try {
+    response.json(await projectTree(project, request.query.path));
+  } catch (error) {
+    response.status(400).json({ error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+app.get("/api/projects/:id/file", async (request, response) => {
+  const project = projectById(request.params.id);
+  if (!project) {
+    response.status(404).json({ error: "Project not found." });
+    return;
+  }
+
+  try {
+    response.json(await projectFile(project, request.query.path, request.query.full === "1"));
+  } catch (error) {
+    response.status(400).json({ error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+app.get("/api/projects/:id/diff", async (request, response) => {
+  const project = projectById(request.params.id);
+  if (!project) {
+    response.status(404).json({ error: "Project not found." });
+    return;
+  }
+
+  try {
+    response.json(await projectFileDiff(project, request.query.path));
+  } catch (error) {
+    response.status(400).json({ error: error instanceof Error ? error.message : String(error) });
   }
 });
 
@@ -1342,18 +1523,20 @@ app.post("/api/filesystem/open", async (request, response) => {
   }
 
   const filePath = path.resolve(requestedPath);
-  if (!isOpenablePath(filePath)) {
+  const mode = request.body?.mode === "containingFolder" ? "containingFolder" : "path";
+  const openPath = mode === "containingFolder" ? path.dirname(filePath) : filePath;
+  if (!isOpenablePath(openPath)) {
     response.status(400).json({ error: "Path must be inside an open project or the built-in agent directory." });
     return;
   }
 
   try {
-    const info = await stat(filePath);
+    const info = await stat(openPath);
     if (!info.isFile() && !info.isDirectory()) {
       response.status(400).json({ error: "Path must be a file or directory." });
       return;
     }
-    await openWithDefaultApp(filePath);
+    await openWithDefaultApp(openPath);
     response.json({ ok: true });
   } catch (error) {
     response.status(500).json({ error: error instanceof Error ? error.message : String(error) });
