@@ -202,6 +202,18 @@
 .xterm {
   height: 100%;
   padding: 8px;
+  max-width: 100%;
+}
+
+.terminal-host .xterm {
+  width: 100% !important;
+  max-width: 100%;
+}
+
+.terminal-host .xterm-screen,
+.terminal-host .xterm-helpers,
+.terminal-host .xterm-rows {
+  max-width: 100%;
 }
 
 .xterm .xterm-viewport {

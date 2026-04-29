@@ -8932,6 +8932,8 @@ function TerminalPane({
 
     const resize = () => {
       try {
+        const rect = host.getBoundingClientRect();
+        if (rect.width < 20 || rect.height < 20) return;
         fit.fit();
         if (terminal.cols !== sizeRef.current.cols || terminal.rows !== sizeRef.current.rows) {
           sizeRef.current = { cols: terminal.cols, rows: terminal.rows };
@@ -8982,6 +8984,7 @@ function TerminalPane({
     host.addEventListener("contextmenu", handleContextMenu);
     const frame = window.requestAnimationFrame(() => {
       resize();
+      window.requestAnimationFrame(resize);
       terminal.focus();
     });
 
@@ -9037,7 +9040,7 @@ function TerminalPane({
           <X className="h-3.5 w-3.5" />
         </Button>
       )}
-      <div ref={hostRef} className="h-full w-full" />
+      <div ref={hostRef} className="terminal-host h-full min-w-0 max-w-full overflow-hidden" />
     </div>
   );
 }
