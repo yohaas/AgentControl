@@ -817,7 +817,7 @@ export class AgentRuntimeManager {
       : ["exec", "--json", "-m", state.agent.currentModel];
     const permissionMode = this.permissionMode(state);
     if (permissionMode === "acceptEdits" || permissionMode === "bypassPermissions") {
-      args.push("--sandbox", "danger-full-access");
+      args.push("-c", `sandbox_mode=${tomlBasicString("danger-full-access")}`);
     }
     args.push("-c", `model_reasoning_effort=${tomlBasicString(this.providerReasoningEffort(state))}`);
     const selectedPlugins = new Set(state.def?.plugins || []);
