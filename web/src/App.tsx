@@ -10,6 +10,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
+  type CSSProperties,
   type UIEvent as ReactUIEvent
 } from "react";
 import { FitAddon } from "@xterm/addon-fit";
@@ -1955,17 +1956,145 @@ function createPermissionAllowRule(agent: RunningAgent, toolName: string, input?
   };
 }
 
-function stripAnsi(value: string) {
-  return value.replace(/\u001b\[[0-?]*[ -/]*[@-~]/g, "");
+const ANSI_COLORS = [
+  "#000000",
+  "#cd3131",
+  "#0dbc79",
+  "#e5e510",
+  "#2472c8",
+  "#bc3fbc",
+  "#11a8cd",
+  "#e5e5e5",
+  "#666666",
+  "#f14c4c",
+  "#23d18b",
+  "#f5f543",
+  "#3b8eea",
+  "#d670d6",
+  "#29b8db",
+  "#e5e5e5"
+];
+
+interface TerminalLineSegment {
+  text: string;
+  style?: CSSProperties;
 }
 
-function latestTerminalLine(output: string[]) {
-  const text = stripAnsi(output.slice(-40).join(""));
-  const lines = text
-    .split(/\r?\n|\r/)
-    .map((line) => line.trim())
-    .filter(Boolean);
-  return lines.at(-1) || "";
+interface TerminalLinePreview {
+  text: string;
+  segments: TerminalLineSegment[];
+}
+
+function terminalAnsiColorFrom256(index: number) {
+  if (index >= 0 && index < ANSI_COLORS.length) return ANSI_COLORS[index];
+  if (index >= 16 && index <= 231) {
+    const value = index - 16;
+    const r = Math.floor(value / 36);
+    const g = Math.floor((value % 36) / 6);
+    const b = value % 6;
+    const channel = (item: number) => (item === 0 ? 0 : 55 + item * 40);
+    return `rgb(${channel(r)}, ${channel(g)}, ${channel(b)})`;
+  }
+  if (index >= 232 && index <= 255) {
+    const gray = 8 + (index - 232) * 10;
+    return `rgb(${gray}, ${gray}, ${gray})`;
+  }
+  return undefined;
+}
+
+function latestTerminalLine(output: string[]): TerminalLinePreview {
+  const text = output.slice(-40).join("");
+  let segments: TerminalLineSegment[] = [];
+  let lastNonEmptySegments: TerminalLineSegment[] = [];
+  let index = 0;
+  const style: CSSProperties = {};
+
+  const appendText = (value: string) => {
+    if (!value) return;
+    const previous = segments.at(-1);
+    const nextStyle = Object.keys(style).length > 0 ? { ...style } : undefined;
+    if (previous && JSON.stringify(previous.style || {}) === JSON.stringify(nextStyle || {})) {
+      previous.text += value;
+      return;
+    }
+    segments.push({ text: value, style: nextStyle });
+  };
+  const rememberLine = () => {
+    const lineText = segments.map((segment) => segment.text).join("");
+    if (lineText.trim()) lastNonEmptySegments = segments.map((segment) => ({ ...segment, style: segment.style ? { ...segment.style } : undefined }));
+  };
+  const resetLine = () => {
+    rememberLine();
+    segments = [];
+  };
+  const applySgr = (codes: number[]) => {
+    const values = codes.length > 0 ? codes : [0];
+    for (let offset = 0; offset < values.length; offset += 1) {
+      const code = values[offset];
+      if (code === 0) {
+        for (const key of Object.keys(style) as Array<keyof CSSProperties>) delete style[key];
+      } else if (code === 1) {
+        style.fontWeight = 700;
+      } else if (code === 3) {
+        style.fontStyle = "italic";
+      } else if (code === 4) {
+        style.textDecoration = "underline";
+      } else if (code === 22) {
+        delete style.fontWeight;
+      } else if (code === 23) {
+        delete style.fontStyle;
+      } else if (code === 24) {
+        delete style.textDecoration;
+      } else if (code === 39) {
+        delete style.color;
+      } else if (code >= 30 && code <= 37) {
+        style.color = ANSI_COLORS[code - 30];
+      } else if (code >= 90 && code <= 97) {
+        style.color = ANSI_COLORS[8 + code - 90];
+      } else if (code === 38 && values[offset + 1] === 5) {
+        const color = terminalAnsiColorFrom256(values[offset + 2]);
+        if (color) style.color = color;
+        offset += 2;
+      } else if (code === 38 && values[offset + 1] === 2) {
+        const [red, green, blue] = values.slice(offset + 2, offset + 5);
+        if ([red, green, blue].every((value) => Number.isFinite(value))) style.color = `rgb(${red}, ${green}, ${blue})`;
+        offset += 4;
+      }
+    }
+  };
+
+  while (index < text.length) {
+    const rest = text.slice(index);
+    const sgr = rest.match(/^\u001b\[([0-9;]*)m/);
+    if (sgr) {
+      applySgr(sgr[1].split(";").filter(Boolean).map(Number));
+      index += sgr[0].length;
+      continue;
+    }
+    const csi = rest.match(/^\u001b\[[0-?]*[ -/]*[@-~]/);
+    if (csi) {
+      index += csi[0].length;
+      continue;
+    }
+    const char = text[index];
+    if (char === "\n" || char === "\r") {
+      resetLine();
+    } else if (char === "\b") {
+      const last = segments.at(-1);
+      if (last) last.text = last.text.slice(0, -1);
+      if (last && !last.text) segments.pop();
+    } else {
+      appendText(char);
+    }
+    index += 1;
+  }
+  rememberLine();
+
+  const selectedSegments = segments.map((segment) => segment.text).join("").trim() ? segments : lastNonEmptySegments;
+  return {
+    text: selectedSegments.map((segment) => segment.text).join("").trim(),
+    segments: selectedSegments
+  };
 }
 
 function timestampValue(value?: string) {
@@ -9264,8 +9393,9 @@ function TerminalMinimizedDock({ poppedOutTerminalIds }: { poppedOutTerminalIds:
     [poppedOutTerminalIds, sessionsById, selectedProjectId]
   );
   const lastActive = sessions[sessions.length - 1];
-  const line = lastActive ? latestTerminalLine(outputById[lastActive.id] || []) : "";
+  const line = lastActive ? latestTerminalLine(outputById[lastActive.id] || []) : undefined;
   if (!lastActive) return null;
+  const terminalLabel = lastActive.title || lastActive.projectName || "Shell";
 
   function restore() {
     setActiveTerminal(lastActive.id);
@@ -9283,7 +9413,18 @@ function TerminalMinimizedDock({ poppedOutTerminalIds }: { poppedOutTerminalIds:
       <span className="text-sm font-medium">Terminal</span>
       <Badge className="border-emerald-400/40 bg-emerald-500/15 text-emerald-100">{sessions.length}</Badge>
       <span className="min-w-0 flex-1 truncate font-mono text-xs text-emerald-200/85">
-        {line ? `${lastActive.title || lastActive.projectName || "Shell"}: ${line}` : lastActive.cwd}
+        {line?.text ? (
+          <>
+            <span>{terminalLabel}: </span>
+            {line.segments.map((segment, index) => (
+              <span key={`${index}-${segment.text}`} style={segment.style}>
+                {segment.text}
+              </span>
+            ))}
+          </>
+        ) : (
+          lastActive.cwd
+        )}
       </span>
     </button>
   );
