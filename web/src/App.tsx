@@ -9276,6 +9276,13 @@ function TerminalPanel({
     .filter((item): item is TerminalSession => Boolean(item));
   const terminalDockOption = TERMINAL_DOCK_OPTIONS.find((option) => option.value === terminalDock) || TERMINAL_DOCK_OPTIONS[2];
   const CurrentDockIcon = terminalDockOption.icon;
+  const panelStyle: CSSProperties | undefined = popout
+    ? undefined
+    : floating
+      ? detachedBounds
+      : sideDock
+        ? { width, minWidth: width, maxWidth: width, flex: `0 0 ${width}px` }
+        : { height, minHeight: height, maxHeight: height, flex: `0 0 ${height}px` };
 
   return (
     <section
@@ -9291,7 +9298,7 @@ function TerminalPanel({
                 ? "relative h-full border-l"
                 : "relative border-t"
       )}
-      style={popout ? undefined : floating ? detachedBounds : sideDock ? { width } : { height }}
+      style={panelStyle}
     >
       {!popout && terminalDock === "bottom" && (
         <div className="absolute -top-1 left-0 right-0 h-2 cursor-ns-resize hover:bg-primary/25" onPointerDown={startResize} title="Drag to resize terminal" />
@@ -9370,6 +9377,16 @@ function TerminalPanel({
           <Columns2 className="h-4 w-4" />
           Split
         </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => session && sendCommand({ type: "terminalClear", id: session.id })}
+          disabled={!session}
+          title="Clear terminal output"
+        >
+          <Trash2 className="h-4 w-4" />
+          Clear
+        </Button>
         {!popout && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -9411,7 +9428,7 @@ function TerminalPanel({
       <div
         className={cn(
           "grid min-h-0 flex-1 gap-2 bg-zinc-950 p-2",
-          visibleSessions.length <= 1 ? "grid-cols-1" : visibleSessions.length === 2 ? "grid-cols-2" : "grid-cols-2"
+          sideDock || visibleSessions.length <= 1 ? "grid-cols-1" : visibleSessions.length === 2 ? "grid-cols-2" : "grid-cols-2"
         )}
       >
         {visibleSessions.length === 0 ? (

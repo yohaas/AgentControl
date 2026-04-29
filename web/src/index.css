@@ -201,11 +201,17 @@
 
 .xterm {
   height: 100%;
-  padding: 8px;
   max-width: 100%;
 }
 
+.terminal-host {
+  box-sizing: border-box;
+  padding: 8px;
+}
+
 .terminal-host .xterm {
+  height: 100%;
+  padding: 0;
   width: 100% !important;
   max-width: 100%;
 }
@@ -214,6 +220,12 @@
 .terminal-host .xterm-helpers,
 .terminal-host .xterm-rows {
   max-width: 100%;
+}
+
+.terminal-host .xterm-viewport {
+  left: 0 !important;
+  right: 0;
+  width: 100% !important;
 }
 
 .xterm .xterm-viewport {
