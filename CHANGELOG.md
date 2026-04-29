@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-04-29
 
+- [1b5fd5a](https://github.com/yohaas/AgentControl/commit/1b5fd5a) Keep selected model during Claude turns
 - [de7963b](https://github.com/yohaas/AgentControl/commit/de7963b) Allow lower agent rows to expand upward
 - [b9ba937](https://github.com/yohaas/AgentControl/commit/b9ba937) Add terminal clear control and tighten dock sizing
 - [69eaf7d](https://github.com/yohaas/AgentControl/commit/69eaf7d) Constrain terminal host width
