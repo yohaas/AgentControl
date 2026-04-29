@@ -6713,30 +6713,15 @@ function PinnedUserMessage({
   compact?: boolean;
   onJump?: () => void;
 }) {
-  const [minimized, setMinimized] = useState(false);
-  const [canExpand, setCanExpand] = useState(false);
-  const textRef = useRef<HTMLDivElement | null>(null);
-  const collapsedMaxHeight = compact ? 48 : 60;
   const minimizedMaxHeight = compact ? 16 : 20;
 
-  useEffect(() => {
-    setMinimized(false);
-  }, [event.id]);
-
-  useEffect(() => {
-    const node = textRef.current;
-    if (!node) return;
-    const hasMoreThanThreeExplicitLines = event.text.split(/\r?\n/).length > 3;
-    setCanExpand(hasMoreThanThreeExplicitLines || node.scrollHeight > collapsedMaxHeight + 1);
-  }, [collapsedMaxHeight, event.text, minimized]);
-
   return (
-    <div className="sticky top-0 z-20 mb-3 flex justify-end">
+    <div className="group sticky top-0 z-20 mb-3 flex justify-end">
       <div
         role="button"
         tabIndex={0}
         className={cn(
-          "max-w-full cursor-pointer rounded-md border border-primary/40 bg-primary/95 px-3 py-2 text-primary-foreground shadow-lg outline-none backdrop-blur focus-visible:ring-2 focus-visible:ring-ring",
+          "relative max-w-full cursor-pointer rounded-md border border-primary/40 bg-primary/95 px-3 py-2 text-primary-foreground shadow-lg outline-none backdrop-blur focus-visible:ring-2 focus-visible:ring-ring",
           "user-question",
           compact ? "text-xs leading-4" : "text-sm leading-5"
         )}
@@ -6753,29 +6738,26 @@ function PinnedUserMessage({
       >
         <div className="flex min-w-0 items-start gap-2">
           <div
-            ref={textRef}
             className="min-w-0 flex-1 whitespace-pre-wrap break-words [overflow-wrap:anywhere]"
-            style={canExpand ? { maxHeight: minimized ? minimizedMaxHeight : collapsedMaxHeight, overflow: "hidden" } : undefined}
+            style={{ maxHeight: minimizedMaxHeight, overflow: "hidden" }}
           >
             {event.text || "Attachment"}
           </div>
-          {canExpand && (
-            <button
-              type="button"
-              className="grid h-5 w-5 shrink-0 place-items-center rounded-sm text-primary-foreground/85 hover:bg-primary-foreground/15 hover:text-primary-foreground"
-              title={minimized ? "Show 3 lines" : "Minimize message"}
-              onClick={(event) => {
-                event.stopPropagation();
-                setMinimized((value) => !value);
-              }}
-            >
-              <ChevronDown className={cn("h-3.5 w-3.5 rotate-180 transition-transform", minimized && "rotate-0")} />
-            </button>
-          )}
         </div>
         {event.attachments && event.attachments.length > 0 && (
           <div className="mt-1 text-[11px] opacity-80">{event.attachments.length} attachment(s)</div>
         )}
+      </div>
+      <div
+        className={cn(
+          "pointer-events-none absolute left-0 right-0 top-full mt-2 hidden rounded-md border border-primary/35 bg-popover px-3 py-2 text-left text-sm leading-5 text-popover-foreground shadow-2xl ring-1 ring-black/10",
+          "before:absolute before:right-6 before:top-[-6px] before:h-3 before:w-3 before:rotate-45 before:border-l before:border-t before:border-primary/35 before:bg-popover",
+          "group-hover:block group-focus-within:block"
+        )}
+        role="tooltip"
+      >
+        <div className="mb-1 text-[11px] font-medium uppercase tracking-normal text-muted-foreground">Pinned message</div>
+        <div className="max-h-[60vh] overflow-auto whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{event.text || "Attachment"}</div>
       </div>
     </div>
   );
