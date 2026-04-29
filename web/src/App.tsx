@@ -6720,18 +6720,36 @@ function AgentTile({
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             {agent.restorable && (
-              <DropdownMenuItem onClick={() => sendCommand({ type: "resume", id: agent.id })}>Resume</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => sendCommand({ type: "resume", id: agent.id })}>
+                <Play className="mr-2 h-4 w-4" />
+                Resume
+              </DropdownMenuItem>
             )}
-            {isBusy && <DropdownMenuItem onClick={() => sendCommand({ type: "interrupt", id: agent.id })}>Stop response</DropdownMenuItem>}
-            <DropdownMenuItem onClick={duplicateAgent}>Duplicate</DropdownMenuItem>
+            {isBusy && (
+              <DropdownMenuItem onClick={() => sendCommand({ type: "interrupt", id: agent.id })}>
+                <Square className="mr-2 h-4 w-4" />
+                Stop response
+              </DropdownMenuItem>
+            )}
             {!agent.remoteControl && (
               <DropdownMenuItem onClick={() => setTranscriptViewMode((mode) => (mode === "chat" ? "raw" : "chat"))}>
+                <CodeXml className="mr-2 h-4 w-4" />
                 {transcriptViewMode === "chat" ? "View Raw Stream" : "View Chat"}
               </DropdownMenuItem>
             )}
             <ExportChatMenu agent={agent} transcripts={transcript} addError={addError} />
-            <DropdownMenuItem onClick={() => sendCommand({ type: "clear", id: agent.id })}>Clear Chat</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => sendCommand({ type: "kill", id: agent.id })}>Close Chat</DropdownMenuItem>
+            <DropdownMenuItem onClick={duplicateAgent}>
+              <Columns2 className="mr-2 h-4 w-4" />
+              Duplicate
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => sendCommand({ type: "clear", id: agent.id })}>
+              <Trash2 className="mr-2 h-4 w-4" />
+              Clear Chat
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => sendCommand({ type: "kill", id: agent.id })}>
+              <X className="mr-2 h-4 w-4" />
+              Close Chat
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
         <Button
