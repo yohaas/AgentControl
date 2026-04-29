@@ -1706,6 +1706,9 @@ wss.on("connection", (ws) => {
         case "userMessage":
           runtime.userMessage(command.id, command.text, undefined, command.attachments);
           break;
+        case "injectMessage":
+          runtime.injectMessage(command.id, command.text, command.attachments);
+          break;
         case "kill":
           runtime.kill(command.id);
           break;

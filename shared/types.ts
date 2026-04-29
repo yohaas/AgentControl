@@ -566,6 +566,12 @@ export type WsClientCommand =
       attachments?: MessageAttachment[];
     }
   | {
+      type: "injectMessage";
+      id: string;
+      text: string;
+      attachments?: MessageAttachment[];
+    }
+  | {
       type: "kill";
       id: string;
     }

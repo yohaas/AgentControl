@@ -26,6 +26,7 @@ See [CHANGELOG.md](CHANGELOG.md) for a date-grouped history of changes with comm
 - Control effort per agent: low, medium, high, xhigh, or max.
 - Toggle Claude thinking for a session.
 - Use provider-aware slash command autocomplete from AgentControl commands, Claude built-ins, project commands, user commands, plugin commands, and session-reported commands. Commands that require the Claude TUI are shown disabled.
+- Steer active chats from queued messages, and use `/btw` to inject a note into a running Claude CLI response.
 - Add context from local files, drag/drop files into chat, paste images, and send selected transcript text to another agent.
 - Run project terminals with tabs, command history, rename, split panes, resize, pop out, dock left/right/bottom/float, and kill-on-close behavior.
 - Show Git status for the selected project, including changed files, unpushed commit count, and a Push action.

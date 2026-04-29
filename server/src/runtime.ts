@@ -60,6 +60,7 @@ interface AgentProcessState {
   interrupting?: boolean;
   exiting?: boolean;
   activeTurn?: boolean;
+  pendingInjectedMessage?: { text: string; attachments: MessageAttachment[] };
   permissionToken?: string;
   permissionMcpConfigPath?: string;
   pendingPermissions?: Map<string, PendingPermissionRequest>;
@@ -529,6 +530,104 @@ export class AgentRuntimeManager {
     child.stdin.write(`${JSON.stringify(payload)}\n`);
   }
 
+  injectMessage(id: string, text: string, attachments: MessageAttachment[] = []): void {
+    const state = this.requiredState(id);
+    const trimmed = text.trim();
+    if (!trimmed && attachments.length === 0) return;
+    if (!state.activeTurn) {
+      this.userMessage(id, trimmed, undefined, attachments);
+      return;
+    }
+    if (state.agent.remoteControl) {
+      this.remoteControlUserMessage(state, trimmed, attachments);
+      return;
+    }
+    if (state.agent.provider === "claude" && !this.isClaudeApi(state)) {
+      this.injectClaudeCliMessage(state, trimmed, attachments);
+      return;
+    }
+    if (state.agent.provider === "codex" && state.child && !state.child.killed) {
+      state.pendingInjectedMessage = { text: trimmed, attachments };
+      this.pushTranscript(state, {
+        ...eventBase(state.agent.id, state.agent.currentModel),
+        kind: "system",
+        text: "Steering active Codex response with queued message."
+      });
+      this.interrupt(id);
+      return;
+    }
+    const provider = state.agent.provider === "codex" ? "Codex" : state.agent.provider === "openai" ? "OpenAI" : "Claude API";
+    throw new Error(`${provider} cannot accept live injected messages from AgentControl yet.`);
+  }
+
+  private injectClaudeCliMessage(state: AgentProcessState, text: string, attachments: MessageAttachment[] = []): void {
+    if (!state.child || state.child.killed || !state.child.stdin.writable) {
+      throw new Error("Claude process is not accepting input.");
+    }
+    const imageAttachments = attachments.filter((attachment) => attachment.mimeType.startsWith("image/"));
+    const contextAttachments = attachments.filter((attachment) => !attachment.mimeType.startsWith("image/"));
+    const attachmentNote = imageAttachments.length
+      ? [
+          "Attached image file(s):",
+          ...imageAttachments.map((attachment) => `- ${attachment.name}: ${attachment.path || attachment.url || attachment.id}`)
+        ].join("\n")
+      : "";
+    const contextNote = contextAttachments.length
+      ? [
+          "Attached context file(s):",
+          ...contextAttachments.map((attachment) => `- ${attachment.relativePath || attachment.name}`)
+        ].join("\n")
+      : "";
+    const fallbackText =
+      imageAttachments.length && contextAttachments.length
+        ? "Please inspect the attached image(s) and use the attached context file(s)."
+        : imageAttachments.length
+          ? "Please inspect the attached image(s)."
+          : contextAttachments.length
+            ? "Please use the attached context file(s)."
+            : "";
+    const displayText = [text || fallbackText, attachmentNote, contextNote].filter(Boolean).join("\n\n");
+    const contextPayload = contextAttachments.length
+      ? ["Context file contents:", ...contextAttachments.map(readAttachmentContext)].join("\n\n")
+      : "";
+    const payloadText = [text || fallbackText, attachmentNote, contextPayload].filter(Boolean).join("\n\n");
+    this.pushTranscript(state, {
+      ...eventBase(state.agent.id, state.agent.currentModel),
+      kind: "user",
+      text: displayText,
+      attachments
+    });
+    const content: Record<string, unknown>[] = [{ type: "text", text: payloadText }];
+    for (const attachment of imageAttachments) {
+      if (!attachment.path) continue;
+      try {
+        content.push({
+          type: "image",
+          source: {
+            type: "base64",
+            media_type: attachment.mimeType,
+            data: readFileSync(attachment.path).toString("base64")
+          }
+        });
+      } catch (error) {
+        this.pushTranscript(state, {
+          ...eventBase(state.agent.id, state.agent.currentModel),
+          kind: "system",
+          text: `Could not attach image ${attachment.name}: ${error instanceof Error ? error.message : String(error)}`
+        });
+      }
+    }
+    state.child.stdin.write(
+      `${JSON.stringify({
+        type: "user",
+        message: {
+          role: "user",
+          content
+        }
+      })}\n`
+    );
+  }
+
   private remoteControlUserMessage(state: AgentProcessState, text: string, attachments: MessageAttachment[] = []): void {
     const trimmed = text.trim();
     if (!trimmed) return;
@@ -910,10 +1009,18 @@ export class AgentRuntimeManager {
           this.setStatus(state, "interrupted");
         } else if (code && code !== 0) this.setStatus(state, "error", `Codex exited with code ${code}.`);
         else if (state.agent.status !== "error") this.setStatus(state, "idle");
+        this.sendPendingInjectedMessage(state);
         resolve();
       });
       child.stdin.end(prompt);
     });
+  }
+
+  private sendPendingInjectedMessage(state: AgentProcessState): void {
+    const pending = state.pendingInjectedMessage;
+    if (!pending || state.exiting) return;
+    state.pendingInjectedMessage = undefined;
+    setImmediate(() => this.userMessage(state.agent.id, pending.text, undefined, pending.attachments));
   }
 
   private flushCodexBuffers(state: AgentProcessState): void {

@@ -205,6 +205,7 @@ const COMMON_SLASH_COMMANDS: SlashCommandSuggestion[] = [
 ];
 
 const CLAUDE_SLASH_COMMANDS: SlashCommandSuggestion[] = [
+  { value: "/btw ", label: "/btw", description: "Inject a note into the active Claude response", argumentHint: "[message]", source: "agentcontrol" },
   { value: "/compact", label: "/compact", description: "Compact conversation context", argumentHint: "[instructions]", source: "builtin" },
   { value: "/memory", label: "/memory", description: "Edit or inspect memory files", source: "builtin", interactive: true },
   { value: "/resume", label: "/resume", description: "Resume a previous conversation", source: "builtin", interactive: true },
@@ -1307,6 +1308,19 @@ function QueuedMessageList({
                     variant="ghost"
                     size="icon"
                     className="h-7 w-7"
+                    title="Steer active response with this queued message"
+                    onClick={() => {
+                      sendCommand({ type: "injectMessage", id: agentId, text: message.text, attachments: message.attachments });
+                      removeQueuedMessage(agentId, message.id);
+                    }}
+                  >
+                    <Waypoints className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
                     title={editing ? "Done editing" : "Edit queued message"}
                     onClick={() => setEditingId((current) => (current === message.id ? undefined : message.id))}
                   >
@@ -1597,6 +1611,16 @@ function handleNativeSlashCommand(agent: RunningAgent, text: string) {
   return false;
 }
 
+function injectedMessageText(agent: RunningAgent, text: string): string | undefined {
+  const trimmed = text.trim();
+  const provider = agent.provider || "claude";
+  if (provider === "claude") {
+    const match = trimmed.match(/^\/btw(?:\s+([\s\S]+))?$/i);
+    return match?.[1]?.trim() || undefined;
+  }
+  return undefined;
+}
+
 function slashCommandSuggestions(
   draft: string,
   models: string[],
@@ -1605,8 +1629,9 @@ function slashCommandSuggestions(
   forceOpen = false
 ): SlashCommandSuggestion[] {
   const trimmed = draft.trimStart();
-  if (!forceOpen && (!trimmed.startsWith("/") || trimmed.includes("\n"))) return [];
-  const query = forceOpen ? "" : trimmed.slice(1).toLowerCase();
+  if (!forceOpen && trimmed.includes("\n")) return [];
+  if (!forceOpen && !trimmed.startsWith("/")) return [];
+  const query = forceOpen ? "" : trimmed.startsWith("/") ? trimmed.slice(1).toLowerCase() : trimmed.toLowerCase();
   if (query.startsWith("model ")) {
     const modelQuery = query.slice("model ".length).trim();
     return models
@@ -1649,7 +1674,8 @@ function slashCommandSuggestions(
       const key = command.label.toLowerCase();
       if (seen.has(key)) return false;
       seen.add(key);
-      return command.label.slice(1).toLowerCase().startsWith(query);
+      const label = command.label.startsWith("/") ? command.label.slice(1) : command.label;
+      return label.toLowerCase().startsWith(query);
     })
     .sort((left, right) => compareSlashCommands(left.label, right.label))
     .slice(0, 60);
@@ -6635,6 +6661,16 @@ function AgentTile({
       addError("Remote Control stdin bridge does not support attachments yet.");
       return;
     }
+    const injectedText = injectedMessageText(agent, draft);
+    if (injectedText) {
+      if (isBusy) sendCommand({ type: "injectMessage", id: agent.id, text: injectedText, attachments });
+      else sendCommand({ type: "userMessage", id: agent.id, text: injectedText, attachments });
+      setDraft(agent.id, "");
+      setComposerCollapsed(false);
+      setAttachments([]);
+      window.requestAnimationFrame(() => inputRef.current?.focus());
+      return;
+    }
     if (handleNativeSlashCommand(agent, draft)) {
       setDraft(agent.id, "");
       return;
@@ -6683,7 +6719,11 @@ function AgentTile({
       window.requestAnimationFrame(() => inputRef.current?.focus());
       return;
     }
-    if (isBusy) {
+    const injectedText = injectedMessageText(agent, commandText);
+    if (injectedText) {
+      if (isBusy) sendCommand({ type: "injectMessage", id: agent.id, text: injectedText });
+      else sendCommand({ type: "userMessage", id: agent.id, text: injectedText, attachments: [] });
+    } else if (isBusy) {
       enqueueMessage(agent.id, { text: commandText, attachments: [] });
     } else {
       sendCommand({ type: "userMessage", id: agent.id, text: commandText, attachments: [] });
@@ -8163,6 +8203,16 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
       addError("Remote Control stdin bridge does not support attachments yet.");
       return;
     }
+    const injectedText = injectedMessageText(agent, draft);
+    if (injectedText) {
+      if (isBusy) sendCommand({ type: "injectMessage", id: agent.id, text: injectedText, attachments });
+      else sendCommand({ type: "userMessage", id: agent.id, text: injectedText, attachments });
+      setDraft(agent.id, "");
+      setComposerCollapsed(false);
+      setAttachments([]);
+      window.requestAnimationFrame(() => inputRef.current?.focus());
+      return;
+    }
     if (handleNativeSlashCommand(agent, draft)) {
       setDraft(agent.id, "");
       return;
@@ -8211,7 +8261,11 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
       window.requestAnimationFrame(() => inputRef.current?.focus());
       return;
     }
-    if (isBusy) {
+    const injectedText = injectedMessageText(agent, commandText);
+    if (injectedText) {
+      if (isBusy) sendCommand({ type: "injectMessage", id: agent.id, text: injectedText });
+      else sendCommand({ type: "userMessage", id: agent.id, text: injectedText, attachments: [] });
+    } else if (isBusy) {
       enqueueMessage(agent.id, { text: commandText, attachments: [] });
     } else {
       sendCommand({ type: "userMessage", id: agent.id, text: commandText, attachments: [] });
@@ -9733,7 +9787,7 @@ function TerminalPanel({
   return (
     <section
       className={cn(
-        "flex shrink-0 flex-col border-border bg-card",
+        "flex min-h-0 shrink-0 flex-col overflow-hidden border-border bg-card",
         popout
           ? "h-screen border-0"
           : floating

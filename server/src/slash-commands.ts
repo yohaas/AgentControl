@@ -12,6 +12,7 @@ const BUILTIN_COMMANDS: SlashCommandInfo[] = [
   { command: "/allowed-tools", description: "Alias for /permissions", source: "builtin", interactive: true },
   { command: "/batch", description: "Run coordinated batches of work", source: "builtin" },
   { command: "/bug", description: "Report a Claude Code issue", source: "builtin", interactive: true },
+  { command: "/btw", description: "Inject a note into the active Claude response", argumentHint: "[message]", source: "agentcontrol" },
   { command: "/clear", description: "Clear this chat history", source: "agentcontrol" },
   { command: "/claude-api", description: "Get help using Claude APIs", source: "builtin" },
   { command: "/compact", description: "Compact conversation context", argumentHint: "[instructions]", source: "builtin" },
