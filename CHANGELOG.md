@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-04-29
 
+- [b9ba937](https://github.com/yohaas/AgentControl/commit/b9ba937) Add terminal clear control and tighten dock sizing
 - [69eaf7d](https://github.com/yohaas/AgentControl/commit/69eaf7d) Constrain terminal host width
 - [d8df76e](https://github.com/yohaas/AgentControl/commit/d8df76e) Merge docked top bar into sidebar
 - [f7c721b](https://github.com/yohaas/AgentControl/commit/f7c721b) Dock top bar to left nav
