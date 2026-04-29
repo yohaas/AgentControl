@@ -5900,11 +5900,11 @@ function SettingsDialog() {
               <h3 className="text-sm font-medium">Appearance</h3>
               <p className="text-xs text-muted-foreground">Control the app theme and chat layout.</p>
             </div>
-            <div className="grid gap-3 sm:grid-cols-4">
-              <label className="grid gap-1.5 text-sm">
+            <div className="grid gap-2 sm:grid-cols-5">
+              <label className="grid min-w-0 gap-1.5 text-sm">
                 Color mode
                 <Select value={themeMode} onValueChange={(value) => setThemeMode(value as ThemeMode)}>
-                  <SelectTrigger>
+                  <SelectTrigger className="px-2">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -5914,10 +5914,10 @@ function SettingsDialog() {
                   </SelectContent>
                 </Select>
               </label>
-              <label className="grid gap-1.5 text-sm">
+              <label className="grid min-w-0 gap-1.5 text-sm">
                 Menu display
                 <Select value={menuDisplay} onValueChange={(value) => setMenuDisplay(value as MenuDisplayMode)}>
-                  <SelectTrigger>
+                  <SelectTrigger className="px-2">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -5926,10 +5926,10 @@ function SettingsDialog() {
                   </SelectContent>
                 </Select>
               </label>
-              <label className="grid gap-1.5 text-sm">
+              <label className="grid min-w-0 gap-1.5 text-sm">
                 Scrolling
                 <Select value={tileScrolling} onValueChange={(value) => setTileScrolling(value as TileScrollingMode)}>
-                  <SelectTrigger>
+                  <SelectTrigger className="px-2">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -5938,7 +5938,7 @@ function SettingsDialog() {
                   </SelectContent>
                 </Select>
               </label>
-              <label className="grid gap-1.5 text-sm">
+              <label className="grid min-w-0 gap-1.5 text-sm">
                 <span>
                   Tile height <span className="text-xs text-muted-foreground">(0 = full height)</span>
                 </span>
@@ -5947,10 +5947,11 @@ function SettingsDialog() {
                   min={0}
                   max={TILE_MAX_HEIGHT}
                   value={tileHeight}
+                  className="px-2"
                   onChange={(event) => setTileHeight(Number(event.target.value))}
                 />
               </label>
-              <label className="grid gap-1.5 text-sm">
+              <label className="grid min-w-0 gap-1.5 text-sm">
                 Columns
                 <Input
                   type="number"
@@ -5958,6 +5959,7 @@ function SettingsDialog() {
                   max={6}
                   step={1}
                   value={tileColumns}
+                  className="px-2"
                   onChange={(event) => setTileColumns(Number(event.target.value))}
                 />
               </label>
