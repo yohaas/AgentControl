@@ -25,6 +25,7 @@ import type {
   RunningAgent,
   SendToCommand,
   SlashCommandInfo,
+  TokenUsage,
   TranscriptEvent,
   WsServerEvent
 } from "@agent-control/shared";
@@ -75,6 +76,7 @@ const RC_URL_PATTERN = /https:\/\/claude\.ai\/code(?:[/?#][^\s\u0007\u001b)]*)?/
 const PERMISSION_MCP_SERVER_NAME = "agentcontrol_permissions";
 const PERMISSION_MCP_TOOL_NAME = `mcp__${PERMISSION_MCP_SERVER_NAME}__approval_prompt`;
 const PERMISSION_REQUEST_TIMEOUT_MS = 10 * 60 * 1000;
+const TURN_TIMER_STATUSES = new Set<AgentStatus>(["starting", "running", "switching-model", "awaiting-permission", "awaiting-input"]);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 interface PendingPermissionRequest {
   toolUseId: string;
@@ -870,6 +872,7 @@ export class AgentRuntimeManager {
     try {
       const payload = JSON.parse(line) as Record<string, unknown>;
       const type = String(payload.type || "");
+      this.updateTokenUsage(state, this.usageFromPayload(payload));
       const text = this.extractCodexText(payload);
       if (text) {
         const completedItem = this.isCodexCompletedItem(payload);
@@ -1025,6 +1028,7 @@ export class AgentRuntimeManager {
         continue;
       }
       const type = String(payload.type || "");
+      this.updateTokenUsage(state, this.usageFromPayload(payload));
       if (type === "content_block_delta") {
         const delta = payload.delta as Record<string, unknown> | undefined;
         if (typeof delta?.text === "string") this.appendAssistantText(state, delta.text);
@@ -1113,6 +1117,7 @@ export class AgentRuntimeManager {
         continue;
       }
       const type = String(payload.type || "");
+      this.updateTokenUsage(state, this.usageFromPayload(payload));
       if (type === "response.output_text.delta" && typeof payload.delta === "string") {
         this.appendAssistantText(state, payload.delta);
       } else if (type === "response.completed") {
@@ -1699,6 +1704,7 @@ export class AgentRuntimeManager {
 
     const type = String(payload.type || "");
     const subtype = String(payload.subtype || "");
+    this.updateTokenUsage(state, this.usageFromPayload(payload));
 
     const questionRequest = this.extractQuestionRequest(payload);
     if (questionRequest) {
@@ -2154,6 +2160,52 @@ export class AgentRuntimeManager {
     return typeof value === "string" && value.length > 0 ? value : undefined;
   }
 
+  private numericField(record: Record<string, unknown>, ...keys: string[]): number | undefined {
+    for (const key of keys) {
+      const value = record[key];
+      if (typeof value === "number" && Number.isFinite(value)) return value;
+      if (typeof value === "string" && value.trim() && Number.isFinite(Number(value))) return Number(value);
+    }
+    return undefined;
+  }
+
+  private usageFromPayload(payload: Record<string, unknown>): TokenUsage | undefined {
+    const candidates = [
+      payload.usage,
+      payload.message && typeof payload.message === "object" ? (payload.message as Record<string, unknown>).usage : undefined,
+      payload.response && typeof payload.response === "object" ? (payload.response as Record<string, unknown>).usage : undefined
+    ];
+    const usage = candidates.find((candidate): candidate is Record<string, unknown> => Boolean(candidate && typeof candidate === "object"));
+    if (!usage) return undefined;
+    const inputTokens = this.numericField(usage, "input_tokens", "inputTokens", "prompt_tokens", "promptTokens");
+    const outputTokens = this.numericField(usage, "output_tokens", "outputTokens", "completion_tokens", "completionTokens");
+    const cacheCreationInputTokens = this.numericField(usage, "cache_creation_input_tokens", "cacheCreationInputTokens");
+    const cacheReadInputTokens = this.numericField(usage, "cache_read_input_tokens", "cacheReadInputTokens", "cached_tokens", "cachedTokens");
+    const totalTokens =
+      this.numericField(usage, "total_tokens", "totalTokens") ??
+      (inputTokens !== undefined && outputTokens !== undefined ? inputTokens + outputTokens : undefined);
+    const normalized = { inputTokens, outputTokens, cacheCreationInputTokens, cacheReadInputTokens, totalTokens };
+    return Object.values(normalized).some((value) => value !== undefined) ? normalized : undefined;
+  }
+
+  private updateTokenUsage(state: AgentProcessState, usage?: TokenUsage): void {
+    if (!usage) return;
+    state.agent.lastTokenUsage = usage;
+    state.agent.updatedAt = now();
+    this.broadcast({
+      type: "agent.status_changed",
+      id: state.agent.id,
+      status: state.agent.status,
+      statusMessage: state.agent.statusMessage,
+      restorable: state.agent.restorable,
+      pid: state.agent.pid,
+      turnStartedAt: state.agent.turnStartedAt,
+      lastTokenUsage: state.agent.lastTokenUsage,
+      updatedAt: state.agent.updatedAt
+    });
+    this.persist();
+  }
+
   private extractTextDelta(payload: Record<string, unknown>): string | undefined {
     const delta = payload.delta && typeof payload.delta === "object" ? (payload.delta as Record<string, unknown>) : undefined;
     const message = payload.message && typeof payload.message === "object" ? (payload.message as Record<string, unknown>) : undefined;
@@ -2239,6 +2291,14 @@ export class AgentRuntimeManager {
   }
 
   private setStatus(state: AgentProcessState, status: AgentStatus, statusMessage?: string): void {
+    const wasTiming = Boolean(state.agent.turnStartedAt);
+    const shouldTime = TURN_TIMER_STATUSES.has(status);
+    if (shouldTime && !wasTiming) {
+      state.agent.turnStartedAt = now();
+      state.agent.lastTokenUsage = undefined;
+    } else if (!shouldTime) {
+      state.agent.turnStartedAt = undefined;
+    }
     state.agent.status = status;
     state.agent.statusMessage = statusMessage;
     state.agent.updatedAt = now();
@@ -2249,6 +2309,8 @@ export class AgentRuntimeManager {
       statusMessage,
       restorable: state.agent.restorable,
       pid: state.agent.pid,
+      turnStartedAt: state.agent.turnStartedAt,
+      lastTokenUsage: state.agent.lastTokenUsage,
       updatedAt: state.agent.updatedAt
     });
     this.persist();

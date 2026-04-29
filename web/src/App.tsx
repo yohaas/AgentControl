@@ -86,6 +86,7 @@ import type {
   RunningAgent,
   SlashCommandInfo,
   TerminalSession,
+  TokenUsage,
   TranscriptEvent
 } from "@agent-control/shared";
 import { Badge } from "./components/ui/badge";
@@ -325,13 +326,58 @@ function useThinkingPhrase(active = true) {
   return THINKING_PHRASES[index];
 }
 
-function ThinkingText({ prefix }: { prefix?: string }) {
+function useElapsedSeconds(startedAt?: string) {
+  const fallbackStartedAt = useRef(Date.now());
+  const [nowMs, setNowMs] = useState(Date.now());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNowMs(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const startedMs = startedAt ? Date.parse(startedAt) : fallbackStartedAt.current;
+  if (!Number.isFinite(startedMs)) return 0;
+  return Math.max(0, Math.floor((nowMs - startedMs) / 1000));
+}
+
+function formatElapsed(seconds: number) {
+  const safeSeconds = Math.max(0, seconds);
+  const hours = Math.floor(safeSeconds / 3600);
+  const minutes = Math.floor((safeSeconds % 3600) / 60);
+  const remainingSeconds = safeSeconds % 60;
+  if (hours > 0) return `${hours}:${String(minutes).padStart(2, "0")}:${String(remainingSeconds).padStart(2, "0")}`;
+  return `${minutes}:${String(remainingSeconds).padStart(2, "0")}`;
+}
+
+function formatTokenCount(value?: number) {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) return "";
+  if (value >= 1000000) return `${(value / 1000000).toFixed(value >= 10000000 ? 0 : 1)}m`;
+  if (value >= 1000) return `${(value / 1000).toFixed(value >= 10000 ? 0 : 1)}k`;
+  return String(value);
+}
+
+function formatTokenUsage(usage?: TokenUsage) {
+  if (!usage) return "";
+  const parts = [
+    usage.inputTokens !== undefined ? `in ${formatTokenCount(usage.inputTokens)}` : "",
+    usage.outputTokens !== undefined ? `out ${formatTokenCount(usage.outputTokens)}` : "",
+    usage.cacheReadInputTokens !== undefined ? `cache ${formatTokenCount(usage.cacheReadInputTokens)}` : "",
+    usage.totalTokens !== undefined ? `total ${formatTokenCount(usage.totalTokens)}` : ""
+  ].filter(Boolean);
+  return parts.join(" / ");
+}
+
+function ThinkingText({ prefix, startedAt, usage }: { prefix?: string; startedAt?: string; usage?: TokenUsage }) {
   const phrase = useThinkingPhrase();
+  const elapsed = useElapsedSeconds(startedAt);
+  const tokenUsage = formatTokenUsage(usage);
   return (
-    <span className="inline-flex items-center gap-1 text-xs text-primary">
-      {prefix}
+    <span className="inline-flex min-w-0 flex-wrap items-center gap-x-1 gap-y-0.5 text-xs text-primary">
+      {prefix && <span>{prefix}</span>}
       <span>{phrase}</span>
       <span className="inline-flex w-4 animate-pulse">...</span>
+      <span className="font-mono text-[11px] text-muted-foreground">{formatElapsed(elapsed)}</span>
+      {tokenUsage && <span className="text-[11px] text-muted-foreground">· {tokenUsage}</span>}
     </span>
   );
 }
@@ -382,7 +428,7 @@ function AgentActivityIndicator({ agent, compact = false }: { agent: RunningAgen
         )}
         style={{ borderLeftColor: agentAccentColor(agent.color), borderLeftWidth: 4 }}
       >
-        <ThinkingText />
+        <ThinkingText startedAt={agent.turnStartedAt} usage={agent.lastTokenUsage} />
       </div>
     </div>
   );
@@ -6398,7 +6444,7 @@ function TranscriptPreview({
         )}
         {event.kind === "assistant_text" && event.streaming && (
           <span className="mt-2 block">
-            <ThinkingText prefix="Streaming" />
+            <ThinkingText prefix="Streaming" startedAt={agent.turnStartedAt} usage={agent.lastTokenUsage} />
           </span>
         )}
       </div>
@@ -7726,7 +7772,7 @@ function TranscriptItem({
         <CollapsibleText text={event.text} query={query} inlineToggle={showPopout} />
         {event.kind === "assistant_text" && event.streaming && (
           <span className="mt-2 block">
-            <ThinkingText prefix="Streaming" />
+            <ThinkingText prefix="Streaming" startedAt={agent.turnStartedAt} usage={agent.lastTokenUsage} />
           </span>
         )}
         {event.kind === "user" && event.attachments && event.attachments.length > 0 && (

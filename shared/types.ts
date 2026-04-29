@@ -19,6 +19,14 @@ export type AgentPermissionMode = "default" | "acceptEdits" | "plan" | "bypassPe
 export type AgentEffort = "low" | "medium" | "high" | "xhigh" | "max";
 export type RemoteControlState = "starting" | "waiting-for-browser" | "connected" | "closed" | "error";
 
+export interface TokenUsage {
+  inputTokens?: number;
+  outputTokens?: number;
+  cacheCreationInputTokens?: number;
+  cacheReadInputTokens?: number;
+  totalTokens?: number;
+}
+
 export interface AgentQuestionOption {
   label: string;
   description?: string;
@@ -151,6 +159,8 @@ export interface RunningAgent {
   modelLastUpdated: string;
   launchedAt: string;
   updatedAt: string;
+  turnStartedAt?: string;
+  lastTokenUsage?: TokenUsage;
   sessionId?: string;
   pid?: number;
   remoteControl: boolean;
@@ -403,6 +413,8 @@ export type WsServerEvent =
       statusMessage?: string;
       restorable?: boolean;
       pid?: number;
+      turnStartedAt?: string;
+      lastTokenUsage?: TokenUsage;
       updatedAt: string;
     }
   | {
