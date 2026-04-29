@@ -554,6 +554,22 @@ function parseGitStatus(output: string): GitStatus {
   };
 }
 
+function parseGitUnpushedCommits(output: string): GitStatus["unpushedCommits"] {
+  return output
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .map((line) => {
+      const [hash, subject, authorName, committedAt] = line.split("\x1f");
+      return {
+        hash,
+        subject,
+        authorName,
+        committedAt
+      };
+    })
+    .filter((commit) => commit.hash && commit.subject);
+}
+
 function parseGitWorktrees(output: string, currentPath: string): GitWorktree[] {
   const worktrees: GitWorktree[] = [];
   let current: GitWorktree | undefined;
@@ -847,12 +863,18 @@ function isOpenablePath(filePath: string): boolean {
 async function projectGitStatus(project: Project): Promise<GitStatus> {
   try {
     const output = await gitCommand(project, ["status", "--porcelain=v1", "--branch"]);
-    return parseGitStatus(output);
+    const status = parseGitStatus(output);
+    if (status.ahead > 0) {
+      const commits = await gitCommand(project, ["log", "--pretty=format:%h%x1f%s%x1f%an%x1f%cI", "@{upstream}..HEAD"]).catch(() => "");
+      status.unpushedCommits = parseGitUnpushedCommits(commits);
+    }
+    return status;
   } catch (error) {
     return {
       isRepo: false,
       ahead: 0,
       behind: 0,
+      unpushedCommits: [],
       files: [],
       message: error instanceof Error ? error.message : String(error)
     };

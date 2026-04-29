@@ -3006,6 +3006,7 @@ function GitStatusMenu({ projectId }: { projectId?: string }) {
 
   const changedCount = status?.files.length || 0;
   const aheadCount = status?.ahead || 0;
+  const unpushedCommits = status?.unpushedCommits || [];
   const hasWork = changedCount > 0 || aheadCount > 0;
 
   return (
@@ -3060,6 +3061,35 @@ function GitStatusMenu({ projectId }: { projectId?: string }) {
                   </div>
                 )}
               </div>
+
+              {aheadCount > 0 && (
+                <div className="grid gap-1">
+                  <div className="text-xs font-medium text-muted-foreground">Commits not pushed</div>
+                  {unpushedCommits.length === 0 ? (
+                    <div className="rounded-md border border-dashed border-border px-2 py-3 text-center text-xs text-muted-foreground">
+                      Commit details unavailable
+                    </div>
+                  ) : (
+                    <div className="max-h-44 overflow-y-auto rounded-md border border-border">
+                      {unpushedCommits.map((commit) => (
+                        <div key={commit.hash} className="grid gap-0.5 border-b border-border px-2 py-1.5 last:border-b-0">
+                          <div className="flex min-w-0 items-center gap-2">
+                            <Badge className="shrink-0 px-1.5 py-0 font-mono text-[10px]">{commit.hash}</Badge>
+                            <span className="min-w-0 truncate text-xs" title={commit.subject}>
+                              {commit.subject}
+                            </span>
+                          </div>
+                          {commit.authorName && (
+                            <div className="truncate pl-[3.25rem] text-[11px] text-muted-foreground" title={commit.authorName}>
+                              {commit.authorName}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="grid gap-1">
                 <div className="text-xs font-medium text-muted-foreground">Uncommitted files</div>

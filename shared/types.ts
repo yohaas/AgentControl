@@ -106,12 +106,20 @@ export interface GitChangedFile {
   status: string;
 }
 
+export interface GitUnpushedCommit {
+  hash: string;
+  subject: string;
+  authorName?: string;
+  committedAt?: string;
+}
+
 export interface GitStatus {
   isRepo: boolean;
   branch?: string;
   upstream?: string;
   ahead: number;
   behind: number;
+  unpushedCommits?: GitUnpushedCommit[];
   files: GitChangedFile[];
   message?: string;
 }
