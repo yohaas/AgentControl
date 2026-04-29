@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-04-29
 
+- [2263c2d](https://github.com/yohaas/AgentControl/commit/2263c2d) Add status pill chat controls
 - [027639e](https://github.com/yohaas/AgentControl/commit/027639e) Allow full-height tile setting
 - [5e18fe5](https://github.com/yohaas/AgentControl/commit/5e18fe5) Use provider-specific thinking phrases
 - [ed550f7](https://github.com/yohaas/AgentControl/commit/ed550f7) Refine layout menu controls
