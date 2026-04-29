@@ -9274,7 +9274,7 @@ function ToolCard({
   const settings = useAppStore((state) => state.settings);
   const setSettings = useAppStore((state) => state.setSettings);
   const isUse = event.kind === "tool_use";
-  const [open, setOpen] = useState((isUse && event.awaitingPermission) || (!isUse && event.isError));
+  const [open, setOpen] = useState(isUse && event.awaitingPermission);
   const detail = result ? toolPairDetail(event, result) : toolDetail(event);
   const pathText = isUse ? toolPath(event.input) : "";
   const commandText = isUse ? fieldText(event.input, ["command"]) : "";
@@ -9291,8 +9291,8 @@ function ToolCard({
   const permissionRuleLabel = permissionRule?.command || (isUse ? event.name : "tool");
 
   useEffect(() => {
-    if (awaitingPermission || resultIsError) setOpen(true);
-  }, [awaitingPermission, resultIsError]);
+    if (awaitingPermission) setOpen(true);
+  }, [awaitingPermission]);
 
   function copyText(text: string) {
     if (!text) return;
