@@ -1726,7 +1726,7 @@ export class AgentRuntimeManager {
       const model = this.modelOrDefault(state, this.trimmedStringField(payload.model) || this.trimmedStringField(payload.current_model));
       const sessionId = this.trimmedStringField(payload.session_id) || this.trimmedStringField(payload.sessionId);
       if (sessionId) state.agent.sessionId = sessionId;
-      if (model) this.updateModel(state, model);
+      if (model) this.updateModelFromInit(state, model);
       this.updateSessionInfo(state, payload);
       if (!state.activeTurn) this.setStatus(state, "idle");
       return;
@@ -2477,6 +2477,15 @@ export class AgentRuntimeManager {
       updatedAt: state.agent.updatedAt
     });
     this.persist();
+  }
+
+  private updateModelFromInit(state: AgentProcessState, model: string): void {
+    model = this.modelOrDefault(state, model) || model;
+    if (state.activeTurn && model !== state.agent.currentModel) {
+      this.noteIgnoredModelReport(state, model);
+      return;
+    }
+    this.updateModel(state, model);
   }
 
   private noteIgnoredModelReport(state: AgentProcessState, reportedModel: string): void {
