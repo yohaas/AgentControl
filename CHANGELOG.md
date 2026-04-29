@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-04-29
 
+- [69eaf7d](https://github.com/yohaas/AgentControl/commit/69eaf7d) Constrain terminal host width
 - [d8df76e](https://github.com/yohaas/AgentControl/commit/d8df76e) Merge docked top bar into sidebar
 - [f7c721b](https://github.com/yohaas/AgentControl/commit/f7c721b) Dock top bar to left nav
 - [bd85456](https://github.com/yohaas/AgentControl/commit/bd85456) Fix tile activation clicks and terminal defaults
