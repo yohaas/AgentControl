@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-04-29
 
+- [21e5899](https://github.com/yohaas/AgentControl/commit/21e5899) Resume ChatGPT responses between turns
 - [ced2f46](https://github.com/yohaas/AgentControl/commit/ced2f46) Resume Codex sessions between turns
 - [1053350](https://github.com/yohaas/AgentControl/commit/1053350) Preserve open projects when saving settings
 - [1b5fd5a](https://github.com/yohaas/AgentControl/commit/1b5fd5a) Keep selected model during Claude turns
