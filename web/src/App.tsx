@@ -2578,7 +2578,7 @@ function Header({
         </DropdownMenuItem>
         <DropdownMenuItem onClick={resetLayout}>
           <RefreshCw className="mr-2 h-4 w-4" />
-          Reset
+          Use Settings
           {!currentTileHeight && <Check className="ml-auto h-4 w-4" />}
         </DropdownMenuItem>
         <div className="mt-1 grid gap-2 border-t border-border px-2 py-2" onClick={(event) => event.stopPropagation()}>
