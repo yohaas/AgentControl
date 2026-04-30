@@ -2131,6 +2131,14 @@ function groupedAgentDefsWithBuiltIns(project?: { agents: AgentDef[]; builtInAge
   };
 }
 
+function agentDefsWithSources(project?: { agents: AgentDef[]; builtInAgents?: AgentDef[] }): Array<{ source: AgentDefSource; def: AgentDef }> {
+  const groups = groupedAgentDefsWithBuiltIns(project);
+  return [
+    ...groups.projectAgents.map((def) => ({ source: "project" as const, def })),
+    ...groups.builtInAgents.map((def) => ({ source: "builtIn" as const, def }))
+  ];
+}
+
 function agentOptionKey(source: AgentDefSource, name: string) {
   return `${source}:${name}`;
 }
@@ -7644,7 +7652,8 @@ function ProjectInspectorTile({
   }
 
   function fileBrowserContextMenu(pathValue: string, hostOpenPath: string | undefined, type: "file" | "directory") {
-    const canSend = type === "file" && (project.agents.length > 0 || agents.length > 0);
+    const launchableAgents = agentDefsWithSources(project);
+    const canSend = type === "file" && (launchableAgents.length > 0 || agents.length > 0);
     const editorUrl = externalEditorUrl(settings, hostOpenPath);
     const editorLabel = externalEditorLabel(settings.externalEditor);
     return (
@@ -7673,19 +7682,21 @@ function ProjectInspectorTile({
                 New agent
               </ContextMenuSubTrigger>
               <ContextMenuSubContent>
-                {project.agents.map((def) => (
+                {launchableAgents.map(({ source, def }) => (
                   <ContextMenuItem
-                    key={def.name}
+                    key={`${source}:${def.name}`}
                     onClick={() =>
                       openLaunchModal({
                         projectId: project.id,
                         defName: def.name,
+                        agentSource: source,
                         initialPrompt: `Review ${pathValue}.`
                       })
                     }
                   >
                     <AgentDot color={def.color} />
                     <span className="ml-2">{def.name}</span>
+                    {source === "builtIn" && <Badge className="ml-2">Built-In</Badge>}
                   </ContextMenuItem>
                 ))}
               </ContextMenuSubContent>
@@ -8049,6 +8060,7 @@ function ProjectInspectorTile({
                 {(() => {
                   const target = currentExplorerText();
                   const fullPath = preview?.hostOpenPath || diff?.hostOpenPath || selectedPath;
+                  const launchableAgents = agentDefsWithSources(project);
                   return (
                     <>
                       <ContextMenuItem disabled={!target.text} onClick={() => copyText(target.text)}>
@@ -8075,20 +8087,22 @@ function ProjectInspectorTile({
                               New agent
                             </ContextMenuSubTrigger>
                             <ContextMenuSubContent>
-                              {project.agents.map((def) => (
+                              {launchableAgents.map(({ source, def }) => (
                                 <ContextMenuItem
-                                  key={def.name}
+                                  key={`${source}:${def.name}`}
                                   onClick={() => {
                                     if (!target.text) return;
                                     openLaunchModal({
                                       projectId: project.id,
                                       defName: def.name,
+                                      agentSource: source,
                                       initialPrompt: `Context from ${project.name}: ${target.label}\n\n${target.text}`
                                     });
                                   }}
                                 >
                                   <AgentDot color={def.color} />
                                   <span className="ml-2">{def.name}</span>
+                                  {source === "builtIn" && <Badge className="ml-2">Built-In</Badge>}
                                 </ContextMenuItem>
                               ))}
                             </ContextMenuSubContent>
