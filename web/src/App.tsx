@@ -3656,8 +3656,6 @@ function AppUpdateNotice({ compact = false, hideWhenNoUpdate = false }: { compac
   const [status, setStatus] = useState<AppUpdateStatus | undefined>();
   const [loading, setLoading] = useState(false);
   const [updateRun, setUpdateRun] = useState<{ requestId: string; commands: string[] }>();
-  const [completionOpen, setCompletionOpen] = useState(false);
-  const [restartCountdown, setRestartCountdown] = useState(30);
 
   useEffect(() => {
     if (settings.updateChecksEnabled === false) return;
@@ -3690,19 +3688,7 @@ function AppUpdateNotice({ compact = false, hideWhenNoUpdate = false }: { compac
       return;
     }
     setUpdateRun(undefined);
-    setRestartCountdown(30);
-    setCompletionOpen(true);
   }, [addError, updateRun, updateSession]);
-
-  useEffect(() => {
-    if (!completionOpen) return;
-    if (restartCountdown <= 0) {
-      window.location.reload();
-      return;
-    }
-    const timer = window.setTimeout(() => setRestartCountdown((current) => Math.max(0, current - 1)), 1000);
-    return () => window.clearTimeout(timer);
-  }, [completionOpen, restartCountdown]);
 
   function runUpdate() {
     const commands = (settings.updateCommands || []).map((command) => command.trim()).filter(Boolean);
@@ -3847,19 +3833,6 @@ function AppUpdateNotice({ compact = false, hideWhenNoUpdate = false }: { compac
                 <SquareTerminal className="h-4 w-4" />
                 {updateRun ? "Running..." : "Run Update"}
               </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-      <Dialog open={completionOpen} onOpenChange={setCompletionOpen}>
-        <DialogContent className="w-[min(94vw,420px)]">
-          <DialogHeader>
-            <DialogTitle>Update Complete</DialogTitle>
-          </DialogHeader>
-          <div className="grid gap-3 text-sm">
-            <p>Update complete, AgentControl restarting, please refresh in {restartCountdown} seconds.</p>
-            <div className="h-2 overflow-hidden rounded-full bg-muted">
-              <div className="h-full bg-primary transition-all" style={{ width: `${Math.max(0, Math.min(100, (restartCountdown / 30) * 100))}%` }} />
             </div>
           </div>
         </DialogContent>
