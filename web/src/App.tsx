@@ -3048,6 +3048,7 @@ function Header({
             <span className="h-2.5 w-2.5 rounded-full bg-current shadow-[0_0_0_3px_rgba(255,255,255,0.06)]" />
           </span>
         )}
+        <AppUpdateNotice />
       </div>
       <button
         type="button"
@@ -3129,7 +3130,6 @@ function Header({
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-        <AppUpdateMenu />
         <GitStatusMenu projectId={selectedProjectId} />
         <WorktreesDialog projectId={selectedProjectId} />
         <Button
@@ -3486,24 +3486,20 @@ function GitStatusMenu({ projectId }: { projectId?: string }) {
   );
 }
 
-function AppUpdateMenu() {
+function AppUpdateNotice() {
   const settings = useAppStore((state) => state.settings);
-  const showMenuText = settings.menuDisplay === "iconText";
   const addError = useAppStore((state) => state.addError);
-  const [open, setOpen] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const [status, setStatus] = useState<AppUpdateStatus | undefined>();
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
+    if (settings.updateChecksEnabled === false) return;
     void refresh(false);
-  }, []);
-
-  useEffect(() => {
-    if (!open) return;
-    void refresh(true);
-  }, [open]);
+  }, [settings.updateChecksEnabled]);
 
   async function refresh(reportErrors = true) {
+    if (settings.updateChecksEnabled === false) return;
     setLoading(true);
     try {
       setStatus(await api.appUpdates());
@@ -3518,45 +3514,38 @@ function AppUpdateMenu() {
     const commands = (settings.updateCommands || []).map((command) => command.trim()).filter(Boolean);
     if (commands.length === 0) return;
     sendCommand({ type: "terminalStart", command: commands.join("; "), title: "Update AgentControl" });
-    setOpen(false);
+    setDetailsOpen(false);
   }
 
   const commits = status?.commits || [];
   const updateAvailable = Boolean(status?.updateAvailable);
+  if (settings.updateChecksEnabled === false || !updateAvailable) return null;
 
   return (
-    <DropdownMenu open={open} onOpenChange={setOpen}>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="outline"
-          size={showMenuText ? undefined : "icon"}
-          title="AgentControl updates"
-          className={cn("relative", showMenuText && "gap-2 px-3")}
-        >
-          <FolderDown className="h-4 w-4" />
-          {showMenuText && <span>Updates</span>}
-          {updateAvailable && (
-            <span className="absolute -right-1.5 -top-1.5 h-3.5 w-3.5 rounded-full border border-background bg-red-500" />
-          )}
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-96">
-        <div className="grid gap-3 p-2">
+    <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className="h-7 gap-1.5 px-2 text-xs text-amber-700 hover:text-amber-800 dark:text-amber-200 dark:hover:text-amber-100"
+        title="AgentControl update available"
+        onClick={() => setDetailsOpen(true)}
+      >
+        <FolderDown className="h-3.5 w-3.5" />
+        <span>Update available</span>
+      </Button>
+      <DialogContent className="w-[min(94vw,520px)]">
+        <DialogHeader>
+          <DialogTitle>AgentControl Update</DialogTitle>
+        </DialogHeader>
+        <div className="grid gap-3">
           <div className="flex items-center justify-between gap-2">
-            <div className="min-w-0">
-              <div className="text-sm font-medium">AgentControl Updates</div>
-              <div className="truncate text-xs text-muted-foreground">
-                {loading
-                  ? "Checking GitHub..."
-                  : status?.isRepo
-                    ? updateAvailable
-                      ? "Updates available"
-                      : "Up to date"
-                    : status?.message || "Update status unavailable"}
-              </div>
+            <div className="min-w-0 text-sm text-muted-foreground">
+              {loading ? "Checking GitHub..." : status?.checkedAt ? `Checked ${new Date(status.checkedAt).toLocaleString()}` : "Update available"}
             </div>
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => void refresh(true)} disabled={loading}>
+            <Button variant="outline" size="sm" onClick={() => void refresh(true)} disabled={loading}>
               <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
+              Refresh
             </Button>
           </div>
 
@@ -3590,7 +3579,7 @@ function AppUpdateMenu() {
                     No incoming commits found
                   </div>
                 ) : (
-                  <div className="max-h-44 overflow-y-auto rounded-md border border-border">
+                  <div className="max-h-52 overflow-y-auto rounded-md border border-border">
                     {commits.map((commit) => (
                       <div key={commit.hash} className="grid gap-0.5 border-b border-border px-2 py-1.5 last:border-b-0">
                         <div className="flex min-w-0 items-center gap-2">
@@ -3618,16 +3607,25 @@ function AppUpdateMenu() {
                   ))}
                 </div>
               </div>
-
-              <Button onClick={runUpdate} disabled={!updateAvailable || (settings.updateCommands || []).length === 0}>
-                <SquareTerminal className="h-4 w-4" />
-                Run Update
-              </Button>
             </>
           )}
+
+          {!status?.isRepo && status?.message && (
+            <div className="rounded-md border border-border bg-muted p-3 text-sm text-muted-foreground">{status.message}</div>
+          )}
+
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setDetailsOpen(false)}>
+              Close
+            </Button>
+            <Button onClick={runUpdate} disabled={(settings.updateCommands || []).length === 0}>
+              <SquareTerminal className="h-4 w-4" />
+              Run Update
+            </Button>
+          </div>
         </div>
-      </DropdownMenuContent>
-    </DropdownMenu>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -6048,6 +6046,7 @@ function SettingsDialog() {
   const [tileColumns, setTileColumns] = useState(settings.tileColumns);
   const [pinLastSentMessage, setPinLastSentMessage] = useState(settings.pinLastSentMessage);
   const [permissionAllowRules, setPermissionAllowRules] = useState<PermissionAllowRule[]>(settings.permissionAllowRules || []);
+  const [updateChecksEnabled, setUpdateChecksEnabled] = useState(settings.updateChecksEnabled !== false);
   const [updateCommandsText, setUpdateCommandsText] = useState((settings.updateCommands || []).join("\n"));
   const [builtInEditor, setBuiltInEditor] = useState<{ open: boolean; agent?: AgentDef; originalName?: string }>({ open: false });
 
@@ -6080,6 +6079,7 @@ function SettingsDialog() {
     setTileColumns(settings.tileColumns);
     setPinLastSentMessage(settings.pinLastSentMessage);
     setPermissionAllowRules(settings.permissionAllowRules || []);
+    setUpdateChecksEnabled(settings.updateChecksEnabled !== false);
     setUpdateCommandsText((settings.updateCommands || []).join("\n"));
   }, [open, settings]);
 
@@ -6114,6 +6114,7 @@ function SettingsDialog() {
         tileColumns,
         pinLastSentMessage,
         permissionAllowRules,
+        updateChecksEnabled,
         updateCommands: updateCommandsText.split(/\r?\n/).map((command) => command.trim()).filter(Boolean)
       });
       setSettings(next);
@@ -6174,6 +6175,7 @@ function SettingsDialog() {
         tileColumns,
         pinLastSentMessage,
         permissionAllowRules,
+        updateChecksEnabled,
         updateCommands: updateCommandsText.split(/\r?\n/).map((command) => command.trim()).filter(Boolean)
       }
     };
@@ -6209,6 +6211,7 @@ function SettingsDialog() {
       setTileColumns(next.tileColumns);
       setPinLastSentMessage(next.pinLastSentMessage);
       setPermissionAllowRules(next.permissionAllowRules || []);
+      setUpdateChecksEnabled(next.updateChecksEnabled !== false);
       setUpdateCommandsText((next.updateCommands || []).join("\n"));
     } catch (error) {
       addError(error instanceof Error ? error.message : String(error));
@@ -6273,6 +6276,7 @@ function SettingsDialog() {
       tileColumns !== settings.tileColumns ||
       pinLastSentMessage !== settings.pinLastSentMessage ||
       permissionAllowRules.map(permissionAllowRuleKey).join("\n") !== (settings.permissionAllowRules || []).map(permissionAllowRuleKey).join("\n") ||
+      updateChecksEnabled !== (settings.updateChecksEnabled !== false) ||
       updateCommandsText !== (settings.updateCommands || []).join("\n"),
     [
       anthropicApiKey,
@@ -6301,6 +6305,7 @@ function SettingsDialog() {
       tileScrolling,
       tileColumns,
       tileHeight,
+      updateChecksEnabled,
       updateCommandsText
     ]
   );
@@ -6519,9 +6524,25 @@ function SettingsDialog() {
           </section>
           <section className="grid gap-2 rounded-md border border-border p-3">
             <div>
-              <h3 className="text-sm font-medium">App update commands</h3>
-              <p className="text-xs text-muted-foreground">One command per line. These run in a project terminal when you launch an update.</p>
+              <h3 className="text-sm font-medium">App updates</h3>
+              <p className="text-xs text-muted-foreground">Check GitHub on startup and run your preferred update commands from a terminal.</p>
             </div>
+            <label className="flex items-start gap-2 rounded-md border border-border bg-background/50 p-3 text-sm">
+              <input
+                type="checkbox"
+                className="mt-1"
+                checked={updateChecksEnabled}
+                onChange={(event) => setUpdateChecksEnabled(event.target.checked)}
+              />
+              <span>
+                <span className="block font-medium">Check for updates on startup</span>
+                <span className="block text-xs text-muted-foreground">
+                  Show a quiet top-bar notice when AgentControl sees incoming GitHub updates.
+                </span>
+              </span>
+            </label>
+            <label className="grid gap-1.5 text-sm">
+              Update commands
             <Textarea
               value={updateCommandsText}
               onChange={(event) => setUpdateCommandsText(event.target.value)}
@@ -6529,6 +6550,7 @@ function SettingsDialog() {
               className="font-mono text-xs"
               placeholder="git pull&#10;npm ci&#10;npm run build&#10;Restart-Service AgentControl"
             />
+            </label>
           </section>
           </>
           )}

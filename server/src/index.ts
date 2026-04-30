@@ -54,6 +54,7 @@ import {
   resolveTileScrolling,
   resolveTileColumns,
   resolveTileHeight,
+  resolveUpdateChecksEnabled,
   resolveUpdateCommands,
   writeConfig,
   writeSecrets
@@ -1875,6 +1876,7 @@ app.get("/api/settings", (_request, response) => {
     terminalDock: resolveTerminalDock(config),
     fileExplorerDock: resolveFileExplorerDock(config),
     themeMode: resolveThemeMode(config),
+    updateChecksEnabled: resolveUpdateChecksEnabled(config),
     updateCommands: resolveUpdateCommands(config),
     capabilities
   });
@@ -1968,6 +1970,7 @@ app.put("/api/settings", async (request, response) => {
     terminalDock: resolveTerminalDock(body.terminalDock ? body : config),
     fileExplorerDock: resolveFileExplorerDock(body.fileExplorerDock ? body : config),
     themeMode: resolveThemeMode(body.themeMode ? body : config),
+    updateChecksEnabled: typeof body.updateChecksEnabled === "boolean" ? body.updateChecksEnabled : resolveUpdateChecksEnabled(config),
     updateCommands: Array.isArray(body.updateCommands) ? body.updateCommands.map((command) => command.trim()).filter(Boolean) : config.updateCommands
   });
   if (config.claudePath) process.env.AGENTCONTROL_CLAUDE_PATH = config.claudePath;
@@ -2016,6 +2019,7 @@ app.put("/api/settings", async (request, response) => {
     terminalDock: resolveTerminalDock(config),
     fileExplorerDock: resolveFileExplorerDock(config),
     themeMode: resolveThemeMode(config),
+    updateChecksEnabled: resolveUpdateChecksEnabled(config),
     updateCommands: resolveUpdateCommands(config),
     capabilities
   });

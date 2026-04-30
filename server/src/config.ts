@@ -57,6 +57,7 @@ export interface DashboardConfig {
   terminalDock?: TerminalDockPosition;
   fileExplorerDock?: FileExplorerDockPosition;
   themeMode?: ThemeMode;
+  updateChecksEnabled?: boolean;
   updateCommands?: string[];
 }
 
@@ -242,4 +243,8 @@ export function resolveUpdateCommands(config: DashboardConfig): string[] {
   const commands = Array.isArray(config.updateCommands) ? config.updateCommands : [];
   const normalized = commands.map((command) => command.trim()).filter(Boolean);
   return normalized.length ? normalized : ["git pull", "npm ci", "npm run build", "Restart-Service AgentControl"];
+}
+
+export function resolveUpdateChecksEnabled(config: DashboardConfig): boolean {
+  return config.updateChecksEnabled !== false;
 }

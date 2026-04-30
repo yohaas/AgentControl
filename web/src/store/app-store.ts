@@ -47,6 +47,7 @@ export interface SettingsState {
   terminalDock: TerminalDockPosition;
   fileExplorerDock: FileExplorerDockPosition;
   themeMode: ThemeMode;
+  updateChecksEnabled: boolean;
   updateCommands: string[];
 }
 
@@ -183,6 +184,7 @@ const defaultSettings: SettingsState = {
   terminalDock: "bottom",
   fileExplorerDock: "left",
   themeMode: "auto",
+  updateChecksEnabled: true,
   updateCommands: ["git pull", "npm ci", "npm run build", "Restart-Service AgentControl"],
   claudeRuntime: "cli",
   claudeAgentDir: ".claude/agents",
@@ -226,6 +228,7 @@ function normalizeSettings(settings: SettingsState): SettingsState {
     ...settings,
     modelProfiles: Array.isArray(settings.modelProfiles) && settings.modelProfiles.length ? settings.modelProfiles : defaultSettings.modelProfiles,
     permissionAllowRules: Array.isArray(settings.permissionAllowRules) ? settings.permissionAllowRules : defaultSettings.permissionAllowRules,
+    updateChecksEnabled: settings.updateChecksEnabled !== false,
     updateCommands:
       Array.isArray(settings.updateCommands) && settings.updateCommands.some((command) => command.trim())
         ? settings.updateCommands.map((command) => command.trim()).filter(Boolean)
