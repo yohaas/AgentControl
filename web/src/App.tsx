@@ -176,6 +176,8 @@ const FILE_EXPLORER_POPOUT_STORAGE_KEY = "agent-control-file-explorer-popout";
 const FOCUS_AGENT_TILE_EVENT = "agent-control:focus-agent-tile";
 const DEFAULT_BUILT_IN_AGENT_DIR = ".agent-control/built-in-agents";
 const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
+const INPUT_NOTIFICATION_DEDUPE_MS = 30_000;
+const recentInputNotificationKeys = new Map<string, number>();
 hljs.registerLanguage("bash", bash);
 hljs.registerLanguage("css", css);
 hljs.registerLanguage("diff", diffLanguage);
@@ -623,6 +625,16 @@ function isAgentBusy(agent: RunningAgent) {
 
 function agentNeedsInput(agent: RunningAgent) {
   return agent.status === "awaiting-permission" || agent.status === "awaiting-input";
+}
+
+function claimInputNotificationKey(key: string) {
+  const nowMs = Date.now();
+  for (const [candidate, sentAt] of recentInputNotificationKeys) {
+    if (nowMs - sentAt > INPUT_NOTIFICATION_DEDUPE_MS) recentInputNotificationKeys.delete(candidate);
+  }
+  if (recentInputNotificationKeys.has(key)) return false;
+  recentInputNotificationKeys.set(key, nowMs);
+  return true;
 }
 
 function hasStreamingAssistantText(transcript: TranscriptEvent[]) {
@@ -12012,7 +12024,9 @@ export function App() {
       const notificationKey = `${agent.status}:${agent.updatedAt}`;
       nextStatuses[agent.id] = notificationKey;
       if (inputNotificationStatusRef.current[agent.id] === notificationKey) continue;
-      const projectName = agent.projectName || "Project";
+      const globalNotificationKey = `${agent.id}:${notificationKey}`;
+      if (!claimInputNotificationKey(globalNotificationKey)) continue;
+      const projectName = projects.find((project) => project.id === agent.projectId)?.name || agent.projectName || "Project";
       const title = `${projectName} - ${agent.displayName}`;
       let notification: Notification;
       try {
@@ -12034,7 +12048,7 @@ export function App() {
       };
     }
     inputNotificationStatusRef.current = nextStatuses;
-  }, [addError, agentsById, inputNotificationsEnabled]);
+  }, [addError, agentsById, inputNotificationsEnabled, projects]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
