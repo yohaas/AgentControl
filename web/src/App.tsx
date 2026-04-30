@@ -41,6 +41,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronUp,
+  CircleArrowDown,
   Clipboard,
   ClipboardList,
   Code2,
@@ -669,6 +670,14 @@ function shouldShowPinnedUserMessage(root: HTMLDivElement, pinnedMessageId?: str
 
 function scrollToLatestUserMessage(root: HTMLDivElement | null) {
   root?.querySelector<HTMLElement>('[data-latest-user-message="true"]')?.scrollIntoView({ block: "center", behavior: "smooth" });
+}
+
+function isNearScrollBottom(root: HTMLDivElement, threshold = 48) {
+  return root.scrollHeight - root.scrollTop - root.clientHeight <= threshold;
+}
+
+function scrollTranscriptToBottom(root: HTMLDivElement | null) {
+  root?.scrollTo({ top: root.scrollHeight, behavior: "smooth" });
 }
 
 function AgentActivityIndicator({ agent, compact = false, phaseLabel }: { agent: RunningAgent; compact?: boolean; phaseLabel?: string }) {
@@ -8061,6 +8070,7 @@ function AgentTile({
   const [composerDropActive, setComposerDropActive] = useState(false);
   const [composerCollapsed, setComposerCollapsed] = useState(false);
   const [transcriptViewMode, setTranscriptViewMode] = useState<TranscriptViewMode>("chat");
+  const [showJumpToBottom, setShowJumpToBottom] = useState(false);
   const [slashMenuOpen, setSlashMenuOpen] = useState(false);
   const [slashMenuSuppressed, setSlashMenuSuppressed] = useState(false);
   const composerDragDepthRef = useRef(0);
@@ -8094,11 +8104,13 @@ function AgentTile({
     const nearBottom = root.scrollHeight - root.scrollTop - root.clientHeight < 180;
     if (isBusy || nearBottom) root.scrollTop = root.scrollHeight;
     setShowPinnedMessage(shouldShowPinnedUserMessage(root, pinnedMessage?.id));
+    setShowJumpToBottom(!isNearScrollBottom(root));
   }, [transcript, agent.id, isBusy, pinnedMessage?.id]);
 
   function handleTranscriptScroll(event: ReactUIEvent<HTMLDivElement>) {
     const nextVisible = shouldShowPinnedUserMessage(event.currentTarget, pinnedMessage?.id);
     setShowPinnedMessage((current) => (current === nextVisible ? current : nextVisible));
+    setShowJumpToBottom(!isNearScrollBottom(event.currentTarget));
   }
 
   useEffect(() => {
@@ -8599,6 +8611,21 @@ function AgentTile({
                       />
                     ))}
                     {showActivityIndicator && <AgentActivityIndicator agent={agent} compact phaseLabel={phaseLabel} />}
+                  </div>
+                )}
+                {transcriptViewMode === "chat" && showJumpToBottom && (
+                  <div className="pointer-events-none sticky bottom-2 z-30 flex justify-end">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="icon"
+                      className="pointer-events-auto h-8 w-8 rounded-full border border-border shadow-md"
+                      title="Jump to bottom"
+                      aria-label="Jump to bottom"
+                      onClick={() => scrollTranscriptToBottom(rootRef.current)}
+                    >
+                      <CircleArrowDown className="h-4 w-4" />
+                    </Button>
                   </div>
                 )}
               </div>
@@ -9565,6 +9592,7 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
   const [composerDropActive, setComposerDropActive] = useState(false);
   const [composerCollapsed, setComposerCollapsed] = useState(false);
   const [transcriptViewMode, setTranscriptViewMode] = useState<TranscriptViewMode>("chat");
+  const [showJumpToBottom, setShowJumpToBottom] = useState(false);
   const [activeSlashIndex, setActiveSlashIndex] = useState(0);
   const [slashMenuOpen, setSlashMenuOpen] = useState(false);
   const [slashMenuSuppressed, setSlashMenuSuppressed] = useState(false);
@@ -9597,6 +9625,7 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
     if (!root) return;
     root.scrollTop = scrollTop;
     setShowPinnedMessage(shouldShowPinnedUserMessage(root, pinnedMessage?.id));
+    setShowJumpToBottom(!isNearScrollBottom(root));
   }, [agent.id, pinnedMessage?.id, scrollTop]);
 
   useEffect(() => {
@@ -9608,6 +9637,7 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
       setScrollPosition(agent.id, root.scrollTop);
     }
     setShowPinnedMessage(shouldShowPinnedUserMessage(root, pinnedMessage?.id));
+    setShowJumpToBottom(!isNearScrollBottom(root));
   }, [transcript, agent.id, isBusy, pinnedMessage?.id, setScrollPosition]);
 
   useEffect(() => {
@@ -9769,6 +9799,7 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
     setScrollPosition(agent.id, top);
     const nextVisible = shouldShowPinnedUserMessage(event.currentTarget, pinnedMessage?.id);
     setShowPinnedMessage((current) => (current === nextVisible ? current : nextVisible));
+    setShowJumpToBottom(!isNearScrollBottom(event.currentTarget));
   }
 
   function prepareContextMenu(event: ReactMouseEvent<HTMLDivElement>) {
@@ -9915,6 +9946,21 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
                 </>
               )}
             </div>
+            {transcriptViewMode === "chat" && showJumpToBottom && (
+              <div className="pointer-events-none sticky bottom-3 z-30 mx-auto flex w-full max-w-4xl justify-end">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="icon"
+                  className="pointer-events-auto h-9 w-9 rounded-full border border-border shadow-md"
+                  title="Jump to bottom"
+                  aria-label="Jump to bottom"
+                  onClick={() => scrollTranscriptToBottom(rootRef.current)}
+                >
+                  <CircleArrowDown className="h-5 w-5" />
+                </Button>
+              </div>
+            )}
           </div>
         </ContextMenuTrigger>
         <SendToMenu
