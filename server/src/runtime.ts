@@ -651,7 +651,7 @@ export class AgentRuntimeManager {
     state.apiAbort?.abort();
     state.apiAbort = undefined;
     if (state.agent.remoteControl) {
-      if (state.child && !state.child.killed) {
+      if (state.child && !state.child.killed && state.child.exitCode === null && state.child.signalCode === null) {
         this.updateRemoteControlState(state, "closed", "Closing Remote Control session...");
         this.stopProcessTree(state);
         setTimeout(() => {
@@ -663,7 +663,7 @@ export class AgentRuntimeManager {
       }
       return;
     }
-    if (state.child && !state.child.killed) {
+    if (state.child && !state.child.killed && state.child.exitCode === null && state.child.signalCode === null) {
       this.stopProcessTree(state);
     } else {
       this.removeExitedAgent(state);
@@ -1929,7 +1929,7 @@ export class AgentRuntimeManager {
 
     child.kill("SIGTERM");
     setTimeout(() => {
-      if (state.child && !state.child.killed) state.child.kill("SIGKILL");
+      if (!child.killed && child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
     }, 3000);
   }
 
@@ -2841,6 +2841,8 @@ export class AgentRuntimeManager {
   }
 
   private markTerminated(state: AgentProcessState, exitCode: number | null, signal: NodeJS.Signals | null): void {
+    state.child = undefined;
+    state.agent.pid = undefined;
     this.denyPendingPermissions(state);
     this.cleanupPermissionMcpConfig(state);
     if (state.exiting) {
@@ -2857,7 +2859,6 @@ export class AgentRuntimeManager {
     state.agent.status = status;
     state.agent.statusMessage = statusMessage;
     state.agent.updatedAt = now();
-    state.agent.pid = undefined;
     this.broadcast({
       type: "agent.terminated",
       id: state.agent.id,
