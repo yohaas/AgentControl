@@ -954,6 +954,9 @@ export class AgentRuntimeManager {
     if (permissionMode === "acceptEdits" || permissionMode === "bypassPermissions") {
       args.push("-c", `sandbox_mode=${tomlBasicString("danger-full-access")}`);
     }
+    if (permissionMode === "plan") {
+      args.push("-c", `collaboration_modes=[${tomlBasicString("plan")}]`);
+    }
     args.push("-c", `model_reasoning_effort=${tomlBasicString(this.providerReasoningEffort(state))}`);
     const selectedPlugins = new Set(state.def?.plugins || []);
     const installedPlugins = await listPlugins("codex").catch(() => []);

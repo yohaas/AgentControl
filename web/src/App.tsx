@@ -5120,7 +5120,8 @@ interface ProviderComposerModeOption {
   compactLabel: string;
   description: string;
   icon: ComponentType<{ className?: string }>;
-  model: string;
+  model?: string;
+  permissionMode?: AgentPermissionMode;
 }
 
 function providerComposerModeOptions(
@@ -5144,6 +5145,14 @@ function providerComposerModeOptions(
         description: "Use the fastest Codex model for focused iteration.",
         icon: Gauge,
         model: preferredProviderModeModel(settings, "codex", "speed")
+      },
+      {
+        id: "plan",
+        label: "Plan mode",
+        compactLabel: "Plan",
+        description: "Codex will explore the code and present a plan before editing.",
+        icon: ClipboardList,
+        permissionMode: "plan"
       }
     ];
   }
@@ -5188,6 +5197,7 @@ function providerComposerModeOptions(
 
 function activeProviderMode(agent: RunningAgent, options: ProviderComposerModeOption[]) {
   if (agent.provider === "codex") {
+    if (currentPermissionMode(agent) === "plan") return options.find((option) => option.id === "plan") || options[0];
     const speedSelected = /spark|mini|codex-mini/i.test(agent.currentModel);
     return options.find((option) => option.id === (speedSelected ? "speed" : "intelligence")) || options[0];
   }
@@ -5217,7 +5227,15 @@ function sendNextComposerMode(agent: RunningAgent, settings: { models: string[];
     const active = activeProviderMode(agent, options);
     const activeIndex = Math.max(0, options.findIndex((option) => option.id === active?.id));
     const next = options[(activeIndex + 1) % options.length];
-    if (next) sendCommand({ type: "setModel", id: agent.id, model: next.model });
+    if (!next) return;
+    if (next.permissionMode) {
+      sendCommand({ type: "setPermissionMode", id: agent.id, permissionMode: next.permissionMode });
+      return;
+    }
+    if (agent.provider === "codex" && currentPermissionMode(agent) === "plan") {
+      sendCommand({ type: "setPermissionMode", id: agent.id, permissionMode: "default" });
+    }
+    if (next.model) sendCommand({ type: "setModel", id: agent.id, model: next.model });
     return;
   }
   sendCommand({ type: "setPermissionMode", id: agent.id, permissionMode: nextPermissionMode(agent) });
@@ -5259,9 +5277,17 @@ function ComposerModeMenu({
     sendCommand({ type: "setThinking", id: agent.id, thinking });
   }
 
-  function setModelMode(option: ProviderComposerModeOption) {
-    if (agent.currentModel === option.model) return;
-    sendCommand({ type: "setModel", id: agent.id, model: option.model });
+  function setProviderMode(option: ProviderComposerModeOption) {
+    if (option.permissionMode) {
+      setPermissionMode(option.permissionMode);
+      return;
+    }
+    if (provider === "codex" && activeMode === "plan") {
+      sendCommand({ type: "setPermissionMode", id: agent.id, permissionMode: "default" });
+    }
+    if (option.model && agent.currentModel !== option.model) {
+      sendCommand({ type: "setModel", id: agent.id, model: option.model });
+    }
   }
 
   if (provider !== "claude") {
@@ -5304,7 +5330,7 @@ function ComposerModeMenu({
               return (
                 <DropdownMenuItem
                   key={option.id}
-                  onClick={() => setModelMode(option)}
+                  onClick={() => setProviderMode(option)}
                   className={cn(
                     "items-start gap-3 rounded-md px-2 py-2.5",
                     selected && "bg-primary/20 text-foreground focus:bg-primary/25"
@@ -5314,7 +5340,7 @@ function ComposerModeMenu({
                   <span className="min-w-0 flex-1">
                     <span className="block text-sm font-medium leading-none">{option.label}</span>
                     <span className="mt-1 block text-xs leading-snug text-muted-foreground">{option.description}</span>
-                    <span className="mt-1 block truncate text-[11px] text-muted-foreground">{option.model}</span>
+                    {option.model && <span className="mt-1 block truncate text-[11px] text-muted-foreground">{option.model}</span>}
                   </span>
                   <Check className={cn("mt-1 h-4 w-4 shrink-0", selected ? "opacity-100" : "opacity-0")} />
                 </DropdownMenuItem>
