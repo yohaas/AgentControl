@@ -1819,6 +1819,22 @@ app.get("/api/agent-snapshot", (_request, response) => {
   response.json(runtime.snapshot());
 });
 
+app.post("/api/agents/:id/message", (request, response) => {
+  const text = typeof request.body?.text === "string" ? request.body.text : "";
+  const attachments = Array.isArray(request.body?.attachments) ? (request.body.attachments as MessageAttachment[]) : [];
+  if (!text.trim() && attachments.length === 0) {
+    response.status(400).json({ error: "Message text or attachments are required." });
+    return;
+  }
+  runtime.userMessage(request.params.id, text, undefined, attachments);
+  response.json({ ok: true });
+});
+
+app.post("/api/agents/:id/interrupt", (request, response) => {
+  runtime.interrupt(request.params.id);
+  response.json({ ok: true });
+});
+
 app.get("/api/agents/:id/raw-stream", (request, response) => {
   response.type("text/plain").send(runtime.rawLines(request.params.id).join("\n"));
 });

@@ -80,6 +80,13 @@ export const api = {
   projects: () => json<Project[]>("/api/projects"),
   agents: () => json<RunningAgent[]>("/api/agents"),
   agentSnapshot: () => json<AgentSnapshot>("/api/agent-snapshot"),
+  sendAgentMessage: (id: string, text: string, attachments: MessageAttachment[] = []) =>
+    json<{ ok: boolean }>(`/api/agents/${encodeURIComponent(id)}/message`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text, attachments })
+    }),
+  interruptAgent: (id: string) => json<{ ok: boolean }>(`/api/agents/${encodeURIComponent(id)}/interrupt`, { method: "POST" }),
   rawAgentStream: async (id: string) => {
     const response = await authedFetch(`/api/agents/${encodeURIComponent(id)}/raw-stream`);
     if (!response.ok) throw new Error(await response.text());

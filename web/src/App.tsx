@@ -12425,9 +12425,12 @@ function MobileChatPane({ agent, addError }: { agent: RunningAgent; addError: (m
   const setDraft = useAppStore((state) => state.setDraft);
   const queue = useAppStore((state) => state.messageQueues[agent.id] || EMPTY_QUEUE);
   const enqueueMessage = useAppStore((state) => state.enqueueMessage);
+  const hydrateSnapshot = useAppStore((state) => state.hydrateSnapshot);
+  const wsConnected = useAppStore((state) => state.wsConnected);
   const transcriptItems = useMemo(() => pairedTranscriptItems(transcript), [transcript]);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  const [sending, setSending] = useState(false);
   const isBusy = isAgentBusy(agent);
   const canType = agentHasProcess(agent);
   const latestUser = latestUserMessage(transcript);
@@ -12441,17 +12444,53 @@ function MobileChatPane({ agent, addError }: { agent: RunningAgent; addError: (m
     if (nearBottom || isBusy) root.scrollTop = root.scrollHeight;
   }, [transcript, isBusy]);
 
-  function send() {
+  async function refreshMobileSnapshot() {
+    try {
+      hydrateSnapshot(await api.agentSnapshot());
+    } catch {
+      // The WebSocket will refresh the transcript when connected.
+    }
+  }
+
+  async function send() {
     const text = draft.trim();
-    if (!text) return;
+    if (!text || sending) return;
     if (!canType) {
       addError("This chat is not ready to receive messages.");
       return;
     }
-    if (isBusy && agent.status !== "awaiting-input") enqueueMessage(agent.id, { text, attachments: [] });
-    else if (!sendCommand({ type: "userMessage", id: agent.id, text, attachments: [] })) return;
-    setDraft(agent.id, "");
-    window.requestAnimationFrame(() => inputRef.current?.focus());
+    if (isBusy && agent.status !== "awaiting-input") {
+      enqueueMessage(agent.id, { text, attachments: [] });
+      setDraft(agent.id, "");
+      window.requestAnimationFrame(() => inputRef.current?.focus());
+      return;
+    }
+    setSending(true);
+    try {
+      const sentBySocket = wsConnected && sendCommand({ type: "userMessage", id: agent.id, text, attachments: [] });
+      if (!sentBySocket) {
+        await api.sendAgentMessage(agent.id, text);
+        await refreshMobileSnapshot();
+      }
+      setDraft(agent.id, "");
+      window.requestAnimationFrame(() => inputRef.current?.focus());
+    } catch (error) {
+      addError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setSending(false);
+    }
+  }
+
+  async function stopCurrentResponse() {
+    try {
+      const sentBySocket = wsConnected && sendCommand({ type: "interrupt", id: agent.id });
+      if (!sentBySocket) {
+        await api.interruptAgent(agent.id);
+        await refreshMobileSnapshot();
+      }
+    } catch (error) {
+      addError(error instanceof Error ? error.message : String(error));
+    }
   }
 
   return (
@@ -12466,7 +12505,7 @@ function MobileChatPane({ agent, addError }: { agent: RunningAgent; addError: (m
         </div>
         <StatusPill status={agent.status} />
         {isBusy && agentHasProcess(agent) && (
-          <Button type="button" variant="outline" size="icon" className="h-9 w-9" title="Stop response" onClick={() => sendCommand({ type: "interrupt", id: agent.id })}>
+          <Button type="button" variant="outline" size="icon" className="h-9 w-9" title="Stop response" onClick={() => void stopCurrentResponse()}>
             <Square className="h-4 w-4" />
           </Button>
         )}
@@ -12500,14 +12539,14 @@ function MobileChatPane({ agent, addError }: { agent: RunningAgent; addError: (m
           onKeyDown={(event) => {
             if (event.key === "Enter" && !event.shiftKey) {
               event.preventDefault();
-              send();
+              void send();
             }
           }}
           className="max-h-32 min-h-11 flex-1 resize-none"
           placeholder={canType ? "Message" : "Chat unavailable"}
           disabled={!canType}
         />
-        <Button type="button" size="icon" className="h-11 w-11" disabled={!canType || !draft.trim()} onClick={send} title="Send">
+        <Button type="button" size="icon" className="h-11 w-11" disabled={!canType || sending || !draft.trim()} onClick={() => void send()} title="Send">
           <ArrowUp className="h-4 w-4" />
         </Button>
       </div>

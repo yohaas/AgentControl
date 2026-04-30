@@ -78,7 +78,7 @@ export function disconnectWebSocket() {
 
 export function sendCommand(command: WsClientCommand): boolean {
   if (!socket || socket.readyState !== WebSocket.OPEN) {
-    useAppStore.getState().addError("Backend server not running.");
+    useAppStore.getState().addError("WebSocket is not connected.");
     return false;
   }
   try {
