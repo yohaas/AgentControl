@@ -2742,9 +2742,16 @@ function Header({
     () => new Set(Object.values(agentsById).filter(agentNeedsInput).map((agent) => agent.projectId)),
     [agentsById]
   );
-  const offProjectInputCount = useMemo(
-    () => Object.values(agentsById).filter((agent) => agentNeedsInput(agent) && agent.projectId !== selectedProjectId).length,
-    [agentsById, selectedProjectId]
+  const offProjectInputAlerts = useMemo(
+    () =>
+      Object.values(agentsById)
+        .filter((agent) => agentNeedsInput(agent) && agent.projectId !== selectedProjectId)
+        .map((agent) => {
+          const projectName = projects.find((candidate) => candidate.id === agent.projectId)?.name || agent.projectName;
+          const need = agent.status === "awaiting-permission" ? "needs approval" : "needs an answer";
+          return `${projectName}: ${agent.displayName} ${need}`;
+        }),
+    [agentsById, projects, selectedProjectId]
   );
   const projectAgents = useMemo(() => agentsForProject(agentsById, selectedProjectId), [agentsById, selectedProjectId]);
   const agentCount = projectAgents.length;
@@ -3097,11 +3104,14 @@ function Header({
         <ChevronLeft className="h-4 w-4" />
       </button>
       <div className="ml-auto flex items-center gap-2">
-        {offProjectInputCount > 0 && (
-          <TriangleAlert
-            className="h-5 w-5 shrink-0 text-amber-500"
-            aria-label={`${offProjectInputCount} agent${offProjectInputCount === 1 ? "" : "s"} need input in another project`}
-          />
+        {offProjectInputAlerts.length > 0 && (
+          <span
+            className="grid h-5 w-5 shrink-0 place-items-center text-amber-500"
+            title={offProjectInputAlerts.join("\n")}
+            aria-label={offProjectInputAlerts.join("; ")}
+          >
+            <TriangleAlert className="h-5 w-5" />
+          </span>
         )}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
