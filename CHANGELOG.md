@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-04-30
 
+- [8915bed](https://github.com/yohaas/AgentControl/commit/8915bed) Fix duplicated Codex response text
 - [524c0f6](https://github.com/yohaas/AgentControl/commit/524c0f6) Add a `/mobile` chat view for existing project agents
 - [a5fa790](https://github.com/yohaas/AgentControl/commit/a5fa790) Link chat file references to the File Explorer preview
 - [cdef00a](https://github.com/yohaas/AgentControl/commit/cdef00a) Rename app state storage to `~/.agent-control` with legacy migration
