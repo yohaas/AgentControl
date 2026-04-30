@@ -9316,7 +9316,7 @@ function TranscriptPreview({
     >
       <div
         className={cn(
-          "relative max-w-[86%] whitespace-pre-wrap break-words rounded-md border border-border px-3 py-2 text-sm leading-5",
+          "relative min-w-0 max-w-[86%] whitespace-pre-wrap break-words [overflow-wrap:anywhere] rounded-md border border-border px-3 py-2 text-sm leading-5",
           isUser ? "user-question bg-primary text-primary-foreground" : "bg-background/60",
           showPopout && "pr-16"
         )}
@@ -12520,7 +12520,9 @@ function MobileChatPane({ agent, addError }: { agent: RunningAgent; addError: (m
   const transcriptItems = useMemo(() => pairedTranscriptItems(transcript), [transcript]);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  const didInitialTranscriptScrollRef = useRef(false);
   const [sending, setSending] = useState(false);
+  const [showJumpToBottom, setShowJumpToBottom] = useState(false);
   const isBusy = isAgentBusy(agent);
   const canType = agentHasProcess(agent);
   const latestUser = latestUserMessage(transcript);
@@ -12528,11 +12530,29 @@ function MobileChatPane({ agent, addError }: { agent: RunningAgent; addError: (m
   useQueuedMessageSender(agent, queue, canType);
 
   useEffect(() => {
+    didInitialTranscriptScrollRef.current = false;
+    setShowJumpToBottom(false);
+  }, [agent.id]);
+
+  useEffect(() => {
     const root = rootRef.current;
-    if (!root) return;
+    if (!root || transcript.length === 0) return;
+    if (!didInitialTranscriptScrollRef.current) {
+      didInitialTranscriptScrollRef.current = true;
+      window.requestAnimationFrame(() => {
+        root.scrollTop = root.scrollHeight;
+        setShowJumpToBottom(false);
+      });
+      return;
+    }
     const nearBottom = root.scrollHeight - root.scrollTop - root.clientHeight < 180;
     if (nearBottom || isBusy) root.scrollTop = root.scrollHeight;
-  }, [transcript, isBusy]);
+    setShowJumpToBottom(!isNearScrollBottom(root));
+  }, [agent.id, transcript, isBusy]);
+
+  function handleTranscriptScroll(event: ReactUIEvent<HTMLDivElement>) {
+    setShowJumpToBottom(!isNearScrollBottom(event.currentTarget));
+  }
 
   async function refreshMobileSnapshot() {
     try {
@@ -12584,7 +12604,7 @@ function MobileChatPane({ agent, addError }: { agent: RunningAgent; addError: (m
   }
 
   return (
-    <section className="flex min-h-0 flex-1 flex-col">
+    <section className="relative flex min-h-0 flex-1 flex-col">
       <div className="flex shrink-0 items-center gap-2 border-b border-border bg-card px-3 py-2">
         <AgentDot color={agent.color} />
         <div className="min-w-0 flex-1">
@@ -12601,7 +12621,7 @@ function MobileChatPane({ agent, addError }: { agent: RunningAgent; addError: (m
         )}
       </div>
 
-      <div ref={rootRef} className="min-h-0 flex-1 overflow-y-auto bg-background px-3 py-4">
+      <div ref={rootRef} className="min-h-0 flex-1 overflow-y-auto bg-background px-3 py-4" onScroll={handleTranscriptScroll}>
         {transcriptItems.length === 0 ? (
           <div className="grid min-h-full place-items-center text-center text-sm text-muted-foreground">No transcript yet.</div>
         ) : (
@@ -12619,6 +12639,17 @@ function MobileChatPane({ agent, addError }: { agent: RunningAgent; addError: (m
           </div>
         )}
       </div>
+      {showJumpToBottom && (
+        <Button
+          type="button"
+          size="icon"
+          className="absolute bottom-20 right-4 z-20 h-9 w-9 rounded-full shadow-lg"
+          title="Jump to bottom"
+          onClick={() => scrollTranscriptToBottom(rootRef.current)}
+        >
+          <CircleArrowDown className="h-4 w-4" />
+        </Button>
+      )}
 
       {queue.length > 0 && <div className="border-t border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">{queue.length} queued</div>}
       <div className="flex shrink-0 items-end gap-2 border-t border-border bg-card p-2">
