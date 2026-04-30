@@ -1608,8 +1608,9 @@ function QueuedMessageList({
                     aria-label="Steer"
                     title="Steer this queued message into the active response"
                     onClick={() => {
-                      sendCommand({ type: "injectMessage", id: agentId, text: message.text, attachments: message.attachments });
-                      removeQueuedMessage(agentId, message.id);
+                      if (sendCommand({ type: "injectMessage", id: agentId, text: message.text, attachments: message.attachments })) {
+                        removeQueuedMessage(agentId, message.id);
+                      }
                     }}
                   >
                     <CornerDownRight className="h-3.5 w-3.5" />
@@ -1653,7 +1654,7 @@ function QueuedMessageList({
 }
 
 function useQueuedMessageSender(agent: RunningAgent, queue: QueuedMessage[], canType?: boolean) {
-  const popNextQueuedMessage = useAppStore((state) => state.popNextQueuedMessage);
+  const removeQueuedMessage = useAppStore((state) => state.removeQueuedMessage);
   const isBusy = isAgentBusy(agent);
   const queuedTurnInFlightRef = useRef(false);
   const wasBusyRef = useRef(isBusy);
@@ -1666,11 +1667,12 @@ function useQueuedMessageSender(agent: RunningAgent, queue: QueuedMessage[], can
     wasBusyRef.current = isBusy;
 
     if (isBusy || !canType || queue.length === 0 || queuedTurnInFlightRef.current) return;
-    const next = popNextQueuedMessage(agent.id);
+    const next = queue[0];
     if (!next) return;
+    if (!sendCommand({ type: "userMessage", id: agent.id, text: next.text, attachments: next.attachments })) return;
+    removeQueuedMessage(agent.id, next.id);
     queuedTurnInFlightRef.current = true;
-    sendCommand({ type: "userMessage", id: agent.id, text: next.text, attachments: next.attachments });
-  }, [agent.id, canType, isBusy, popNextQueuedMessage, queue.length]);
+  }, [agent.id, canType, isBusy, queue, queue.length, removeQueuedMessage]);
 }
 
 function AddContextDialog({
@@ -1949,63 +1951,57 @@ function AgentActionsMenu({
   );
 }
 
-function handleNativeSlashCommand(agent: RunningAgent, text: string) {
+type NativeSlashCommandResult = "unhandled" | "sent" | "failed";
+
+function nativeSlashResult(sent: boolean): NativeSlashCommandResult {
+  return sent ? "sent" : "failed";
+}
+
+function handleNativeSlashCommand(agent: RunningAgent, text: string): NativeSlashCommandResult {
   const trimmed = text.trim();
-  if (!trimmed.startsWith("/")) return false;
+  if (!trimmed.startsWith("/")) return "unhandled";
   const [command, ...rest] = trimmed.slice(1).split(/\s+/);
   const arg = rest.join(" ").trim();
   const provider = agent.provider || "claude";
   const settings = useAppStore.getState().settings;
 
   if (command === "clear") {
-    sendCommand({ type: "clear", id: agent.id });
-    return true;
+    return nativeSlashResult(sendCommand({ type: "clear", id: agent.id }));
   }
   if (command === "exit" || command === "quit") {
-    sendCommand({ type: "kill", id: agent.id });
-    return true;
+    return nativeSlashResult(sendCommand({ type: "kill", id: agent.id }));
   }
   if (command === "stop" || command === "interrupt") {
-    sendCommand({ type: "interrupt", id: agent.id });
-    return true;
+    return nativeSlashResult(sendCommand({ type: "interrupt", id: agent.id }));
   }
   if (command === "status") {
-    sendCommand({ type: "nativeStatus", id: agent.id });
-    return true;
+    return nativeSlashResult(sendCommand({ type: "nativeStatus", id: agent.id }));
   }
   if (command === "model" && arg) {
-    sendCommand({ type: "setModel", id: agent.id, model: arg });
-    return true;
+    return nativeSlashResult(sendCommand({ type: "setModel", id: agent.id, model: arg }));
   }
   if (command === "effort" && isAgentEffort(arg)) {
-    sendCommand({ type: "setEffort", id: agent.id, effort: arg });
-    return true;
+    return nativeSlashResult(sendCommand({ type: "setEffort", id: agent.id, effort: arg }));
   }
   if (provider === "codex" && (command === "speed" || command === "fast")) {
-    sendCommand({ type: "setModel", id: agent.id, model: preferredProviderModeModel(settings, "codex", "speed") });
-    return true;
+    return nativeSlashResult(sendCommand({ type: "setModel", id: agent.id, model: preferredProviderModeModel(settings, "codex", "speed") }));
   }
   if (provider === "codex" && (command === "intelligence" || command === "smart")) {
-    sendCommand({ type: "setModel", id: agent.id, model: preferredProviderModeModel(settings, "codex", "intelligence") });
-    return true;
+    return nativeSlashResult(sendCommand({ type: "setModel", id: agent.id, model: preferredProviderModeModel(settings, "codex", "intelligence") }));
   }
   if (provider === "openai" && (command === "chatgpt" || command === "standard")) {
-    sendCommand({ type: "setModel", id: agent.id, model: preferredProviderModeModel(settings, "openai", "standard") });
-    return true;
+    return nativeSlashResult(sendCommand({ type: "setModel", id: agent.id, model: preferredProviderModeModel(settings, "openai", "standard") }));
   }
   if (provider === "openai" && command === "fast") {
-    sendCommand({ type: "setModel", id: agent.id, model: preferredProviderModeModel(settings, "openai", "fast") });
-    return true;
+    return nativeSlashResult(sendCommand({ type: "setModel", id: agent.id, model: preferredProviderModeModel(settings, "openai", "fast") }));
   }
   if (provider === "openai" && (command === "deep-research" || command === "research")) {
-    sendCommand({ type: "setModel", id: agent.id, model: preferredProviderModeModel(settings, "openai", "deepResearch") });
-    return true;
+    return nativeSlashResult(sendCommand({ type: "setModel", id: agent.id, model: preferredProviderModeModel(settings, "openai", "deepResearch") }));
   }
   if (provider === "openai" && (command === "research-fast" || command === "fast-research")) {
-    sendCommand({ type: "setModel", id: agent.id, model: preferredProviderModeModel(settings, "openai", "fastResearch") });
-    return true;
+    return nativeSlashResult(sendCommand({ type: "setModel", id: agent.id, model: preferredProviderModeModel(settings, "openai", "fastResearch") }));
   }
-  return false;
+  return "unhandled";
 }
 
 function injectedMessageText(agent: RunningAgent, text: string): string | undefined {
@@ -8658,15 +8654,19 @@ function AgentTile({
     }
     const injectedText = injectedMessageText(agent, draft);
     if (injectedText) {
-      if (isBusy) sendCommand({ type: "injectMessage", id: agent.id, text: injectedText, attachments });
-      else sendCommand({ type: "userMessage", id: agent.id, text: injectedText, attachments });
+      const sent = isBusy
+        ? sendCommand({ type: "injectMessage", id: agent.id, text: injectedText, attachments })
+        : sendCommand({ type: "userMessage", id: agent.id, text: injectedText, attachments });
+      if (!sent) return;
       setDraft(agent.id, "");
       setComposerCollapsed(false);
       setAttachments([]);
       window.requestAnimationFrame(() => inputRef.current?.focus());
       return;
     }
-    if (handleNativeSlashCommand(agent, draft)) {
+    const nativeResult = handleNativeSlashCommand(agent, draft);
+    if (nativeResult !== "unhandled") {
+      if (nativeResult === "failed") return;
       setDraft(agent.id, "");
       return;
     }
@@ -8678,7 +8678,7 @@ function AgentTile({
       window.requestAnimationFrame(() => inputRef.current?.focus());
       return;
     }
-    sendCommand({ type: "userMessage", id: agent.id, text: draft, attachments });
+    if (!sendCommand({ type: "userMessage", id: agent.id, text: draft, attachments })) return;
     setDraft(agent.id, "");
     setComposerCollapsed(false);
     setAttachments([]);
@@ -8706,7 +8706,7 @@ function AgentTile({
       window.requestAnimationFrame(() => inputRef.current?.focus());
       return;
     }
-    if (handleNativeSlashCommand(agent, commandText)) {
+    if (handleNativeSlashCommand(agent, commandText) !== "unhandled") {
       window.requestAnimationFrame(() => inputRef.current?.focus());
       return;
     }
@@ -10160,15 +10160,19 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
     }
     const injectedText = injectedMessageText(agent, draft);
     if (injectedText) {
-      if (isBusy) sendCommand({ type: "injectMessage", id: agent.id, text: injectedText, attachments });
-      else sendCommand({ type: "userMessage", id: agent.id, text: injectedText, attachments });
+      const sent = isBusy
+        ? sendCommand({ type: "injectMessage", id: agent.id, text: injectedText, attachments })
+        : sendCommand({ type: "userMessage", id: agent.id, text: injectedText, attachments });
+      if (!sent) return;
       setDraft(agent.id, "");
       setComposerCollapsed(false);
       setAttachments([]);
       window.requestAnimationFrame(() => inputRef.current?.focus());
       return;
     }
-    if (handleNativeSlashCommand(agent, draft)) {
+    const nativeResult = handleNativeSlashCommand(agent, draft);
+    if (nativeResult !== "unhandled") {
+      if (nativeResult === "failed") return;
       setDraft(agent.id, "");
       return;
     }
@@ -10180,7 +10184,7 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
       window.requestAnimationFrame(() => inputRef.current?.focus());
       return;
     }
-    sendCommand({ type: "userMessage", id: agent.id, text: draft, attachments });
+    if (!sendCommand({ type: "userMessage", id: agent.id, text: draft, attachments })) return;
     setDraft(agent.id, "");
     setComposerCollapsed(false);
     setAttachments([]);
@@ -10208,7 +10212,7 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
       window.requestAnimationFrame(() => inputRef.current?.focus());
       return;
     }
-    if (handleNativeSlashCommand(agent, commandText)) {
+    if (handleNativeSlashCommand(agent, commandText) !== "unhandled") {
       window.requestAnimationFrame(() => inputRef.current?.focus());
       return;
     }
@@ -12282,6 +12286,7 @@ export function MobileApp() {
   const setProjects = useAppStore((state) => state.setProjects);
   const setCapabilities = useAppStore((state) => state.setCapabilities);
   const setSettings = useAppStore((state) => state.setSettings);
+  const hydrateSnapshot = useAppStore((state) => state.hydrateSnapshot);
   const setSelectedProject = useAppStore((state) => state.setSelectedProject);
   const projects = useAppStore((state) => state.projects);
   const selectedProjectId = useAppStore((state) => state.selectedProjectId);
@@ -12297,12 +12302,17 @@ export function MobileApp() {
 
   useEffect(() => {
     let cancelled = false;
-    void Promise.all([api.projects(), api.capabilities(), api.settings()])
-      .then(([nextProjects, capabilities, settings]) => {
+    const snapshotPromise = api.agentSnapshot().catch(async () => ({
+      agents: await api.agents(),
+      transcripts: {}
+    }));
+    void Promise.all([api.projects(), api.capabilities(), api.settings(), snapshotPromise])
+      .then(([nextProjects, capabilities, settings, snapshot]) => {
         if (cancelled) return;
         setProjects(nextProjects);
         setCapabilities(capabilities);
         setSettings(settings);
+        hydrateSnapshot(snapshot);
         setServerStartupError(undefined);
         connectWebSocket();
       })
@@ -12313,7 +12323,7 @@ export function MobileApp() {
       cancelled = true;
       disconnectWebSocket();
     };
-  }, [serverRetryCount, setCapabilities, setProjects, setSettings]);
+  }, [hydrateSnapshot, serverRetryCount, setCapabilities, setProjects, setSettings]);
 
   const selectedProject = projects.find((project) => project.id === selectedProjectId) || projects[0];
   const openChats = useMemo(
@@ -12439,7 +12449,7 @@ function MobileChatPane({ agent, addError }: { agent: RunningAgent; addError: (m
       return;
     }
     if (isBusy && agent.status !== "awaiting-input") enqueueMessage(agent.id, { text, attachments: [] });
-    else sendCommand({ type: "userMessage", id: agent.id, text, attachments: [] });
+    else if (!sendCommand({ type: "userMessage", id: agent.id, text, attachments: [] })) return;
     setDraft(agent.id, "");
     window.requestAnimationFrame(() => inputRef.current?.focus());
   }

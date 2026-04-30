@@ -1815,6 +1815,10 @@ app.get("/api/agents", (_request, response) => {
   response.json(runtime.listAgents());
 });
 
+app.get("/api/agent-snapshot", (_request, response) => {
+  response.json(runtime.snapshot());
+});
+
 app.get("/api/agents/:id/raw-stream", (request, response) => {
   response.type("text/plain").send(runtime.rawLines(request.params.id).join("\n"));
 });

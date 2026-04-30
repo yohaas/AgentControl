@@ -688,7 +688,9 @@ export const useAppStore = create<AppState>((set, get) => ({
         set((state) => ({
           transcripts: {
             ...state.transcripts,
-            [event.id]: [...(state.transcripts[event.id] || []), event.event]
+            [event.id]: (state.transcripts[event.id] || []).some((item) => item.id === event.event.id)
+              ? (state.transcripts[event.id] || []).map((item) => (item.id === event.event.id ? event.event : item))
+              : [...(state.transcripts[event.id] || []), event.event]
           }
         }));
         break;

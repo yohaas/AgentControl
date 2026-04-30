@@ -1,6 +1,7 @@
 import type {
   Capabilities,
   AppUpdateStatus,
+  AgentSnapshot,
   ClaudePlugin,
   ClaudePluginCatalog,
   DirectoryListing,
@@ -15,7 +16,8 @@ import type {
   ProjectDiffResponse,
   ProjectFileEntry,
   ProjectFileResponse,
-  ProjectTreeResponse
+  ProjectTreeResponse,
+  RunningAgent
 } from "@agent-control/shared";
 import type { SettingsState } from "../store/app-store";
 
@@ -76,6 +78,8 @@ async function json<T>(input: RequestInfo, init?: RequestInit): Promise<T> {
 
 export const api = {
   projects: () => json<Project[]>("/api/projects"),
+  agents: () => json<RunningAgent[]>("/api/agents"),
+  agentSnapshot: () => json<AgentSnapshot>("/api/agent-snapshot"),
   rawAgentStream: async (id: string) => {
     const response = await authedFetch(`/api/agents/${encodeURIComponent(id)}/raw-stream`);
     if (!response.ok) throw new Error(await response.text());

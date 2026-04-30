@@ -76,10 +76,16 @@ export function disconnectWebSocket() {
   currentSocket.close();
 }
 
-export function sendCommand(command: WsClientCommand) {
+export function sendCommand(command: WsClientCommand): boolean {
   if (!socket || socket.readyState !== WebSocket.OPEN) {
     useAppStore.getState().addError("Backend server not running.");
-    return;
+    return false;
   }
-  socket.send(JSON.stringify(command));
+  try {
+    socket.send(JSON.stringify(command));
+    return true;
+  } catch (error) {
+    useAppStore.getState().addError(error instanceof Error ? error.message : String(error));
+    return false;
+  }
 }
