@@ -11054,14 +11054,27 @@ function TerminalPanel({
           </DropdownMenu>
         )}
         {popout && (
-          <Button variant="outline" size="sm" onClick={dockPopout} title="Return terminal to the docked panel">
+          <Button
+            variant="outline"
+            size={showMenuText ? "sm" : "icon"}
+            className={showMenuText ? "gap-1 px-2" : "h-8 w-8"}
+            onClick={dockPopout}
+            title="Return terminal to the docked panel"
+          >
             <PopoutDockIcon className="h-4 w-4" />
-            Dock
+            {showMenuText && "Dock"}
           </Button>
         )}
         {popout ? (
-          <Button variant="ghost" size="icon" onClick={() => window.close()} title="Close window">
+          <Button
+            variant="ghost"
+            size={showMenuText ? "sm" : "icon"}
+            className={showMenuText ? "gap-1 px-2" : "h-8 w-8"}
+            onClick={() => window.close()}
+            title="Close window"
+          >
             <X className="h-4 w-4" />
+            {showMenuText && "Close"}
           </Button>
         ) : embedded ? (
           <Button
