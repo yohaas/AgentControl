@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-04-30
 
+- [e444661](https://github.com/yohaas/AgentControl/commit/e444661) Keep the update dialog open while update commands run
 - [3de35f6](https://github.com/yohaas/AgentControl/commit/3de35f6) Fix WSL file explorer send and external editor actions
 - [ba39734](https://github.com/yohaas/AgentControl/commit/ba39734) Remove the update complete restart modal
 - [42e71c0](https://github.com/yohaas/AgentControl/commit/42e71c0) Avoid UNC stat errors when browsing WSL directories
