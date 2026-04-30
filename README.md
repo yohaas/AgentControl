@@ -12,6 +12,7 @@ See [CHANGELOG.md](CHANGELOG.md) for a date-grouped history of changes with comm
 
 - Launch Claude, Codex, or OpenAI API agents from project agent files or shipped built-in agents such as `general`, `frontend`, `backend`, `security`, and `qa`.
 - Run multiple agents as resizable tiles, with minimize-to-header, maximize, drag/drop ordering, configurable tile height, and configurable tile columns.
+- Use `/mobile` for a phone-first view of existing chats in the selected project, with a project switcher, chat list, transcript viewer, status indicators, stop control, and message sending.
 - Switch between projects. Each project keeps its own open agents and terminal sessions.
 - Open the current project folder from the top bar in Explorer/Finder/xdg-open.
 - See provider icons, model, status, and last activity in the left nav and chat headers.

@@ -12261,6 +12261,250 @@ function ServerOfflinePage({ error, onRetry }: { error?: string; onRetry: () => 
   );
 }
 
+const MOBILE_CHAT_STATUSES = new Set<RunningAgent["status"]>([
+  "starting",
+  "running",
+  "idle",
+  "awaiting-permission",
+  "awaiting-input",
+  "switching-model",
+  "error",
+  "paused",
+  "interrupted"
+]);
+
+function isMobileOpenChat(agent: RunningAgent, transcript: TranscriptEvent[]) {
+  if (agent.remoteControl && transcript.length === 0) return false;
+  return MOBILE_CHAT_STATUSES.has(agent.status) || transcript.length > 0 || agent.restorable;
+}
+
+export function MobileApp() {
+  const setProjects = useAppStore((state) => state.setProjects);
+  const setCapabilities = useAppStore((state) => state.setCapabilities);
+  const setSettings = useAppStore((state) => state.setSettings);
+  const setSelectedProject = useAppStore((state) => state.setSelectedProject);
+  const projects = useAppStore((state) => state.projects);
+  const selectedProjectId = useAppStore((state) => state.selectedProjectId);
+  const agentsById = useAppStore((state) => state.agents);
+  const transcripts = useAppStore((state) => state.transcripts);
+  const wsConnected = useAppStore((state) => state.wsConnected);
+  const themeMode = useAppStore((state) => state.settings.themeMode);
+  const addError = useAppStore((state) => state.addError);
+  const [selectedAgentId, setSelectedAgentId] = useState<string | undefined>();
+  const [serverStartupError, setServerStartupError] = useState<string | undefined>();
+  const [serverRetryCount, setServerRetryCount] = useState(0);
+  useThemeMode(themeMode);
+
+  useEffect(() => {
+    let cancelled = false;
+    void Promise.all([api.projects(), api.capabilities(), api.settings()])
+      .then(([nextProjects, capabilities, settings]) => {
+        if (cancelled) return;
+        setProjects(nextProjects);
+        setCapabilities(capabilities);
+        setSettings(settings);
+        setServerStartupError(undefined);
+        connectWebSocket();
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) setServerStartupError(serverStartupErrorMessage(error));
+      });
+    return () => {
+      cancelled = true;
+      disconnectWebSocket();
+    };
+  }, [serverRetryCount, setCapabilities, setProjects, setSettings]);
+
+  const selectedProject = projects.find((project) => project.id === selectedProjectId) || projects[0];
+  const openChats = useMemo(
+    () =>
+      agentsForProject(agentsById, selectedProject?.id)
+        .filter((agent) => isMobileOpenChat(agent, transcripts[agent.id] || EMPTY_TRANSCRIPT))
+        .sort((left, right) => +new Date(right.updatedAt) - +new Date(left.updatedAt)),
+    [agentsById, selectedProject?.id, transcripts]
+  );
+  const selectedAgent =
+    (selectedAgentId && openChats.find((agent) => agent.id === selectedAgentId)) || openChats[0];
+
+  useEffect(() => {
+    if (!selectedAgent || selectedAgent.id === selectedAgentId) return;
+    setSelectedAgentId(selectedAgent.id);
+  }, [selectedAgent, selectedAgentId]);
+
+  if (serverStartupError) {
+    return <ServerOfflinePage error={serverStartupError} onRetry={() => setServerRetryCount((count) => count + 1)} />;
+  }
+
+  return (
+    <div className="flex h-dvh flex-col overflow-hidden bg-background text-foreground">
+      <header className="flex shrink-0 items-center gap-2 border-b border-border bg-card px-3 py-2">
+        <Select value={selectedProject?.id || ""} onValueChange={(value) => setSelectedProject(value)}>
+          <SelectTrigger className="h-10 min-w-0 flex-1">
+            <SelectValue placeholder="Project" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectGroup>
+              <SelectLabel>Projects</SelectLabel>
+              {projects.map((project) => (
+                <SelectItem key={project.id} value={project.id}>
+                  {project.name}
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          </SelectContent>
+        </Select>
+        <span
+          className={cn("h-3 w-3 shrink-0 rounded-full", wsConnected ? "bg-emerald-500" : "bg-red-500")}
+          title={wsConnected ? "Connected" : "Disconnected"}
+        />
+      </header>
+
+      <main className="flex min-h-0 flex-1 flex-col sm:grid sm:grid-cols-[18rem_minmax(0,1fr)]">
+        <section className="max-h-48 shrink-0 overflow-y-auto border-b border-border bg-card/50 sm:max-h-none sm:border-b-0 sm:border-r">
+          {openChats.length === 0 ? (
+            <div className="p-4 text-sm text-muted-foreground">No open chats in this project.</div>
+          ) : (
+            <div className="grid gap-1 p-2">
+              {openChats.map((agent) => {
+                const transcript = transcripts[agent.id] || EMPTY_TRANSCRIPT;
+                const active = selectedAgent?.id === agent.id;
+                return (
+                  <button
+                    key={agent.id}
+                    type="button"
+                    className={cn(
+                      "grid min-h-16 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 rounded-md border px-2 py-2 text-left",
+                      active ? "border-primary bg-primary/10" : "border-transparent hover:bg-accent/60"
+                    )}
+                    onClick={() => setSelectedAgentId(agent.id)}
+                  >
+                    <AgentDot color={agent.color} />
+                    <span className="min-w-0">
+                      <span className="flex min-w-0 items-center gap-1.5">
+                        <span className="truncate text-sm font-medium">{providerLabel(agent.provider)}: {agent.displayName}</span>
+                        {agentNeedsInput(agent) && <Badge className="shrink-0 border-amber-500/50 bg-amber-500/15 text-amber-800 dark:text-amber-200">!</Badge>}
+                      </span>
+                      <span className="block truncate text-xs text-muted-foreground">
+                        {transcript.length > 0 ? `${transcript.length} events` : "No transcript yet"}
+                      </span>
+                    </span>
+                    <StatusPill status={agent.status} />
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </section>
+
+        {selectedAgent ? (
+          <MobileChatPane key={selectedAgent.id} agent={selectedAgent} addError={addError} />
+        ) : (
+          <section className="grid min-h-0 flex-1 place-items-center p-6 text-center text-sm text-muted-foreground">
+            Select a project with existing chats.
+          </section>
+        )}
+      </main>
+      <ErrorStack />
+    </div>
+  );
+}
+
+function MobileChatPane({ agent, addError }: { agent: RunningAgent; addError: (message: string) => void }) {
+  const transcript = useAppStore((state) => state.transcripts[agent.id] || EMPTY_TRANSCRIPT);
+  const draft = useAppStore((state) => state.drafts[agent.id] || "");
+  const setDraft = useAppStore((state) => state.setDraft);
+  const queue = useAppStore((state) => state.messageQueues[agent.id] || EMPTY_QUEUE);
+  const enqueueMessage = useAppStore((state) => state.enqueueMessage);
+  const transcriptItems = useMemo(() => pairedTranscriptItems(transcript), [transcript]);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  const isBusy = isAgentBusy(agent);
+  const canType = agentHasProcess(agent);
+  const latestUser = latestUserMessage(transcript);
+  const phaseLabel = isBusy ? executingPlanPhase(transcript) : undefined;
+  useQueuedMessageSender(agent, queue, canType);
+
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    const nearBottom = root.scrollHeight - root.scrollTop - root.clientHeight < 180;
+    if (nearBottom || isBusy) root.scrollTop = root.scrollHeight;
+  }, [transcript, isBusy]);
+
+  function send() {
+    const text = draft.trim();
+    if (!text) return;
+    if (!canType) {
+      addError("This chat is not ready to receive messages.");
+      return;
+    }
+    if (isBusy && agent.status !== "awaiting-input") enqueueMessage(agent.id, { text, attachments: [] });
+    else sendCommand({ type: "userMessage", id: agent.id, text, attachments: [] });
+    setDraft(agent.id, "");
+    window.requestAnimationFrame(() => inputRef.current?.focus());
+  }
+
+  return (
+    <section className="flex min-h-0 flex-1 flex-col">
+      <div className="flex shrink-0 items-center gap-2 border-b border-border bg-card px-3 py-2">
+        <AgentDot color={agent.color} />
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-sm font-semibold">{agent.displayName}</div>
+          <div className="truncate text-xs text-muted-foreground" title={fullLastActivity(agent.updatedAt)}>
+            {providerLabel(agent.provider)} · {formatLastActivity(agent.updatedAt)}
+          </div>
+        </div>
+        <StatusPill status={agent.status} />
+        {isBusy && agentHasProcess(agent) && (
+          <Button type="button" variant="outline" size="icon" className="h-9 w-9" title="Stop response" onClick={() => sendCommand({ type: "interrupt", id: agent.id })}>
+            <Square className="h-4 w-4" />
+          </Button>
+        )}
+      </div>
+
+      <div ref={rootRef} className="min-h-0 flex-1 overflow-y-auto bg-background px-3 py-4">
+        {transcriptItems.length === 0 ? (
+          <div className="grid min-h-full place-items-center text-center text-sm text-muted-foreground">No transcript yet.</div>
+        ) : (
+          <div className="grid gap-3">
+            {transcriptItems.map((item, index) => (
+              <TranscriptPreview
+                key={item.kind === "tool_pair" ? item.event.id : item.event.id}
+                item={item}
+                agent={agent}
+                phaseLabel={phaseLabel}
+                latestUserMessageId={latestUser?.id}
+                defaultExpanded={shouldExpandTranscriptItemByDefault(item, index, transcriptItems)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {queue.length > 0 && <div className="border-t border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">{queue.length} queued</div>}
+      <div className="flex shrink-0 items-end gap-2 border-t border-border bg-card p-2">
+        <Textarea
+          ref={inputRef}
+          value={draft}
+          onChange={(event) => setDraft(agent.id, event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && !event.shiftKey) {
+              event.preventDefault();
+              send();
+            }
+          }}
+          className="max-h-32 min-h-11 flex-1 resize-none"
+          placeholder={canType ? "Message" : "Chat unavailable"}
+          disabled={!canType}
+        />
+        <Button type="button" size="icon" className="h-11 w-11" disabled={!canType || !draft.trim()} onClick={send} title="Send">
+          <ArrowUp className="h-4 w-4" />
+        </Button>
+      </div>
+    </section>
+  );
+}
+
 export function App() {
   const setProjects = useAppStore((state) => state.setProjects);
   const setCapabilities = useAppStore((state) => state.setCapabilities);
