@@ -196,8 +196,8 @@ const THINKING_PHRASES: Record<AgentProvider, string[]> = {
     "Mulling",
     "Connecting dots"
   ],
-  codex: ["Inspecting", "Planning", "Patching", "Tracing", "Refactoring", "Testing", "Verifying", "Reviewing", "Applying changes"],
-  openai: ["Reasoning", "Analyzing", "Researching", "Drafting", "Checking", "Synthesizing", "Evaluating", "Composing", "Reviewing"]
+  codex: ["Working", "Thinking", "Running", "Churning", "Analyzing", "Reasoning"],
+  openai: ["Working", "Thinking", "Running", "Churning", "Analyzing", "Reasoning"]
 };
 
 function isGitCredentialPromptError(error: unknown) {
