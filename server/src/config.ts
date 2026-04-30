@@ -60,6 +60,8 @@ export interface DashboardConfig {
   updateChecksEnabled?: boolean;
   updateCommands?: string[];
   inputNotificationsEnabled?: boolean;
+  externalEditor?: ExternalEditor;
+  externalEditorUrlTemplate?: string;
 }
 
 export type TerminalDockPosition = "float" | "left" | "bottom" | "right";
@@ -68,6 +70,7 @@ export type ThemeMode = "auto" | "light" | "dark";
 export type ClaudeRuntime = "cli" | "api";
 export type MenuDisplayMode = "iconOnly" | "iconText";
 export type TileScrollingMode = "vertical" | "horizontal";
+export type ExternalEditor = "none" | "vscode" | "cursor" | "custom";
 
 const configDir = path.join(os.homedir(), ".agent-dashboard");
 const configPath = path.join(configDir, "config.json");
@@ -252,4 +255,10 @@ export function resolveUpdateChecksEnabled(config: DashboardConfig): boolean {
 
 export function resolveInputNotificationsEnabled(config: DashboardConfig): boolean {
   return config.inputNotificationsEnabled === true;
+}
+
+export function resolveExternalEditor(config: DashboardConfig): ExternalEditor {
+  return config.externalEditor === "vscode" || config.externalEditor === "cursor" || config.externalEditor === "custom"
+    ? config.externalEditor
+    : "none";
 }

@@ -42,6 +42,7 @@ import {
   resolveClaudeRuntime,
   resolveDefaultAgentMode,
   resolveAgentDirs,
+  resolveExternalEditor,
   resolveFileExplorerDock,
   resolveInputNotificationsEnabled,
   resolveModelProfiles,
@@ -1880,6 +1881,8 @@ app.get("/api/settings", (_request, response) => {
     updateChecksEnabled: resolveUpdateChecksEnabled(config),
     updateCommands: resolveUpdateCommands(config),
     inputNotificationsEnabled: resolveInputNotificationsEnabled(config),
+    externalEditor: resolveExternalEditor(config),
+    externalEditorUrlTemplate: config.externalEditorUrlTemplate || "",
     capabilities
   });
 });
@@ -1975,7 +1978,10 @@ app.put("/api/settings", async (request, response) => {
     updateChecksEnabled: typeof body.updateChecksEnabled === "boolean" ? body.updateChecksEnabled : resolveUpdateChecksEnabled(config),
     updateCommands: Array.isArray(body.updateCommands) ? body.updateCommands.map((command) => command.trim()).filter(Boolean) : config.updateCommands,
     inputNotificationsEnabled:
-      typeof body.inputNotificationsEnabled === "boolean" ? body.inputNotificationsEnabled : resolveInputNotificationsEnabled(config)
+      typeof body.inputNotificationsEnabled === "boolean" ? body.inputNotificationsEnabled : resolveInputNotificationsEnabled(config),
+    externalEditor: resolveExternalEditor(body.externalEditor ? body : config),
+    externalEditorUrlTemplate:
+      typeof body.externalEditorUrlTemplate === "string" ? body.externalEditorUrlTemplate.trim() : config.externalEditorUrlTemplate
   });
   if (config.claudePath) process.env.AGENTCONTROL_CLAUDE_PATH = config.claudePath;
   else delete process.env.AGENTCONTROL_CLAUDE_PATH;
@@ -2026,6 +2032,8 @@ app.put("/api/settings", async (request, response) => {
     updateChecksEnabled: resolveUpdateChecksEnabled(config),
     updateCommands: resolveUpdateCommands(config),
     inputNotificationsEnabled: resolveInputNotificationsEnabled(config),
+    externalEditor: resolveExternalEditor(config),
+    externalEditorUrlTemplate: config.externalEditorUrlTemplate || "",
     capabilities
   });
 });

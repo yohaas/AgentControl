@@ -156,6 +156,7 @@ import { connectWebSocket, disconnectWebSocket, sendCommand } from "./lib/ws-cli
 import {
   useAppStore,
   type ClaudeRuntime,
+  type ExternalEditor,
   type FileExplorerDockPosition,
   type MenuDisplayMode,
   type QueuedMessage,
@@ -1178,6 +1179,45 @@ function toolPath(value: unknown) {
 
 function displayPathName(value: string) {
   return value.split(/[\\/]/).filter(Boolean).pop() || value;
+}
+
+function externalEditorLabel(editor: ExternalEditor) {
+  if (editor === "vscode") return "VS Code";
+  if (editor === "cursor") return "Cursor";
+  if (editor === "custom") return "custom editor";
+  return "external editor";
+}
+
+function externalEditorPath(pathValue: string) {
+  return pathValue.replace(/\\/g, "/");
+}
+
+function encodeExternalEditorPath(pathValue: string) {
+  return encodeURI(externalEditorPath(pathValue)).replace(/#/g, "%23").replace(/\?/g, "%3F");
+}
+
+function externalEditorUrl(settings: Pick<SettingsState, "externalEditor" | "externalEditorUrlTemplate">, pathValue?: string, line?: number) {
+  if (!pathValue || settings.externalEditor === "none") return undefined;
+  const rawPath = externalEditorPath(pathValue);
+  const encodedPath = encodeExternalEditorPath(pathValue);
+  const lineText = line && line > 0 ? String(Math.round(line)) : "1";
+  if (settings.externalEditor === "custom") {
+    const template = settings.externalEditorUrlTemplate?.trim();
+    if (!template) return undefined;
+    return template
+      .replaceAll("{path}", rawPath)
+      .replaceAll("{encodedPath}", encodedPath)
+      .replaceAll("{line}", lineText);
+  }
+  const scheme = settings.externalEditor === "cursor" ? "cursor" : "vscode";
+  return `${scheme}://file/${encodedPath}${line ? `:${lineText}` : ""}`;
+}
+
+function openExternalEditor(settings: Pick<SettingsState, "externalEditor" | "externalEditorUrlTemplate">, pathValue?: string, line?: number) {
+  const url = externalEditorUrl(settings, pathValue, line);
+  if (!url) return false;
+  window.location.href = url;
+  return true;
 }
 
 function toolActivityText(event: ToolUseEvent, result?: ToolResultEvent) {
@@ -6157,6 +6197,8 @@ function SettingsDialog() {
   const [themeMode, setThemeMode] = useState<ThemeMode>(settings.themeMode);
   const [menuDisplay, setMenuDisplay] = useState<MenuDisplayMode>(settings.menuDisplay);
   const [tileScrolling, setTileScrolling] = useState<TileScrollingMode>(settings.tileScrolling);
+  const [externalEditor, setExternalEditor] = useState<ExternalEditor>(settings.externalEditor || "none");
+  const [externalEditorUrlTemplate, setExternalEditorUrlTemplate] = useState(settings.externalEditorUrlTemplate || "");
   const [claudeRuntime, setClaudeRuntime] = useState<ClaudeRuntime>(settings.claudeRuntime || "cli");
   const [tileHeight, setTileHeight] = useState(settings.tileHeight);
   const [tileColumns, setTileColumns] = useState(settings.tileColumns);
@@ -6196,6 +6238,8 @@ function SettingsDialog() {
     setThemeMode(settings.themeMode);
     setMenuDisplay(settings.menuDisplay);
     setTileScrolling(settings.tileScrolling);
+    setExternalEditor(settings.externalEditor || "none");
+    setExternalEditorUrlTemplate(settings.externalEditorUrlTemplate || "");
     setClaudeRuntime(settings.claudeRuntime || "cli");
     setTileHeight(settings.tileHeight);
     setTileColumns(settings.tileColumns);
@@ -6234,6 +6278,8 @@ function SettingsDialog() {
         themeMode,
         menuDisplay,
         tileScrolling,
+        externalEditor,
+        externalEditorUrlTemplate,
         claudeRuntime,
         tileHeight,
         tileColumns,
@@ -6307,6 +6353,8 @@ function SettingsDialog() {
         themeMode,
         menuDisplay,
         tileScrolling,
+        externalEditor,
+        externalEditorUrlTemplate,
         claudeRuntime,
         tileHeight,
         tileColumns,
@@ -6344,6 +6392,8 @@ function SettingsDialog() {
       setThemeMode(next.themeMode);
       setMenuDisplay(next.menuDisplay);
       setTileScrolling(next.tileScrolling);
+      setExternalEditor(next.externalEditor || "none");
+      setExternalEditorUrlTemplate(next.externalEditorUrlTemplate || "");
       setClaudeRuntime(next.claudeRuntime || "cli");
       setTileHeight(next.tileHeight);
       setTileColumns(next.tileColumns);
@@ -6432,6 +6482,8 @@ function SettingsDialog() {
       themeMode !== settings.themeMode ||
       menuDisplay !== settings.menuDisplay ||
       tileScrolling !== settings.tileScrolling ||
+      externalEditor !== (settings.externalEditor || "none") ||
+      externalEditorUrlTemplate !== (settings.externalEditorUrlTemplate || "") ||
       claudeRuntime !== (settings.claudeRuntime || "cli") ||
       tileHeight !== settings.tileHeight ||
       tileColumns !== settings.tileColumns ||
@@ -6454,6 +6506,8 @@ function SettingsDialog() {
       codexModelsText,
       codexPath,
       defaultAgentMode,
+      externalEditor,
+      externalEditorUrlTemplate,
       gitPath,
       inputNotificationsEnabled,
       menuDisplay,
@@ -6658,6 +6712,39 @@ function SettingsDialog() {
                 </span>
               </span>
             </label>
+            <div className="grid gap-2 rounded-md border border-border bg-background/50 p-3">
+              <div className="grid gap-2 sm:grid-cols-[220px_minmax(0,1fr)]">
+                <label className="grid min-w-0 gap-1.5 text-sm">
+                  External editor
+                  <Select value={externalEditor} onValueChange={(value) => setExternalEditor(value as ExternalEditor)}>
+                    <SelectTrigger className="px-2">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">None</SelectItem>
+                      <SelectItem value="vscode">VS Code</SelectItem>
+                      <SelectItem value="cursor">Cursor</SelectItem>
+                      <SelectItem value="custom">Custom URL</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </label>
+                {externalEditor === "custom" && (
+                  <label className="grid min-w-0 gap-1.5 text-sm">
+                    URL template
+                    <Input
+                      value={externalEditorUrlTemplate}
+                      onChange={(event) => setExternalEditorUrlTemplate(event.target.value)}
+                      placeholder="myeditor://open?file={encodedPath}&line={line}"
+                    />
+                  </label>
+                )}
+              </div>
+              {externalEditor === "custom" && (
+                <p className="text-xs text-muted-foreground">
+                  Custom templates support {"{path}"}, {"{encodedPath}"}, and {"{line}"}.
+                </p>
+              )}
+            </div>
             <label className="flex items-start gap-2 rounded-md border border-border bg-background/50 p-3 text-sm">
               <input
                 type="checkbox"
@@ -7355,6 +7442,8 @@ function ProjectInspectorTile({
 
   function fileBrowserContextMenu(pathValue: string, hostOpenPath: string | undefined, type: "file" | "directory") {
     const canSend = type === "file" && agents.length > 0;
+    const editorUrl = externalEditorUrl(settings, hostOpenPath);
+    const editorLabel = externalEditorLabel(settings.externalEditor);
     return (
       <ContextMenuContent>
         <ContextMenuItem onClick={() => copyText(pathValue)}>
@@ -7364,6 +7453,10 @@ function ProjectInspectorTile({
         <ContextMenuItem disabled={!hostOpenPath} onClick={() => hostOpenPath && copyText(hostOpenPath)}>
           <Copy className="mr-2 h-4 w-4" />
           Copy full path
+        </ContextMenuItem>
+        <ContextMenuItem disabled={!editorUrl} onClick={() => openExternalEditor(settings, hostOpenPath)}>
+          <ExternalLink className="mr-2 h-4 w-4" />
+          Open in {editorLabel}
         </ContextMenuItem>
         <ContextMenuSub>
           <ContextMenuSubTrigger className="flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none focus:bg-accent data-[disabled]:opacity-45" disabled={!canSend}>
@@ -7471,6 +7564,8 @@ function ProjectInspectorTile({
 
   const changedFiles = status?.files || [];
   const selectedChanged = changedFiles.find((file) => file.path === selectedPath || file.path.endsWith(` -> ${selectedPath}`));
+  const selectedHostOpenPath = preview?.hostOpenPath || diff?.hostOpenPath;
+  const selectedExternalEditorUrl = externalEditorUrl(settings, selectedHostOpenPath);
 
   return (
     <section
@@ -7616,6 +7711,18 @@ function ProjectInspectorTile({
                 </Button>
               )}
               <div className="min-w-0 flex-1 truncate px-2 text-xs text-muted-foreground">{selectedPath || project.path}</div>
+              {settings.externalEditor !== "none" && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  disabled={!selectedExternalEditorUrl}
+                  title={`Open in ${externalEditorLabel(settings.externalEditor)}`}
+                  onClick={() => openExternalEditor(settings, selectedHostOpenPath)}
+                >
+                  <ExternalLink className="h-4 w-4" />
+                </Button>
+              )}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="icon" className="h-7 w-7" disabled={!selectedPath} title="File actions">
@@ -7628,6 +7735,9 @@ function ProjectInspectorTile({
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => copyText(preview?.hostOpenPath || diff?.hostOpenPath || selectedPath)}>
                     <Copy className="mr-2 h-4 w-4" /> Copy full path
+                  </DropdownMenuItem>
+                  <DropdownMenuItem disabled={!selectedExternalEditorUrl} onClick={() => openExternalEditor(settings, selectedHostOpenPath)}>
+                    <ExternalLink className="mr-2 h-4 w-4" /> Open in {externalEditorLabel(settings.externalEditor)}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>

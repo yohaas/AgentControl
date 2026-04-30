@@ -50,6 +50,8 @@ export interface SettingsState {
   updateChecksEnabled: boolean;
   updateCommands: string[];
   inputNotificationsEnabled: boolean;
+  externalEditor: ExternalEditor;
+  externalEditorUrlTemplate?: string;
 }
 
 export type TerminalDockPosition = "float" | "left" | "bottom" | "right";
@@ -58,6 +60,7 @@ export type ThemeMode = "auto" | "light" | "dark";
 export type ClaudeRuntime = "cli" | "api";
 export type MenuDisplayMode = "iconOnly" | "iconText";
 export type TileScrollingMode = "vertical" | "horizontal";
+export type ExternalEditor = "none" | "vscode" | "cursor" | "custom";
 
 interface SendDialogState {
   open: boolean;
@@ -238,6 +241,8 @@ const defaultSettings: SettingsState = {
   updateChecksEnabled: true,
   updateCommands: ["git pull", "npm ci", "npm run build", "Restart-Service AgentControl"],
   inputNotificationsEnabled: false,
+  externalEditor: "none",
+  externalEditorUrlTemplate: "",
   claudeRuntime: "cli",
   claudeAgentDir: ".claude/agents",
   codexAgentDir: ".codex/agents",
@@ -275,6 +280,9 @@ function normalizeSettings(settings: SettingsState): SettingsState {
   const claudeRuntime = settings.claudeRuntime === "api" ? "api" : "cli";
   const menuDisplay = settings.menuDisplay === "iconText" ? "iconText" : "iconOnly";
   const tileScrolling = settings.tileScrolling === "horizontal" ? "horizontal" : "vertical";
+  const externalEditor = ["none", "vscode", "cursor", "custom"].includes(settings.externalEditor)
+    ? settings.externalEditor
+    : defaultSettings.externalEditor;
   return {
     ...defaultSettings,
     ...settings,
@@ -282,6 +290,8 @@ function normalizeSettings(settings: SettingsState): SettingsState {
     permissionAllowRules: Array.isArray(settings.permissionAllowRules) ? settings.permissionAllowRules : defaultSettings.permissionAllowRules,
     updateChecksEnabled: settings.updateChecksEnabled !== false,
     inputNotificationsEnabled: settings.inputNotificationsEnabled === true,
+    externalEditor,
+    externalEditorUrlTemplate: typeof settings.externalEditorUrlTemplate === "string" ? settings.externalEditorUrlTemplate : "",
     updateCommands:
       Array.isArray(settings.updateCommands) && settings.updateCommands.some((command) => command.trim())
         ? settings.updateCommands.map((command) => command.trim()).filter(Boolean)
