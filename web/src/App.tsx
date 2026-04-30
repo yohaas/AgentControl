@@ -1412,7 +1412,7 @@ function QueuedMessageList({
         <span className="font-medium text-foreground">
           Queued messages ({queue.length})
         </span>
-        <ChevronDown className={cn("h-4 w-4 transition-transform", expanded && "rotate-180")} />
+        {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
       </button>
       {expanded && (
         <div className="grid gap-1 border-t border-border p-1.5">
