@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-04-30
 
+- [13bbd50](https://github.com/yohaas/AgentControl/commit/13bbd50) Fix built-in agent frontmatter serialization
 - [4543c0b](https://github.com/yohaas/AgentControl/commit/4543c0b) Preserve the selected project across browser refreshes
 - [83b20bd](https://github.com/yohaas/AgentControl/commit/83b20bd) Keep queued messages after steering one
 - [bc8464c](https://github.com/yohaas/AgentControl/commit/bc8464c) Scope file explorer existing-agent actions to the current project
