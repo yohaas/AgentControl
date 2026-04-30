@@ -12757,7 +12757,11 @@ function MobileChatPane({ agent, addError }: { agent: RunningAgent; addError: (m
         </Button>
       )}
 
-      {queue.length > 0 && <div className="border-t border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">{queue.length} queued</div>}
+      {queue.length > 0 && (
+        <div className="shrink-0 border-t border-border bg-card p-2">
+          <QueuedMessageList agentId={agent.id} queue={queue} compact />
+        </div>
+      )}
       <div className="flex shrink-0 items-end gap-2 border-t border-border bg-card p-2">
         <Textarea
           ref={inputRef}
