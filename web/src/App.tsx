@@ -166,6 +166,7 @@ const EMPTY_QUEUE: QueuedMessage[] = [];
 const TERMINAL_DOCK_MESSAGE = "agent-control:dock-terminal";
 const TERMINAL_DOCK_STORAGE_KEY = "agent-control-terminal-dock-request";
 const TERMINAL_POPOUT_STORAGE_KEY = "agent-control-popped-out-terminals";
+const TERMINAL_POPOUT_EXPLICIT_CLOSE_STORAGE_KEY = "agent-control-terminal-popout-explicit-close";
 const FILE_EXPLORER_POPOUT_STORAGE_KEY = "agent-control-file-explorer-popout";
 const DEFAULT_BUILT_IN_AGENT_DIR = ".agent-control/built-in-agents";
 hljs.registerLanguage("bash", bash);
@@ -10899,6 +10900,17 @@ function TerminalPanel({
     });
   }
 
+  function closeTerminalPanel() {
+    sessions.forEach((item) => sendCommand({ type: "terminalClose", id: item.id }));
+    if (popout) {
+      window.sessionStorage.setItem(TERMINAL_POPOUT_EXPLICIT_CLOSE_STORAGE_KEY, "true");
+      window.close();
+      return;
+    }
+    if (embedded) setTerminalInFileExplorer(false);
+    setTerminalOpen(false);
+  }
+
   async function changeTerminalDock(nextDock: typeof TERMINAL_DOCK_OPTIONS[number]["value"]) {
     if (nextDock === terminalDock) return;
     try {
@@ -11070,8 +11082,8 @@ function TerminalPanel({
             variant="ghost"
             size={showMenuText ? "sm" : "icon"}
             className={showMenuText ? "gap-1 px-2" : "h-8 w-8"}
-            onClick={() => window.close()}
-            title="Close window"
+            onClick={closeTerminalPanel}
+            title="Close terminal"
           >
             <X className="h-4 w-4" />
             {showMenuText && "Close"}
@@ -11080,16 +11092,13 @@ function TerminalPanel({
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => {
-              setTerminalInFileExplorer(false);
-              setTerminalOpen(false);
-            }}
-            title="Hide terminal"
+            onClick={closeTerminalPanel}
+            title="Close terminal"
           >
             <X className="h-4 w-4" />
           </Button>
         ) : (
-          <Button variant="ghost" size="icon" onClick={() => setTerminalOpen(false)} title="Hide terminal">
+          <Button variant="ghost" size="icon" onClick={closeTerminalPanel} title="Close terminal">
             <X className="h-4 w-4" />
           </Button>
         )}
@@ -11492,6 +11501,7 @@ export function TerminalPopoutApp() {
   useThemeMode(themeMode);
 
   useEffect(() => {
+    window.sessionStorage.removeItem(TERMINAL_POPOUT_EXPLICIT_CLOSE_STORAGE_KEY);
     void Promise.all([api.projects(), api.capabilities(), api.settings()])
       .then(([projects, capabilities, settings]) => {
         setProjects(projects);
@@ -11509,7 +11519,10 @@ export function TerminalPopoutApp() {
 
   useEffect(() => {
     if (!requestedTerminalId) return;
-    const onBeforeUnload = () => notifyTerminalDock(requestedTerminalId);
+    const onBeforeUnload = () => {
+      if (window.sessionStorage.getItem(TERMINAL_POPOUT_EXPLICIT_CLOSE_STORAGE_KEY) === "true") return;
+      notifyTerminalDock(requestedTerminalId);
+    };
     window.addEventListener("beforeunload", onBeforeUnload);
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
   }, [requestedTerminalId]);
