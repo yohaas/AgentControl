@@ -12441,9 +12441,16 @@ function MobileSidebar({
     setCollapsed(true);
   }
 
+  function toggleOnEmptyNavTap(event: ReactMouseEvent<HTMLElement>) {
+    const target = event.target as HTMLElement;
+    if (target.closest("button,a,input,textarea,select,[role='button'],[role='combobox'],[data-radix-select-trigger]")) return;
+    if (target !== event.currentTarget && !("mobileNavEmptyToggle" in target.dataset)) return;
+    setCollapsed(!collapsed);
+  }
+
   if (collapsed) {
     return (
-      <aside className="flex w-14 shrink-0 flex-col overflow-x-hidden border-r border-border bg-card/45">
+      <aside className="flex w-14 shrink-0 flex-col overflow-x-hidden border-r border-border bg-card/45" onClick={toggleOnEmptyNavTap}>
         <div className="flex h-14 shrink-0 items-center justify-center border-b border-border">
           <span
             className={cn("h-2.5 w-2.5 rounded-full", wsConnected ? "bg-emerald-500" : "bg-red-500")}
@@ -12451,7 +12458,7 @@ function MobileSidebar({
             aria-label={wsConnected ? "Connected" : "Disconnected"}
           />
         </div>
-        <div className="flex min-h-0 flex-1 flex-col items-center gap-2 py-3">
+        <div className="flex min-h-0 flex-1 flex-col items-center gap-2 py-3" data-mobile-nav-empty-toggle>
           <Button variant="ghost" size="icon" onClick={() => setCollapsed(false)} title="Expand sidebar">
             <PanelLeftOpen className="h-4 w-4" />
           </Button>
@@ -12459,7 +12466,7 @@ function MobileSidebar({
             <Plus className="h-4 w-4" />
           </Button>
           <div className="h-px w-8 bg-border" />
-          <div className="flex min-h-0 flex-1 flex-col items-center gap-2 overflow-y-auto overflow-x-hidden px-1">
+          <div className="flex min-h-0 flex-1 flex-col items-center gap-2 overflow-y-auto overflow-x-hidden px-1" data-mobile-nav-empty-toggle>
             {openChats.map((agent) => (
               <div key={agent.id} className="relative h-9 w-9">
                 <button
@@ -12482,7 +12489,7 @@ function MobileSidebar({
   }
 
   return (
-    <aside className="flex w-72 shrink-0 flex-col overflow-x-hidden border-r border-border bg-card/45">
+    <aside className="flex w-72 shrink-0 flex-col overflow-x-hidden border-r border-border bg-card/45" onClick={toggleOnEmptyNavTap}>
       <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-3">
         <Bot className="h-5 w-5 shrink-0 text-primary" />
         <div className="min-w-0 flex-1">
@@ -12517,7 +12524,7 @@ function MobileSidebar({
         </Select>
       </section>
 
-      <section className="flex min-h-0 flex-1 flex-col p-3">
+      <section className="flex min-h-0 flex-1 flex-col p-3" data-mobile-nav-empty-toggle>
         <div className="mb-2 flex items-center justify-between gap-2">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Chats</h2>
           <Button size="sm" disabled={!selectedProjectId} onClick={newChat}>
@@ -12530,7 +12537,7 @@ function MobileSidebar({
             No open chats in this project.
           </div>
         ) : (
-          <div className="min-h-0 flex-1 space-y-1 overflow-y-auto overflow-x-hidden pr-1">
+          <div className="min-h-0 flex-1 space-y-1 overflow-y-auto overflow-x-hidden pr-1" data-mobile-nav-empty-toggle>
             {openChats.map((agent) => {
               const active = selectedAgentId === agent.id;
               return (
