@@ -9147,9 +9147,8 @@ function AgentTile({
                   <div className="pointer-events-none sticky bottom-2 z-30 flex justify-end">
                     <Button
                       type="button"
-                      variant="secondary"
                       size="icon"
-                      className="pointer-events-auto h-8 w-8 rounded-full border border-border shadow-md"
+                      className="pointer-events-auto h-9 w-9 rounded-full shadow-lg"
                       title="Jump to bottom"
                       aria-label="Jump to bottom"
                       onClick={() => scrollTranscriptToBottom(rootRef.current)}
@@ -10496,9 +10495,8 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
               <div className="pointer-events-none sticky bottom-3 z-30 mx-auto flex w-full max-w-4xl justify-end">
                 <Button
                   type="button"
-                  variant="secondary"
                   size="icon"
-                  className="pointer-events-auto h-9 w-9 rounded-full border border-border shadow-md"
+                  className="pointer-events-auto h-9 w-9 rounded-full shadow-lg"
                   title="Jump to bottom"
                   aria-label="Jump to bottom"
                   onClick={() => scrollTranscriptToBottom(rootRef.current)}
