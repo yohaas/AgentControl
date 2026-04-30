@@ -81,6 +81,53 @@ export interface QueuedMessage {
   attachments: MessageAttachment[];
 }
 
+const MESSAGE_QUEUES_STORAGE_KEY = "agent-control-message-queues";
+
+function normalizeQueuedMessage(value: unknown): QueuedMessage | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const message = value as Partial<QueuedMessage>;
+  if (typeof message.id !== "string" || typeof message.text !== "string") return undefined;
+  return {
+    id: message.id,
+    text: message.text,
+    attachments: Array.isArray(message.attachments) ? (message.attachments as MessageAttachment[]) : []
+  };
+}
+
+function normalizeMessageQueues(value: unknown): Record<string, QueuedMessage[]> {
+  if (!value || typeof value !== "object") return {};
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .map(([agentId, queue]) => [
+        agentId,
+        Array.isArray(queue) ? queue.map(normalizeQueuedMessage).filter((message): message is QueuedMessage => Boolean(message)) : []
+      ])
+      .filter(([, queue]) => queue.length > 0)
+  );
+}
+
+function readStoredMessageQueues(): Record<string, QueuedMessage[]> {
+  if (typeof window === "undefined") return {};
+  try {
+    return normalizeMessageQueues(JSON.parse(window.localStorage.getItem(MESSAGE_QUEUES_STORAGE_KEY) || "{}"));
+  } catch {
+    return {};
+  }
+}
+
+function writeStoredMessageQueues(queues: Record<string, QueuedMessage[]>): Record<string, QueuedMessage[]> {
+  const normalized = normalizeMessageQueues(queues);
+  if (typeof window !== "undefined") {
+    if (Object.keys(normalized).length === 0) window.localStorage.removeItem(MESSAGE_QUEUES_STORAGE_KEY);
+    else window.localStorage.setItem(MESSAGE_QUEUES_STORAGE_KEY, JSON.stringify(normalized));
+  }
+  return normalized;
+}
+
+function pruneMessageQueues(queues: Record<string, QueuedMessage[]>, agentIds: Set<string>): Record<string, QueuedMessage[]> {
+  return writeStoredMessageQueues(Object.fromEntries(Object.entries(queues).filter(([agentId]) => agentIds.has(agentId))));
+}
+
 interface AppState {
   projects: Project[];
   selectedProjectId?: string;
@@ -304,7 +351,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   wsConnected: false,
   errors: [],
   drafts: {},
-  messageQueues: {},
+  messageQueues: readStoredMessageQueues(),
   scrollPositions: {},
   flashModels: {},
   tileOrder: [],
@@ -385,6 +432,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       agents: agentMap(snapshot.agents),
       transcripts: snapshot.transcripts,
       capabilities: snapshot.capabilities || state.capabilities,
+      messageQueues: pruneMessageQueues(state.messageQueues, new Set(snapshot.agents.map((agent) => agent.id))),
       selectedAgentId:
         state.selectedAgentId && snapshot.agents.some((agent) => agent.id === state.selectedAgentId)
           ? state.selectedAgentId
@@ -652,47 +700,51 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   setDraft: (id, text) => set((state) => ({ drafts: { ...state.drafts, [id]: text } })),
   enqueueMessage: (id, message) =>
-    set((state) => ({
-      messageQueues: {
+    set((state) => {
+      const messageQueues = writeStoredMessageQueues({
         ...state.messageQueues,
         [id]: [...(state.messageQueues[id] || []), { ...message, id: `${Date.now()}-${Math.random().toString(36).slice(2)}` }]
-      }
-    })),
+      });
+      return { messageQueues };
+    }),
   updateQueuedMessage: (id, messageId, patch) =>
-    set((state) => ({
-      messageQueues: {
+    set((state) => {
+      const messageQueues = writeStoredMessageQueues({
         ...state.messageQueues,
         [id]: (state.messageQueues[id] || []).map((message) => (message.id === messageId ? { ...message, ...patch } : message))
-      }
-    })),
+      });
+      return { messageQueues };
+    }),
   removeQueuedMessage: (id, messageId) =>
-    set((state) => ({
-      messageQueues: {
+    set((state) => {
+      const messageQueues = writeStoredMessageQueues({
         ...state.messageQueues,
         [id]: (state.messageQueues[id] || []).filter((message) => message.id !== messageId)
-      }
-    })),
+      });
+      return { messageQueues };
+    }),
   reorderQueuedMessages: (id, orderedIds) =>
     set((state) => {
       const queue = state.messageQueues[id] || [];
       const byId = new Map(queue.map((message) => [message.id, message]));
       const ordered = orderedIds.map((messageId) => byId.get(messageId)).filter((message): message is QueuedMessage => Boolean(message));
       const missing = queue.filter((message) => !orderedIds.includes(message.id));
+      const messageQueues = writeStoredMessageQueues({
+        ...state.messageQueues,
+        [id]: [...ordered, ...missing]
+      });
       return {
-        messageQueues: {
-          ...state.messageQueues,
-          [id]: [...ordered, ...missing]
-        }
+        messageQueues
       };
     }),
   popNextQueuedMessage: (id) => {
     const queue = get().messageQueues[id] || [];
     const [next, ...rest] = queue;
     set((state) => ({
-      messageQueues: {
+      messageQueues: writeStoredMessageQueues({
         ...state.messageQueues,
         [id]: rest
-      }
+      })
     }));
     return next;
   },
