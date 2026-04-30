@@ -172,6 +172,7 @@ const TERMINAL_DOCK_STORAGE_KEY = "agent-control-terminal-dock-request";
 const TERMINAL_POPOUT_STORAGE_KEY = "agent-control-popped-out-terminals";
 const TERMINAL_POPOUT_EXPLICIT_HIDE_STORAGE_KEY = "agent-control-terminal-popout-explicit-hide";
 const FILE_EXPLORER_POPOUT_STORAGE_KEY = "agent-control-file-explorer-popout";
+const FOCUS_AGENT_TILE_EVENT = "agent-control:focus-agent-tile";
 const DEFAULT_BUILT_IN_AGENT_DIR = ".agent-control/built-in-agents";
 const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 hljs.registerLanguage("bash", bash);
@@ -500,6 +501,10 @@ function notifyTerminalDock(terminalId?: string, focusOpener = false, dock = fal
     // Fall back to a storage event for browsers that block opener access.
   }
   window.localStorage.setItem(TERMINAL_DOCK_STORAGE_KEY, JSON.stringify({ terminalId, dock, hide, nextDock, at: Date.now() }));
+}
+
+function notifyAgentTileFocus(agentId: string) {
+  window.dispatchEvent(new CustomEvent(FOCUS_AGENT_TILE_EVENT, { detail: { agentId } }));
 }
 
 function hashString(value: string) {
@@ -4525,7 +4530,7 @@ function Sidebar({ topSlot }: { topSlot?: ReactNode }) {
   const focusedAgentId = useAppStore((state) => state.focusedAgentId);
   const doneAgentIds = useAppStore((state) => state.doneAgentIds);
   const setSelectedAgent = useAppStore((state) => state.setSelectedAgent);
-  const setFocusedAgent = useAppStore((state) => state.setFocusedAgent);
+  const setTileMinimized = useAppStore((state) => state.setTileMinimized);
   const openLaunchModal = useAppStore((state) => state.openLaunchModal);
   const collapsed = useAppStore((state) => state.sidebarCollapsed);
   const setCollapsed = useAppStore((state) => state.setSidebarCollapsed);
@@ -4571,7 +4576,8 @@ function Sidebar({ topSlot }: { topSlot?: ReactNode }) {
 
   function focusRunningAgent(id: string) {
     setSelectedAgent(undefined);
-    setFocusedAgent(id);
+    setTileMinimized(id, false);
+    notifyAgentTileFocus(id);
   }
 
   function startSidebarResize(event: ReactPointerEvent<HTMLDivElement>) {
@@ -8211,6 +8217,20 @@ function AgentTile({
       window.requestAnimationFrame(() => inputRef.current?.focus());
     }
   }, [agent.id, canType, focusedAgentId]);
+
+  useEffect(() => {
+    const onFocusTile = (event: Event) => {
+      const agentId = (event as CustomEvent<{ agentId?: string }>).detail?.agentId;
+      if (agentId !== agent.id) return;
+      suppressAutoFocusRef.current = true;
+      suppressScrollIntoViewRef.current = true;
+      setSelectedAgent(undefined);
+      setFocusedAgent(agent.id);
+      window.requestAnimationFrame(() => tileRef.current?.scrollIntoView({ block: "nearest", inline: "nearest" }));
+    };
+    window.addEventListener(FOCUS_AGENT_TILE_EVENT, onFocusTile);
+    return () => window.removeEventListener(FOCUS_AGENT_TILE_EVENT, onFocusTile);
+  }, [agent.id, setFocusedAgent, setSelectedAgent]);
 
   useEffect(() => {
     setActiveSlashIndex(0);
@@ -11855,9 +11875,9 @@ export function App() {
       nextStatuses[agent.id] = agent.status;
       if (inputNotificationStatusRef.current[agent.id] === agent.status) continue;
       const projectName = agent.projectName || "Project";
-      const title = agent.status === "awaiting-permission" ? `${projectName}: approval needed` : `${projectName}: answer needed`;
+      const title = `${projectName} - ${agent.displayName}`;
       const notification = new Notification(title, {
-        body: agent.displayName,
+        body: agent.status === "awaiting-permission" ? "Approval needed" : "Answer needed",
         tag: `agent-control-input-${agent.id}`
       });
       notification.onclick = () => {
@@ -11866,7 +11886,7 @@ export function App() {
         store.setSelectedAgent(undefined);
         store.setSelectedProject(agent.projectId);
         store.setTileMinimized(agent.id, false);
-        store.setFocusedAgent(agent.id);
+        window.setTimeout(() => notifyAgentTileFocus(agent.id), 0);
         notification.close();
       };
     }
