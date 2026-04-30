@@ -11892,7 +11892,7 @@ export function App() {
   const [poppedOutTerminalIds, setPoppedOutTerminalIds] = useState(readPoppedOutTerminalIds);
   const [serverStartupError, setServerStartupError] = useState<string | undefined>();
   const [serverRetryCount, setServerRetryCount] = useState(0);
-  const inputNotificationStatusRef = useRef<Record<string, RunningAgent["status"]>>({});
+  const inputNotificationStatusRef = useRef<Record<string, string>>({});
   const terminalSideDocked = terminalOpen && !terminalInFileExplorer && (terminalDock === "left" || terminalDock === "right");
   const terminalBottomDocked = terminalOpen && !terminalInFileExplorer && terminalDock === "bottom";
   const fileExplorerSideDocked = fileExplorerOpen && (fileExplorerDock === "left" || fileExplorerDock === "right");
@@ -12006,18 +12006,18 @@ export function App() {
       inputNotificationStatusRef.current = {};
       return;
     }
-    const nextStatuses: Record<string, RunningAgent["status"]> = {};
+    const nextStatuses: Record<string, string> = {};
     for (const agent of Object.values(agentsById)) {
       if (!agentNeedsInput(agent)) continue;
-      nextStatuses[agent.id] = agent.status;
-      if (inputNotificationStatusRef.current[agent.id] === agent.status) continue;
+      const notificationKey = `${agent.status}:${agent.updatedAt}`;
+      nextStatuses[agent.id] = notificationKey;
+      if (inputNotificationStatusRef.current[agent.id] === notificationKey) continue;
       const projectName = agent.projectName || "Project";
       const title = `${projectName} - ${agent.displayName}`;
       let notification: Notification;
       try {
         notification = new Notification(title, {
-          body: agent.status === "awaiting-permission" ? "Approval needed" : "Answer needed",
-          tag: `agent-control-input-${agent.id}`
+          body: agent.status === "awaiting-permission" ? "Approval needed" : "Answer needed"
         });
       } catch (error) {
         addError(error instanceof Error ? error.message : String(error));
