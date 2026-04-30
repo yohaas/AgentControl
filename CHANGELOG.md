@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-04-30
 
+- [a5fa790](https://github.com/yohaas/AgentControl/commit/a5fa790) Link chat file references to the File Explorer preview
 - [cdef00a](https://github.com/yohaas/AgentControl/commit/cdef00a) Rename app state storage to `~/.agent-control` with legacy migration
 - [a99a7f9](https://github.com/yohaas/AgentControl/commit/a99a7f9) Launch standard Claude chats through the WSL command wrapper
 - [13bbd50](https://github.com/yohaas/AgentControl/commit/13bbd50) Fix built-in agent frontmatter serialization
