@@ -7422,6 +7422,7 @@ function ProjectInspectorTile({
   const previewRootId = `project-inspector-preview-${project.id}`;
   const explorerSelection = useTextSelection(`#${previewRootId}`);
   const normalizedFilter = filter.trim().toLowerCase();
+  const currentProjectAgents = useMemo(() => agents.filter((agent) => agent.projectId === project.id), [agents, project.id]);
   const canFormatPreview = Boolean(
     preview &&
       !preview.binary &&
@@ -7653,7 +7654,7 @@ function ProjectInspectorTile({
 
   function fileBrowserContextMenu(pathValue: string, hostOpenPath: string | undefined, type: "file" | "directory") {
     const launchableAgents = agentDefsWithSources(project);
-    const canSend = type === "file" && (launchableAgents.length > 0 || agents.length > 0);
+    const canSend = type === "file" && (launchableAgents.length > 0 || currentProjectAgents.length > 0);
     const editorLine = type === "file" ? 1 : undefined;
     const editorUrl = externalEditorUrl(settings, hostOpenPath, editorLine);
     const editorLabel = externalEditorLabel(settings.externalEditor);
@@ -7703,11 +7704,14 @@ function ProjectInspectorTile({
               </ContextMenuSubContent>
             </ContextMenuSub>
             <ContextMenuSub>
-              <ContextMenuSubTrigger className="flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none focus:bg-accent">
+              <ContextMenuSubTrigger
+                className="flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none focus:bg-accent data-[disabled]:opacity-45"
+                disabled={currentProjectAgents.length === 0}
+              >
                 Existing agent
               </ContextMenuSubTrigger>
               <ContextMenuSubContent>
-                {agents.map((agent) => (
+                {currentProjectAgents.map((agent) => (
                   <ContextMenuItem
                     key={agent.id}
                     disabled={agent.remoteControl}
@@ -8111,12 +8115,12 @@ function ProjectInspectorTile({
                           <ContextMenuSub>
                             <ContextMenuSubTrigger
                               className="flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none focus:bg-accent data-[disabled]:opacity-45"
-                              disabled={agents.length === 0}
+                              disabled={currentProjectAgents.length === 0}
                             >
                               Existing agent
                             </ContextMenuSubTrigger>
                             <ContextMenuSubContent>
-                              {agents.map((agent) => (
+                              {currentProjectAgents.map((agent) => (
                                 <ContextMenuItem
                                   key={agent.id}
                                   disabled={agent.remoteControl}
