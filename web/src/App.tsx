@@ -4485,6 +4485,7 @@ function Sidebar({ topSlot }: { topSlot?: ReactNode }) {
   const agentsById = useAppStore((state) => state.agents);
   const selectedAgentId = useAppStore((state) => state.selectedAgentId);
   const focusedAgentId = useAppStore((state) => state.focusedAgentId);
+  const doneAgentIds = useAppStore((state) => state.doneAgentIds);
   const setSelectedAgent = useAppStore((state) => state.setSelectedAgent);
   const setFocusedAgent = useAppStore((state) => state.setFocusedAgent);
   const openLaunchModal = useAppStore((state) => state.openLaunchModal);
@@ -4718,6 +4719,7 @@ function Sidebar({ topSlot }: { topSlot?: ReactNode }) {
                   <span className="flex shrink-0 flex-col items-end gap-1">
                     <StatusPill
                       status={agent.status}
+                      done={Boolean(doneAgentIds[agent.id])}
                       onResume={() => sendCommand({ type: "resume", id: agent.id })}
                       onRestart={() => sendCommand({ type: "restart", id: agent.id })}
                     />
@@ -8037,10 +8039,12 @@ function AgentTile({
   const addError = useAppStore((state) => state.addError);
   const setSelectedAgent = useAppStore((state) => state.setSelectedAgent);
   const setFocusedAgent = useAppStore((state) => state.setFocusedAgent);
+  const setChatFocusedAgent = useAppStore((state) => state.setChatFocusedAgent);
   const setTileWidth = useAppStore((state) => state.setTileWidth);
   const tileMinimized = useAppStore((state) => Boolean(state.minimizedTiles[agent.id]));
   const setTileMinimized = useAppStore((state) => state.setTileMinimized);
   const focusedAgentId = useAppStore((state) => state.focusedAgentId);
+  const done = useAppStore((state) => Boolean(state.doneAgentIds[agent.id]));
   const settings = useAppStore((state) => state.settings);
   const [attachments, setAttachments] = useState<MessageAttachment[]>([]);
   const [activeSlashIndex, setActiveSlashIndex] = useState(0);
@@ -8473,6 +8477,7 @@ function AgentTile({
           <LastActivityText agent={agent} compact timeOnly />
           <StatusPill
             status={agent.status}
+            done={done}
             onResume={() => sendCommand({ type: "resume", id: agent.id })}
             onRestart={() => sendCommand({ type: "restart", id: agent.id })}
           />
@@ -8659,7 +8664,11 @@ function AgentTile({
                 )}
                 value={draft}
                 disabled={!canType}
-                onFocus={() => activateTile(true)}
+                onFocus={() => {
+                  activateTile(true);
+                  setChatFocusedAgent(agent.id);
+                }}
+                onBlur={() => setChatFocusedAgent(undefined)}
                 onChange={(event) => {
                   activateTile(true);
                   setSlashMenuOpen(false);
@@ -9497,6 +9506,7 @@ function AgentPanelHeader({
   onToggleViewMode: () => void;
 }) {
   const transcripts = useAppStore((state) => state.transcripts[agent.id] || EMPTY_TRANSCRIPT);
+  const done = useAppStore((state) => Boolean(state.doneAgentIds[agent.id]));
   const setSelectedAgent = useAppStore((state) => state.setSelectedAgent);
 
   return (
@@ -9516,6 +9526,7 @@ function AgentPanelHeader({
         <LastActivityText agent={agent} compact timeOnly />
         <StatusPill
           status={agent.status}
+          done={done}
           onResume={() => sendCommand({ type: "resume", id: agent.id })}
           onRestart={() => sendCommand({ type: "restart", id: agent.id })}
         />
@@ -9539,6 +9550,7 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
   const settings = useAppStore((state) => state.settings);
   const scrollTop = useAppStore((state) => state.scrollPositions[agent.id] || 0);
   const setScrollPosition = useAppStore((state) => state.setScrollPosition);
+  const setChatFocusedAgent = useAppStore((state) => state.setChatFocusedAgent);
   const searchOpen = useAppStore((state) => state.searchOpen);
   const searchQuery = useAppStore((state) => state.searchQuery);
   const setSearchQuery = useAppStore((state) => state.setSearchQuery);
@@ -9966,6 +9978,8 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
               rows={3}
               value={draft}
               disabled={!canType}
+              onFocus={() => setChatFocusedAgent(agent.id)}
+              onBlur={() => setChatFocusedAgent(undefined)}
               onChange={(event) => {
                 setSlashMenuOpen(false);
                 setSlashMenuSuppressed(false);
