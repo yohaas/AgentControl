@@ -10987,6 +10987,7 @@ function remarkRepoFileLinks(agent?: RunningAgent) {
         const childNode = child as { type?: string; value?: string; children?: unknown[] };
         if (childNode.type === "text" && typeof childNode.value === "string") {
           let lastIndex = 0;
+          let replaced = false;
           let match: RegExpExecArray | null;
           FILE_REFERENCE_PATTERN.lastIndex = 0;
           while ((match = FILE_REFERENCE_PATTERN.exec(childNode.value))) {
@@ -10995,14 +10996,15 @@ function remarkRepoFileLinks(agent?: RunningAgent) {
             const rawLine = match[3] || match[4];
             const target = repoFileReferenceTarget(rawPath, agent, rawLine);
             if (!target) continue;
+            replaced = true;
             const start = match.index + prefix.length;
             if (start > lastIndex) nextChildren.push({ type: "text", value: childNode.value.slice(lastIndex, start) });
             const label = `${rawPath}${rawLine ? `:${rawLine}` : ""}`;
             nextChildren.push({ type: "link", url: filePreviewHref(target), children: [{ type: "text", value: label }] });
             lastIndex = start + label.length;
           }
-          if (lastIndex < childNode.value.length) nextChildren.push({ type: "text", value: childNode.value.slice(lastIndex) });
-          if (lastIndex === 0) nextChildren.push(child);
+          if (replaced && lastIndex < childNode.value.length) nextChildren.push({ type: "text", value: childNode.value.slice(lastIndex) });
+          if (!replaced) nextChildren.push(child);
         } else {
           visit(childNode);
           nextChildren.push(child);
