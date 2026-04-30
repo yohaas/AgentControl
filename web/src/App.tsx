@@ -6158,6 +6158,8 @@ function SettingsDialog() {
   const [permissionAllowRules, setPermissionAllowRules] = useState<PermissionAllowRule[]>(settings.permissionAllowRules || []);
   const [updateChecksEnabled, setUpdateChecksEnabled] = useState(settings.updateChecksEnabled !== false);
   const [updateCommandsText, setUpdateCommandsText] = useState((settings.updateCommands || []).join("\n"));
+  const [checkingUpdates, setCheckingUpdates] = useState(false);
+  const [settingsUpdateStatus, setSettingsUpdateStatus] = useState<AppUpdateStatus | undefined>();
   const [builtInEditor, setBuiltInEditor] = useState<{ open: boolean; agent?: AgentDef; originalName?: string }>({ open: false });
 
   useEffect(() => {
@@ -6193,6 +6195,7 @@ function SettingsDialog() {
     setPermissionAllowRules(settings.permissionAllowRules || []);
     setUpdateChecksEnabled(settings.updateChecksEnabled !== false);
     setUpdateCommandsText((settings.updateCommands || []).join("\n"));
+    setSettingsUpdateStatus(undefined);
   }, [open, settings]);
 
   async function save() {
@@ -6256,6 +6259,17 @@ function SettingsDialog() {
       addError(error instanceof Error ? error.message : String(error));
     } finally {
       setUpdatingModelsProvider(undefined);
+    }
+  }
+
+  async function checkAppUpdatesNow() {
+    setCheckingUpdates(true);
+    try {
+      setSettingsUpdateStatus(await api.appUpdates());
+    } catch (error) {
+      addError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setCheckingUpdates(false);
     }
   }
 
@@ -6677,10 +6691,23 @@ function SettingsDialog() {
             />
           </section>
           <section className="grid gap-2 rounded-md border border-border p-3">
-            <div>
-              <h3 className="text-sm font-medium">App updates</h3>
-              <p className="text-xs text-muted-foreground">Check GitHub on startup and run your preferred update commands from a terminal.</p>
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <h3 className="text-sm font-medium">App updates</h3>
+                <p className="text-xs text-muted-foreground">Check GitHub on startup and run your preferred update commands from a terminal.</p>
+              </div>
+              <Button type="button" variant="outline" size="sm" onClick={() => void checkAppUpdatesNow()} disabled={checkingUpdates}>
+                {checkingUpdates ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                Check Now
+              </Button>
             </div>
+            {settingsUpdateStatus && (
+              <div className="rounded-md border border-border bg-muted px-3 py-2 text-xs text-muted-foreground">
+                {settingsUpdateStatus.isRepo
+                  ? `${settingsUpdateStatus.updateAvailable ? "Updates available" : "No updates found"} at ${new Date(settingsUpdateStatus.checkedAt).toLocaleString()}.`
+                  : settingsUpdateStatus.message || "Update status unavailable."}
+              </div>
+            )}
             <label className="flex items-start gap-2 rounded-md border border-border bg-background/50 p-3 text-sm">
               <input
                 type="checkbox"
