@@ -942,24 +942,30 @@ async function removeProjectWorktree(project: Project, request: GitWorktreeRemov
 
 function spawnDetached(command: string, args: string[]): Promise<void> {
   try {
+    console.info(`[open-path] spawn detached command=${command} args=${JSON.stringify(args)}`);
     const child = spawn(command, args, {
       detached: true,
       stdio: "ignore",
       windowsHide: false
     });
-    child.on("error", () => undefined);
+    child.on("error", (error) => {
+      console.error(`[open-path] detached spawn error command=${command}: ${error.message}`);
+    });
     child.unref();
     return Promise.resolve();
   } catch (error) {
+    console.error(`[open-path] detached spawn threw command=${command}: ${error instanceof Error ? error.stack || error.message : String(error)}`);
     return Promise.reject(error);
   }
 }
 
 function openWindowsFolder(folderPath: string): Promise<void> {
+  console.info(`[open-path] spawning explorer.exe for folder: ${folderPath}`);
   return spawnDetached("explorer.exe", [folderPath]);
 }
 
 function openWindowsFileChooser(filePath: string): Promise<void> {
+  console.info(`[open-path] spawning Open With dialog for file: ${filePath}`);
   return spawnDetached("rundll32.exe", ["shell32.dll,OpenAs_RunDLL", filePath]);
 }
 
@@ -1556,6 +1562,8 @@ app.get("/api/filesystem/directories", async (request, response) => {
 app.post("/api/filesystem/open", async (request, response) => {
   const requestedPath = typeof request.body?.path === "string" ? request.body.path.trim() : "";
   const requestedProjectId = typeof request.body?.projectId === "string" ? request.body.projectId : "";
+  const requestedMode = typeof request.body?.mode === "string" ? request.body.mode : "path";
+  console.info(`[open-path] request mode=${requestedMode} projectId=${requestedProjectId || "(none)"} path=${requestedPath || "(project root)"}`);
   if (!requestedPath && !requestedProjectId) {
     response.status(400).json({ error: "File path is required." });
     return;
@@ -1573,14 +1581,18 @@ app.post("/api/filesystem/open", async (request, response) => {
       const { relativePath } = assertProjectPath(project, requestedPath);
       const projectPath = pathInfoForProject(project, relativePath).hostOpenPath;
       const openPath = mode === "containingFolder" ? path.dirname(projectPath) : projectPath;
+      console.info(`[open-path] resolved project=${project.name} relative=${relativePath || "."} host=${projectPath} open=${openPath}`);
       const info = await stat(openPath);
+      console.info(`[open-path] stat file=${info.isFile()} directory=${info.isDirectory()} size=${info.size}`);
       if (!info.isFile() && !info.isDirectory()) {
         response.status(400).json({ error: "Path must be a file or directory." });
         return;
       }
       await openWithDefaultApp(openPath, { file: info.isFile(), openWith: mode === "openWith" });
+      console.info(`[open-path] launched ok open=${openPath}`);
       response.json({ ok: true });
     } catch (error) {
+      console.error(`[open-path] failed: ${error instanceof Error ? error.stack || error.message : String(error)}`);
       response.status(500).json({ error: error instanceof Error ? error.message : String(error) });
     }
     return;
@@ -1588,6 +1600,7 @@ app.post("/api/filesystem/open", async (request, response) => {
 
   const filePath = path.resolve(requestedPath);
   const openPath = mode === "containingFolder" ? path.dirname(filePath) : filePath;
+  console.info(`[open-path] resolved direct file=${filePath} open=${openPath}`);
   if (!isOpenablePath(openPath)) {
     response.status(400).json({ error: "Path must be inside an open project or the built-in agent directory." });
     return;
@@ -1595,13 +1608,16 @@ app.post("/api/filesystem/open", async (request, response) => {
 
   try {
     const info = await stat(openPath);
+    console.info(`[open-path] stat file=${info.isFile()} directory=${info.isDirectory()} size=${info.size}`);
     if (!info.isFile() && !info.isDirectory()) {
       response.status(400).json({ error: "Path must be a file or directory." });
       return;
     }
     await openWithDefaultApp(openPath, { file: info.isFile(), openWith: mode === "openWith" });
+    console.info(`[open-path] launched ok open=${openPath}`);
     response.json({ ok: true });
   } catch (error) {
+    console.error(`[open-path] failed: ${error instanceof Error ? error.stack || error.message : String(error)}`);
     response.status(500).json({ error: error instanceof Error ? error.message : String(error) });
   }
 });
