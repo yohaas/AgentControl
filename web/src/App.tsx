@@ -9356,12 +9356,12 @@ function TranscriptPreview({
   const showPopout = isLongTextBlock(event.text, true);
   return (
     <div
-      className={cn("flex", isUser && "justify-end")}
+      className={cn("flex min-w-0 max-w-full overflow-hidden", isUser && "justify-end")}
       data-latest-user-message={event.id === latestUserMessageId ? "true" : undefined}
     >
       <div
         className={cn(
-          "relative min-w-0 max-w-[86%] whitespace-pre-wrap break-words [overflow-wrap:anywhere] rounded-md border border-border px-3 py-2 text-sm leading-5",
+          "relative min-w-0 max-w-[86%] overflow-hidden whitespace-pre-wrap break-words [overflow-wrap:anywhere] rounded-md border border-border px-3 py-2 text-sm leading-5",
           isUser ? "user-question bg-primary text-primary-foreground" : "bg-background/60",
           showPopout && "pr-16"
         )}
@@ -12392,7 +12392,7 @@ export function MobileApp() {
   }
 
   return (
-    <div className="flex h-dvh overflow-hidden bg-background text-foreground">
+    <div className="flex h-dvh w-full max-w-full overflow-hidden bg-background text-foreground">
       <MobileSidebar
         projects={projects}
         selectedProject={selectedProject}
@@ -12402,7 +12402,7 @@ export function MobileApp() {
         onSelectProject={setSelectedProject}
         onSelectAgent={setSelectedAgentId}
       />
-      <main className="flex min-w-0 flex-1">
+      <main className="flex min-w-0 max-w-full flex-1 overflow-hidden">
         {selectedAgent ? (
           <MobileChatPane key={selectedAgent.id} agent={selectedAgent} addError={addError} />
         ) : (
@@ -12712,8 +12712,8 @@ function MobileChatPane({ agent, addError }: { agent: RunningAgent; addError: (m
   }
 
   return (
-    <section className="relative flex min-h-0 flex-1 flex-col">
-      <div className="flex shrink-0 items-center gap-2 border-b border-border bg-card px-3 py-2">
+    <section className="relative flex min-h-0 min-w-0 max-w-full flex-1 flex-col overflow-hidden">
+      <div className="flex min-w-0 shrink-0 items-center gap-2 border-b border-border bg-card px-3 py-2">
         <AgentDot color={agent.color} />
         <div className="min-w-0 flex-1">
           <div className="truncate text-sm font-semibold">{agent.displayName}</div>
@@ -12730,7 +12730,7 @@ function MobileChatPane({ agent, addError }: { agent: RunningAgent; addError: (m
         <MobileAgentActionsMenu agent={agent} />
       </div>
 
-      <div ref={rootRef} className="min-h-0 flex-1 overflow-y-auto bg-background px-3 py-4" onScroll={handleTranscriptScroll}>
+      <div ref={rootRef} className="min-h-0 min-w-0 max-w-full flex-1 overflow-y-auto overflow-x-hidden bg-background px-3 py-4" onScroll={handleTranscriptScroll}>
         {transcriptItems.length === 0 ? (
           showActivityIndicator ? (
             <AgentActivityIndicator agent={agent} compact phaseLabel={phaseLabel} />
@@ -12738,7 +12738,7 @@ function MobileChatPane({ agent, addError }: { agent: RunningAgent; addError: (m
             <div className="grid min-h-full place-items-center text-center text-sm text-muted-foreground">No transcript yet.</div>
           )
         ) : (
-          <div className="grid gap-3">
+          <div className="grid min-w-0 max-w-full gap-3">
             {transcriptItems.map((item, index) => (
               <TranscriptPreview
                 key={item.kind === "tool_pair" ? item.event.id : item.event.id}
@@ -12766,11 +12766,11 @@ function MobileChatPane({ agent, addError }: { agent: RunningAgent; addError: (m
       )}
 
       {queue.length > 0 && (
-        <div className="shrink-0 border-t border-border bg-card p-2">
+        <div className="min-w-0 shrink-0 overflow-x-hidden border-t border-border bg-card p-2">
           <QueuedMessageList agentId={agent.id} queue={queue} compact />
         </div>
       )}
-      <div className="flex shrink-0 items-end gap-2 border-t border-border bg-card p-2">
+      <div className="flex min-w-0 shrink-0 items-end gap-2 border-t border-border bg-card p-2">
         <Textarea
           ref={inputRef}
           value={draft}
