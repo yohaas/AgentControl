@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-04-30
 
+- [b266473](https://github.com/yohaas/AgentControl/commit/b266473) Fix markdown text duplication
 - [7c8febe](https://github.com/yohaas/AgentControl/commit/7c8febe) Add mobile nav new and close chat controls
 - [bcef1ed](https://github.com/yohaas/AgentControl/commit/bcef1ed) Fix mobile chat scrolling and wrapping
 - [8681b3e](https://github.com/yohaas/AgentControl/commit/8681b3e) Add a collapsible mobile left nav
