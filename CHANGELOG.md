@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-04-30
 
+- [493ddfc](https://github.com/yohaas/AgentControl/commit/493ddfc) Add external editor links for File Explorer paths with VS Code, Cursor, and custom URL settings
 - [f7db9cf](https://github.com/yohaas/AgentControl/commit/f7db9cf) Make Codex intelligence mode use the first configured model regardless of name
 - [e510432](https://github.com/yohaas/AgentControl/commit/e510432) Add a Check Now button to App updates settings
 - [aa527c4](https://github.com/yohaas/AgentControl/commit/aa527c4) Add Codex plan mode to the mode menu
