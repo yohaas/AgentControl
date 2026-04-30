@@ -860,6 +860,47 @@ function wslExec(project: Project, command: string, args: string[] = [], timeout
   });
 }
 
+class WslCommandError extends Error {
+  constructor(
+    message: string,
+    readonly exitCode?: number
+  ) {
+    super(message);
+  }
+}
+
+function wslExecAt(distro: string, cwd: string, command: string, args: string[] = [], timeout = 15000): Promise<string> {
+  const project = { path: wslUncPath(distro, cwd), wslDistro: distro, wslPath: cwd };
+  return new Promise((resolve, reject) => {
+    execFile("wsl.exe", wslCommandArgs(project, command, args), { timeout, windowsHide: true }, (error, stdout, stderr) => {
+      if (error) {
+        const execError = error as Error & { code?: number | string | null };
+        const exitCode = typeof execError.code === "number" ? execError.code : undefined;
+        reject(new WslCommandError((stderr || error.message || "WSL command failed.").replace(/\0/g, "").trim(), exitCode));
+        return;
+      }
+      resolve(stdout);
+    });
+  });
+}
+
+async function listWslDirectories(distro: string, linuxPath: string): Promise<DirectoryEntry[]> {
+  const script = [
+    'target="$1"',
+    'if [ ! -d "$target" ]; then exit 64; fi',
+    'find "$target" -mindepth 1 -maxdepth 1 -type d -printf "%f\\0"'
+  ].join("\n");
+  const output = await wslExecAt(distro, "/", "sh", ["-c", script, "sh", linuxPath]);
+  return output
+    .split("\0")
+    .filter(Boolean)
+    .map((name) => ({
+      name,
+      path: path.posix.join(linuxPath, name)
+    }))
+    .sort((left, right) => left.name.localeCompare(right.name, undefined, { sensitivity: "base" }));
+}
+
 function parseWslDistroOutput(output: string): string[] {
   return output
     .replace(/\0/g, "")
@@ -1595,22 +1636,8 @@ app.get("/api/filesystem/directories", async (request, response) => {
     const distro = typeof request.query.distro === "string" && request.query.distro.trim() ? request.query.distro.trim() : "Ubuntu";
     const requestedPath = typeof request.query.path === "string" && request.query.path.trim() ? request.query.path.trim() : "/home";
     const linuxPath = normalizeWslPath(requestedPath);
-    const directoryPath = wslUncPath(distro, linuxPath);
     try {
-      const info = await stat(directoryPath);
-      if (!info.isDirectory()) {
-        response.status(400).json({ error: "Selected WSL path is not a directory." });
-        return;
-      }
-
-      const entries = await readdir(directoryPath, { withFileTypes: true });
-      const directories = entries
-        .filter((entry) => entry.isDirectory())
-        .map((entry) => ({
-          name: entry.name,
-          path: path.posix.join(linuxPath, entry.name)
-        }))
-        .sort((left, right) => left.name.localeCompare(right.name, undefined, { sensitivity: "base" }));
+      const directories = await listWslDirectories(distro, linuxPath);
       const parentPath = path.posix.dirname(linuxPath);
 
       response.json({
@@ -1625,6 +1652,10 @@ app.get("/api/filesystem/directories", async (request, response) => {
         entries: directories
       });
     } catch (error) {
+      if (error instanceof WslCommandError && error.exitCode === 64) {
+        response.status(400).json({ error: "Selected WSL path is not a directory." });
+        return;
+      }
       response.status(500).json({ error: error instanceof Error ? error.message : String(error) });
     }
     return;
