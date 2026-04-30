@@ -12352,7 +12352,6 @@ export function MobileApp() {
         selectedProject={selectedProject}
         openChats={openChats}
         selectedAgentId={selectedAgent?.id}
-        transcripts={transcripts}
         wsConnected={wsConnected}
         onSelectProject={setSelectedProject}
         onSelectAgent={setSelectedAgentId}
@@ -12366,6 +12365,7 @@ export function MobileApp() {
           </section>
         )}
       </main>
+      <LaunchDialog />
       <ErrorStack />
     </div>
   );
@@ -12376,7 +12376,6 @@ function MobileSidebar({
   selectedProject,
   openChats,
   selectedAgentId,
-  transcripts,
   wsConnected,
   onSelectProject,
   onSelectAgent
@@ -12385,13 +12384,23 @@ function MobileSidebar({
   selectedProject?: Project;
   openChats: RunningAgent[];
   selectedAgentId?: string;
-  transcripts: Record<string, TranscriptEvent[]>;
   wsConnected: boolean;
   onSelectProject: (id?: string) => void;
   onSelectAgent: (id: string) => void;
 }) {
   const collapsed = useAppStore((state) => state.sidebarCollapsed);
   const setCollapsed = useAppStore((state) => state.setSidebarCollapsed);
+  const openLaunchModal = useAppStore((state) => state.openLaunchModal);
+  const selectedProjectId = selectedProject?.id;
+
+  function newChat() {
+    if (!selectedProjectId) return;
+    openLaunchModal({ projectId: selectedProjectId });
+  }
+
+  function closeChat(agentId: string) {
+    sendCommand({ type: "kill", id: agentId });
+  }
 
   if (collapsed) {
     return (
@@ -12407,21 +12416,34 @@ function MobileSidebar({
           <Button variant="ghost" size="icon" onClick={() => setCollapsed(false)} title="Expand sidebar">
             <PanelLeftOpen className="h-4 w-4" />
           </Button>
+          <Button size="icon" className="h-9 w-9" disabled={!selectedProjectId} onClick={newChat} title="New chat">
+            <Plus className="h-4 w-4" />
+          </Button>
           <div className="h-px w-8 bg-border" />
           <div className="flex min-h-0 flex-1 flex-col items-center gap-2 overflow-y-auto overflow-x-hidden px-1">
             {openChats.map((agent) => (
-              <button
-                key={agent.id}
-                type="button"
-                className={cn(
-                  "grid h-9 w-9 place-items-center rounded-md hover:bg-accent",
-                  selectedAgentId === agent.id && "bg-accent"
-                )}
-                onClick={() => onSelectAgent(agent.id)}
-                title={`${providerLabel(agent.provider)}: ${agent.displayName}\n${fullLastActivity(agent.updatedAt || agent.launchedAt)}`}
-              >
-                <ActiveAgentDot agent={agent} />
-              </button>
+              <div key={agent.id} className="relative h-9 w-9">
+                <button
+                  type="button"
+                  className={cn(
+                    "grid h-9 w-9 place-items-center rounded-md hover:bg-accent",
+                    selectedAgentId === agent.id && "bg-accent"
+                  )}
+                  onClick={() => onSelectAgent(agent.id)}
+                  title={`${agent.defName}\n${providerLabel(agent.provider)}\n${agent.currentModel}`}
+                >
+                  <ActiveAgentDot agent={agent} />
+                </button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="absolute right-0 top-0 h-4 w-4 rounded-full bg-background/90 p-0 text-muted-foreground shadow-sm hover:text-foreground"
+                  title={`Close chat ${agent.displayName}`}
+                  onClick={() => closeChat(agent.id)}
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              </div>
             ))}
           </div>
         </div>
@@ -12466,7 +12488,13 @@ function MobileSidebar({
       </section>
 
       <section className="flex min-h-0 flex-1 flex-col p-3">
-        <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Chats</h2>
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Chats</h2>
+          <Button size="sm" disabled={!selectedProjectId} onClick={newChat}>
+            <Plus className="h-4 w-4" />
+            New
+          </Button>
+        </div>
         {openChats.length === 0 ? (
           <div className="rounded-md border border-dashed border-border px-3 py-5 text-center text-sm text-muted-foreground">
             No open chats in this project.
@@ -12474,32 +12502,48 @@ function MobileSidebar({
         ) : (
           <div className="min-h-0 flex-1 space-y-1 overflow-y-auto overflow-x-hidden pr-1">
             {openChats.map((agent) => {
-              const transcript = transcripts[agent.id] || EMPTY_TRANSCRIPT;
               const active = selectedAgentId === agent.id;
               return (
-                <button
+                <div
                   key={agent.id}
-                  type="button"
                   className={cn(
-                    "grid w-full min-h-16 grid-cols-[auto_minmax(0,1fr)] items-center gap-2 rounded-md px-2 py-2 text-left hover:bg-accent",
+                    "grid min-h-16 grid-cols-[minmax(0,1fr)_auto] items-center gap-1 rounded-md px-1 py-1 hover:bg-accent",
                     active && "bg-accent"
                   )}
-                  onClick={() => onSelectAgent(agent.id)}
                 >
-                  <ActiveAgentDot agent={agent} />
-                  <span className="min-w-0">
-                    <span className="flex min-w-0 items-center gap-1.5">
-                      <span className="truncate text-sm font-medium">{agent.displayName}</span>
-                      {agentNeedsInput(agent) && (
-                        <Badge className="shrink-0 border-amber-500/50 bg-amber-500/15 text-amber-800 dark:text-amber-200">!</Badge>
-                      )}
+                  <button
+                    type="button"
+                    className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-2 rounded-sm px-1 py-1 text-left"
+                    onClick={() => onSelectAgent(agent.id)}
+                  >
+                    <ActiveAgentDot agent={agent} />
+                    <span className="min-w-0">
+                      <span className="flex min-w-0 items-center gap-1.5">
+                        <span className="truncate text-sm font-medium">{agent.defName}</span>
+                        {agentNeedsInput(agent) && (
+                          <Badge className="shrink-0 border-amber-500/50 bg-amber-500/15 text-amber-800 dark:text-amber-200">!</Badge>
+                        )}
+                      </span>
+                      <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+                        <span className="shrink-0">{providerLabel(agent.provider)}</span>
+                        <span aria-hidden="true">·</span>
+                        <span className="truncate">{agent.currentModel}</span>
+                      </span>
                     </span>
-                    <span className="flex min-w-0 items-center justify-between gap-2 text-xs text-muted-foreground">
-                      <span className="truncate">{providerLabel(agent.provider)}</span>
-                      <span className="shrink-0">{transcript.length > 0 ? `${transcript.length} events` : "No transcript"}</span>
-                    </span>
-                  </span>
-                </button>
+                  </button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground"
+                    title={`Close chat ${agent.displayName}`}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      closeChat(agent.id);
+                    }}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
               );
             })}
           </div>
