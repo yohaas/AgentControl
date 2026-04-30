@@ -1513,6 +1513,27 @@ function QueuedMessageList({
   );
 }
 
+function useQueuedMessageSender(agent: RunningAgent, queue: QueuedMessage[], canType?: boolean) {
+  const popNextQueuedMessage = useAppStore((state) => state.popNextQueuedMessage);
+  const isBusy = isAgentBusy(agent);
+  const queuedTurnInFlightRef = useRef(false);
+  const wasBusyRef = useRef(isBusy);
+
+  useEffect(() => {
+    const wasBusy = wasBusyRef.current;
+    if (!isBusy && wasBusy && queuedTurnInFlightRef.current) {
+      queuedTurnInFlightRef.current = false;
+    }
+    wasBusyRef.current = isBusy;
+
+    if (isBusy || !canType || queue.length === 0 || queuedTurnInFlightRef.current) return;
+    const next = popNextQueuedMessage(agent.id);
+    if (!next) return;
+    queuedTurnInFlightRef.current = true;
+    sendCommand({ type: "userMessage", id: agent.id, text: next.text, attachments: next.attachments });
+  }, [agent.id, canType, isBusy, popNextQueuedMessage, queue.length]);
+}
+
 function AddContextDialog({
   agent,
   open,
@@ -7735,7 +7756,6 @@ function AgentTile({
   const setDraft = useAppStore((state) => state.setDraft);
   const queue = useAppStore((state) => state.messageQueues[agent.id] || EMPTY_QUEUE);
   const enqueueMessage = useAppStore((state) => state.enqueueMessage);
-  const popNextQueuedMessage = useAppStore((state) => state.popNextQueuedMessage);
   const addError = useAppStore((state) => state.addError);
   const setSelectedAgent = useAppStore((state) => state.setSelectedAgent);
   const setFocusedAgent = useAppStore((state) => state.setFocusedAgent);
@@ -7785,6 +7805,7 @@ function AgentTile({
 
   const hasMultilineDraft = draftLines > 1 || composerWrapped;
   const composerExpanded = hasMultilineDraft && !composerCollapsed;
+  useQueuedMessageSender(agent, queue, canType);
 
   useEffect(() => {
     const root = rootRef.current;
@@ -7814,13 +7835,6 @@ function AgentTile({
       window.requestAnimationFrame(() => inputRef.current?.focus());
     }
   }, [agent.id, canType, focusedAgentId]);
-
-  useEffect(() => {
-    if (isBusy || !canType || queue.length === 0) return;
-    const next = popNextQueuedMessage(agent.id);
-    if (!next) return;
-    sendCommand({ type: "userMessage", id: agent.id, text: next.text, attachments: next.attachments });
-  }, [agent.id, canType, isBusy, popNextQueuedMessage, queue.length]);
 
   useEffect(() => {
     setActiveSlashIndex(0);
@@ -9243,7 +9257,6 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
   const setDraft = useAppStore((state) => state.setDraft);
   const queue = useAppStore((state) => state.messageQueues[agent.id] || EMPTY_QUEUE);
   const enqueueMessage = useAppStore((state) => state.enqueueMessage);
-  const popNextQueuedMessage = useAppStore((state) => state.popNextQueuedMessage);
   const addError = useAppStore((state) => state.addError);
   const settings = useAppStore((state) => state.settings);
   const scrollTop = useAppStore((state) => state.scrollPositions[agent.id] || 0);
@@ -9288,6 +9301,7 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
   const [composerWrapped, setComposerWrapped] = useState(false);
   const hasMultilineDraft = draftLines > 1 || composerWrapped;
   const composerExpanded = hasMultilineDraft && !composerCollapsed;
+  useQueuedMessageSender(agent, queue, canType);
 
   useEffect(() => {
     const root = rootRef.current;
@@ -9306,13 +9320,6 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
     }
     setShowPinnedMessage(shouldShowPinnedUserMessage(root, pinnedMessage?.id));
   }, [transcript, agent.id, isBusy, pinnedMessage?.id, setScrollPosition]);
-
-  useEffect(() => {
-    if (isBusy || !canType || queue.length === 0) return;
-    const next = popNextQueuedMessage(agent.id);
-    if (!next) return;
-    sendCommand({ type: "userMessage", id: agent.id, text: next.text, attachments: next.attachments });
-  }, [agent.id, canType, isBusy, popNextQueuedMessage, queue.length]);
 
   useEffect(() => {
     setActiveSlashIndex(0);

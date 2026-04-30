@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-04-29
 
+- [pending] Send queued messages one at a time after each agent turn completes
 - [pending] Make terminal hide controls preserve sessions instead of closing or re-docking them
 - [pending] Make bottom-docked File Explorer resizable and remember when Files should reopen as a popout
 - [pending] Preserve File Explorer open state and dock position across browser refreshes
