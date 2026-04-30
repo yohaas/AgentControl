@@ -4,6 +4,7 @@ import {
   useRef,
   useState,
   useCallback,
+  type ComponentProps,
   type ComponentType,
   type ClipboardEvent as ReactClipboardEvent,
   type DragEvent as ReactDragEvent,
@@ -3523,9 +3524,20 @@ function WorktreeTabs() {
   );
 }
 
-function GitStatusMenu({ projectId }: { projectId?: string }) {
+function GitStatusMenu({
+  projectId,
+  compact = false,
+  buttonVariant = "outline",
+  contentClassName
+}: {
+  projectId?: string;
+  compact?: boolean;
+  buttonVariant?: ComponentProps<typeof Button>["variant"];
+  contentClassName?: string;
+}) {
   const addError = useAppStore((state) => state.addError);
   const showMenuText = useAppStore((state) => state.settings.menuDisplay === "iconText");
+  const showButtonText = showMenuText && !compact;
   const [open, setOpen] = useState(false);
   const [status, setStatus] = useState<GitStatus | undefined>();
   const [loading, setLoading] = useState(false);
@@ -3592,14 +3604,14 @@ function GitStatusMenu({ projectId }: { projectId?: string }) {
       <DropdownMenu open={open} onOpenChange={setOpen}>
         <DropdownMenuTrigger asChild>
           <Button
-            variant="outline"
-            size={showMenuText ? undefined : "icon"}
+            variant={buttonVariant}
+            size={showButtonText ? undefined : "icon"}
             disabled={!projectId}
             title="Git status"
-            className={cn("relative", showMenuText && "gap-2 px-3")}
+            className={cn("relative", showButtonText && "gap-2 px-3")}
           >
             <GitBranch className="h-4 w-4" />
-            {showMenuText && <span>Git</span>}
+            {showButtonText && <span>Git</span>}
             {aheadCount > 0 && (
               <span className="absolute -right-1.5 -top-1.5 grid min-h-4 min-w-4 place-items-center rounded-full border border-background bg-red-500 px-1 text-[10px] font-semibold leading-none text-white">
                 {aheadCount > 99 ? "99+" : aheadCount}
@@ -3607,7 +3619,7 @@ function GitStatusMenu({ projectId }: { projectId?: string }) {
             )}
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-80">
+        <DropdownMenuContent align="end" className={cn("w-80", contentClassName)}>
           <div className="grid gap-3 p-2">
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0">
@@ -12465,6 +12477,12 @@ function MobileSidebar({
           <Button size="icon" className="h-9 w-9" disabled={!selectedProjectId} onClick={newChat} title="New chat">
             <Plus className="h-4 w-4" />
           </Button>
+          <GitStatusMenu
+            projectId={selectedProjectId}
+            compact
+            buttonVariant="ghost"
+            contentClassName="w-[min(calc(100vw-1rem),20rem)]"
+          />
           <div className="h-px w-8 bg-border" />
           <div className="flex min-h-0 flex-1 flex-col items-center gap-2 overflow-y-auto overflow-x-hidden px-1" data-mobile-nav-empty-toggle>
             {openChats.map((agent) => (
@@ -12500,6 +12518,12 @@ function MobileSidebar({
           className={cn("h-2.5 w-2.5 shrink-0 rounded-full", wsConnected ? "bg-emerald-500" : "bg-red-500")}
           title={wsConnected ? "Connected" : "Disconnected"}
           aria-label={wsConnected ? "Connected" : "Disconnected"}
+        />
+        <GitStatusMenu
+          projectId={selectedProjectId}
+          compact
+          buttonVariant="ghost"
+          contentClassName="w-[min(calc(100vw-1rem),20rem)]"
         />
         <Button variant="ghost" size="icon" onClick={() => setCollapsed(true)} title="Collapse sidebar">
           <PanelLeftClose className="h-4 w-4" />
