@@ -4,7 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-04-29
 
-- [pending] Make terminal close controls terminate sessions instead of only hiding or re-docking them
+- [pending] Make terminal hide controls preserve sessions instead of closing or re-docking them
 - [pending] Make bottom-docked File Explorer resizable and remember when Files should reopen as a popout
 - [pending] Preserve File Explorer open state and dock position across browser refreshes
 - [pending] Default File Explorer to the left dock beside the left nav
