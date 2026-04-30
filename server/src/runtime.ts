@@ -1617,8 +1617,10 @@ export class AgentRuntimeManager {
       PERMISSION_MCP_TOOL_NAME
     );
 
-    const child = spawn(resolveClaudeCommand(), args, {
-      cwd: state.agent.projectPath,
+    const command = this.spawnCommand(state, resolveClaudeCommand(), args);
+    const child = spawn(command.command, command.args, {
+      cwd: command.cwd,
+      env: this.claudeEnv(state),
       windowsHide: true
     });
     state.child = child;

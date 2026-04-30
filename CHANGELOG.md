@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-04-30
 
+- [1d8682d](https://github.com/yohaas/AgentControl/commit/1d8682d) Launch standard Claude chats through the WSL command wrapper
 - [13bbd50](https://github.com/yohaas/AgentControl/commit/13bbd50) Fix built-in agent frontmatter serialization
 - [4543c0b](https://github.com/yohaas/AgentControl/commit/4543c0b) Preserve the selected project across browser refreshes
 - [83b20bd](https://github.com/yohaas/AgentControl/commit/83b20bd) Keep queued messages after steering one

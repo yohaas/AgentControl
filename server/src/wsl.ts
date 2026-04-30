@@ -39,7 +39,7 @@ export function wslDistro(project: Pick<Project, "path" | "wslDistro">): string 
 export function wslCommandArgs(project: Pick<Project, "path" | "wslDistro" | "wslPath">, command: string, args: string[] = []): string[] {
   const script = [
     'if [ -r "$HOME/.profile" ]; then . "$HOME/.profile"; fi',
-    'export PATH="$HOME/.local/bin:$HOME/bin:$HOME/.npm-global/bin:$HOME/.volta/bin:$HOME/.bun/bin:/usr/local/bin:/usr/bin:/bin:$PATH"',
+    'export PATH="$HOME/.local/npm-global/bin:$HOME/.local/bin:$HOME/bin:$HOME/.npm-global/bin:$HOME/.volta/bin:$HOME/.bun/bin:/usr/local/bin:/usr/bin:/bin:$PATH"',
     'for node_bin in "$HOME"/.nvm/versions/node/*/bin; do if [ -d "$node_bin" ]; then PATH="$node_bin:$PATH"; fi; done',
     'exec "$0" "$@"'
   ].join("; ");
