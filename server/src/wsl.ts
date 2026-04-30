@@ -9,7 +9,7 @@ export function isWslProject(project?: Pick<Project, "runtime">): boolean {
 export function wslUncPath(distro: string, linuxPath: string): string {
   const cleanDistro = distro.trim();
   const cleanPath = normalizeWslPath(linuxPath);
-  return `\\\\wsl$\\${cleanDistro}${cleanPath.replace(/\//g, "\\")}`;
+  return `\\\\wsl.localhost\\${cleanDistro}${cleanPath.replace(/\//g, "\\")}`;
 }
 
 export function parseWslUncPath(input: string): { distro: string; wslPath: string } | undefined {
@@ -26,6 +26,12 @@ export function normalizeWslPath(input: string): string {
   const trimmed = input.trim() || "/";
   const withSlash = trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
   return path.posix.normalize(withSlash);
+}
+
+export function canonicalWslProjectKey(input: string): string | undefined {
+  const parsed = parseWslUncPath(input);
+  if (!parsed) return undefined;
+  return `wsl:${parsed.distro.toLowerCase()}:${normalizeWslPath(parsed.wslPath)}`;
 }
 
 export function wslProjectPath(project: Pick<Project, "path" | "wslPath">): string {

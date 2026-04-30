@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import matter from "gray-matter";
 import type { AgentDef, AgentProvider, Project } from "@agent-control/shared";
-import { parseWslUncPath } from "./wsl.js";
+import { canonicalWslProjectKey, parseWslUncPath, wslUncPath } from "./wsl.js";
 import { APP_ROOT, DEFAULT_BUILT_IN_AGENT_DIR } from "./config.js";
 
 const agentColorPalette = [
@@ -139,7 +139,7 @@ function generalAgentDef(): AgentDef {
 }
 
 function projectId(projectPath: string): string {
-  return Buffer.from(path.resolve(projectPath)).toString("base64url");
+  return Buffer.from(canonicalWslProjectKey(projectPath) || path.resolve(projectPath)).toString("base64url");
 }
 
 function projectRuntimeFields(projectPath: string): Pick<Project, "runtime" | "wslDistro" | "wslPath"> {
@@ -154,8 +154,23 @@ function expandHome(input: string): string {
 }
 
 function normalizedProjectPath(projectPath: string): string {
+  const wslKey = canonicalWslProjectKey(projectPath);
+  if (wslKey) return wslKey;
   const resolved = path.resolve(expandHome(projectPath));
   return process.platform === "win32" ? resolved.toLowerCase() : resolved;
+}
+
+async function resolveExistingProjectPath(projectPath: string): Promise<string | null> {
+  const resolvedPath = path.resolve(expandHome(projectPath));
+  const wsl = parseWslUncPath(resolvedPath);
+  const candidates = wsl ? Array.from(new Set([resolvedPath, wslUncPath(wsl.distro, wsl.wslPath)])) : [resolvedPath];
+
+  for (const candidate of candidates) {
+    const projectStats = await stat(candidate).catch(() => null);
+    if (projectStats?.isDirectory()) return candidate;
+  }
+
+  return null;
 }
 
 function isDescendantPath(childPath: string, parentPath: string): boolean {
@@ -354,10 +369,9 @@ export async function scanProjects(projectsRoot: string, agentDirs = DEFAULT_AGE
 }
 
 export async function scanProject(projectPath: string, agentDirs = DEFAULT_AGENT_DIRS, agentSourcePath?: string): Promise<Project | null> {
-  const resolvedPath = path.resolve(expandHome(projectPath));
-  const projectStats = await stat(resolvedPath).catch(() => null);
-  if (!projectStats?.isDirectory()) return null;
-  const resolvedAgentSourcePath = agentSourcePath ? path.resolve(expandHome(agentSourcePath)) : resolvedPath;
+  const resolvedPath = await resolveExistingProjectPath(projectPath);
+  if (!resolvedPath) return null;
+  const resolvedAgentSourcePath = agentSourcePath ? (await resolveExistingProjectPath(agentSourcePath)) || resolvedPath : resolvedPath;
   const agents = await readAgentDefs(resolvedAgentSourcePath, agentDirs);
   const builtInAgents = await readBuiltInAgentDefs(resolvedPath, agentDirs);
 

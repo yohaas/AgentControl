@@ -66,7 +66,7 @@ import { addMarketplace, enablePlugin, installPlugin, listPlugins, normalizePlug
 import { AgentRuntimeManager } from "./runtime.js";
 import { deleteBuiltInAgent, scanConfiguredProjects, scanProject, updateAgentPlugins, updateAgentPluginsFile, upsertBuiltInAgent } from "./scanner.js";
 import { TerminalManager } from "./terminal.js";
-import { isWslProject, normalizeWslPath, parseWslUncPath, wslCommandArgs, wslProjectPath, wslUncPath } from "./wsl.js";
+import { canonicalWslProjectKey, isWslProject, normalizeWslPath, parseWslUncPath, wslCommandArgs, wslProjectPath, wslUncPath } from "./wsl.js";
 
 const PORT = Number(process.env.PORT || 4317);
 const HOST = process.env.HOST || "127.0.0.1";
@@ -405,6 +405,8 @@ async function ensurePrivateAttachmentsDir(): Promise<void> {
 }
 
 function normalizedProjectPath(projectPath: string): string {
+  const wslKey = canonicalWslProjectKey(projectPath);
+  if (wslKey) return wslKey;
   const resolved = path.resolve(expandHome(projectPath));
   return process.platform === "win32" ? resolved.toLowerCase() : resolved;
 }
