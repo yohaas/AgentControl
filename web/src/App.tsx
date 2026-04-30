@@ -244,7 +244,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
         </div>
         <Input
           autoFocus
-          type="password"
+          type={status === "setup" ? "text" : "password"}
           value={token}
           onChange={(event) => setToken(event.target.value)}
           onKeyDown={(event) => {
@@ -6995,7 +6995,7 @@ function SettingsDialog() {
               <label className="grid min-w-0 gap-1.5 text-sm">
                 Access token
                 <Input
-                  type="password"
+                  type="text"
                   value={accessToken}
                   onChange={(event) => setAccessToken(event.target.value)}
                   placeholder={settings.accessTokenSaved ? "Leave blank to keep current token" : "Enter or generate a token"}
