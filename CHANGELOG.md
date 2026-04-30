@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-04-30
 
+- [ea0d067](https://github.com/yohaas/AgentControl/commit/ea0d067) Add a circular jump-to-bottom button when chat transcripts are scrolled upward
 - [5ae4d81](https://github.com/yohaas/AgentControl/commit/5ae4d81) Show input-needed alerts across projects and add optional browser notifications
 - [cbab4c6](https://github.com/yohaas/AgentControl/commit/cbab4c6) Use an icon-only bell update notice and remove update settings helper text
 - [cdef6f6](https://github.com/yohaas/AgentControl/commit/cdef6f6) Show startup update notices beside the connection dot with a details modal and Settings toggle
