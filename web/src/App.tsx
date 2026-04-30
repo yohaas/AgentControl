@@ -56,6 +56,7 @@ import {
   FolderOpen,
   FolderPlus,
   FolderTree,
+  Forward,
   GitBranch,
   GripVertical,
   Gauge,
@@ -6945,6 +6946,7 @@ function ProjectInspectorTile({
         </ContextMenuItem>
         <ContextMenuSub>
           <ContextMenuSubTrigger className="flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none focus:bg-accent data-[disabled]:opacity-45" disabled={!canSend}>
+            <Forward className="mr-2 h-4 w-4" />
             <span className="flex-1">Send file to</span>
             <ChevronRight className="ml-4 h-4 w-4 text-muted-foreground" />
           </ContextMenuSubTrigger>
@@ -7329,6 +7331,7 @@ function ProjectInspectorTile({
                       </ContextMenuItem>
                       <ContextMenuSub>
                         <ContextMenuSubTrigger className="flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none focus:bg-accent data-[disabled]:opacity-45" disabled={!target.text}>
+                          <Forward className="mr-2 h-4 w-4" />
                           <span className="flex-1">Send {target.scope === "selection" ? "selected text" : "file content"} to</span>
                           <ChevronRight className="ml-4 h-4 w-4 text-muted-foreground" />
                         </ContextMenuSubTrigger>
@@ -9764,6 +9767,7 @@ function SendToMenu({
       </ContextMenuItem>
       <ContextMenuSub>
         <ContextMenuSubTrigger className="flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none focus:bg-accent data-[disabled]:opacity-45" disabled={!activeText}>
+          <Forward className="mr-2 h-4 w-4" />
           <span className="flex-1">Send {targetLabel} to</span>
           <ChevronRight className="ml-4 h-4 w-4 text-muted-foreground" />
         </ContextMenuSubTrigger>
@@ -10144,6 +10148,7 @@ function ChatBlockPopoutButton({
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm" disabled={!text.trim()}>
+                  <Forward className="h-4 w-4" />
                   Send {actionScope} to new agent
                   <ChevronDown className="h-4 w-4" />
                 </Button>
@@ -10170,6 +10175,7 @@ function ChatBlockPopoutButton({
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm" disabled={targetAgents.length === 0 || !text.trim()}>
+                  <Forward className="h-4 w-4" />
                   Send {actionScope} to existing agent
                   <ChevronDown className="h-4 w-4" />
                 </Button>
@@ -10230,6 +10236,7 @@ function ChatBlockPopoutButton({
                   className="flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none focus:bg-accent data-[disabled]:opacity-45"
                   disabled={!text.trim()}
                 >
+                  <Forward className="mr-2 h-4 w-4" />
                   <span className="flex-1">Send {contextLabel} to</span>
                   <ChevronRight className="ml-4 h-4 w-4 text-muted-foreground" />
                 </ContextMenuSubTrigger>
