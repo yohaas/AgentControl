@@ -15,6 +15,17 @@ import {
   type UIEvent as ReactUIEvent
 } from "react";
 import { FitAddon } from "@xterm/addon-fit";
+import hljs from "highlight.js/lib/core";
+import bash from "highlight.js/lib/languages/bash";
+import css from "highlight.js/lib/languages/css";
+import diffLanguage from "highlight.js/lib/languages/diff";
+import javascript from "highlight.js/lib/languages/javascript";
+import json from "highlight.js/lib/languages/json";
+import markdown from "highlight.js/lib/languages/markdown";
+import powershell from "highlight.js/lib/languages/powershell";
+import typescript from "highlight.js/lib/languages/typescript";
+import xml from "highlight.js/lib/languages/xml";
+import yaml from "highlight.js/lib/languages/yaml";
 import { Terminal as XTerm } from "@xterm/xterm";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -155,6 +166,16 @@ const TERMINAL_DOCK_MESSAGE = "agent-control:dock-terminal";
 const TERMINAL_DOCK_STORAGE_KEY = "agent-control-terminal-dock-request";
 const TERMINAL_POPOUT_STORAGE_KEY = "agent-control-popped-out-terminals";
 const DEFAULT_BUILT_IN_AGENT_DIR = ".agent-control/built-in-agents";
+hljs.registerLanguage("bash", bash);
+hljs.registerLanguage("css", css);
+hljs.registerLanguage("diff", diffLanguage);
+hljs.registerLanguage("javascript", javascript);
+hljs.registerLanguage("json", json);
+hljs.registerLanguage("markdown", markdown);
+hljs.registerLanguage("powershell", powershell);
+hljs.registerLanguage("typescript", typescript);
+hljs.registerLanguage("xml", xml);
+hljs.registerLanguage("yaml", yaml);
 const THINKING_PHRASES: Record<AgentProvider, string[]> = {
   claude: [
     "Discombobulating",
@@ -187,6 +208,82 @@ function formatBytes(bytes: number): string {
     index += 1;
   }
   return `${value >= 10 ? value.toFixed(0) : value.toFixed(1)} ${units[index]}`;
+}
+
+function languageForPath(pathValue: string, mimeType?: string): string | undefined {
+  const lower = pathValue.toLowerCase();
+  if (mimeType?.includes("json") || lower.endsWith(".json")) return "json";
+  if (mimeType?.includes("markdown") || /\.(md|markdown)$/.test(lower)) return "markdown";
+  if (mimeType?.includes("typescript") || /\.(ts|tsx|mts|cts)$/.test(lower)) return "typescript";
+  if (mimeType?.includes("javascript") || /\.(js|jsx|mjs|cjs)$/.test(lower)) return "javascript";
+  if (mimeType?.includes("html") || /\.(html|htm|xml|svg)$/.test(lower)) return "xml";
+  if (mimeType?.includes("css") || lower.endsWith(".css")) return "css";
+  if (/\.(ya?ml)$/.test(lower)) return "yaml";
+  if (/\.(sh|bash|zsh)$/.test(lower)) return "bash";
+  if (/\.(ps1|psm1|psd1)$/.test(lower)) return "powershell";
+  if (lower.endsWith(".diff") || lower.endsWith(".patch")) return "diff";
+  return undefined;
+}
+
+function highlightedHtml(text = "", pathValue = "", mimeType?: string): string {
+  const language = languageForPath(pathValue, mimeType);
+  try {
+    if (language && hljs.getLanguage(language)) return hljs.highlight(text, { language, ignoreIllegals: true }).value;
+    return hljs.highlightAuto(text).value;
+  } catch {
+    return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+}
+
+interface SideBySideDiffRow {
+  kind: "hunk" | "context" | "remove" | "add" | "change";
+  oldLine?: number;
+  newLine?: number;
+  oldText?: string;
+  newText?: string;
+  header?: string;
+}
+
+function parseUnifiedDiff(diffText: string): SideBySideDiffRow[] {
+  const rows: SideBySideDiffRow[] = [];
+  let oldLine = 0;
+  let newLine = 0;
+  let pendingRemovals: SideBySideDiffRow[] = [];
+
+  function flushRemovals() {
+    rows.push(...pendingRemovals);
+    pendingRemovals = [];
+  }
+
+  for (const line of diffText.split(/\r?\n/)) {
+    if (/^diff --git|^index |^--- |\+\+\+ /.test(line)) continue;
+    const hunk = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@(.*)$/.exec(line);
+    if (hunk) {
+      flushRemovals();
+      oldLine = Number(hunk[1]);
+      newLine = Number(hunk[2]);
+      rows.push({ kind: "hunk", header: line });
+      continue;
+    }
+    if (line.startsWith("-")) {
+      pendingRemovals.push({ kind: "remove", oldLine: oldLine++, oldText: line.slice(1) });
+      continue;
+    }
+    if (line.startsWith("+")) {
+      const removed = pendingRemovals.shift();
+      if (removed) {
+        rows.push({ kind: "change", oldLine: removed.oldLine, newLine: newLine++, oldText: removed.oldText, newText: line.slice(1) });
+      } else {
+        rows.push({ kind: "add", newLine: newLine++, newText: line.slice(1) });
+      }
+      continue;
+    }
+    flushRemovals();
+    const text = line.startsWith(" ") ? line.slice(1) : line;
+    rows.push({ kind: "context", oldLine: oldLine++, newLine: newLine++, oldText: text, newText: text });
+  }
+  flushRemovals();
+  return rows;
 }
 
 function formatDateTime(value: string): string {
@@ -6567,6 +6664,9 @@ function ProjectInspectorTile({
   const [searchResults, setSearchResults] = useState<ProjectFileEntry[]>([]);
   const [mode, setMode] = useState<"preview" | "diff" | "details">("preview");
   const [previewView, setPreviewView] = useState<"raw" | "formatted">("raw");
+  const [diffView, setDiffView] = useState<"sideBySide" | "unified">("sideBySide");
+  const [browserCollapsed, setBrowserCollapsed] = useState(false);
+  const [browserWidth, setBrowserWidth] = useState(260);
   const [selectedPath, setSelectedPath] = useState("");
   const [preview, setPreview] = useState<ProjectFileResponse | undefined>();
   const [diff, setDiff] = useState<ProjectDiffResponse | undefined>();
@@ -6581,6 +6681,7 @@ function ProjectInspectorTile({
       !preview.binary &&
       (/\.(md|markdown)$/i.test(preview.relativePath) || /markdown/i.test(preview.mimeType))
   );
+  const diffRows = useMemo(() => parseUnifiedDiff(diff?.diff || ""), [diff?.diff]);
 
   useEffect(() => {
     setTargetAgentId((current) => (current && agents.some((agent) => agent.id === current) ? current : agents[0]?.id || ""));
@@ -6759,6 +6860,22 @@ function ProjectInspectorTile({
     setTerminalOpen(true);
   }
 
+  function startBrowserResize(event: ReactPointerEvent<HTMLDivElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    const startX = event.clientX;
+    const startWidth = browserWidth;
+    const onMove = (moveEvent: PointerEvent) => {
+      setBrowserWidth(Math.min(520, Math.max(180, startWidth + moveEvent.clientX - startX)));
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp, { once: true });
+  }
+
   const changedFiles = status?.files || [];
   const selectedChanged = changedFiles.find((file) => file.path === selectedPath || file.path.endsWith(` -> ${selectedPath}`));
 
@@ -6841,15 +6958,33 @@ function ProjectInspectorTile({
         )}
       </div>
       {!collapsed && (
-        <div className="grid min-h-0 flex-1 grid-cols-[240px_minmax(0,1fr)]">
-          <aside className="flex min-h-0 flex-col border-r border-border">
+        <div className="grid min-h-0 flex-1" style={{ gridTemplateColumns: browserCollapsed ? "40px minmax(0,1fr)" : `${browserWidth}px minmax(0,1fr)` }}>
+          <aside className="relative flex min-h-0 flex-col border-r border-border">
             <div className="border-b border-border p-2">
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-2 top-2 h-3.5 w-3.5 text-muted-foreground" />
-                <Input className="h-8 pl-7 text-xs" value={filter} onChange={(event) => setFilter(event.target.value)} placeholder="Search files" title="Search files and subfolders" />
-              </div>
+              {browserCollapsed ? (
+                <Button variant="ghost" size="icon" className="h-8 w-8" title="Expand file browser" onClick={() => setBrowserCollapsed(false)}>
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              ) : (
+                <div className="flex items-center gap-1">
+                  <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" title="Collapse file browser" onClick={() => setBrowserCollapsed(true)}>
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <div className="relative min-w-0 flex-1">
+                    <Search className="pointer-events-none absolute left-2 top-2 h-3.5 w-3.5 text-muted-foreground" />
+                    <Input className="h-8 pl-7 text-xs" value={filter} onChange={(event) => setFilter(event.target.value)} placeholder="Search files" title="Search files and subfolders" />
+                  </div>
+                </div>
+              )}
             </div>
-            <div className="min-h-0 flex-1 overflow-auto p-1">{renderSearchResults()}</div>
+            {!browserCollapsed && <div className="min-h-0 flex-1 overflow-auto p-1">{renderSearchResults()}</div>}
+            {!browserCollapsed && (
+              <div
+                className="absolute bottom-0 right-0 top-0 w-2 cursor-ew-resize hover:bg-primary/20"
+                onPointerDown={startBrowserResize}
+                title="Drag to resize file browser"
+              />
+            )}
           </aside>
           <div className="flex min-w-0 flex-col">
             <div className="flex shrink-0 flex-wrap items-center gap-1 border-b border-border px-2 py-2">
@@ -6859,6 +6994,11 @@ function ProjectInspectorTile({
               <Button variant={mode === "diff" ? "secondary" : "ghost"} size="sm" className="h-7 gap-1 px-2" disabled={!selectedPath} title="Show Git diff for selected file" onClick={() => selectedPath && void openDiff(selectedPath)}>
                 <GitBranch className="h-3.5 w-3.5" /> Diff
               </Button>
+              {mode === "diff" && (
+                <Button variant="outline" size="sm" className="h-7 gap-1 px-2" title="Toggle side-by-side and unified diff" onClick={() => setDiffView((view) => (view === "sideBySide" ? "unified" : "sideBySide"))}>
+                  <Columns2 className="h-3.5 w-3.5" /> {diffView === "sideBySide" ? "Unified" : "Side by Side"}
+                </Button>
+              )}
               <Button variant={mode === "details" ? "secondary" : "ghost"} size="sm" className="h-7 gap-1 px-2" disabled={!selectedPath} title="Show file details" onClick={() => setMode("details")}>
                 <Info className="h-3.5 w-3.5" /> Details
               </Button>
@@ -6919,7 +7059,10 @@ function ProjectInspectorTile({
                         <ReactMarkdown remarkPlugins={[remarkGfm]}>{preview.content || ""}</ReactMarkdown>
                       </div>
                     ) : (
-                      <pre className="min-h-0 whitespace-pre-wrap break-words rounded-md bg-muted/40 p-3 font-mono text-xs leading-5">{preview.content}</pre>
+                      <pre
+                        className="syntax-highlight min-h-0 overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted/40 p-3 font-mono text-xs leading-5"
+                        dangerouslySetInnerHTML={{ __html: highlightedHtml(preview.content || "", preview.relativePath, preview.mimeType) }}
+                      />
                     )}
                     {preview.truncated && (
                       <Button variant="outline" size="sm" onClick={() => void api.projectFile(project.id, preview.relativePath, true).then(setPreview).catch((error) => addError(error instanceof Error ? error.message : String(error)))}>
@@ -6941,7 +7084,43 @@ function ProjectInspectorTile({
                         Add diff
                       </Button>
                     </div>
-                    <pre className="whitespace-pre-wrap break-words rounded-md bg-muted/40 p-3 font-mono text-xs leading-5">{diff.diff || diff.content || "No unstaged diff for this file."}</pre>
+                    {diff.diff && diffView === "sideBySide" ? (
+                      <div className="overflow-auto rounded-md border border-border bg-muted/25 font-mono text-xs">
+                        <div className="grid min-w-[760px] grid-cols-[4rem_minmax(0,1fr)_4rem_minmax(0,1fr)] border-b border-border bg-muted/60 text-muted-foreground">
+                          <div className="px-2 py-1 text-right">Old</div>
+                          <div className="border-l border-border px-2 py-1">Before</div>
+                          <div className="border-l border-border px-2 py-1 text-right">New</div>
+                          <div className="border-l border-border px-2 py-1">After</div>
+                        </div>
+                        {diffRows.map((row, index) =>
+                          row.kind === "hunk" ? (
+                            <div key={`${index}-${row.header}`} className="border-y border-border bg-primary/10 px-2 py-1 text-[11px] text-primary">
+                              {row.header}
+                            </div>
+                          ) : (
+                            <div
+                              key={`${index}-${row.oldLine}-${row.newLine}`}
+                              className={cn(
+                                "grid min-w-[760px] grid-cols-[4rem_minmax(0,1fr)_4rem_minmax(0,1fr)]",
+                                row.kind === "change" && "bg-amber-500/10",
+                                row.kind === "remove" && "bg-red-500/10",
+                                row.kind === "add" && "bg-emerald-500/10"
+                              )}
+                            >
+                              <div className="select-none px-2 py-0.5 text-right text-muted-foreground">{row.oldLine || ""}</div>
+                              <pre className={cn("min-w-0 whitespace-pre-wrap break-words border-l border-border px-2 py-0.5", (row.kind === "remove" || row.kind === "change") && "text-red-700 dark:text-red-300")}>{row.oldText ?? ""}</pre>
+                              <div className="select-none border-l border-border px-2 py-0.5 text-right text-muted-foreground">{row.newLine || ""}</div>
+                              <pre className={cn("min-w-0 whitespace-pre-wrap break-words border-l border-border px-2 py-0.5", (row.kind === "add" || row.kind === "change") && "text-emerald-700 dark:text-emerald-300")}>{row.newText ?? ""}</pre>
+                            </div>
+                          )
+                        )}
+                      </div>
+                    ) : (
+                      <pre
+                        className="syntax-highlight overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted/40 p-3 font-mono text-xs leading-5"
+                        dangerouslySetInnerHTML={{ __html: highlightedHtml(diff.diff || diff.content || "No unstaged diff for this file.", diff.relativePath.endsWith(".diff") ? diff.relativePath : `${diff.relativePath}.diff`, "text/x-diff") }}
+                      />
+                    )}
                   </div>
                 ) : (
                   <div className="grid h-full place-items-center text-sm text-muted-foreground">Open a changed file diff.</div>

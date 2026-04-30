@@ -230,3 +230,43 @@
 .xterm .xterm-viewport {
   background-color: transparent !important;
 }
+
+.syntax-highlight .hljs-keyword,
+.syntax-highlight .hljs-selector-tag,
+.syntax-highlight .hljs-built_in,
+.syntax-highlight .hljs-name {
+  color: #7dd3fc;
+}
+
+.syntax-highlight .hljs-string,
+.syntax-highlight .hljs-title,
+.syntax-highlight .hljs-section,
+.syntax-highlight .hljs-attribute {
+  color: #86efac;
+}
+
+.syntax-highlight .hljs-number,
+.syntax-highlight .hljs-literal,
+.syntax-highlight .hljs-variable,
+.syntax-highlight .hljs-template-variable {
+  color: #fca5a5;
+}
+
+.syntax-highlight .hljs-comment,
+.syntax-highlight .hljs-quote {
+  color: #94a3b8;
+}
+
+.syntax-highlight .hljs-meta,
+.syntax-highlight .hljs-symbol,
+.syntax-highlight .hljs-bullet {
+  color: #fcd34d;
+}
+
+.syntax-highlight .hljs-deletion {
+  color: #fecaca;
+}
+
+.syntax-highlight .hljs-addition {
+  color: #bbf7d0;
+}
