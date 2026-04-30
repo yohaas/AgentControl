@@ -4,7 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-04-29
 
-- [pending] Fix File Explorer open file and containing folder actions, including file browser context menus and Open With fallback
+- [pending] Fix File Explorer open file and containing folder actions, including file browser context menus and detached Windows Open With/folder launching
 - [pending] Add a read-only, resizable File Explorer tile, dock, and popout for browsing files, recursive search, collapsible file browser, line-numbered syntax-highlighted previews, raw/formatted markup previews, side-by-side diffs, terminal docking, and right-click copy/send context actions
 - [44f657a](https://github.com/yohaas/AgentControl/commit/44f657a) Keep full-height tiles sized to the remaining space when the terminal docks or minimizes
 - [db090d5](https://github.com/yohaas/AgentControl/commit/db090d5) Fix terminal pane clipping

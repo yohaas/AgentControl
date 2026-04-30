@@ -1,5 +1,5 @@
 import http from "node:http";
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { chmod, cp, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -940,43 +940,27 @@ async function removeProjectWorktree(project: Project, request: GitWorktreeRemov
   return { projects, worktrees: await projectWorktrees(project) };
 }
 
+function spawnDetached(command: string, args: string[]): Promise<void> {
+  try {
+    const child = spawn(command, args, {
+      detached: true,
+      stdio: "ignore",
+      windowsHide: false
+    });
+    child.on("error", () => undefined);
+    child.unref();
+    return Promise.resolve();
+  } catch (error) {
+    return Promise.reject(error);
+  }
+}
+
 function openWindowsFolder(folderPath: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    execFile(
-      "powershell.exe",
-      [
-        "-NoProfile",
-        "-NonInteractive",
-        "-ExecutionPolicy",
-        "Bypass",
-        "-Command",
-        "$target = $env:AGENTCONTROL_OPEN_PATH; if (-not $target) { throw 'Open path was not provided.' }; Start-Process -FilePath explorer.exe -ArgumentList @($target)"
-      ],
-      {
-        env: { ...process.env, AGENTCONTROL_OPEN_PATH: folderPath },
-        windowsHide: true
-      },
-      (error, _stdout, stderr) => {
-        if (error) {
-          reject(new Error(stderr.trim() || error.message || "Unable to open folder."));
-          return;
-        }
-        resolve();
-      }
-    );
-  });
+  return spawnDetached("explorer.exe", [folderPath]);
 }
 
 function openWindowsFileChooser(filePath: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    execFile("rundll32.exe", ["shell32.dll,OpenAs_RunDLL", filePath], { windowsHide: true }, (error, _stdout, stderr) => {
-      if (error) {
-        reject(new Error(stderr.trim() || error.message || "Unable to open the Open With dialog."));
-        return;
-      }
-      resolve();
-    });
-  });
+  return spawnDetached("rundll32.exe", ["shell32.dll,OpenAs_RunDLL", filePath]);
 }
 
 function openWithDefaultApp(filePath: string, options: { file?: boolean; openWith?: boolean } = {}): Promise<void> {
