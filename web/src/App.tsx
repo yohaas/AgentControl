@@ -12630,6 +12630,7 @@ function MobileChatPane({ agent, addError }: { agent: RunningAgent; addError: (m
   const [showJumpToBottom, setShowJumpToBottom] = useState(false);
   const isBusy = isAgentBusy(agent);
   const canType = agentHasProcess(agent);
+  const showActivityIndicator = isBusy && agent.status !== "awaiting-input" && !hasStreamingAssistantText(transcript);
   const latestUser = latestUserMessage(transcript);
   const phaseLabel = isBusy ? executingPlanPhase(transcript) : undefined;
   useQueuedMessageSender(agent, queue, canType);
@@ -12729,7 +12730,11 @@ function MobileChatPane({ agent, addError }: { agent: RunningAgent; addError: (m
 
       <div ref={rootRef} className="min-h-0 flex-1 overflow-y-auto bg-background px-3 py-4" onScroll={handleTranscriptScroll}>
         {transcriptItems.length === 0 ? (
-          <div className="grid min-h-full place-items-center text-center text-sm text-muted-foreground">No transcript yet.</div>
+          showActivityIndicator ? (
+            <AgentActivityIndicator agent={agent} compact phaseLabel={phaseLabel} />
+          ) : (
+            <div className="grid min-h-full place-items-center text-center text-sm text-muted-foreground">No transcript yet.</div>
+          )
         ) : (
           <div className="grid gap-3">
             {transcriptItems.map((item, index) => (
@@ -12742,6 +12747,7 @@ function MobileChatPane({ agent, addError }: { agent: RunningAgent; addError: (m
                 defaultExpanded={shouldExpandTranscriptItemByDefault(item, index, transcriptItems)}
               />
             ))}
+            {showActivityIndicator && <AgentActivityIndicator agent={agent} compact phaseLabel={phaseLabel} />}
           </div>
         )}
       </div>
