@@ -2648,6 +2648,7 @@ function Header({
   const setSelectedAgent = useAppStore((state) => state.setSelectedAgent);
   const terminalOpen = useAppStore((state) => state.terminalOpen);
   const fileExplorerOpen = useAppStore((state) => state.fileExplorerOpen);
+  const terminalInFileExplorer = useAppStore((state) => state.terminalInFileExplorer);
   const terminalSessions = useAppStore((state) => state.terminalSessions);
   const setTerminalOpen = useAppStore((state) => state.setTerminalOpen);
   const setFileExplorerOpen = useAppStore((state) => state.setFileExplorerOpen);
@@ -3108,7 +3109,7 @@ function Header({
           {showMenuText && <span>Files</span>}
         </Button>
         <Button
-          variant={terminalOpen ? "default" : "outline"}
+          variant={terminalOpen && !terminalInFileExplorer ? "default" : "outline"}
           size={showMenuText ? undefined : "icon"}
           className={showMenuText ? "gap-2 px-3" : undefined}
           onClick={toggleTerminal}
@@ -6635,6 +6636,7 @@ function ProjectInspectorTile({
   dock = "tile",
   poppedOutTerminalIds = new Set<string>(),
   onMove,
+  onHeightChange,
   onClose
 }: {
   project: Project;
@@ -6647,16 +6649,20 @@ function ProjectInspectorTile({
   dock?: FileExplorerDockPosition;
   poppedOutTerminalIds?: Set<string>;
   onMove?: (sourceId: string, targetId: string) => void;
+  onHeightChange?: (height: number) => void;
   onClose?: () => void;
 }) {
   const addError = useAppStore((state) => state.addError);
   const enqueueMessage = useAppStore((state) => state.enqueueMessage);
-  const setSelectedAgent = useAppStore((state) => state.setSelectedAgent);
+  const openLaunchModal = useAppStore((state) => state.openLaunchModal);
+  const setTileWidth = useAppStore((state) => state.setTileWidth);
   const setFileExplorerDock = useAppStore((state) => state.setFileExplorerDock);
   const setFileExplorerMaximized = useAppStore((state) => state.setFileExplorerMaximized);
+  const setFileExplorerOpen = useAppStore((state) => state.setFileExplorerOpen);
   const setTerminalInFileExplorer = useAppStore((state) => state.setTerminalInFileExplorer);
   const setTerminalOpen = useAppStore((state) => state.setTerminalOpen);
   const terminalInFileExplorer = useAppStore((state) => state.terminalInFileExplorer);
+  const showMenuText = useAppStore((state) => state.settings.menuDisplay === "iconText");
   const [collapsed, setCollapsed] = useState(false);
   const [tree, setTree] = useState<Record<string, ProjectTreeEntry[]>>({});
   const [expanded, setExpanded] = useState<Record<string, boolean>>({ "": true });
@@ -6671,10 +6677,8 @@ function ProjectInspectorTile({
   const [preview, setPreview] = useState<ProjectFileResponse | undefined>();
   const [diff, setDiff] = useState<ProjectDiffResponse | undefined>();
   const [status, setStatus] = useState<GitStatus | undefined>();
-  const [targetAgentId, setTargetAgentId] = useState(agents[0]?.id || "");
   const [loading, setLoading] = useState(false);
   const previewRootId = `project-inspector-preview-${project.id}`;
-  const targetAgent = agents.find((agent) => agent.id === targetAgentId) || agents[0];
   const normalizedFilter = filter.trim().toLowerCase();
   const canFormatPreview = Boolean(
     preview &&
@@ -6682,10 +6686,6 @@ function ProjectInspectorTile({
       (/\.(md|markdown)$/i.test(preview.relativePath) || /markdown/i.test(preview.mimeType))
   );
   const diffRows = useMemo(() => parseUnifiedDiff(diff?.diff || ""), [diff?.diff]);
-
-  useEffect(() => {
-    setTargetAgentId((current) => (current && agents.some((agent) => agent.id === current) ? current : agents[0]?.id || ""));
-  }, [agents]);
 
   async function loadTree(pathValue = "") {
     const listing = await api.projectTree(project.id, pathValue);
@@ -6774,28 +6774,6 @@ function ProjectInspectorTile({
     }
   }
 
-  async function addFileToChat(pathValue = selectedPath) {
-    if (!targetAgent || !pathValue) return;
-    try {
-      const attachment = await api.addProjectContext(project.id, pathValue);
-      enqueueMessage(targetAgent.id, { text: `Review ${pathValue}`, attachments: [attachment] });
-    } catch (error) {
-      addError(error instanceof Error ? error.message : String(error));
-    }
-  }
-
-  function sendTextToChat(text: string, label: string) {
-    if (!targetAgent || !text.trim()) return;
-    const body = `Context from ${project.name}: ${label}\n\n${text}`;
-    if (isAgentBusy(targetAgent)) enqueueMessage(targetAgent.id, { text: body, attachments: [] });
-    else sendCommand({ type: "userMessage", id: targetAgent.id, text: body, attachments: [] });
-  }
-
-  function addSelectionToChat() {
-    const selected = getSelectionInRoot(`#${previewRootId}`);
-    if (selected) sendTextToChat(selected, selectedPath || "selection");
-  }
-
   function renderEntries(pathValue = "", depth = 0): ReactNode {
     const entries = tree[pathValue] || [];
     return entries
@@ -6860,6 +6838,52 @@ function ProjectInspectorTile({
     setTerminalOpen(true);
   }
 
+  function undockTerminalFromFileExplorer() {
+    setTerminalInFileExplorer(false);
+    setTerminalOpen(true);
+  }
+
+  function openFileExplorerPopout() {
+    const popup = window.open(`/file-explorer-popout?projectId=${encodeURIComponent(project.id)}`, "agent-control-file-explorer", "popup,width=1100,height=760");
+    if (popup) {
+      setFileExplorerOpen(false);
+      setFileExplorerMaximized(false);
+    }
+  }
+
+  function changeFileExplorerDock(nextDock: FileExplorerDockPosition) {
+    setFileExplorerDock(nextDock);
+    setFileExplorerMaximized(false);
+  }
+
+  function minimizeFileExplorer() {
+    setFileExplorerDock("tile");
+    setFileExplorerMaximized(false);
+    setFileExplorerOpen(true);
+  }
+
+  function currentExplorerText() {
+    const selected = getSelectionInRoot(`#${previewRootId}`);
+    if (selected) return { scope: "selection" as const, label: "selected text", text: selected };
+    if (mode === "diff" && diff) {
+      const text = diff.diff || diff.content || "";
+      return { scope: "file" as const, label: `diff for ${diff.relativePath}`, text };
+    }
+    if (preview && !preview.binary) return { scope: "file" as const, label: preview.relativePath, text: preview.content || "" };
+    return { scope: "file" as const, label: selectedPath || "file", text: "" };
+  }
+
+  function sendExplorerTextToAgent(agent: RunningAgent, text: string, label: string) {
+    if (!text.trim() || agent.remoteControl) return;
+    const body = `Context from ${project.name}: ${label}\n\n${text}`;
+    if (isAgentBusy(agent)) enqueueMessage(agent.id, { text: body, attachments: [] });
+    else sendCommand({ type: "userMessage", id: agent.id, text: body, attachments: [] });
+  }
+
+  function copyText(text: string) {
+    void navigator.clipboard.writeText(text).catch((error: unknown) => addError(error instanceof Error ? error.message : String(error)));
+  }
+
   function startBrowserResize(event: ReactPointerEvent<HTMLDivElement>) {
     event.preventDefault();
     event.stopPropagation();
@@ -6867,6 +6891,40 @@ function ProjectInspectorTile({
     const startWidth = browserWidth;
     const onMove = (moveEvent: PointerEvent) => {
       setBrowserWidth(Math.min(520, Math.max(180, startWidth + moveEvent.clientX - startX)));
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp, { once: true });
+  }
+
+  function startTileWidthResize(event: ReactPointerEvent<HTMLDivElement>) {
+    if (!tile) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const startX = event.clientX;
+    const startWidth = event.currentTarget.parentElement?.getBoundingClientRect().width || width || 420;
+    const onMove = (moveEvent: PointerEvent) => {
+      setTileWidth("file-explorer", Math.round(Math.min(1200, Math.max(320, startWidth + moveEvent.clientX - startX))));
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp, { once: true });
+  }
+
+  function startTileHeightResize(event: ReactPointerEvent<HTMLDivElement>) {
+    if (!tile || !onHeightChange) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const startY = event.clientY;
+    const startHeight = height;
+    const onMove = (moveEvent: PointerEvent) => {
+      onHeightChange(Math.round(Math.min(TILE_MAX_HEIGHT, Math.max(TILE_MIN_HEIGHT, startHeight + moveEvent.clientY - startY))));
     };
     const onUp = () => {
       window.removeEventListener("pointermove", onMove);
@@ -6909,51 +6967,70 @@ function ProjectInspectorTile({
           <div className="truncate text-sm font-semibold">File Explorer</div>
           <div className="truncate text-xs text-muted-foreground">{project.name}</div>
         </div>
-        <Button variant="ghost" size="icon" title="Refresh File Explorer" onClick={() => void refresh()}>
+        <Button variant="ghost" size={showMenuText ? "sm" : "icon"} className={showMenuText ? "gap-1 px-2" : undefined} title="Refresh File Explorer" onClick={() => void refresh()}>
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+          {showMenuText && "Refresh"}
         </Button>
-        <Button variant="ghost" size="icon" title="Open project folder" onClick={() => void api.openFile(project.path).catch((error) => addError(error instanceof Error ? error.message : String(error)))}>
+        <Button variant="ghost" size={showMenuText ? "sm" : "icon"} className={showMenuText ? "gap-1 px-2" : undefined} title="Open project folder" onClick={() => void api.openFile(project.path).catch((error) => addError(error instanceof Error ? error.message : String(error)))}>
           <FolderOpen className="h-4 w-4" />
+          {showMenuText && "Open"}
         </Button>
-        <Button variant="ghost" size="icon" onClick={dockTerminalHere} title="Dock terminal to File Explorer">
+        <Button variant={terminalInFileExplorer ? "secondary" : "ghost"} size={showMenuText ? "sm" : "icon"} className={showMenuText ? "gap-1 px-2" : undefined} onClick={terminalInFileExplorer ? undockTerminalFromFileExplorer : dockTerminalHere} title={terminalInFileExplorer ? "Move terminal back to main window" : "Dock terminal to File Explorer"}>
           <SquareTerminal className="h-4 w-4" />
+          {showMenuText && "Terminal"}
         </Button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" title={`File Explorer location: ${dock}`}>
+            <Button variant="ghost" size={showMenuText ? "sm" : "icon"} className={showMenuText ? "gap-1 px-2" : undefined} title={`File Explorer location: ${dock}`}>
               <PanelBottom className="h-4 w-4" />
+              {showMenuText && "Dock"}
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={openFileExplorerPopout}>
+              <PictureInPicture2 className="mr-2 h-4 w-4" />
+              <span className="min-w-24">Pop out</span>
+            </DropdownMenuItem>
             {([
-              ["tile", LayoutGrid, "Tile"],
               ["left", PanelLeft, "Dock left"],
               ["bottom", PanelBottom, "Dock bottom"],
-              ["right", PanelRight, "Dock right"]
+              ["right", PanelRight, "Dock right"],
+              ["tile", LayoutGrid, "Tile"]
             ] as const).map(([value, Icon, label]) => (
-              <DropdownMenuItem key={value} onClick={() => setFileExplorerDock(value)}>
+              <DropdownMenuItem key={value} onClick={() => changeFileExplorerDock(value)}>
                 <Icon className="mr-2 h-4 w-4" />
                 <span className="min-w-24">{label}</span>
                 <Check className={cn("ml-auto h-4 w-4", value === dock ? "opacity-100" : "opacity-0")} />
               </DropdownMenuItem>
             ))}
-            <DropdownMenuItem onClick={() => window.open(`/file-explorer-popout?projectId=${encodeURIComponent(project.id)}`, "agent-control-file-explorer", "popup,width=1100,height=760")}>
-              <PictureInPicture2 className="mr-2 h-4 w-4" />
-              Pop out
-            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+        <Button
+          variant="ghost"
+          size={showMenuText ? "sm" : "icon"}
+          className={showMenuText ? "gap-1 px-2" : undefined}
+          onClick={() => (fill || dock !== "tile" ? minimizeFileExplorer() : setCollapsed((value) => !value))}
+          title={fill || dock !== "tile" ? "Minimize File Explorer to tile" : collapsed ? "Restore File Explorer" : "Collapse File Explorer"}
+        >
+          {collapsed && !fill && dock === "tile" ? <ChevronDown className="h-4 w-4" /> : <Minimize2 className="h-4 w-4" />}
+          {showMenuText && "Min"}
+        </Button>
         {tile && (
-          <Button variant="ghost" size="icon" onClick={() => setFileExplorerMaximized(true)} title="Maximize File Explorer">
+          <Button variant="ghost" size={showMenuText ? "sm" : "icon"} className={showMenuText ? "gap-1 px-2" : undefined} onClick={() => setFileExplorerMaximized(true)} title="Maximize File Explorer">
             <Maximize2 className="h-4 w-4" />
+            {showMenuText && "Max"}
           </Button>
         )}
-        <Button variant="ghost" size="icon" onClick={() => setCollapsed((value) => !value)} title={collapsed ? "Restore File Explorer" : "Collapse File Explorer"}>
-          {collapsed ? <ChevronDown className="h-4 w-4" /> : <Minimize2 className="h-4 w-4" />}
-        </Button>
+        {!tile && !fill && (
+          <Button variant="ghost" size={showMenuText ? "sm" : "icon"} className={showMenuText ? "gap-1 px-2" : undefined} onClick={() => setFileExplorerMaximized(true)} title="Maximize File Explorer">
+            <Maximize2 className="h-4 w-4" />
+            {showMenuText && "Max"}
+          </Button>
+        )}
         {onClose && (
-          <Button variant="ghost" size="icon" onClick={onClose} title="Close File Explorer">
+          <Button variant="ghost" size={showMenuText ? "sm" : "icon"} className={showMenuText ? "gap-1 px-2" : undefined} onClick={onClose} title="Close File Explorer">
             <X className="h-4 w-4" />
+            {showMenuText && "Close"}
           </Button>
         )}
       </div>
@@ -7008,15 +7085,6 @@ function ProjectInspectorTile({
                 </Button>
               )}
               <div className="min-w-0 flex-1 truncate px-2 text-xs text-muted-foreground">{selectedPath || project.path}</div>
-              <Select value={targetAgent?.id || ""} onValueChange={setTargetAgentId}>
-                <SelectTrigger className="h-7 w-36 text-xs"><SelectValue placeholder="Target chat" /></SelectTrigger>
-                <SelectContent>
-                  {agents.map((agent) => <SelectItem key={agent.id} value={agent.id}>{agent.displayName}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              <Button variant="outline" size="sm" className="h-7 px-2" disabled={!selectedPath || !targetAgent} title="Add selected file to target chat" onClick={() => void addFileToChat()}>
-                <MessageSquare className="h-3.5 w-3.5" />
-              </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="icon" className="h-7 w-7" disabled={!selectedPath} title="File actions">
@@ -7033,14 +7101,16 @@ function ProjectInspectorTile({
                   <DropdownMenuItem onClick={() => selectedPath && void navigator.clipboard.writeText(selectedPath)}>
                     <Clipboard className="mr-2 h-4 w-4" /> Copy relative path
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={addSelectionToChat}>
-                    <MessageCircle className="mr-2 h-4 w-4" /> Add selection to chat
+                  <DropdownMenuItem onClick={() => copyText(preview?.hostOpenPath || diff?.hostOpenPath || selectedPath)}>
+                    <Copy className="mr-2 h-4 w-4" /> Copy full path
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
-            <div id={previewRootId} className="min-h-0 flex-1 overflow-auto p-3">
-              {mode === "preview" ? (
+            <ContextMenu>
+              <ContextMenuTrigger asChild>
+                <div id={previewRootId} className="min-h-0 flex-1 overflow-auto p-3">
+                  {mode === "preview" ? (
                 preview ? preview.binary ? (
                   <div className="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">
                     Binary file. Size {formatBytes(preview.size)}. Use the file actions menu to open it externally.
@@ -7080,9 +7150,7 @@ function ProjectInspectorTile({
                   <div className="grid gap-2">
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
                       <Badge>{diff.status || selectedChanged?.status || "changed"}</Badge>
-                      <Button variant="outline" size="sm" className="h-7" disabled={!targetAgent || !(diff.diff || diff.content)} onClick={() => sendTextToChat(diff.diff || diff.content || "", `diff for ${diff.relativePath}`)}>
-                        Add diff
-                      </Button>
+                      <span>Right-click to copy or send this diff.</span>
                     </div>
                     {diff.diff && diffView === "sideBySide" ? (
                       <div className="overflow-auto rounded-md border border-border bg-muted/25 font-mono text-xs">
@@ -7134,7 +7202,84 @@ function ProjectInspectorTile({
                   {preview && <div><span className="text-muted-foreground">Modified:</span> {formatDateTime(preview.modifiedAt)}</div>}
                 </div>
               )}
-            </div>
+                </div>
+              </ContextMenuTrigger>
+              <ContextMenuContent>
+                {(() => {
+                  const target = currentExplorerText();
+                  const fullPath = preview?.hostOpenPath || diff?.hostOpenPath || selectedPath;
+                  return (
+                    <>
+                      <ContextMenuItem disabled={!target.text} onClick={() => copyText(target.text)}>
+                        <Clipboard className="mr-2 h-4 w-4" />
+                        Copy {target.label}
+                      </ContextMenuItem>
+                      <ContextMenuItem disabled={!selectedPath} onClick={() => copyText(selectedPath)}>
+                        <ClipboardList className="mr-2 h-4 w-4" />
+                        Copy relative path
+                      </ContextMenuItem>
+                      <ContextMenuItem disabled={!fullPath} onClick={() => copyText(fullPath)}>
+                        <Copy className="mr-2 h-4 w-4" />
+                        Copy full path
+                      </ContextMenuItem>
+                      <ContextMenuSub>
+                        <ContextMenuSubTrigger className="flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none focus:bg-accent data-[disabled]:opacity-45" disabled={!target.text}>
+                          <span className="flex-1">Send {target.scope === "selection" ? "selected text" : "file content"} to</span>
+                          <ChevronRight className="ml-4 h-4 w-4 text-muted-foreground" />
+                        </ContextMenuSubTrigger>
+                        <ContextMenuSubContent>
+                          <ContextMenuSub>
+                            <ContextMenuSubTrigger className="flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none focus:bg-accent">
+                              New agent
+                            </ContextMenuSubTrigger>
+                            <ContextMenuSubContent>
+                              {project.agents.map((def) => (
+                                <ContextMenuItem
+                                  key={def.name}
+                                  onClick={() => {
+                                    if (!target.text) return;
+                                    openLaunchModal({
+                                      projectId: project.id,
+                                      defName: def.name,
+                                      initialPrompt: `Context from ${project.name}: ${target.label}\n\n${target.text}`
+                                    });
+                                  }}
+                                >
+                                  <AgentDot color={def.color} />
+                                  <span className="ml-2">{def.name}</span>
+                                </ContextMenuItem>
+                              ))}
+                            </ContextMenuSubContent>
+                          </ContextMenuSub>
+                          <ContextMenuSub>
+                            <ContextMenuSubTrigger
+                              className="flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none focus:bg-accent data-[disabled]:opacity-45"
+                              disabled={agents.length === 0}
+                            >
+                              Existing agent
+                            </ContextMenuSubTrigger>
+                            <ContextMenuSubContent>
+                              {agents.map((agent) => (
+                                <ContextMenuItem
+                                  key={agent.id}
+                                  disabled={agent.remoteControl}
+                                  onClick={() => sendExplorerTextToAgent(agent, target.text, target.label)}
+                                  title={agent.remoteControl ? "Remote Control agents cannot receive dashboard messages." : undefined}
+                                >
+                                  <AgentDot color={agent.color} />
+                                  <span className="ml-2">{agent.displayName}</span>
+                                  {agent.remoteControl && <Badge className="ml-2">RC</Badge>}
+                                </ContextMenuItem>
+                              ))}
+                            </ContextMenuSubContent>
+                          </ContextMenuSub>
+                        </ContextMenuSubContent>
+                      </ContextMenuSub>
+                    </>
+                  );
+                })()}
+              </ContextMenuContent>
+            </ContextMenu>
             {changedFiles.length > 0 && (
               <div className="max-h-28 shrink-0 overflow-auto border-t border-border p-2">
                 <div className="mb-1 text-xs font-medium text-muted-foreground">Changed files</div>
@@ -7151,6 +7296,20 @@ function ProjectInspectorTile({
         </div>
       )}
       {!collapsed && terminalInFileExplorer && <TerminalPanel embedded poppedOutTerminalIds={poppedOutTerminalIds} />}
+      {tile && !collapsed && (
+        <>
+          <div
+            className="absolute bottom-0 right-0 top-0 w-2 cursor-ew-resize rounded-r-md hover:bg-primary/20"
+            onPointerDown={startTileWidthResize}
+            title="Drag to resize File Explorer width"
+          />
+          <div
+            className="absolute bottom-0 left-0 right-0 h-2 cursor-ns-resize rounded-b-md hover:bg-primary/20"
+            onPointerDown={startTileHeightResize}
+            title="Drag to resize File Explorer height"
+          />
+        </>
+      )}
     </section>
   );
 }
@@ -7301,11 +7460,13 @@ function AgentTileGrid({ agents, project }: { agents: RunningAgent[]; project?: 
                 project={project}
                 agents={agents}
                 height={rowHeight}
+                width={tileWidths["file-explorer"]}
                 defaultWidth={defaultWidth}
                 tile
                 dock={fileExplorerDock}
                 poppedOutTerminalIds={poppedOutTerminalIds}
                 onMove={moveTile}
+                onHeightChange={(nextHeight) => setRowHeight(rowIndex, nextHeight)}
                 onClose={() => setFileExplorerOpen(false)}
               />
             ) : null;
@@ -10355,6 +10516,7 @@ function TerminalPanel({
   const setSettings = useAppStore((state) => state.setSettings);
   const addError = useAppStore((state) => state.addError);
   const terminalDock = settings.terminalDock;
+  const showMenuText = settings.menuDisplay === "iconText";
   const [height, setHeight] = useState(320);
   const [width, setWidth] = useState(420);
   const [detachedBounds, setDetachedBounds] = useState({ left: 96, top: 72, width: 960, height: 520 });
@@ -10664,30 +10826,31 @@ function TerminalPanel({
             </div>
           ))}
         </div>
-        <Button variant="outline" size="sm" onClick={() => startTerminal()} disabled={!projects.length && !selectedProjectId}>
+        <Button variant="outline" size={showMenuText ? "sm" : "icon"} className={showMenuText ? undefined : "h-8 w-8"} onClick={() => startTerminal()} disabled={!projects.length && !selectedProjectId} title="New terminal">
           <Plus className="h-4 w-4" />
-          New
+          {showMenuText && "New"}
         </Button>
-        <Button variant="outline" size="sm" onClick={splitTerminal} disabled={!projects.length && !selectedProjectId}>
+        <Button variant="outline" size={showMenuText ? "sm" : "icon"} className={showMenuText ? undefined : "h-8 w-8"} onClick={splitTerminal} disabled={!projects.length && !selectedProjectId} title="Split terminal">
           <Columns2 className="h-4 w-4" />
-          Split
+          {showMenuText && "Split"}
         </Button>
         <Button
           variant="outline"
-          size="sm"
+          size={showMenuText ? "sm" : "icon"}
+          className={showMenuText ? undefined : "h-8 w-8"}
           onClick={() => session && sendCommand({ type: "terminalClear", id: session.id })}
           disabled={!session}
           title="Clear terminal output"
         >
           <Trash2 className="h-4 w-4" />
-          Clear
+          {showMenuText && "Clear"}
         </Button>
         {!popout && !embedded && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="gap-1 px-2" title={`Terminal: ${terminalDockOption.label}`}>
+              <Button variant="outline" size={showMenuText ? "sm" : "icon"} className={showMenuText ? "gap-1 px-2" : "h-8 w-8"} title={`Terminal: ${terminalDockOption.label}`}>
                 <CurrentDockIcon className="h-4 w-4" />
-                <ChevronDown className="h-4 w-4" />
+                {showMenuText && <ChevronDown className="h-4 w-4" />}
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
