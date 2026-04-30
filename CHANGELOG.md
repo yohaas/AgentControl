@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-04-30
 
+- [35c552d](https://github.com/yohaas/AgentControl/commit/35c552d) Open WSL external editor links as files
 - [d502bc9](https://github.com/yohaas/AgentControl/commit/d502bc9) Enable file explorer send actions for built-in agents
 - [930698d](https://github.com/yohaas/AgentControl/commit/930698d) Keep the updater window on a completion prompt
 - [e444661](https://github.com/yohaas/AgentControl/commit/e444661) Keep the update dialog open while update commands run
