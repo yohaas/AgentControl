@@ -3528,12 +3528,14 @@ function GitStatusMenu({
   projectId,
   compact = false,
   buttonVariant = "outline",
-  contentClassName
+  contentClassName,
+  hideWhenNoPendingPushes = false
 }: {
   projectId?: string;
   compact?: boolean;
   buttonVariant?: ComponentProps<typeof Button>["variant"];
   contentClassName?: string;
+  hideWhenNoPendingPushes?: boolean;
 }) {
   const addError = useAppStore((state) => state.addError);
   const showMenuText = useAppStore((state) => state.settings.menuDisplay === "iconText");
@@ -3594,10 +3596,10 @@ function GitStatusMenu({
     setCredentialPromptOpen(false);
   }
 
-  const changedCount = status?.files.length || 0;
   const aheadCount = status?.ahead || 0;
   const unpushedCommits = status?.unpushedCommits || [];
-  const hasWork = changedCount > 0 || aheadCount > 0;
+
+  if (hideWhenNoPendingPushes && (!status?.isRepo || aheadCount <= 0)) return null;
 
   return (
     <>
@@ -12480,6 +12482,7 @@ function MobileSidebar({
             compact
             buttonVariant="ghost"
             contentClassName="w-[min(calc(100vw-1rem),20rem)]"
+            hideWhenNoPendingPushes
           />
           <div className="h-px w-8 bg-border" />
           <div className="flex min-h-0 flex-1 flex-col items-center gap-2 overflow-y-auto overflow-x-hidden px-1" data-mobile-nav-empty-toggle>
@@ -12522,6 +12525,7 @@ function MobileSidebar({
           compact
           buttonVariant="ghost"
           contentClassName="w-[min(calc(100vw-1rem),20rem)]"
+          hideWhenNoPendingPushes
         />
         <Button variant="ghost" size="icon" onClick={() => setCollapsed(true)} title="Collapse sidebar">
           <PanelLeftClose className="h-4 w-4" />
