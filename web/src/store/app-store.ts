@@ -85,6 +85,13 @@ export interface QueuedMessage {
 }
 
 const MESSAGE_QUEUES_STORAGE_KEY = "agent-control-message-queues";
+const TILE_LAYOUT_STORAGE_KEY = "agent-control-tile-layout";
+
+interface StoredTileLayout {
+  order: string[];
+  widths: Record<string, number>;
+  minimized: Record<string, boolean>;
+}
 
 function normalizeQueuedMessage(value: unknown): QueuedMessage | undefined {
   if (!value || typeof value !== "object") return undefined;
@@ -129,6 +136,47 @@ function writeStoredMessageQueues(queues: Record<string, QueuedMessage[]>): Reco
 
 function pruneMessageQueues(queues: Record<string, QueuedMessage[]>, agentIds: Set<string>): Record<string, QueuedMessage[]> {
   return writeStoredMessageQueues(Object.fromEntries(Object.entries(queues).filter(([agentId]) => agentIds.has(agentId))));
+}
+
+function normalizeTileLayout(value: unknown): StoredTileLayout {
+  if (!value || typeof value !== "object") return { order: [], widths: {}, minimized: {} };
+  const layout = value as Partial<StoredTileLayout>;
+  const order = Array.isArray(layout.order) ? layout.order.filter((id): id is string => typeof id === "string" && Boolean(id)) : [];
+  const widths = Object.fromEntries(
+    Object.entries(layout.widths || {})
+      .map(([id, width]) => [id, clampNumber(width, 0, 0, 1200)] as const)
+      .filter(([id, width]) => Boolean(id) && width > 0)
+  );
+  const minimized = Object.fromEntries(Object.entries(layout.minimized || {}).filter(([id, value]) => Boolean(id) && value === true));
+  return { order, widths, minimized };
+}
+
+function readStoredTileLayout(): StoredTileLayout {
+  if (typeof window === "undefined") return { order: [], widths: {}, minimized: {} };
+  try {
+    return normalizeTileLayout(JSON.parse(window.localStorage.getItem(TILE_LAYOUT_STORAGE_KEY) || "{}"));
+  } catch {
+    return { order: [], widths: {}, minimized: {} };
+  }
+}
+
+function writeStoredTileLayout(layout: StoredTileLayout): StoredTileLayout {
+  const normalized = normalizeTileLayout(layout);
+  if (typeof window !== "undefined") {
+    const empty = normalized.order.length === 0 && Object.keys(normalized.widths).length === 0 && Object.keys(normalized.minimized).length === 0;
+    if (empty) window.localStorage.removeItem(TILE_LAYOUT_STORAGE_KEY);
+    else window.localStorage.setItem(TILE_LAYOUT_STORAGE_KEY, JSON.stringify(normalized));
+  }
+  return normalized;
+}
+
+function pruneTileLayout(layout: StoredTileLayout, agentIds: Set<string>): StoredTileLayout {
+  const allowed = (id: string) => id === "file-explorer" || agentIds.has(id);
+  return writeStoredTileLayout({
+    order: layout.order.filter(allowed),
+    widths: Object.fromEntries(Object.entries(layout.widths).filter(([id]) => allowed(id))),
+    minimized: Object.fromEntries(Object.entries(layout.minimized).filter(([id]) => allowed(id)))
+  });
 }
 
 interface AppState {
@@ -349,6 +397,7 @@ function latestTerminalForProject(terminals: Record<string, TerminalSession>, pr
 }
 
 const TRANSIENT_WS_NOT_CONNECTED_ERROR = "Backend server not running.";
+const initialTileLayout = readStoredTileLayout();
 
 export const useAppStore = create<AppState>((set, get) => ({
   projects: [],
@@ -364,9 +413,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   messageQueues: readStoredMessageQueues(),
   scrollPositions: {},
   flashModels: {},
-  tileOrder: [],
-  tileWidths: {},
-  minimizedTiles: {},
+  tileOrder: initialTileLayout.order,
+  tileWidths: initialTileLayout.widths,
+  minimizedTiles: initialTileLayout.minimized,
   currentTileHeight: undefined,
   sidebarCollapsed: false,
   terminalOpen: false,
@@ -438,49 +487,56 @@ export const useAppStore = create<AppState>((set, get) => ({
     }),
   dismissError: (index) => set((state) => ({ errors: state.errors.filter((_, candidateIndex) => candidateIndex !== index) })),
   hydrateSnapshot: (snapshot) =>
-    set((state) => ({
-      agents: agentMap(snapshot.agents),
-      transcripts: snapshot.transcripts,
-      capabilities: snapshot.capabilities || state.capabilities,
-      messageQueues: pruneMessageQueues(state.messageQueues, new Set(snapshot.agents.map((agent) => agent.id))),
-      selectedAgentId:
-        state.selectedAgentId && snapshot.agents.some((agent) => agent.id === state.selectedAgentId)
-          ? state.selectedAgentId
-          : undefined,
-      focusedAgentId:
-        state.focusedAgentId && snapshot.agents.some((agent) => agent.id === state.focusedAgentId)
-          ? state.focusedAgentId
-          : undefined,
-      chatFocusedAgentId:
-        state.chatFocusedAgentId && snapshot.agents.some((agent) => agent.id === state.chatFocusedAgentId)
-          ? state.chatFocusedAgentId
-          : undefined,
-      doneAgentIds: Object.fromEntries(Object.entries(state.doneAgentIds).filter(([id]) => snapshot.agents.some((agent) => agent.id === id))),
-      tileOrder: [
-        ...state.tileOrder.filter((id) => snapshot.agents.some((agent) => agent.id === id)),
-        ...snapshot.agents.filter((agent) => !state.tileOrder.includes(agent.id)).map((agent) => agent.id)
-      ],
-      tileWidths: Object.fromEntries(Object.entries(state.tileWidths).filter(([id]) => snapshot.agents.some((agent) => agent.id === id))),
-      minimizedTiles: Object.fromEntries(
-        Object.entries(state.minimizedTiles).filter(([id]) => snapshot.agents.some((agent) => agent.id === id))
-      )
-    })),
+    set((state) => {
+      const agentIds = new Set(snapshot.agents.map((agent) => agent.id));
+      const tileLayout = pruneTileLayout(
+        {
+          order: state.tileOrder,
+          widths: state.tileWidths,
+          minimized: state.minimizedTiles
+        },
+        agentIds
+      );
+      return {
+        agents: agentMap(snapshot.agents),
+        transcripts: snapshot.transcripts,
+        capabilities: snapshot.capabilities || state.capabilities,
+        messageQueues: pruneMessageQueues(state.messageQueues, agentIds),
+        selectedAgentId: state.selectedAgentId && agentIds.has(state.selectedAgentId) ? state.selectedAgentId : undefined,
+        focusedAgentId: state.focusedAgentId && agentIds.has(state.focusedAgentId) ? state.focusedAgentId : undefined,
+        chatFocusedAgentId: state.chatFocusedAgentId && agentIds.has(state.chatFocusedAgentId) ? state.chatFocusedAgentId : undefined,
+        doneAgentIds: Object.fromEntries(Object.entries(state.doneAgentIds).filter(([id]) => agentIds.has(id))),
+        tileOrder: [
+          ...tileLayout.order,
+          ...snapshot.agents.filter((agent) => !tileLayout.order.includes(agent.id)).map((agent) => agent.id)
+        ],
+        tileWidths: tileLayout.widths,
+        minimizedTiles: tileLayout.minimized
+      };
+    }),
   handleServerEvent: (event) => {
     switch (event.type) {
       case "agent.snapshot":
         get().hydrateSnapshot(event.snapshot);
         break;
       case "agent.launched":
-        set((state) => ({
-          agents: { ...state.agents, [event.agent.id]: event.agent },
-          transcripts: { ...state.transcripts, [event.agent.id]: state.transcripts[event.agent.id] || [] },
-          selectedAgentId: state.selectedAgentId ? event.agent.id : undefined,
-          focusedAgentId: event.agent.id,
-          chatFocusedAgentId: undefined,
-          doneAgentIds: { ...state.doneAgentIds, [event.agent.id]: false },
-          tileOrder: [...state.tileOrder.filter((id) => id !== event.agent.id), event.agent.id],
-          minimizedTiles: Object.fromEntries(Object.entries(state.minimizedTiles).filter(([id]) => id !== event.agent.id))
-        }));
+        set((state) => {
+          const tileLayout = writeStoredTileLayout({
+            order: [...state.tileOrder.filter((id) => id !== event.agent.id), event.agent.id],
+            widths: state.tileWidths,
+            minimized: Object.fromEntries(Object.entries(state.minimizedTiles).filter(([id]) => id !== event.agent.id))
+          });
+          return {
+            agents: { ...state.agents, [event.agent.id]: event.agent },
+            transcripts: { ...state.transcripts, [event.agent.id]: state.transcripts[event.agent.id] || [] },
+            selectedAgentId: state.selectedAgentId ? event.agent.id : undefined,
+            focusedAgentId: event.agent.id,
+            chatFocusedAgentId: undefined,
+            doneAgentIds: { ...state.doneAgentIds, [event.agent.id]: false },
+            tileOrder: tileLayout.order,
+            minimizedTiles: tileLayout.minimized
+          };
+        });
         break;
       case "agent.status_changed":
         set((state) => {
@@ -759,14 +815,25 @@ export const useAppStore = create<AppState>((set, get) => ({
     return next;
   },
   setScrollPosition: (id, top) => set((state) => ({ scrollPositions: { ...state.scrollPositions, [id]: top } })),
-  setTileOrder: (ids) => set({ tileOrder: ids }),
-  setTileWidth: (id, width) => set((state) => ({ tileWidths: { ...state.tileWidths, [id]: width } })),
+  setTileOrder: (ids) =>
+    set((state) => ({
+      tileOrder: writeStoredTileLayout({ order: ids, widths: state.tileWidths, minimized: state.minimizedTiles }).order
+    })),
+  setTileWidth: (id, width) =>
+    set((state) => {
+      const tileLayout = writeStoredTileLayout({
+        order: state.tileOrder,
+        widths: { ...state.tileWidths, [id]: width },
+        minimized: state.minimizedTiles
+      });
+      return { tileWidths: tileLayout.widths };
+    }),
   setTileMinimized: (id, minimized) =>
     set((state) => {
       const minimizedTiles = { ...state.minimizedTiles };
       if (minimized) minimizedTiles[id] = true;
       else delete minimizedTiles[id];
-      return { minimizedTiles };
+      return { minimizedTiles: writeStoredTileLayout({ order: state.tileOrder, widths: state.tileWidths, minimized: minimizedTiles }).minimized };
     }),
   setCurrentTileHeight: (height) => set({ currentTileHeight: height }),
   setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
