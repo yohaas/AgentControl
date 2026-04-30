@@ -1211,8 +1211,22 @@ function externalEditorPath(pathValue: string) {
   return pathValue.replace(/\\/g, "/");
 }
 
+function parseWslUncPath(pathValue: string): { distro: string; linuxPath: string } | undefined {
+  const normalized = pathValue.replace(/\//g, "\\");
+  const match = normalized.match(/^\\\\(?:wsl\$|wsl\.localhost)\\([^\\]+)(?:\\(.*))?$/i);
+  if (!match) return undefined;
+  return {
+    distro: match[1],
+    linuxPath: match[2] ? `/${match[2].replace(/\\/g, "/")}` : "/"
+  };
+}
+
 function encodeExternalEditorPath(pathValue: string) {
   return encodeURI(externalEditorPath(pathValue)).replace(/#/g, "%23").replace(/\?/g, "%3F");
+}
+
+function encodeWslRemotePath(pathValue: string) {
+  return encodeURI(pathValue).replace(/#/g, "%23").replace(/\?/g, "%3F");
 }
 
 function externalEditorUrl(settings: Pick<SettingsState, "externalEditor" | "externalEditorUrlTemplate">, pathValue?: string, line?: number) {
@@ -1229,6 +1243,10 @@ function externalEditorUrl(settings: Pick<SettingsState, "externalEditor" | "ext
       .replaceAll("{line}", lineText);
   }
   const scheme = settings.externalEditor === "cursor" ? "cursor" : "vscode";
+  const wslPath = parseWslUncPath(pathValue);
+  if (wslPath) {
+    return `${scheme}://vscode-remote/wsl+${encodeURIComponent(wslPath.distro)}${encodeWslRemotePath(wslPath.linuxPath)}${line ? `:${lineText}` : ""}`;
+  }
   return `${scheme}://file/${encodedPath}${line ? `:${lineText}` : ""}`;
 }
 
@@ -7627,7 +7645,7 @@ function ProjectInspectorTile({
   }
 
   function fileBrowserContextMenu(pathValue: string, hostOpenPath: string | undefined, type: "file" | "directory") {
-    const canSend = type === "file" && agents.length > 0;
+    const canSend = type === "file" && (project.agents.length > 0 || agents.length > 0);
     const editorUrl = externalEditorUrl(settings, hostOpenPath);
     const editorLabel = externalEditorLabel(settings.externalEditor);
     return (
