@@ -32,6 +32,7 @@ import remarkGfm from "remark-gfm";
 import {
   ArrowDownAZ,
   ArrowUp,
+  BellPlus,
   Bot,
   Brain,
   Check,
@@ -3526,13 +3527,13 @@ function AppUpdateNotice() {
       <Button
         type="button"
         variant="ghost"
-        size="sm"
-        className="h-7 gap-1.5 px-2 text-xs text-amber-700 hover:text-amber-800 dark:text-amber-200 dark:hover:text-amber-100"
+        size="icon"
+        className="h-7 w-7 text-amber-700 hover:text-amber-800 dark:text-amber-200 dark:hover:text-amber-100"
         title="AgentControl update available"
+        aria-label="AgentControl update available"
         onClick={() => setDetailsOpen(true)}
       >
-        <FolderDown className="h-3.5 w-3.5" />
-        <span>Update available</span>
+        <BellPlus className="h-4 w-4" />
       </Button>
       <DialogContent className="w-[min(94vw,520px)]">
         <DialogHeader>
@@ -6536,9 +6537,6 @@ function SettingsDialog() {
               />
               <span>
                 <span className="block font-medium">Check for updates on startup</span>
-                <span className="block text-xs text-muted-foreground">
-                  Show a quiet top-bar notice when AgentControl sees incoming GitHub updates.
-                </span>
               </span>
             </label>
             <label className="grid gap-1.5 text-sm">
