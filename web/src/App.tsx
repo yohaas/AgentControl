@@ -173,6 +173,7 @@ const TERMINAL_POPOUT_STORAGE_KEY = "agent-control-popped-out-terminals";
 const TERMINAL_POPOUT_EXPLICIT_HIDE_STORAGE_KEY = "agent-control-terminal-popout-explicit-hide";
 const FILE_EXPLORER_POPOUT_STORAGE_KEY = "agent-control-file-explorer-popout";
 const DEFAULT_BUILT_IN_AGENT_DIR = ".agent-control/built-in-agents";
+const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 hljs.registerLanguage("bash", bash);
 hljs.registerLanguage("css", css);
 hljs.registerLanguage("diff", diffLanguage);
@@ -3571,6 +3572,8 @@ function AppUpdateNotice() {
   useEffect(() => {
     if (settings.updateChecksEnabled === false) return;
     void refresh(false);
+    const timer = window.setInterval(() => void refresh(false), UPDATE_CHECK_INTERVAL_MS);
+    return () => window.clearInterval(timer);
   }, [settings.updateChecksEnabled]);
 
   async function refresh(reportErrors = true) {
