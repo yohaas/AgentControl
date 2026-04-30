@@ -12,6 +12,7 @@ import type { DashboardConfig } from "./config.js";
 import type {
   Capabilities,
   AgentDef,
+  AgentSnapshot,
   AppUpdateStatus,
   DirectoryEntry,
   GitChangedFile,
@@ -31,6 +32,7 @@ import type {
   ProjectPathInfo,
   ProjectTreeEntry,
   ProjectTreeResponse,
+  QueuedMessage,
   WsClientCommand,
   WsServerEvent
 } from "@agent-control/shared";
@@ -105,6 +107,7 @@ await ensurePrivateAttachmentsDir();
 const app = express();
 const server = http.createServer(app);
 const clients = new Set<WebSocket>();
+let messageQueues: Record<string, QueuedMessage[]> = {};
 
 function isLoopbackHost(hostname: string): boolean {
   const normalized = hostname.toLowerCase();
@@ -416,6 +419,34 @@ function send(ws: WebSocket, event: WsServerEvent): void {
 
 function broadcast(event: WsServerEvent): void {
   for (const client of clients) send(client, event);
+}
+
+function normalizeQueuedMessage(value: unknown): QueuedMessage | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const message = value as Partial<QueuedMessage>;
+  if (typeof message.id !== "string" || typeof message.text !== "string") return undefined;
+  return {
+    id: message.id,
+    text: message.text,
+    attachments: Array.isArray(message.attachments) ? (message.attachments as MessageAttachment[]) : []
+  };
+}
+
+function normalizeMessageQueues(value: unknown): Record<string, QueuedMessage[]> {
+  if (!value || typeof value !== "object") return {};
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .map(([agentId, queue]) => [
+        agentId,
+        Array.isArray(queue) ? queue.map(normalizeQueuedMessage).filter((message): message is QueuedMessage => Boolean(message)) : []
+      ])
+      .filter(([, queue]) => queue.length > 0)
+  );
+}
+
+function pruneMessageQueuesForAgents(queues: Record<string, QueuedMessage[]>, agents: { id: string }[]): Record<string, QueuedMessage[]> {
+  const agentIds = new Set(agents.map((agent) => agent.id));
+  return Object.fromEntries(Object.entries(queues).filter(([agentId]) => agentIds.has(agentId)));
 }
 
 async function ensurePrivateAttachmentsDir(): Promise<void> {
@@ -1287,6 +1318,12 @@ const runtime = new AgentRuntimeManager(
 await runtime.loadPersistedState();
 const terminals = new TerminalManager(() => projects, broadcast);
 
+function agentSnapshot(): AgentSnapshot {
+  const snapshot = runtime.snapshot();
+  messageQueues = pruneMessageQueuesForAgents(messageQueues, snapshot.agents);
+  return { ...snapshot, messageQueues };
+}
+
 app.use(express.json({ limit: "20mb" }));
 app.use(
   cors({
@@ -1839,7 +1876,7 @@ app.get("/api/agents", (_request, response) => {
 });
 
 app.get("/api/agent-snapshot", (_request, response) => {
-  response.json(runtime.snapshot());
+  response.json(agentSnapshot());
 });
 
 app.post("/api/agents/:id/message", (request, response) => {
@@ -2153,7 +2190,7 @@ server.on("upgrade", (request, socket, head) => {
 
 wss.on("connection", (ws) => {
   clients.add(ws);
-  send(ws, { type: "agent.snapshot", snapshot: runtime.snapshot() });
+  send(ws, { type: "agent.snapshot", snapshot: agentSnapshot() });
   send(ws, { type: "terminal.snapshot", snapshot: terminals.snapshot() });
 
   ws.on("message", (raw) => {
@@ -2168,7 +2205,7 @@ wss.on("connection", (ws) => {
     try {
       switch (command.type) {
         case "snapshot":
-          send(ws, { type: "agent.snapshot", snapshot: runtime.snapshot() });
+          send(ws, { type: "agent.snapshot", snapshot: agentSnapshot() });
           send(ws, { type: "terminal.snapshot", snapshot: terminals.snapshot() });
           break;
         case "launch":
@@ -2184,6 +2221,10 @@ wss.on("connection", (ws) => {
           break;
         case "injectMessage":
           runtime.injectMessage(command.id, command.text, command.attachments);
+          break;
+        case "messageQueues":
+          messageQueues = pruneMessageQueuesForAgents(normalizeMessageQueues(command.messageQueues), runtime.listAgents());
+          broadcast({ type: "agent.message_queues", messageQueues });
           break;
         case "kill":
           runtime.kill(command.id);

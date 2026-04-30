@@ -119,6 +119,7 @@ import type {
   ProjectFileEntry,
   ProjectFileResponse,
   ProjectTreeEntry,
+  QueuedMessage,
   RunningAgent,
   SlashCommandInfo,
   TerminalSession,
@@ -160,7 +161,6 @@ import {
   type ExternalEditor,
   type FileExplorerDockPosition,
   type MenuDisplayMode,
-  type QueuedMessage,
   type SettingsState,
   type ThemeMode,
   type TileScrollingMode

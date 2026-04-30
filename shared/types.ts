@@ -456,6 +456,13 @@ export interface AgentSnapshot {
   agents: RunningAgent[];
   transcripts: Record<string, TranscriptEvent[]>;
   capabilities?: Capabilities;
+  messageQueues?: Record<string, QueuedMessage[]>;
+}
+
+export interface QueuedMessage {
+  id: string;
+  text: string;
+  attachments: MessageAttachment[];
 }
 
 export type TerminalStatus = "running" | "exited";
@@ -584,6 +591,10 @@ export type WsServerEvent =
       message: string;
     }
   | {
+      type: "agent.message_queues";
+      messageQueues: Record<string, QueuedMessage[]>;
+    }
+  | {
       type: "terminal.snapshot";
       snapshot: TerminalSnapshot;
     }
@@ -639,6 +650,10 @@ export type WsClientCommand =
       id: string;
       text: string;
       attachments?: MessageAttachment[];
+    }
+  | {
+      type: "messageQueues";
+      messageQueues: Record<string, QueuedMessage[]>;
     }
   | {
       type: "kill";

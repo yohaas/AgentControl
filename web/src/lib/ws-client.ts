@@ -6,6 +6,7 @@ let socket: WebSocket | undefined;
 let reconnectTimer: number | undefined;
 let attempt = 0;
 let connecting = false;
+let lastSyncedMessageQueues = "";
 
 function wsUrl(token: string) {
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
@@ -41,11 +42,17 @@ export async function connectWebSocket() {
     attempt = 0;
     useAppStore.getState().setWsConnected(true);
     sendCommand({ type: "snapshot" });
+    sendMessageQueues();
   });
   nextSocket.addEventListener("message", (message) => {
     if (socket !== nextSocket) return;
     try {
-      useAppStore.getState().handleServerEvent(JSON.parse(message.data) as WsServerEvent);
+      const event = JSON.parse(message.data) as WsServerEvent;
+      if (event.type === "agent.message_queues") lastSyncedMessageQueues = JSON.stringify(event.messageQueues);
+      if (event.type === "agent.snapshot" && event.snapshot.messageQueues) {
+        lastSyncedMessageQueues = JSON.stringify(event.snapshot.messageQueues);
+      }
+      useAppStore.getState().handleServerEvent(event);
     } catch {
       useAppStore.getState().addError("Received an invalid WebSocket event.");
     }
@@ -89,3 +96,16 @@ export function sendCommand(command: WsClientCommand): boolean {
     return false;
   }
 }
+
+function sendMessageQueues() {
+  if (!socket || socket.readyState !== WebSocket.OPEN) return;
+  const messageQueues = useAppStore.getState().messageQueues;
+  const serialized = JSON.stringify(messageQueues);
+  if (serialized === "{}" || serialized === lastSyncedMessageQueues) return;
+  lastSyncedMessageQueues = serialized;
+  socket.send(JSON.stringify({ type: "messageQueues", messageQueues } satisfies WsClientCommand));
+}
+
+useAppStore.subscribe((state, previousState) => {
+  if (state.messageQueues !== previousState.messageQueues) sendMessageQueues();
+});

@@ -8,6 +8,7 @@ import type {
   MessageAttachment,
   PermissionAllowRule,
   Project,
+  QueuedMessage,
   RunningAgent,
   TerminalSession,
   TranscriptEvent,
@@ -86,12 +87,6 @@ interface FilePreviewRequest {
   line?: number;
 }
 
-export interface QueuedMessage {
-  id: string;
-  text: string;
-  attachments: MessageAttachment[];
-}
-
 const MESSAGE_QUEUES_STORAGE_KEY = "agent-control-message-queues";
 const TILE_LAYOUT_STORAGE_KEY = "agent-control-tile-layout";
 const SELECTED_PROJECT_STORAGE_KEY = "agent-control-selected-project";
@@ -161,6 +156,24 @@ function writeStoredMessageQueues(queues: Record<string, QueuedMessage[]>): Reco
 
 function pruneMessageQueues(queues: Record<string, QueuedMessage[]>, agentIds: Set<string>): Record<string, QueuedMessage[]> {
   return writeStoredMessageQueues(Object.fromEntries(Object.entries(queues).filter(([agentId]) => agentIds.has(agentId))));
+}
+
+function mergeMessageQueues(
+  primaryQueues: Record<string, QueuedMessage[]> | undefined,
+  fallbackQueues: Record<string, QueuedMessage[]>,
+  agentIds: Set<string>
+): Record<string, QueuedMessage[]> {
+  const merged: Record<string, QueuedMessage[]> = {};
+  for (const agentId of agentIds) {
+    const seen = new Set<string>();
+    const queue = [...(primaryQueues?.[agentId] || []), ...(fallbackQueues[agentId] || [])].filter((message) => {
+      if (seen.has(message.id)) return false;
+      seen.add(message.id);
+      return true;
+    });
+    if (queue.length > 0) merged[agentId] = queue;
+  }
+  return writeStoredMessageQueues(merged);
 }
 
 function normalizeTileLayout(value: unknown): StoredTileLayout {
@@ -553,7 +566,9 @@ export const useAppStore = create<AppState>((set, get) => ({
         agents: agentMap(snapshot.agents),
         transcripts: snapshot.transcripts,
         capabilities: snapshot.capabilities || state.capabilities,
-        messageQueues: pruneMessageQueues(state.messageQueues, agentIds),
+        messageQueues: snapshot.messageQueues
+          ? mergeMessageQueues(snapshot.messageQueues, state.messageQueues, agentIds)
+          : pruneMessageQueues(state.messageQueues, agentIds),
         selectedAgentId: state.selectedAgentId && agentIds.has(state.selectedAgentId) ? state.selectedAgentId : undefined,
         focusedAgentId: state.focusedAgentId && agentIds.has(state.focusedAgentId) ? state.focusedAgentId : undefined,
         chatFocusedAgentId: state.chatFocusedAgentId && agentIds.has(state.chatFocusedAgentId) ? state.chatFocusedAgentId : undefined,
@@ -570,6 +585,12 @@ export const useAppStore = create<AppState>((set, get) => ({
     switch (event.type) {
       case "agent.snapshot":
         get().hydrateSnapshot(event.snapshot);
+        break;
+      case "agent.message_queues":
+        set((state) => {
+          const agentIds = new Set(Object.keys(state.agents));
+          return { messageQueues: pruneMessageQueues(event.messageQueues, agentIds) };
+        });
         break;
       case "agent.launched":
         set((state) => {
