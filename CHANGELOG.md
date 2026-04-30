@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-04-30
 
+- [cdef6f6](https://github.com/yohaas/AgentControl/commit/cdef6f6) Show startup update notices beside the connection dot with a details modal and Settings toggle
 - [9586f26](https://github.com/yohaas/AgentControl/commit/9586f26) Add an AgentControl GitHub update checker with incoming commits and customizable terminal update commands
 
 ## 2026-04-29
