@@ -6679,6 +6679,7 @@ function ProjectInspectorTile({
   const [status, setStatus] = useState<GitStatus | undefined>();
   const [loading, setLoading] = useState(false);
   const previewRootId = `project-inspector-preview-${project.id}`;
+  const explorerSelection = useTextSelection(`#${previewRootId}`);
   const normalizedFilter = filter.trim().toLowerCase();
   const canFormatPreview = Boolean(
     preview &&
@@ -6863,7 +6864,7 @@ function ProjectInspectorTile({
   }
 
   function currentExplorerText() {
-    const selected = getSelectionInRoot(`#${previewRootId}`);
+    const selected = getSelectionInRoot(`#${previewRootId}`) || explorerSelection.selectedText || explorerSelection.getCachedSelection();
     if (selected) return { scope: "selection" as const, label: "selected text", text: selected };
     if (mode === "diff" && diff) {
       const text = diff.diff || diff.content || "";
@@ -7109,7 +7110,13 @@ function ProjectInspectorTile({
             </div>
             <ContextMenu>
               <ContextMenuTrigger asChild>
-                <div id={previewRootId} className="min-h-0 flex-1 overflow-auto p-3">
+                <div
+                  id={previewRootId}
+                  className="min-h-0 flex-1 overflow-auto p-3"
+                  onMouseUp={() => explorerSelection.captureSelection()}
+                  onKeyUp={() => explorerSelection.captureSelection()}
+                  onContextMenuCapture={() => explorerSelection.captureSelection()}
+                >
                   {mode === "preview" ? (
                 preview ? preview.binary ? (
                   <div className="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">
