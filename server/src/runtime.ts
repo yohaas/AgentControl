@@ -1009,7 +1009,8 @@ export class AgentRuntimeManager {
         this.finishAssistantStream(state, false);
         if (state.interrupting) {
           state.interrupting = false;
-          this.setStatus(state, "interrupted");
+          if (state.pendingInjectedMessage) this.sendPendingInjectedMessage(state);
+          else this.setStatus(state, "interrupted");
         } else if (code && code !== 0) this.setStatus(state, "error", `Codex exited with code ${code}.`);
         else if (state.agent.status !== "error") this.setStatus(state, "idle");
         this.sendPendingInjectedMessage(state);
@@ -1023,7 +1024,7 @@ export class AgentRuntimeManager {
     const pending = state.pendingInjectedMessage;
     if (!pending || state.exiting) return;
     state.pendingInjectedMessage = undefined;
-    setImmediate(() => this.userMessage(state.agent.id, pending.text, undefined, pending.attachments));
+    this.userMessage(state.agent.id, pending.text, undefined, pending.attachments);
   }
 
   private flushCodexBuffers(state: AgentProcessState): void {
