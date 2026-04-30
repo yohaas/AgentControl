@@ -3,9 +3,11 @@ import { mkdir, readFile, rm, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-const stateDir = path.join(os.homedir(), ".agent-control");
+const stateDir = path.join(os.homedir(), ".agent-hero");
+const previousStateDir = path.join(os.homedir(), ".agent-control");
 const legacyStateDir = path.join(os.homedir(), ".agent-dashboard");
 const controlPath = path.join(stateDir, "control.json");
+const previousControlPath = path.join(previousStateDir, "control.json");
 const legacyControlPath = path.join(legacyStateDir, "control.json");
 const npmCommand = "npm";
 
@@ -14,10 +16,10 @@ const lastControlMtimes = new Map();
 let stopping = false;
 
 function start() {
-  console.log("[supervisor] starting AgentControl dev stack");
+  console.log("[supervisor] starting AgentHero dev stack");
   child = spawn(npmCommand, ["run", "dev"], {
     cwd: process.cwd(),
-    env: { ...process.env, AGENT_CONTROL_SUPERVISED: "1" },
+    env: { ...process.env, AGENT_HERO_SUPERVISED: "1", AGENT_CONTROL_SUPERVISED: "1" },
     stdio: "inherit",
     shell: process.platform === "win32"
   });
@@ -51,11 +53,11 @@ async function readControlCommand(controlFilePath) {
 }
 
 async function pollControl() {
-  const command = (await readControlCommand(controlPath)) || (await readControlCommand(legacyControlPath));
+  const command = (await readControlCommand(controlPath)) || (await readControlCommand(previousControlPath)) || (await readControlCommand(legacyControlPath));
   if (!command) return;
 
   if (command.command === "shutdown") {
-    console.log("[supervisor] shutting down AgentControl");
+    console.log("[supervisor] shutting down AgentHero");
     stopping = true;
     stopChild();
     setTimeout(() => process.exit(0), 750);
@@ -63,7 +65,7 @@ async function pollControl() {
   }
 
   if (command.command === "restart") {
-    console.log("[supervisor] restarting AgentControl");
+    console.log("[supervisor] restarting AgentHero");
     stopChild();
     setTimeout(start, 1200);
   }
@@ -71,6 +73,7 @@ async function pollControl() {
 
 await mkdir(stateDir, { recursive: true });
 await rm(controlPath, { force: true });
+await rm(previousControlPath, { force: true });
 await rm(legacyControlPath, { force: true });
 start();
 setInterval(() => void pollControl(), 500);

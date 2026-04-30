@@ -1,6 +1,6 @@
 param(
-  [string]$ServiceName = "AgentControl",
-  [string]$UpdateTaskName = "AgentControlUpdate",
+  [string]$ServiceName = "AgentHero",
+  [string]$UpdateTaskName = "AgentHeroUpdate",
   [string]$ServiceDir = "",
   [switch]$KeepUpdateTask,
   [switch]$RemoveFiles

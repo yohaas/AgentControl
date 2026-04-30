@@ -7,9 +7,9 @@ type JsonRpcMessage = {
   params?: Record<string, unknown>;
 };
 
-const agentId = process.env.AGENTCONTROL_AGENT_ID || "";
-const token = process.env.AGENTCONTROL_PERMISSION_TOKEN || "";
-const permissionUrl = process.env.AGENTCONTROL_PERMISSION_URL || "http://127.0.0.1:4317/api/permissions/request";
+const agentId = process.env.AGENTHERO_AGENT_ID || process.env.AGENTCONTROL_AGENT_ID || "";
+const token = process.env.AGENTHERO_PERMISSION_TOKEN || process.env.AGENTCONTROL_PERMISSION_TOKEN || "";
+const permissionUrl = process.env.AGENTHERO_PERMISSION_URL || process.env.AGENTCONTROL_PERMISSION_URL || "http://127.0.0.1:4317/api/permissions/request";
 
 function write(message: unknown): void {
   process.stdout.write(`${JSON.stringify(message)}\n`);
@@ -42,7 +42,7 @@ async function requestPermission(args: Record<string, unknown>): Promise<Record<
   if (!agentId || !token || !toolUseId) {
     return {
       behavior: "deny",
-      message: "AgentControl permission prompt was not initialized."
+      message: "AgentHero permission prompt was not initialized."
     };
   }
 
@@ -57,7 +57,7 @@ async function requestPermission(args: Record<string, unknown>): Promise<Record<
   if (!response.ok) {
     return {
       behavior: "deny",
-      message: `AgentControl permission prompt failed with HTTP ${response.status}.`
+      message: `AgentHero permission prompt failed with HTTP ${response.status}.`
     };
   }
   return (await response.json()) as Record<string, unknown>;
@@ -79,7 +79,7 @@ async function postPermissionRequest(body: string): Promise<Response> {
       errors.push(`${url}: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
-  throw new Error(`AgentControl permission callback failed. Tried ${errors.join("; ")}`);
+  throw new Error(`AgentHero permission callback failed. Tried ${errors.join("; ")}`);
 }
 
 function permissionRequestUrls(primary: string): string[] {
@@ -121,7 +121,7 @@ async function handle(message: JsonRpcMessage): Promise<void> {
           tools: {}
         },
         serverInfo: {
-          name: "agentcontrol-permissions",
+          name: "agenthero-permissions",
           version: "0.1.0"
         }
       });
@@ -131,7 +131,7 @@ async function handle(message: JsonRpcMessage): Promise<void> {
         tools: [
           {
             name: "approval_prompt",
-            description: "Ask AgentControl to approve or deny a Claude Code tool permission request.",
+            description: "Ask AgentHero to approve or deny a Claude Code tool permission request.",
             inputSchema: {
               type: "object",
               properties: {

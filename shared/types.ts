@@ -263,7 +263,7 @@ export interface RunningAgent {
   activePlugins?: string[];
 }
 
-export type SlashCommandSource = "agentcontrol" | "builtin" | "project" | "user" | "plugin" | "session";
+export type SlashCommandSource = "agenthero" | "builtin" | "project" | "user" | "plugin" | "session";
 
 export interface SlashCommandInfo {
   command: string;

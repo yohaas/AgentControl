@@ -1,11 +1,11 @@
 param(
-  [string]$TaskName = "AgentControlUpdate"
+  [string]$TaskName = "AgentHeroUpdate"
 )
 
 $ErrorActionPreference = "Stop"
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = Resolve-Path (Join-Path $scriptRoot "..\..")
-$updateScript = Resolve-Path (Join-Path $scriptRoot "..\update-agent-control.ps1")
+$updateScript = Resolve-Path (Join-Path $scriptRoot "..\update-agent-hero.ps1")
 
 $task = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
 if ($task) {
@@ -15,7 +15,7 @@ if ($task) {
 }
 
 Write-Host "Scheduled task $TaskName was not found; falling back to UAC PowerShell handoff."
-$command = "Write-Host 'Starting AgentControl updater...'; & `"$updateScript`""
+$command = "Write-Host 'Starting AgentHero updater...'; & `"$updateScript`""
 Start-Process powershell -Verb RunAs -WorkingDirectory $repoRoot.Path -ArgumentList @(
   "-NoExit",
   "-NoProfile",

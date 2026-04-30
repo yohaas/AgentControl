@@ -1,6 +1,6 @@
 import os from "node:os";
 import path from "node:path";
-import type { Project } from "@agent-control/shared";
+import type { Project } from "@agent-hero/shared";
 
 export function isWslProject(project?: Pick<Project, "runtime">): boolean {
   return project?.runtime === "wsl";

@@ -1,6 +1,6 @@
 {
-  "name": "Agent Control",
-  "short_name": "Agent Control",
+  "name": "AgentHero",
+  "short_name": "AgentHero",
   "description": "Full desktop control surface for local agents.",
   "id": "/",
   "start_url": "/",

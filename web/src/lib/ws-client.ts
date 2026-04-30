@@ -1,6 +1,6 @@
-import type { WsClientCommand, WsServerEvent } from "@agent-control/shared";
+import type { WsClientCommand, WsServerEvent } from "@agent-hero/shared";
 import { useAppStore } from "../store/app-store";
-import { storedAgentControlToken } from "./api";
+import { storedAgentHeroToken } from "./api";
 
 let socket: WebSocket | undefined;
 let reconnectTimer: number | undefined;
@@ -22,7 +22,7 @@ export async function connectWebSocket() {
   }
 
   connecting = true;
-  const token = storedAgentControlToken();
+  const token = storedAgentHeroToken();
 
   const nextSocket = new WebSocket(wsUrl(token));
   socket = nextSocket;

@@ -36,13 +36,13 @@ import type {
   QueuedMessage,
   WsClientCommand,
   WsServerEvent
-} from "@agent-control/shared";
+} from "@agent-hero/shared";
 import { detectCapabilities } from "./capabilities.js";
 import {
   expandHome,
   readConfig,
   readSecrets,
-  resolveAgentControlProjectPath,
+  resolveAgentHeroProjectPath,
   resolveClaudeRuntime,
   resolveDefaultAgentMode,
   resolveAgentDirs,
@@ -80,9 +80,10 @@ const attachmentsDir = statePath("attachments");
 const controlDir = STATE_DIR;
 const controlPath = path.join(controlDir, "control.json");
 const openPathLogPath = path.join(controlDir, "open-path.log");
-const supervised = process.env.AGENT_CONTROL_SUPERVISED === "1";
+const supervised = process.env.AGENT_HERO_SUPERVISED === "1" || process.env.AGENT_CONTROL_SUPERVISED === "1";
 const ignoredContextDirs = new Set([".git", "node_modules", "dist", "build", ".next", ".turbo", ".cache", "coverage"]);
-const authCookieName = "agent_control_token";
+const authCookieName = "agent_hero_token";
+const legacyAuthCookieName = "agent_control_token";
 const anthropicModelsApiUrl = "https://api.anthropic.com/v1/models";
 const anthropicModelsDocUrl = "https://docs.anthropic.com/en/docs/about-claude/models/overview";
 const anthropicOpus47NewsUrl = "https://www.anthropic.com/news/claude-opus-4-7";
@@ -93,8 +94,8 @@ const fallbackClaudeModelIds = ["claude-opus-4-7", "claude-opus-4-6", "claude-so
 await migrateLegacyStateDir();
 let config = await readConfig();
 let secrets = await readSecrets();
-if (config.claudePath) process.env.AGENTCONTROL_CLAUDE_PATH = config.claudePath;
-if (config.codexPath) process.env.AGENTCONTROL_CODEX_PATH = config.codexPath;
+if (config.claudePath) process.env.AGENTHERO_CLAUDE_PATH = config.claudePath;
+if (config.codexPath) process.env.AGENTHERO_CODEX_PATH = config.codexPath;
 if (config.gitPath) process.env.GIT_PATH = config.gitPath;
 if (!process.env.ANTHROPIC_API_KEY && secrets.anthropicApiKey) process.env.ANTHROPIC_API_KEY = secrets.anthropicApiKey;
 if (!process.env.OPENAI_API_KEY && secrets.openaiApiKey) process.env.OPENAI_API_KEY = secrets.openaiApiKey;
@@ -115,7 +116,7 @@ function isLoopbackHost(hostname: string): boolean {
 }
 
 function configuredAllowedOrigins(): string[] {
-  return (process.env.AGENTCONTROL_ALLOWED_ORIGINS || "")
+  return (process.env.AGENTHERO_ALLOWED_ORIGINS || process.env.AGENTCONTROL_ALLOWED_ORIGINS || "")
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean);
@@ -123,7 +124,7 @@ function configuredAllowedOrigins(): string[] {
 
 function trustedDefaultOrigins(): string[] {
   const serverPort = String(PORT);
-  const devPort = process.env.AGENTCONTROL_WEB_PORT || "4318";
+  const devPort = process.env.AGENTHERO_WEB_PORT || process.env.AGENTCONTROL_WEB_PORT || "4318";
   const hosts = new Set(["127.0.0.1", "localhost"]);
   if (HOST && HOST !== "0.0.0.0" && HOST !== "::") hosts.add(HOST);
   return [...hosts].flatMap((host) => [`http://${host}:${serverPort}`, `http://${host}:${devPort}`]);
@@ -223,7 +224,7 @@ async function fetchAnthropicApiModels(): Promise<ModelProfile[]> {
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY is not set.");
   const response = await fetch(anthropicModelsApiUrl, {
     headers: {
-      "User-Agent": "AgentControl model updater",
+      "User-Agent": "AgentHero model updater",
       "x-api-key": apiKey,
       "anthropic-version": "2023-06-01"
     }
@@ -264,7 +265,7 @@ function parsePublishedCodexModels(html: string): ModelProfile[] {
 async function fetchText(url: string): Promise<string> {
   const response = await fetch(url, {
     headers: {
-      "User-Agent": "AgentControl model updater"
+      "User-Agent": "AgentHero model updater"
     }
   });
   if (!response.ok) throw new Error(`${url} returned ${response.status}`);
@@ -370,15 +371,16 @@ function parseCookies(cookieHeader: string | undefined): Record<string, string> 
 }
 
 function requestToken(request: express.Request): string | undefined {
-  const header = request.header("x-agent-control-token");
+  const header = request.header("x-agent-hero-token") || request.header("x-agent-control-token");
   if (header) return header;
   const authorization = request.header("authorization");
   if (authorization?.toLowerCase().startsWith("bearer ")) return authorization.slice(7).trim();
-  return parseCookies(request.header("cookie"))[authCookieName];
+  const cookies = parseCookies(request.header("cookie"));
+  return cookies[authCookieName] || cookies[legacyAuthCookieName];
 }
 
 function configuredAccessToken(): string | undefined {
-  return process.env.AGENTCONTROL_ACCESS_TOKEN || process.env.AGENTCONTROL_AUTH_TOKEN || secrets.accessToken;
+  return process.env.AGENTHERO_ACCESS_TOKEN || process.env.AGENTHERO_AUTH_TOKEN || process.env.AGENTCONTROL_ACCESS_TOKEN || process.env.AGENTCONTROL_AUTH_TOKEN || secrets.accessToken;
 }
 
 function accessTokenEnabled(): boolean {
@@ -411,11 +413,12 @@ function webSocketToken(request: http.IncomingMessage): string | undefined {
   const requestUrl = new URL(request.url || "/", `http://${request.headers.host || "localhost"}`);
   const queryToken = requestUrl.searchParams.get("token");
   if (queryToken) return queryToken;
-  const header = request.headers["x-agent-control-token"];
+  const header = request.headers["x-agent-hero-token"] || request.headers["x-agent-control-token"];
   if (typeof header === "string") return header;
   const authorization = request.headers.authorization;
   if (authorization?.toLowerCase().startsWith("bearer ")) return authorization.slice(7).trim();
-  return parseCookies(request.headers.cookie)[authCookieName];
+  const cookies = parseCookies(request.headers.cookie);
+  return cookies[authCookieName] || cookies[legacyAuthCookieName];
 }
 
 function isAuthenticatedWebSocket(request: http.IncomingMessage): boolean {
@@ -436,6 +439,11 @@ function setAuthCookie(response: express.Response, token: string): void {
 
 function clearAuthCookie(response: express.Response): void {
   response.clearCookie(authCookieName, {
+    sameSite: "strict",
+    secure: false,
+    path: "/"
+  });
+  response.clearCookie(legacyAuthCookieName, {
     sameSite: "strict",
     secure: false,
     path: "/"
@@ -804,7 +812,7 @@ async function fetchLatestGithubRelease(repo: string): Promise<AppUpdateStatus["
   const response = await fetch(`https://api.github.com/repos/${repo}/releases/latest`, {
     headers: {
       Accept: "application/vnd.github+json",
-      "User-Agent": "AgentControl update checker"
+      "User-Agent": "AgentHero update checker"
     }
   });
   if (response.status === 404) return undefined;
@@ -836,7 +844,7 @@ async function appUpdateStatus(): Promise<AppUpdateStatus> {
   try {
     const isRepo = (await gitCommand(appRoot, ["rev-parse", "--is-inside-work-tree"])).trim() === "true";
     if (!isRepo) {
-      return { isRepo: false, checkedAt, releaseAvailable: false, updateAvailable: false, commits: [], message: "AgentControl is not running from a Git repository." };
+      return { isRepo: false, checkedAt, releaseAvailable: false, updateAvailable: false, commits: [], message: "AgentHero is not running from a Git repository." };
     }
 
     const remoteUrl = (await gitCommand(appRoot, ["remote", "get-url", "origin"])).trim();
@@ -940,7 +948,7 @@ function gitCredentialPromptMessage(error: unknown): string | undefined {
   const message = error instanceof Error ? error.message : String(error);
   if (!/terminal prompts (have been )?disabled|could not read Username|Authentication failed/i.test(message)) return undefined;
   return [
-    "Git push needs credentials, but AgentControl cannot show interactive Git prompts.",
+    "Git push needs credentials, but AgentHero cannot show interactive Git prompts.",
     "Configure Git credentials in a terminal, then retry push.",
     "For HTTPS remotes on Windows, use Git Credential Manager or run `gh auth login`; SSH remotes also work once your key is configured."
   ].join(" ");
@@ -1229,9 +1237,9 @@ function openWithDefaultApp(filePath: string, options: { file?: boolean; openWit
         "-ExecutionPolicy",
         "Bypass",
         "-Command",
-        "$target = $env:AGENTCONTROL_OPEN_PATH; if (-not $target) { throw 'Open path was not provided.' }; Invoke-Item -LiteralPath $target"
+        "$target = $env:AGENTHERO_OPEN_PATH; if (-not $target) { $target = $env:AGENTCONTROL_OPEN_PATH }; if (-not $target) { throw 'Open path was not provided.' }; Invoke-Item -LiteralPath $target"
       ], {
-        env: { ...process.env, AGENTCONTROL_OPEN_PATH: filePath },
+        env: { ...process.env, AGENTHERO_OPEN_PATH: filePath, AGENTCONTROL_OPEN_PATH: filePath },
         windowsHide: true
       }, (error, _stdout, stderr) => {
         if (error) {
@@ -1331,7 +1339,7 @@ async function ensureLaunchPluginsEnabled(request: LaunchRequest): Promise<void>
   if (plugins.length === 0) return;
   const provider = request.provider || def?.provider || "claude";
   if (!supportsPluginProvider(provider)) {
-    throw new Error("OpenAI API sessions do not support local AgentControl plugins.");
+    throw new Error("OpenAI API sessions do not support local AgentHero plugins.");
   }
 
   const installed = await listPlugins(provider);
@@ -1441,7 +1449,7 @@ app.use((request, response, next) => {
     next();
     return;
   }
-  response.status(401).json({ error: "AgentControl API authentication is required." });
+  response.status(401).json({ error: "AgentHero API authentication is required." });
 });
 
 app.get("/api/projects", (_request, response) => {
@@ -1706,7 +1714,7 @@ app.post("/api/projects/:id/git/push", async (request, response) => {
   try {
     await gitCommand(project, ["push", "--porcelain"], 120000, {
       env: { GIT_TERMINAL_PROMPT: "0" },
-      timeoutMessage: "Git push timed out. Git may be waiting for credentials or remote interaction that AgentControl cannot display."
+      timeoutMessage: "Git push timed out. Git may be waiting for credentials or remote interaction that AgentHero cannot display."
     });
     response.json(await projectGitStatus(project));
   } catch (error) {
@@ -2030,7 +2038,7 @@ app.get("/api/admin/updates", async (_request, response) => {
 
 app.post("/api/admin/restart", async (_request, response) => {
   if (!supervised) {
-    response.status(409).json({ error: "Restart requires starting AgentControl with npm run dev:supervised." });
+    response.status(409).json({ error: "Restart requires starting AgentHero with npm run dev:supervised." });
     return;
   }
   await requestSupervisor("restart");
@@ -2051,9 +2059,9 @@ app.get("/api/settings", (_request, response) => {
     models: resolveModels(config),
     modelProfiles: resolveModelProfiles(config),
     gitPath: config.gitPath || process.env.GIT_PATH || "git",
-    claudePath: config.claudePath || process.env.CLAUDE_CODE_CLI || process.env.AGENTCONTROL_CLAUDE_PATH || "",
+    claudePath: config.claudePath || process.env.CLAUDE_CODE_CLI || process.env.AGENTHERO_CLAUDE_PATH || process.env.AGENTCONTROL_CLAUDE_PATH || "",
     claudeRuntime: resolveClaudeRuntime(config),
-    codexPath: config.codexPath || process.env.CODEX_CLI || process.env.AGENTCONTROL_CODEX_PATH || "",
+    codexPath: config.codexPath || process.env.CODEX_CLI || process.env.AGENTHERO_CODEX_PATH || process.env.AGENTCONTROL_CODEX_PATH || "",
     claudeAgentDir: agentDirs.claude,
     codexAgentDir: agentDirs.codex,
     openaiAgentDir: agentDirs.openai,
@@ -2074,7 +2082,7 @@ app.get("/api/settings", (_request, response) => {
     terminalDock: resolveTerminalDock(config),
     fileExplorerDock: resolveFileExplorerDock(config),
     themeMode: resolveThemeMode(config),
-    agentControlProjectPath: resolveAgentControlProjectPath(config),
+    agentControlProjectPath: resolveAgentHeroProjectPath(config),
     updateChecksEnabled: resolveUpdateChecksEnabled(config),
     updateCommands: resolveUpdateCommands(config),
     inputNotificationsEnabled: resolveInputNotificationsEnabled(config),
@@ -2188,7 +2196,7 @@ app.put("/api/settings", async (request, response) => {
     fileExplorerDock: resolveFileExplorerDock(body.fileExplorerDock ? body : config),
     themeMode: resolveThemeMode(body.themeMode ? body : config),
     agentControlProjectPath:
-      typeof body.agentControlProjectPath === "string" ? body.agentControlProjectPath.trim() : resolveAgentControlProjectPath(config),
+      typeof body.agentControlProjectPath === "string" ? body.agentControlProjectPath.trim() : resolveAgentHeroProjectPath(config),
     updateChecksEnabled: typeof body.updateChecksEnabled === "boolean" ? body.updateChecksEnabled : resolveUpdateChecksEnabled(config),
     updateCommands: Array.isArray(body.updateCommands) ? body.updateCommands.map((command) => command.trim()).filter(Boolean) : config.updateCommands,
     inputNotificationsEnabled:
@@ -2198,10 +2206,10 @@ app.put("/api/settings", async (request, response) => {
       typeof body.externalEditorUrlTemplate === "string" ? body.externalEditorUrlTemplate.trim() : config.externalEditorUrlTemplate,
     accessTokenEnabled: typeof body.accessTokenEnabled === "boolean" ? body.accessTokenEnabled : config.accessTokenEnabled
   });
-  if (config.claudePath) process.env.AGENTCONTROL_CLAUDE_PATH = config.claudePath;
-  else delete process.env.AGENTCONTROL_CLAUDE_PATH;
-  if (config.codexPath) process.env.AGENTCONTROL_CODEX_PATH = config.codexPath;
-  else delete process.env.AGENTCONTROL_CODEX_PATH;
+  if (config.claudePath) process.env.AGENTHERO_CLAUDE_PATH = config.claudePath;
+  else delete process.env.AGENTHERO_CLAUDE_PATH;
+  if (config.codexPath) process.env.AGENTHERO_CODEX_PATH = config.codexPath;
+  else delete process.env.AGENTHERO_CODEX_PATH;
   if (config.gitPath) process.env.GIT_PATH = config.gitPath;
   agentDirs = resolveAgentDirs(config);
   if (!process.env.ANTHROPIC_API_KEY || secrets.anthropicApiKey) {
@@ -2221,9 +2229,9 @@ app.put("/api/settings", async (request, response) => {
     models: resolveModels(config),
     modelProfiles: resolveModelProfiles(config),
     gitPath: config.gitPath || process.env.GIT_PATH || "git",
-    claudePath: config.claudePath || process.env.CLAUDE_CODE_CLI || process.env.AGENTCONTROL_CLAUDE_PATH || "",
+    claudePath: config.claudePath || process.env.CLAUDE_CODE_CLI || process.env.AGENTHERO_CLAUDE_PATH || process.env.AGENTCONTROL_CLAUDE_PATH || "",
     claudeRuntime: resolveClaudeRuntime(config),
-    codexPath: config.codexPath || process.env.CODEX_CLI || process.env.AGENTCONTROL_CODEX_PATH || "",
+    codexPath: config.codexPath || process.env.CODEX_CLI || process.env.AGENTHERO_CODEX_PATH || process.env.AGENTCONTROL_CODEX_PATH || "",
     claudeAgentDir: agentDirs.claude,
     codexAgentDir: agentDirs.codex,
     openaiAgentDir: agentDirs.openai,
@@ -2244,7 +2252,7 @@ app.put("/api/settings", async (request, response) => {
     terminalDock: resolveTerminalDock(config),
     fileExplorerDock: resolveFileExplorerDock(config),
     themeMode: resolveThemeMode(config),
-    agentControlProjectPath: resolveAgentControlProjectPath(config),
+    agentControlProjectPath: resolveAgentHeroProjectPath(config),
     updateChecksEnabled: resolveUpdateChecksEnabled(config),
     updateCommands: resolveUpdateCommands(config),
     inputNotificationsEnabled: resolveInputNotificationsEnabled(config),
@@ -2419,8 +2427,8 @@ wss.on("connection", (ws) => {
 
 server.listen(PORT, HOST, () => {
   const displayHost = HOST === "0.0.0.0" || HOST === "::" ? "localhost" : HOST;
-  console.log(`AgentControl web app available at http://${displayHost}:${PORT}`);
-  console.log(`AgentControl API/WebSocket server listening on http://${HOST}:${PORT}`);
-  console.log(`AgentControl access token ${accessTokenEnabled() ? "is enabled" : "is disabled"}.`);
+  console.log(`AgentHero web app available at http://${displayHost}:${PORT}`);
+  console.log(`AgentHero API/WebSocket server listening on http://${HOST}:${PORT}`);
+  console.log(`AgentHero access token ${accessTokenEnabled() ? "is enabled" : "is disabled"}.`);
   console.log(`Configured projects=${config.projectPaths?.length || 0}`);
 });

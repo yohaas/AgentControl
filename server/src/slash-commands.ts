@@ -2,7 +2,7 @@ import { readdir, readFile, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import matter from "gray-matter";
-import type { AgentProvider, ClaudePlugin, SlashCommandInfo } from "@agent-control/shared";
+import type { AgentProvider, ClaudePlugin, SlashCommandInfo } from "@agent-hero/shared";
 
 const INTERACTIVE_BUILTINS = new Set(["/config", "/login", "/mcp", "/permissions", "/terminal-setup", "/vim"]);
 
@@ -12,22 +12,22 @@ const BUILTIN_COMMANDS: SlashCommandInfo[] = [
   { command: "/allowed-tools", description: "Alias for /permissions", source: "builtin", interactive: true },
   { command: "/batch", description: "Run coordinated batches of work", source: "builtin" },
   { command: "/bug", description: "Report a Claude Code issue", source: "builtin", interactive: true },
-  { command: "/btw", description: "Inject a note into the active Claude response", argumentHint: "[message]", source: "agentcontrol" },
-  { command: "/clear", description: "Clear this chat history", source: "agentcontrol" },
+  { command: "/btw", description: "Inject a note into the active Claude response", argumentHint: "[message]", source: "agenthero" },
+  { command: "/clear", description: "Clear this chat history", source: "agenthero" },
   { command: "/claude-api", description: "Get help using Claude APIs", source: "builtin" },
   { command: "/compact", description: "Compact conversation context", argumentHint: "[instructions]", source: "builtin" },
   { command: "/config", description: "Open Claude Code configuration", source: "builtin", interactive: true },
   { command: "/cost", description: "Show session cost and usage", source: "builtin" },
   { command: "/debug", description: "Debug a failing test or bug", source: "builtin" },
   { command: "/doctor", description: "Check Claude Code installation health", source: "builtin", interactive: true },
-  { command: "/exit", description: "Close this agent", source: "agentcontrol" },
+  { command: "/exit", description: "Close this agent", source: "agenthero" },
   { command: "/export", description: "Export the current conversation", source: "builtin", interactive: true },
   { command: "/help", description: "Show Claude Code help", source: "builtin", interactive: true },
   { command: "/hooks", description: "Manage hooks", source: "builtin", interactive: true },
   { command: "/ide", description: "Manage IDE integration", source: "builtin", interactive: true },
   { command: "/init", description: "Initialize project memory", source: "builtin" },
   { command: "/install-github-app", description: "Install the Claude GitHub app", source: "builtin", interactive: true },
-  { command: "/interrupt", description: "Stop the active response", source: "agentcontrol" },
+  { command: "/interrupt", description: "Stop the active response", source: "agenthero" },
   { command: "/login", description: "Change Claude authentication", source: "builtin", interactive: true },
   { command: "/logout", description: "Log out of Claude Code", source: "builtin", interactive: true },
   { command: "/loop", description: "Iterate on a task repeatedly", source: "builtin" },
@@ -41,8 +41,8 @@ const BUILTIN_COMMANDS: SlashCommandInfo[] = [
   { command: "/resume", description: "Resume a previous conversation", source: "builtin", interactive: true },
   { command: "/review", description: "Review code changes", source: "builtin" },
   { command: "/simplify", description: "Simplify code or explanations", source: "builtin" },
-  { command: "/status", description: "Show AgentControl session status", source: "agentcontrol" },
-  { command: "/stop", description: "Stop the active response", source: "agentcontrol" },
+  { command: "/status", description: "Show AgentHero session status", source: "agenthero" },
+  { command: "/stop", description: "Stop the active response", source: "agenthero" },
   { command: "/terminal-setup", description: "Install terminal integration", source: "builtin", interactive: true },
   { command: "/upgrade", description: "Upgrade Claude Code", source: "builtin", interactive: true },
   { command: "/vim", description: "Toggle Vim mode", source: "builtin", interactive: true }
@@ -68,7 +68,8 @@ function booleanField(value: unknown): boolean | undefined {
 }
 
 function sourceField(value: unknown): SlashCommandInfo["source"] | undefined {
-  return value === "agentcontrol" || value === "builtin" || value === "project" || value === "user" || value === "plugin" || value === "session"
+  if (value === "agentcontrol") return "agenthero";
+  return value === "agenthero" || value === "builtin" || value === "project" || value === "user" || value === "plugin" || value === "session"
     ? value
     : undefined;
 }

@@ -1,6 +1,6 @@
 import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { RunningAgent, TranscriptEvent } from "@agent-control/shared";
+import type { RunningAgent, TranscriptEvent } from "@agent-hero/shared";
 import { migrateLegacyStateDir, statePath as resolveStatePath } from "./storage.js";
 
 export interface PersistedState {

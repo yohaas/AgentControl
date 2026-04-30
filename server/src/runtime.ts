@@ -28,7 +28,7 @@ import type {
   TokenUsage,
   TranscriptEvent,
   WsServerEvent
-} from "@agent-control/shared";
+} from "@agent-hero/shared";
 import { createStateWriter, readPersistedState, type PersistedState } from "./persistence.js";
 import { DEFAULT_MODEL_PROFILES } from "./config.js";
 import { resolveClaudeCommand, resolveCodexInvocation } from "./capabilities.js";
@@ -76,7 +76,7 @@ type SpawnCommand = { command: string; args: string[]; cwd: string };
 const RAW_LINE_LIMIT = 5000;
 const TRANSCRIPT_PERSIST_LIMIT = 1000;
 const RC_URL_PATTERN = /https:\/\/claude\.ai\/code(?:[/?#][^\s\u0007\u001b)]*)?/g;
-const PERMISSION_MCP_SERVER_NAME = "agentcontrol_permissions";
+const PERMISSION_MCP_SERVER_NAME = "agenthero_permissions";
 const PERMISSION_MCP_TOOL_NAME = `mcp__${PERMISSION_MCP_SERVER_NAME}__approval_prompt`;
 const PERMISSION_REQUEST_TIMEOUT_MS = 10 * 60 * 1000;
 const TURN_TIMER_STATUSES = new Set<AgentStatus>(["starting", "running", "switching-model", "awaiting-permission", "awaiting-input"]);
@@ -557,7 +557,7 @@ export class AgentRuntimeManager {
       return;
     }
     const provider = state.agent.provider === "codex" ? "Codex" : state.agent.provider === "openai" ? "OpenAI" : "Claude API";
-    throw new Error(`${provider} cannot accept live injected messages from AgentControl yet.`);
+    throw new Error(`${provider} cannot accept live injected messages from AgentHero yet.`);
   }
 
   private injectClaudeCliMessage(state: AgentProcessState, text: string, attachments: MessageAttachment[] = []): void {
@@ -1397,7 +1397,7 @@ export class AgentRuntimeManager {
       const message = await new Promise<string>((resolve) => {
         const timeout = setTimeout(() => {
           state.pendingQuestions?.delete(toolUseId);
-          resolve("No answer was provided before the AgentControl question prompt timed out.");
+          resolve("No answer was provided before the AgentHero question prompt timed out.");
         }, PERMISSION_REQUEST_TIMEOUT_MS);
         state.pendingQuestions ??= new Map();
         state.pendingQuestions.set(toolUseId, { toolUseId, resolve, timeout });
@@ -1416,7 +1416,7 @@ export class AgentRuntimeManager {
           state.pendingPlans?.delete(toolUseId);
           resolve({
             behavior: "deny",
-            message: "No plan decision was provided before the AgentControl plan prompt timed out."
+            message: "No plan decision was provided before the AgentHero plan prompt timed out."
           });
         }, PERMISSION_REQUEST_TIMEOUT_MS);
         state.pendingPlans ??= new Map();
@@ -1462,7 +1462,7 @@ export class AgentRuntimeManager {
 
     return {
       behavior: "deny",
-      message: "Denied in AgentControl."
+      message: "Denied in AgentHero."
     };
   }
 
@@ -1847,6 +1847,9 @@ export class AgentRuntimeManager {
           command: mcpCommand,
           args: mcpArgs,
           env: {
+            AGENTHERO_AGENT_ID: state.agent.id,
+            AGENTHERO_PERMISSION_TOKEN: state.permissionToken,
+            AGENTHERO_PERMISSION_URL: this.permissionRequestUrl(),
             AGENTCONTROL_AGENT_ID: state.agent.id,
             AGENTCONTROL_PERMISSION_TOKEN: state.permissionToken,
             AGENTCONTROL_PERMISSION_URL: this.permissionRequestUrl()
@@ -1911,7 +1914,7 @@ export class AgentRuntimeManager {
   }
 
   private permissionRequestUrl(): string {
-    return process.env.AGENTCONTROL_PERMISSION_URL || `http://127.0.0.1:${process.env.PORT || 4317}/api/permissions/request`;
+    return process.env.AGENTHERO_PERMISSION_URL || process.env.AGENTCONTROL_PERMISSION_URL || `http://127.0.0.1:${process.env.PORT || 4317}/api/permissions/request`;
   }
 
   private stopProcessTree(state: AgentProcessState): void {
@@ -2764,7 +2767,7 @@ export class AgentRuntimeManager {
     this.pushTranscript(state, {
       ...eventBase(state.agent.id, selectedModel),
       kind: "system",
-      text: `Claude reported ${reportedModel} in stream metadata, but AgentControl kept the selected model ${selectedModel}.`
+      text: `Claude reported ${reportedModel} in stream metadata, but AgentHero kept the selected model ${selectedModel}.`
     });
   }
 

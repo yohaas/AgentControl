@@ -13,7 +13,7 @@ import type {
   TerminalSession,
   TranscriptEvent,
   WsServerEvent
-} from "@agent-control/shared";
+} from "@agent-hero/shared";
 
 export interface SettingsState {
   projectsRoot: string;
@@ -90,24 +90,46 @@ interface FilePreviewRequest {
   line?: number;
 }
 
-const MESSAGE_QUEUES_STORAGE_KEY = "agent-control-message-queues";
-const TILE_LAYOUT_STORAGE_KEY = "agent-control-tile-layout";
-const SELECTED_PROJECT_STORAGE_KEY = "agent-control-selected-project";
+const MESSAGE_QUEUES_STORAGE_KEY = "agent-hero-message-queues";
+const TILE_LAYOUT_STORAGE_KEY = "agent-hero-tile-layout";
+const SELECTED_PROJECT_STORAGE_KEY = "agent-hero-selected-project";
+const LEGACY_MESSAGE_QUEUES_STORAGE_KEY = "agent-control-message-queues";
+const LEGACY_TILE_LAYOUT_STORAGE_KEY = "agent-control-tile-layout";
+const LEGACY_SELECTED_PROJECT_STORAGE_KEY = "agent-control-selected-project";
+const FILE_EXPLORER_OPEN_STORAGE_KEY = "agent-hero-file-explorer-open";
+const LEGACY_FILE_EXPLORER_OPEN_STORAGE_KEY = "agent-control-file-explorer-open";
+const FILE_EXPLORER_POPOUT_STORAGE_KEY = "agent-hero-file-explorer-popout";
 const WINDOWS_UPDATE_COMMANDS = [
   "powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\windows\\start-update.ps1"
 ];
 const PREVIOUS_WINDOWS_UPDATE_COMMANDS = [
-  "$script = Join-Path (Get-Location) 'scripts\\update-agent-control.ps1'; $command = \"Write-Host 'Starting AgentControl updater...'; & `\"$script`\"\"; Start-Process powershell -Verb RunAs -WorkingDirectory (Get-Location).Path -ArgumentList @('-NoExit', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', $command)"
+  "$script = Join-Path (Get-Location) 'scripts\\update-agent-hero.ps1'; $command = \"Write-Host 'Starting AgentHero updater...'; & `\"$script`\"\"; Start-Process powershell -Verb RunAs -WorkingDirectory (Get-Location).Path -ArgumentList @('-NoExit', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', $command)"
 ];
 const OLDER_WINDOWS_UPDATE_COMMANDS = [
+  "$script = Join-Path (Get-Location) 'scripts\\update-agent-hero.ps1'; $command = \"Write-Host 'Starting AgentHero updater...'; & `\"$script`\"\"; Start-Process powershell -Verb RunAs -WorkingDirectory (Get-Location).Path -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', $command)"
+];
+const POSIX_UPDATE_COMMANDS = ["bash ./scripts/update-agent-hero.sh"];
+const PREVIOUS_WINDOWS_UPDATE_COMMANDS_LEGACY = [
+  "$script = Join-Path (Get-Location) 'scripts\\update-agent-control.ps1'; $command = \"Write-Host 'Starting AgentControl updater...'; & `\"$script`\"\"; Start-Process powershell -Verb RunAs -WorkingDirectory (Get-Location).Path -ArgumentList @('-NoExit', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', $command)"
+];
+const OLDER_WINDOWS_UPDATE_COMMANDS_LEGACY = [
   "$script = Join-Path (Get-Location) 'scripts\\update-agent-control.ps1'; $command = \"Write-Host 'Starting AgentControl updater...'; & `\"$script`\"\"; Start-Process powershell -Verb RunAs -WorkingDirectory (Get-Location).Path -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', $command)"
 ];
-const POSIX_UPDATE_COMMANDS = ["bash ./scripts/update-agent-control.sh"];
+const POSIX_UPDATE_COMMANDS_LEGACY = ["bash ./scripts/update-agent-control.sh"];
 const LEGACY_UPDATE_COMMANDS = ["git pull", "npm ci", "npm run build", "Restart-Service AgentControl"];
 
 function defaultUpdateCommands(): string[] {
   const platform = typeof navigator === "undefined" ? "" : `${navigator.platform} ${navigator.userAgent}`.toLowerCase();
   return platform.includes("win") ? WINDOWS_UPDATE_COMMANDS : POSIX_UPDATE_COMMANDS;
+}
+
+function readLocalStorageWithLegacy(key: string, legacyKey: string): string | undefined {
+  if (typeof window === "undefined") return undefined;
+  const value = window.localStorage.getItem(key) || undefined;
+  if (value !== undefined) return value;
+  const legacyValue = window.localStorage.getItem(legacyKey) || undefined;
+  if (legacyValue !== undefined) window.localStorage.setItem(key, legacyValue);
+  return legacyValue;
 }
 
 interface StoredTileLayout {
@@ -142,7 +164,7 @@ function normalizeMessageQueues(value: unknown): Record<string, QueuedMessage[]>
 function readStoredMessageQueues(): Record<string, QueuedMessage[]> {
   if (typeof window === "undefined") return {};
   try {
-    return normalizeMessageQueues(JSON.parse(window.localStorage.getItem(MESSAGE_QUEUES_STORAGE_KEY) || "{}"));
+    return normalizeMessageQueues(JSON.parse(readLocalStorageWithLegacy(MESSAGE_QUEUES_STORAGE_KEY, LEGACY_MESSAGE_QUEUES_STORAGE_KEY) || "{}"));
   } catch {
     return {};
   }
@@ -195,7 +217,7 @@ function normalizeTileLayout(value: unknown): StoredTileLayout {
 function readStoredTileLayout(): StoredTileLayout {
   if (typeof window === "undefined") return { order: [], widths: {}, minimized: {} };
   try {
-    return normalizeTileLayout(JSON.parse(window.localStorage.getItem(TILE_LAYOUT_STORAGE_KEY) || "{}"));
+    return normalizeTileLayout(JSON.parse(readLocalStorageWithLegacy(TILE_LAYOUT_STORAGE_KEY, LEGACY_TILE_LAYOUT_STORAGE_KEY) || "{}"));
   } catch {
     return { order: [], widths: {}, minimized: {} };
   }
@@ -222,7 +244,7 @@ function pruneTileLayout(layout: StoredTileLayout, agentIds: Set<string>): Store
 
 function readStoredSelectedProjectId(): string | undefined {
   if (typeof window === "undefined") return undefined;
-  return window.localStorage.getItem(SELECTED_PROJECT_STORAGE_KEY) || undefined;
+  return readLocalStorageWithLegacy(SELECTED_PROJECT_STORAGE_KEY, LEGACY_SELECTED_PROJECT_STORAGE_KEY);
 }
 
 function writeStoredSelectedProjectId(id?: string) {
@@ -350,13 +372,13 @@ const defaultSettings: SettingsState = {
   claudeRuntime: "cli",
   claudeAgentDir: ".claude/agents",
   codexAgentDir: ".codex/agents",
-  openaiAgentDir: ".agent-control/openai-agents",
-  builtInAgentDir: ".agent-control/built-in-agents"
+  openaiAgentDir: ".agent-hero/openai-agents",
+  builtInAgentDir: ".agent-hero/built-in-agents"
 };
 
 function initialFileExplorerOpen(): boolean {
   if (typeof window === "undefined") return true;
-  return window.localStorage.getItem("agent-control-file-explorer-open") !== "false";
+  return readLocalStorageWithLegacy(FILE_EXPLORER_OPEN_STORAGE_KEY, LEGACY_FILE_EXPLORER_OPEN_STORAGE_KEY) !== "false";
 }
 
 function clampNumber(value: unknown, fallback: number, min: number, max: number): number {
@@ -405,7 +427,10 @@ function normalizeSettings(settings: SettingsState): SettingsState {
       return normalized.length &&
         commandKey !== LEGACY_UPDATE_COMMANDS.join("\n") &&
         commandKey !== PREVIOUS_WINDOWS_UPDATE_COMMANDS.join("\n") &&
-        commandKey !== OLDER_WINDOWS_UPDATE_COMMANDS.join("\n")
+        commandKey !== OLDER_WINDOWS_UPDATE_COMMANDS.join("\n") &&
+        commandKey !== PREVIOUS_WINDOWS_UPDATE_COMMANDS_LEGACY.join("\n") &&
+        commandKey !== OLDER_WINDOWS_UPDATE_COMMANDS_LEGACY.join("\n") &&
+        commandKey !== POSIX_UPDATE_COMMANDS_LEGACY.join("\n")
         ? normalized
         : defaultSettings.updateCommands;
     })(),
@@ -923,7 +948,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
   setTerminalOpen: (open) => set({ terminalOpen: open }),
   setFileExplorerOpen: (open) => {
-    if (typeof window !== "undefined") window.localStorage.setItem("agent-control-file-explorer-open", String(open));
+    if (typeof window !== "undefined") window.localStorage.setItem(FILE_EXPLORER_OPEN_STORAGE_KEY, String(open));
     set({
       fileExplorerOpen: open,
       fileExplorerMaximized: open ? get().fileExplorerMaximized : false,
@@ -933,8 +958,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   setFileExplorerMaximized: (maximized) => set({ fileExplorerMaximized: maximized, fileExplorerOpen: maximized ? true : get().fileExplorerOpen }),
   openFilePreview: (projectId, path, line) => {
     if (typeof window !== "undefined") {
-      window.localStorage.setItem("agent-control-file-explorer-open", "true");
-      window.localStorage.setItem("agent-control-file-explorer-popout", "false");
+      window.localStorage.setItem(FILE_EXPLORER_OPEN_STORAGE_KEY, "true");
+      window.localStorage.setItem(FILE_EXPLORER_POPOUT_STORAGE_KEY, "false");
     }
     set((state) => {
       writeStoredSelectedProjectId(projectId);
@@ -954,7 +979,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     });
   },
   setFileExplorerDock: (dock) => {
-    if (typeof window !== "undefined") window.localStorage.setItem("agent-control-file-explorer-open", "true");
+    if (typeof window !== "undefined") window.localStorage.setItem(FILE_EXPLORER_OPEN_STORAGE_KEY, "true");
     set({ settings: { ...get().settings, fileExplorerDock: dock }, fileExplorerOpen: true, fileExplorerMaximized: false });
   },
   setTerminalInFileExplorer: (docked) => set({ terminalInFileExplorer: docked }),

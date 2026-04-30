@@ -126,7 +126,7 @@ import type {
   TerminalSession,
   TokenUsage,
   TranscriptEvent
-} from "@agent-control/shared";
+} from "@agent-hero/shared";
 import { Badge } from "./components/ui/badge";
 import { Button } from "./components/ui/button";
 import {
@@ -170,17 +170,29 @@ import {
 const DEFAULT_MODEL = "claude-sonnet-4-6";
 const EMPTY_TRANSCRIPT: TranscriptEvent[] = [];
 const EMPTY_QUEUE: QueuedMessage[] = [];
-const TERMINAL_DOCK_MESSAGE = "agent-control:dock-terminal";
-const TERMINAL_DOCK_STORAGE_KEY = "agent-control-terminal-dock-request";
-const TERMINAL_POPOUT_STORAGE_KEY = "agent-control-popped-out-terminals";
-const TERMINAL_POPOUT_EXPLICIT_HIDE_STORAGE_KEY = "agent-control-terminal-popout-explicit-hide";
-const FILE_EXPLORER_POPOUT_STORAGE_KEY = "agent-control-file-explorer-popout";
-const FOCUS_AGENT_TILE_EVENT = "agent-control:focus-agent-tile";
-const DEFAULT_BUILT_IN_AGENT_DIR = ".agent-control/built-in-agents";
+const TERMINAL_DOCK_MESSAGE = "agent-hero:dock-terminal";
+const TERMINAL_DOCK_STORAGE_KEY = "agent-hero-terminal-dock-request";
+const TERMINAL_POPOUT_STORAGE_KEY = "agent-hero-popped-out-terminals";
+const TERMINAL_POPOUT_EXPLICIT_HIDE_STORAGE_KEY = "agent-hero-terminal-popout-explicit-hide";
+const FILE_EXPLORER_POPOUT_STORAGE_KEY = "agent-hero-file-explorer-popout";
+const FOCUS_AGENT_TILE_EVENT = "agent-hero:focus-agent-tile";
+const DEFAULT_BUILT_IN_AGENT_DIR = ".agent-hero/built-in-agents";
 const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const INPUT_NOTIFICATION_DEDUPE_MS = 30_000;
-const INPUT_NOTIFICATION_STORAGE_PREFIX = "agent-control-input-notification:";
+const INPUT_NOTIFICATION_STORAGE_PREFIX = "agent-hero-input-notification:";
 const recentInputNotificationKeys = new Map<string, number>();
+
+function legacyStorageKey(key: string): string {
+  return key.replace("agent-hero", "agent-control");
+}
+
+function readLocalStorageWithLegacy(key: string): string | undefined {
+  const value = window.localStorage.getItem(key) || undefined;
+  if (value !== undefined) return value;
+  const legacyValue = window.localStorage.getItem(legacyStorageKey(key)) || undefined;
+  if (legacyValue !== undefined) window.localStorage.setItem(key, legacyValue);
+  return legacyValue;
+}
 
 function generateAccessToken(): string {
   const bytes = new Uint8Array(32);
@@ -236,7 +248,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
             <KeyRound className="h-4 w-4" />
           </div>
           <div>
-            <h1 className="text-base font-semibold">{status === "setup" ? "Set Access Token" : "AgentControl Access"}</h1>
+            <h1 className="text-base font-semibold">{status === "setup" ? "Set Access Token" : "AgentHero Access"}</h1>
             <p className="text-xs text-muted-foreground">
               {status === "setup" ? "Create the token required to use this server." : "Enter the access token configured for this server."}
             </p>
@@ -489,15 +501,15 @@ type PlanNextStep = {
 type PlanNextStepState = { dismissed: boolean; completed: string[] };
 
 const COMMON_SLASH_COMMANDS: SlashCommandSuggestion[] = [
-  { value: "/clear", label: "/clear", description: "Clear this chat history", source: "agentcontrol" },
-  { value: "/exit", label: "/exit", description: "Close this agent", source: "agentcontrol" },
-  { value: "/stop", label: "/stop", description: "Stop the active response", source: "agentcontrol" },
-  { value: "/interrupt", label: "/interrupt", description: "Stop the active response", source: "agentcontrol" },
-  { value: "/status", label: "/status", description: "Show AgentControl session status", source: "agentcontrol" }
+  { value: "/clear", label: "/clear", description: "Clear this chat history", source: "agenthero" },
+  { value: "/exit", label: "/exit", description: "Close this agent", source: "agenthero" },
+  { value: "/stop", label: "/stop", description: "Stop the active response", source: "agenthero" },
+  { value: "/interrupt", label: "/interrupt", description: "Stop the active response", source: "agenthero" },
+  { value: "/status", label: "/status", description: "Show AgentHero session status", source: "agenthero" }
 ];
 
 const CLAUDE_SLASH_COMMANDS: SlashCommandSuggestion[] = [
-  { value: "/btw ", label: "/btw", description: "Inject a note into the active Claude response", argumentHint: "[message]", source: "agentcontrol" },
+  { value: "/btw ", label: "/btw", description: "Inject a note into the active Claude response", argumentHint: "[message]", source: "agenthero" },
   { value: "/compact", label: "/compact", description: "Compact conversation context", argumentHint: "[instructions]", source: "builtin" },
   { value: "/memory", label: "/memory", description: "Edit or inspect memory files", source: "builtin", interactive: true },
   { value: "/resume", label: "/resume", description: "Resume a previous conversation", source: "builtin", interactive: true },
@@ -505,23 +517,23 @@ const CLAUDE_SLASH_COMMANDS: SlashCommandSuggestion[] = [
 ];
 
 const CODEX_SLASH_COMMANDS: SlashCommandSuggestion[] = [
-  { value: "/intelligence", label: "/intelligence", description: "Use the most capable Codex model", source: "agentcontrol" },
-  { value: "/speed", label: "/speed", description: "Use the fastest Codex model available", source: "agentcontrol" },
-  { value: "/effort low", label: "/effort low", description: "Use low Codex reasoning effort", source: "agentcontrol" },
-  { value: "/effort medium", label: "/effort medium", description: "Use medium Codex reasoning effort", source: "agentcontrol" },
-  { value: "/effort high", label: "/effort high", description: "Use high Codex reasoning effort", source: "agentcontrol" },
-  { value: "/effort xhigh", label: "/effort xhigh", description: "Use extra-high Codex reasoning effort", source: "agentcontrol" }
+  { value: "/intelligence", label: "/intelligence", description: "Use the most capable Codex model", source: "agenthero" },
+  { value: "/speed", label: "/speed", description: "Use the fastest Codex model available", source: "agenthero" },
+  { value: "/effort low", label: "/effort low", description: "Use low Codex reasoning effort", source: "agenthero" },
+  { value: "/effort medium", label: "/effort medium", description: "Use medium Codex reasoning effort", source: "agenthero" },
+  { value: "/effort high", label: "/effort high", description: "Use high Codex reasoning effort", source: "agenthero" },
+  { value: "/effort xhigh", label: "/effort xhigh", description: "Use extra-high Codex reasoning effort", source: "agenthero" }
 ];
 
 const OPENAI_SLASH_COMMANDS: SlashCommandSuggestion[] = [
-  { value: "/chatgpt", label: "/chatgpt", description: "Use the standard ChatGPT/OpenAI model", source: "agentcontrol" },
-  { value: "/fast", label: "/fast", description: "Use a lower-latency OpenAI model", source: "agentcontrol" },
-  { value: "/deep-research", label: "/deep-research", description: "Use OpenAI deep research", source: "agentcontrol" },
-  { value: "/research-fast", label: "/research-fast", description: "Use faster OpenAI deep research", source: "agentcontrol" },
-  { value: "/effort low", label: "/effort low", description: "Use low OpenAI reasoning effort", source: "agentcontrol" },
-  { value: "/effort medium", label: "/effort medium", description: "Use medium OpenAI reasoning effort", source: "agentcontrol" },
-  { value: "/effort high", label: "/effort high", description: "Use high OpenAI reasoning effort", source: "agentcontrol" },
-  { value: "/effort xhigh", label: "/effort xhigh", description: "Use extra-high OpenAI reasoning effort", source: "agentcontrol" }
+  { value: "/chatgpt", label: "/chatgpt", description: "Use the standard ChatGPT/OpenAI model", source: "agenthero" },
+  { value: "/fast", label: "/fast", description: "Use a lower-latency OpenAI model", source: "agenthero" },
+  { value: "/deep-research", label: "/deep-research", description: "Use OpenAI deep research", source: "agenthero" },
+  { value: "/research-fast", label: "/research-fast", description: "Use faster OpenAI deep research", source: "agenthero" },
+  { value: "/effort low", label: "/effort low", description: "Use low OpenAI reasoning effort", source: "agenthero" },
+  { value: "/effort medium", label: "/effort medium", description: "Use medium OpenAI reasoning effort", source: "agenthero" },
+  { value: "/effort high", label: "/effort high", description: "Use high OpenAI reasoning effort", source: "agenthero" },
+  { value: "/effort xhigh", label: "/effort xhigh", description: "Use extra-high OpenAI reasoning effort", source: "agenthero" }
 ];
 
 function compareSlashCommands(left: string, right: string) {
@@ -602,7 +614,7 @@ function terminalThemeFromCss() {
 
 function readPoppedOutTerminalIds() {
   try {
-    return new Set(JSON.parse(window.localStorage.getItem(TERMINAL_POPOUT_STORAGE_KEY) || "[]") as string[]);
+    return new Set(JSON.parse(readLocalStorageWithLegacy(TERMINAL_POPOUT_STORAGE_KEY) || "[]") as string[]);
   } catch {
     return new Set<string>();
   }
@@ -760,7 +772,7 @@ function claimInputNotificationKey(key: string) {
   if (recentInputNotificationKeys.has(key)) return false;
   if (typeof window !== "undefined") {
     const storageKey = `${INPUT_NOTIFICATION_STORAGE_PREFIX}${key}`;
-    const storedAt = Number(window.localStorage.getItem(storageKey));
+    const storedAt = Number(readLocalStorageWithLegacy(storageKey));
     if (Number.isFinite(storedAt) && nowMs - storedAt <= INPUT_NOTIFICATION_DEDUPE_MS) return false;
     window.localStorage.setItem(storageKey, String(nowMs));
   }
@@ -2363,14 +2375,14 @@ const PLAN_NEXT_STEP_ROLES: Array<{
 ];
 
 function planNextStepStorageKey(planId: string) {
-  return `agent-control-plan-next-steps:${planId}`;
+  return `agent-hero-plan-next-steps:${planId}`;
 }
 
 function usePlanNextStepState(planId: string): [PlanNextStepState, (next: PlanNextStepState) => void] {
   const storageKey = planNextStepStorageKey(planId);
   const [state, setState] = useState<PlanNextStepState>(() => {
     try {
-      const raw = window.localStorage.getItem(storageKey);
+      const raw = readLocalStorageWithLegacy(storageKey);
       if (!raw) return { dismissed: false, completed: [] };
       const parsed = JSON.parse(raw) as Partial<PlanNextStepState>;
       return {
@@ -2437,7 +2449,7 @@ function terminalsForProject(sessionsById: Record<string, TerminalSession>, proj
 }
 
 function devCommandStorageKey(projectId: string) {
-  return `agent-control-dev-command:${projectId}`;
+  return `agent-hero-dev-command:${projectId}`;
 }
 
 function isLikelyWindowsPath(value: string) {
@@ -3021,7 +3033,7 @@ function Header({
       setDevCommand("npm run dev");
       return;
     }
-    setDevCommand(window.localStorage.getItem(devCommandStorageKey(selectedProjectId)) || "npm run dev");
+    setDevCommand(readLocalStorageWithLegacy(devCommandStorageKey(selectedProjectId)) || "npm run dev");
   }, [selectedProjectId]);
 
   useEffect(() => {
@@ -3047,8 +3059,8 @@ function Header({
     }
   }
 
-  async function restartAgentControl() {
-    if (!window.confirm("Restart AgentControl? The dashboard will disconnect briefly.")) return;
+  async function restartAgentHero() {
+    if (!window.confirm("Restart AgentHero? The dashboard will disconnect briefly.")) return;
     try {
       await api.restartApp();
     } catch (error) {
@@ -3056,8 +3068,8 @@ function Header({
     }
   }
 
-  async function shutdownAgentControl() {
-    if (!window.confirm("Shutdown AgentControl? You will need to start it again from a terminal.")) return;
+  async function shutdownAgentHero() {
+    if (!window.confirm("Shutdown AgentHero? You will need to start it again from a terminal.")) return;
     try {
       await api.shutdownApp();
     } catch (error) {
@@ -3133,7 +3145,7 @@ function Header({
 
   function openFileExplorerPopoutFromHeader() {
     if (!selectedProjectId) return false;
-    const popup = window.open(`/file-explorer-popout?projectId=${encodeURIComponent(selectedProjectId)}`, "agent-control-file-explorer", "popup,width=1100,height=760");
+    const popup = window.open(`/file-explorer-popout?projectId=${encodeURIComponent(selectedProjectId)}`, "agent-hero-file-explorer", "popup,width=1100,height=760");
     if (!popup) return false;
     window.localStorage.setItem(FILE_EXPLORER_POPOUT_STORAGE_KEY, "true");
     setFileExplorerOpen(false);
@@ -3145,7 +3157,7 @@ function Header({
       setFileExplorerOpen(false);
       return;
     }
-    if (window.localStorage.getItem(FILE_EXPLORER_POPOUT_STORAGE_KEY) === "true" && openFileExplorerPopoutFromHeader()) return;
+    if (readLocalStorageWithLegacy(FILE_EXPLORER_POPOUT_STORAGE_KEY) === "true" && openFileExplorerPopoutFromHeader()) return;
     window.localStorage.setItem(FILE_EXPLORER_POPOUT_STORAGE_KEY, "false");
     setFileExplorerOpen(true);
   }
@@ -3273,7 +3285,7 @@ function Header({
         {!sidebarCollapsed && (
           <>
             <Bot className="h-5 w-5 shrink-0 text-primary" />
-            <h1 className="min-w-0 flex-1 truncate text-base font-semibold">Agent Control</h1>
+            <h1 className="min-w-0 flex-1 truncate text-base font-semibold">AgentHero</h1>
           </>
         )}
         {sidebarCollapsed && (
@@ -3281,8 +3293,8 @@ function Header({
             {showCollapsedOfflineDot && (
               <span
                 className="grid h-5 w-5 shrink-0 place-items-center rounded-full text-red-400"
-                title="AgentControl is disconnected. The dashboard is not receiving live updates."
-                aria-label="AgentControl disconnected"
+                title="AgentHero is disconnected. The dashboard is not receiving live updates."
+                aria-label="AgentHero disconnected"
               >
                 <span className="h-2.5 w-2.5 rounded-full bg-current shadow-[0_0_0_3px_rgba(255,255,255,0.06)]" />
               </span>
@@ -3315,7 +3327,7 @@ function Header({
     >
       <div className="flex min-w-0 items-center gap-2">
         <Bot className="h-5 w-5 text-primary" />
-        <h1 className="truncate text-base font-semibold">Agent Control</h1>
+        <h1 className="truncate text-base font-semibold">AgentHero</h1>
         {supervised ? (
           <DropdownMenu open={connectionMenuOpen} onOpenChange={setConnectionMenuOpen}>
             <DropdownMenuTrigger asChild>
@@ -3326,22 +3338,22 @@ function Header({
                 )}
                 title={
                   wsConnected
-                    ? "AgentControl is connected and running in supervised mode. Click for restart and shutdown options."
-                    : "AgentControl is disconnected. The dashboard is not receiving live updates."
+                    ? "AgentHero is connected and running in supervised mode. Click for restart and shutdown options."
+                    : "AgentHero is disconnected. The dashboard is not receiving live updates."
                 }
-                aria-label={wsConnected ? "AgentControl connected" : "AgentControl disconnected"}
+                aria-label={wsConnected ? "AgentHero connected" : "AgentHero disconnected"}
               >
                 <span className="h-2.5 w-2.5 rounded-full bg-current shadow-[0_0_0_3px_rgba(255,255,255,0.06)]" />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-56">
-              <DropdownMenuItem onClick={() => void restartAgentControl()}>
+              <DropdownMenuItem onClick={() => void restartAgentHero()}>
                 <RefreshCw className="mr-2 h-4 w-4" />
-                Restart AgentControl
+                Restart AgentHero
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => void shutdownAgentControl()}>
+              <DropdownMenuItem onClick={() => void shutdownAgentHero()}>
                 <X className="mr-2 h-4 w-4" />
-                Shutdown AgentControl
+                Shutdown AgentHero
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -3353,10 +3365,10 @@ function Header({
             )}
             title={
               wsConnected
-                ? "AgentControl is connected. Restart controls are available when launched with npm run dev:supervised."
-                : "AgentControl is disconnected. The dashboard is not receiving live updates."
+                ? "AgentHero is connected. Restart controls are available when launched with npm run dev:supervised."
+                : "AgentHero is disconnected. The dashboard is not receiving live updates."
             }
-            aria-label={wsConnected ? "AgentControl connected" : "AgentControl disconnected"}
+            aria-label={wsConnected ? "AgentHero connected" : "AgentHero disconnected"}
           >
             <span className="h-2.5 w-2.5 rounded-full bg-current shadow-[0_0_0_3px_rgba(255,255,255,0.06)]" />
           </span>
@@ -3820,7 +3832,7 @@ function GitStatusMenu({
           </DialogHeader>
           <div className="grid gap-3 text-sm">
             <p className="text-muted-foreground">
-              Git needs an interactive credential prompt before AgentControl can push from this repo.
+              Git needs an interactive credential prompt before AgentHero can push from this repo.
             </p>
             <div className="rounded-md border border-border bg-muted p-3 font-mono text-xs">git push</div>
             <div className="flex justify-end gap-2">
@@ -3874,7 +3886,7 @@ function AppUpdateNotice({ compact = false, hideWhenNoUpdate = false }: { compac
   useEffect(() => {
     if (!updateRun || !updateSession || updateSession.status !== "exited") return;
     if ((updateSession.exitCode || 0) !== 0) {
-      addError(`AgentControl update command failed with exit code ${updateSession.exitCode ?? "unknown"}.`);
+      addError(`AgentHero update command failed with exit code ${updateSession.exitCode ?? "unknown"}.`);
       setUpdateRun(undefined);
       return;
     }
@@ -3893,7 +3905,7 @@ function AppUpdateNotice({ compact = false, hideWhenNoUpdate = false }: { compac
       cwd: settings.agentControlProjectPath?.trim() || undefined,
       commands,
       hidden: true,
-      title: "Update AgentControl"
+      title: "Update AgentHero"
     });
   }
 
@@ -3915,15 +3927,15 @@ function AppUpdateNotice({ compact = false, hideWhenNoUpdate = false }: { compac
               ? "text-amber-600 hover:text-amber-700 dark:text-amber-300 dark:hover:text-amber-200"
               : "text-muted-foreground hover:text-foreground"
           )}
-          title={updateAvailable ? "AgentControl update available" : "AgentControl updates"}
-          aria-label={updateAvailable ? "AgentControl update available" : "AgentControl updates"}
+          title={updateAvailable ? "AgentHero update available" : "AgentHero updates"}
+          aria-label={updateAvailable ? "AgentHero update available" : "AgentHero updates"}
           onClick={() => setDetailsOpen(true)}
         >
           <BellPlus className={compact ? "h-3.5 w-3.5" : "h-4 w-4"} />
         </Button>
         <DialogContent className="w-[min(94vw,520px)]">
           <DialogHeader>
-            <DialogTitle>AgentControl Update</DialogTitle>
+            <DialogTitle>AgentHero Update</DialogTitle>
           </DialogHeader>
           <div className="grid gap-3">
             <div className="flex items-center justify-between gap-2">
@@ -4001,7 +4013,7 @@ function AppUpdateNotice({ compact = false, hideWhenNoUpdate = false }: { compac
             <div className="grid gap-1">
               <div className="text-xs font-medium text-muted-foreground">Project location</div>
               <div className="rounded-md border border-border bg-muted p-2 font-mono text-xs">
-                {settings.agentControlProjectPath || "the AgentControl project folder"}
+                {settings.agentControlProjectPath || "the AgentHero project folder"}
               </div>
             </div>
 
@@ -6456,7 +6468,7 @@ function SettingsDialog() {
   const [codexPath, setCodexPath] = useState(settings.codexPath || "");
   const [claudeAgentDir, setClaudeAgentDir] = useState(settings.claudeAgentDir || ".claude/agents");
   const [codexAgentDir, setCodexAgentDir] = useState(settings.codexAgentDir || ".codex/agents");
-  const [openaiAgentDir, setOpenaiAgentDir] = useState(settings.openaiAgentDir || ".agent-control/openai-agents");
+  const [openaiAgentDir, setOpenaiAgentDir] = useState(settings.openaiAgentDir || ".agent-hero/openai-agents");
   const [builtInAgentDir, setBuiltInAgentDir] = useState(settings.builtInAgentDir || DEFAULT_BUILT_IN_AGENT_DIR);
   const [agentDirBrowser, setAgentDirBrowser] = useState<undefined | "claude" | "codex" | "openai" | "builtIn">();
   const [projectFolderBrowserOpen, setProjectFolderBrowserOpen] = useState(false);
@@ -6485,8 +6497,8 @@ function SettingsDialog() {
     typeof Notification === "undefined" ? "unsupported" : Notification.permission
   );
   const [permissionAllowRules, setPermissionAllowRules] = useState<PermissionAllowRule[]>(settings.permissionAllowRules || []);
-  const [agentControlProjectPath, setAgentControlProjectPath] = useState(settings.agentControlProjectPath || "");
-  const [agentControlProjectBrowserOpen, setAgentControlProjectBrowserOpen] = useState(false);
+  const [agentControlProjectPath, setAgentHeroProjectPath] = useState(settings.agentControlProjectPath || "");
+  const [agentControlProjectBrowserOpen, setAgentHeroProjectBrowserOpen] = useState(false);
   const [updateChecksEnabled, setUpdateChecksEnabled] = useState(settings.updateChecksEnabled !== false);
   const [updateCommandsText, setUpdateCommandsText] = useState((settings.updateCommands || []).join("\n"));
   const [checkingUpdates, setCheckingUpdates] = useState(false);
@@ -6505,7 +6517,7 @@ function SettingsDialog() {
     setCodexPath(settings.codexPath || "");
     setClaudeAgentDir(settings.claudeAgentDir || ".claude/agents");
     setCodexAgentDir(settings.codexAgentDir || ".codex/agents");
-    setOpenaiAgentDir(settings.openaiAgentDir || ".agent-control/openai-agents");
+    setOpenaiAgentDir(settings.openaiAgentDir || ".agent-hero/openai-agents");
     setBuiltInAgentDir(settings.builtInAgentDir || DEFAULT_BUILT_IN_AGENT_DIR);
     setAnthropicApiKey("");
     setOpenaiApiKey("");
@@ -6529,7 +6541,7 @@ function SettingsDialog() {
     setAccessToken("");
     setNotificationPermission(typeof Notification === "undefined" ? "unsupported" : Notification.permission);
     setPermissionAllowRules(settings.permissionAllowRules || []);
-    setAgentControlProjectPath(settings.agentControlProjectPath || "");
+    setAgentHeroProjectPath(settings.agentControlProjectPath || "");
     setUpdateChecksEnabled(settings.updateChecksEnabled !== false);
     setUpdateCommandsText((settings.updateCommands || []).join("\n"));
     setSettingsUpdateStatus(undefined);
@@ -6619,25 +6631,25 @@ function SettingsDialog() {
   function runWindowsServiceScript(action: "install" | "uninstall") {
     const scriptName = action === "install" ? "install-service.ps1" : "uninstall-service.ps1";
     const extraArgs = action === "install" ? " -Force -RunAsCurrentUser -NoStart" : "";
-    const label = action === "install" ? "Starting AgentControl service installer..." : "Starting AgentControl service uninstaller...";
+    const label = action === "install" ? "Starting AgentHero service installer..." : "Starting AgentHero service uninstaller...";
     const command = `$script = Join-Path (Get-Location) 'scripts\\windows\\${scriptName}'; $command = "Write-Host '${label}'; & \`"$script\`"${extraArgs}"; Start-Process powershell -Verb RunAs -WorkingDirectory (Get-Location).Path -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', $command)`;
     sendCommand({
       type: "terminalStart",
       cwd: agentControlProjectPath.trim() || undefined,
       commands: [command],
       hidden: true,
-      title: action === "install" ? "Install AgentControl service" : "Uninstall AgentControl service"
+      title: action === "install" ? "Install AgentHero service" : "Uninstall AgentHero service"
     });
     setWindowsServiceStatus(
       action === "install"
-        ? "Service installer launched. Approve the Windows UAC prompt. Service installed; restart AgentControl or start the service after closing the current instance."
+        ? "Service installer launched. Approve the Windows UAC prompt. Service installed; restart AgentHero or start the service after closing the current instance."
         : "Service uninstaller launched. Approve the Windows UAC prompt."
     );
   }
 
   function exportConfig() {
     const payload = {
-      app: "AgentControl",
+      app: "AgentHero",
       exportedAt: new Date().toISOString(),
       settings: {
         ...settings,
@@ -6674,7 +6686,7 @@ function SettingsDialog() {
         updateCommands: updateCommandsText.split(/\r?\n/).map((command) => command.trim()).filter(Boolean)
       }
     };
-    downloadText("agent-control-config.json", JSON.stringify(payload, null, 2), "application/json");
+    downloadText("agent-hero-config.json", JSON.stringify(payload, null, 2), "application/json");
   }
 
   async function importConfig(file: File) {
@@ -6694,7 +6706,7 @@ function SettingsDialog() {
       setCodexPath(next.codexPath || "");
       setClaudeAgentDir(next.claudeAgentDir || ".claude/agents");
       setCodexAgentDir(next.codexAgentDir || ".codex/agents");
-      setOpenaiAgentDir(next.openaiAgentDir || ".agent-control/openai-agents");
+      setOpenaiAgentDir(next.openaiAgentDir || ".agent-hero/openai-agents");
       setBuiltInAgentDir(next.builtInAgentDir || DEFAULT_BUILT_IN_AGENT_DIR);
       setAutoApprove(next.autoApprove);
       setDefaultAgentMode(next.defaultAgentMode);
@@ -6712,7 +6724,7 @@ function SettingsDialog() {
       setAccessToken("");
       setNotificationPermission(typeof Notification === "undefined" ? "unsupported" : Notification.permission);
       setPermissionAllowRules(next.permissionAllowRules || []);
-      setAgentControlProjectPath(next.agentControlProjectPath || "");
+      setAgentHeroProjectPath(next.agentControlProjectPath || "");
       setUpdateChecksEnabled(next.updateChecksEnabled !== false);
       setUpdateCommandsText((next.updateCommands || []).join("\n"));
     } catch (error) {
@@ -6736,7 +6748,7 @@ function SettingsDialog() {
     const permission = Notification.permission === "default" ? await Notification.requestPermission() : Notification.permission;
     setNotificationPermission(permission);
     if (permission !== "granted") {
-      addError("Browser notifications are not allowed for AgentControl.");
+      addError("Browser notifications are not allowed for AgentHero.");
       setInputNotificationsEnabled(false);
       return;
     }
@@ -6752,13 +6764,13 @@ function SettingsDialog() {
     const permission = Notification.permission === "default" ? await Notification.requestPermission() : Notification.permission;
     setNotificationPermission(permission);
     if (permission !== "granted") {
-      addError("Browser notifications are not allowed for AgentControl.");
+      addError("Browser notifications are not allowed for AgentHero.");
       setInputNotificationsEnabled(false);
       return;
     }
     setInputNotificationsEnabled(true);
     try {
-      new Notification("AgentControl test notification", {
+      new Notification("AgentHero test notification", {
         body: "Browser notifications are working."
       });
     } catch (error) {
@@ -6808,7 +6820,7 @@ function SettingsDialog() {
       codexPath !== (settings.codexPath || "") ||
       claudeAgentDir !== (settings.claudeAgentDir || ".claude/agents") ||
       codexAgentDir !== (settings.codexAgentDir || ".codex/agents") ||
-      openaiAgentDir !== (settings.openaiAgentDir || ".agent-control/openai-agents") ||
+      openaiAgentDir !== (settings.openaiAgentDir || ".agent-hero/openai-agents") ||
       builtInAgentDir !== (settings.builtInAgentDir || DEFAULT_BUILT_IN_AGENT_DIR) ||
       Boolean(anthropicApiKey.trim()) ||
       Boolean(openaiApiKey.trim()) ||
@@ -6928,7 +6940,7 @@ function SettingsDialog() {
             <div className="flex items-center justify-between gap-2">
               <div>
                 <h3 className="text-sm font-medium">Project folders</h3>
-                <p className="text-xs text-muted-foreground">Choose folders to load into AgentControl.</p>
+                <p className="text-xs text-muted-foreground">Choose folders to load into AgentHero.</p>
               </div>
               <Button type="button" variant="outline" size="sm" onClick={() => setProjectFolderBrowserOpen(true)}>
                 <FolderOpen className="h-4 w-4" />
@@ -7198,14 +7210,14 @@ function SettingsDialog() {
               </span>
             </label>
             <label className="grid gap-1.5 text-sm">
-              AgentControl project location
+              AgentHero project location
               <div className="flex gap-2">
                 <Input
                   value={agentControlProjectPath}
-                  onChange={(event) => setAgentControlProjectPath(event.target.value)}
-                  placeholder="AgentControl project folder"
+                  onChange={(event) => setAgentHeroProjectPath(event.target.value)}
+                  placeholder="AgentHero project folder"
                 />
-                <Button type="button" variant="outline" onClick={() => setAgentControlProjectBrowserOpen(true)}>
+                <Button type="button" variant="outline" onClick={() => setAgentHeroProjectBrowserOpen(true)}>
                   <FolderOpen className="h-4 w-4" />
                   Browse
                 </Button>
@@ -7216,7 +7228,7 @@ function SettingsDialog() {
                 <div>
                   <div className="text-sm font-medium">Windows service</div>
                   <p className="text-xs text-muted-foreground">
-                    Install or remove the AgentControl Windows service using the project location above.
+                    Install or remove the AgentHero Windows service using the project location above.
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -7250,7 +7262,7 @@ function SettingsDialog() {
               <section className="grid gap-2 rounded-md border border-border p-3">
                 <div>
                   <h3 className="text-sm font-medium">Built-in agents directory</h3>
-                  <p className="text-xs text-muted-foreground">Global AgentControl agents available to every project.</p>
+                  <p className="text-xs text-muted-foreground">Global AgentHero agents available to every project.</p>
                 </div>
                 <div className="flex gap-2">
                   <Input value={builtInAgentDir} onChange={(event) => setBuiltInAgentDir(event.target.value)} placeholder={DEFAULT_BUILT_IN_AGENT_DIR} />
@@ -7495,7 +7507,7 @@ function SettingsDialog() {
               <label className="grid gap-1.5 text-sm">
                 OpenAI agents directory
                 <div className="flex gap-2">
-                  <Input value={openaiAgentDir} onChange={(event) => setOpenaiAgentDir(event.target.value)} placeholder=".agent-control/openai-agents" />
+                  <Input value={openaiAgentDir} onChange={(event) => setOpenaiAgentDir(event.target.value)} placeholder=".agent-hero/openai-agents" />
                   <Button type="button" variant="outline" onClick={() => setAgentDirBrowser("openai")}>
                     <FolderOpen className="h-4 w-4" />
                     Browse
@@ -7516,7 +7528,7 @@ function SettingsDialog() {
               <section className="grid gap-1 rounded-md border border-border p-3 text-sm">
                 <h3 className="text-sm font-medium">OpenAI plugins</h3>
                 <p className="text-xs text-muted-foreground">
-                  OpenAI API sessions do not expose a local plugin catalog to AgentControl. Use Codex or Claude CLI sessions for local plugins.
+                  OpenAI API sessions do not expose a local plugin catalog to AgentHero. Use Codex or Claude CLI sessions for local plugins.
                 </p>
               </section>
             </>
@@ -7568,10 +7580,10 @@ function SettingsDialog() {
       <FolderBrowserDialog
         open={agentControlProjectBrowserOpen}
         initialPath={agentControlProjectPath || selectedProject?.path || ""}
-        onOpenChange={setAgentControlProjectBrowserOpen}
+        onOpenChange={setAgentHeroProjectBrowserOpen}
         onSelect={(selectedPath) => {
-          setAgentControlProjectPath(selectedPath);
-          setAgentControlProjectBrowserOpen(false);
+          setAgentHeroProjectPath(selectedPath);
+          setAgentHeroProjectBrowserOpen(false);
         }}
       />
     </>
@@ -7820,7 +7832,7 @@ function ProjectInspectorTile({
   }
 
   function openFileExplorerPopout() {
-    const popup = window.open(`/file-explorer-popout?projectId=${encodeURIComponent(project.id)}`, "agent-control-file-explorer", "popup,width=1100,height=760");
+    const popup = window.open(`/file-explorer-popout?projectId=${encodeURIComponent(project.id)}`, "agent-hero-file-explorer", "popup,width=1100,height=760");
     if (popup) {
       window.localStorage.setItem(FILE_EXPLORER_POPOUT_STORAGE_KEY, "true");
       setFileExplorerOpen(false);
@@ -10175,7 +10187,7 @@ function RemoteControlPanel({ agent }: { agent: RunningAgent }) {
             mobile app.
           </p>
           <p className="text-sm text-muted-foreground">
-            AgentControl can show connection state, URL/QR, PID, and Claude CLI diagnostics. Claude does not expose the live
+            AgentHero can show connection state, URL/QR, PID, and Claude CLI diagnostics. Claude does not expose the live
             remote conversation back through this local process.
           </p>
           <div className="flex justify-center gap-2">
@@ -11108,7 +11120,7 @@ interface FileReferenceTarget {
   line?: number;
 }
 
-const FILE_PREVIEW_SCHEME = "agent-control-file-preview:";
+const FILE_PREVIEW_SCHEME = "agent-hero-file-preview:";
 const FILE_REFERENCE_PATTERN =
   /(^|[\s([{"'])(\.{0,2}\/?(?:[\w@.-]+\/)+[\w@.-]+\.[\w+-]+|\.{0,2}\/?(?:[\w@.-]+\/)+[\w@.-]+|[\w@.-]+\.(?:tsx?|jsx?|mjs|cjs|json|md|markdown|css|html?|ya?ml|toml|py|rs|go|java|cs|cpp|c|h|hpp|sh|ps1|sql|xml|svg|txt))(?::(\d+)|#L(\d+))?/g;
 
@@ -12412,8 +12424,8 @@ function ErrorStack() {
 
 function serverStartupErrorMessage(error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
-  if (/failed to fetch|load failed|networkerror/i.test(message)) return "The AgentControl server is not responding.";
-  return message || "The AgentControl server is not responding.";
+  if (/failed to fetch|load failed|networkerror/i.test(message)) return "The AgentHero server is not responding.";
+  return message || "The AgentHero server is not responding.";
 }
 
 function ServerOfflinePage({ error, onRetry }: { error?: string; onRetry: () => void }) {
@@ -12425,7 +12437,7 @@ function ServerOfflinePage({ error, onRetry }: { error?: string; onRetry: () => 
             <Bot className="h-5 w-5" />
           </span>
           <div>
-            <h1 className="text-lg font-semibold">Start AgentControl</h1>
+            <h1 className="text-lg font-semibold">Start AgentHero</h1>
             <p className="text-sm text-muted-foreground">The web app is loaded, but the local server is not reachable.</p>
           </div>
         </div>
@@ -12661,7 +12673,7 @@ function MobileSidebar({
       <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-3">
         <Bot className="h-5 w-5 shrink-0 text-primary" />
         <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-semibold">Agent Control</div>
+          <div className="truncate text-sm font-semibold">AgentHero</div>
           <div className="truncate text-xs text-muted-foreground">Mobile</div>
         </div>
         <span
@@ -12975,12 +12987,13 @@ export function App() {
   const fileExplorerBottomDocked = fileExplorerOpen && fileExplorerDock === "bottom";
   const selectedProject = useMemo(() => projects.find((project) => project.id === selectedProjectId) || projects[0], [projects, selectedProjectId]);
   const projectAgents = useMemo(() => agentsForProject(agentsById, selectedProjectId), [agentsById, selectedProjectId]);
-  const [topBarDocked, setTopBarDockedState] = useState(() => window.localStorage.getItem("agent-control-top-bar-docked") === "true");
+  const TOP_BAR_DOCKED_STORAGE_KEY = "agent-hero-top-bar-docked";
+  const [topBarDocked, setTopBarDockedState] = useState(() => readLocalStorageWithLegacy(TOP_BAR_DOCKED_STORAGE_KEY) === "true");
   useThemeMode(themeMode);
 
   function setTopBarDocked(value: boolean) {
     setTopBarDockedState(value);
-    window.localStorage.setItem("agent-control-top-bar-docked", String(value));
+    window.localStorage.setItem(TOP_BAR_DOCKED_STORAGE_KEY, String(value));
   }
 
   const updatePoppedOutTerminalIds = useCallback((updater: (ids: Set<string>) => Set<string>) => {
@@ -13001,7 +13014,7 @@ export function App() {
       const params = new URLSearchParams();
       if (selectedProjectId) params.set("projectId", selectedProjectId);
       params.set("terminalId", terminalId);
-      const popup = window.open(`/terminal-popout?${params.toString()}`, `agent-control-terminal-${terminalId}`, "popup,width=1100,height=720");
+      const popup = window.open(`/terminal-popout?${params.toString()}`, `agent-hero-terminal-${terminalId}`, "popup,width=1100,height=720");
       if (!popup) {
         updatePoppedOutTerminalIds((ids) => {
           ids.delete(terminalId);

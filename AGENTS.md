@@ -1,4 +1,4 @@
-# AgentControl Agent Instructions
+# AgentHero Agent Instructions
 
 - Commit completed code changes unless explicitly told not to.
 - Update the README and CHANGELOG only when the change is worth calling out.

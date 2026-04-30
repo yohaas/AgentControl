@@ -2,7 +2,7 @@ import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import type { AgentPermissionMode, AutoApproveMode, ModelProfile, PermissionAllowRule } from "@agent-control/shared";
+import type { AgentPermissionMode, AutoApproveMode, ModelProfile, PermissionAllowRule } from "@agent-hero/shared";
 import { migrateLegacyStateDir, statePath } from "./storage.js";
 
 export const DEFAULT_MODELS = [
@@ -79,17 +79,24 @@ const configDir = statePath();
 const configPath = path.join(configDir, "config.json");
 const secretsPath = path.join(configDir, "secrets.json");
 export const APP_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-export const DEFAULT_BUILT_IN_AGENT_DIR = path.join(APP_ROOT, ".agent-control", "built-in-agents");
+export const DEFAULT_BUILT_IN_AGENT_DIR = path.join(APP_ROOT, ".agent-hero", "built-in-agents");
 const WINDOWS_UPDATE_COMMANDS = [
   "powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\windows\\start-update.ps1"
 ];
 const PREVIOUS_WINDOWS_UPDATE_COMMANDS = [
-  "$script = Join-Path (Get-Location) 'scripts\\update-agent-control.ps1'; $command = \"Write-Host 'Starting AgentControl updater...'; & `\"$script`\"\"; Start-Process powershell -Verb RunAs -WorkingDirectory (Get-Location).Path -ArgumentList @('-NoExit', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', $command)"
+  "$script = Join-Path (Get-Location) 'scripts\\update-agent-hero.ps1'; $command = \"Write-Host 'Starting AgentHero updater...'; & `\"$script`\"\"; Start-Process powershell -Verb RunAs -WorkingDirectory (Get-Location).Path -ArgumentList @('-NoExit', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', $command)"
 ];
 const OLDER_WINDOWS_UPDATE_COMMANDS = [
+  "$script = Join-Path (Get-Location) 'scripts\\update-agent-hero.ps1'; $command = \"Write-Host 'Starting AgentHero updater...'; & `\"$script`\"\"; Start-Process powershell -Verb RunAs -WorkingDirectory (Get-Location).Path -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', $command)"
+];
+const POSIX_UPDATE_COMMANDS = ["bash ./scripts/update-agent-hero.sh"];
+const PREVIOUS_WINDOWS_UPDATE_COMMANDS_LEGACY = [
+  "$script = Join-Path (Get-Location) 'scripts\\update-agent-control.ps1'; $command = \"Write-Host 'Starting AgentControl updater...'; & `\"$script`\"\"; Start-Process powershell -Verb RunAs -WorkingDirectory (Get-Location).Path -ArgumentList @('-NoExit', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', $command)"
+];
+const OLDER_WINDOWS_UPDATE_COMMANDS_LEGACY = [
   "$script = Join-Path (Get-Location) 'scripts\\update-agent-control.ps1'; $command = \"Write-Host 'Starting AgentControl updater...'; & `\"$script`\"\"; Start-Process powershell -Verb RunAs -WorkingDirectory (Get-Location).Path -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', $command)"
 ];
-const POSIX_UPDATE_COMMANDS = ["bash ./scripts/update-agent-control.sh"];
+const POSIX_UPDATE_COMMANDS_LEGACY = ["bash ./scripts/update-agent-control.sh"];
 const LEGACY_UPDATE_COMMANDS = ["git pull", "npm ci", "npm run build", "Restart-Service AgentControl"];
 const LEGACY_BUILT_IN_AGENT_DIR = "~/.agent-control/built-in-agents";
 const LEGACY_REPO_RELATIVE_BUILT_IN_AGENT_DIR = ".agent-control/built-in-agents";
@@ -192,7 +199,7 @@ export function resolveAgentDirs(config: DashboardConfig): Record<"claude" | "co
   return {
     claude: config.claudeAgentDir?.trim() || ".claude/agents",
     codex: config.codexAgentDir?.trim() || ".codex/agents",
-    openai: config.openaiAgentDir?.trim() || ".agent-control/openai-agents",
+    openai: config.openaiAgentDir?.trim() || ".agent-hero/openai-agents",
     builtIn: useDefaultBuiltInDir ? DEFAULT_BUILT_IN_AGENT_DIR : builtInAgentDir
   };
 }
@@ -263,8 +270,8 @@ export function resolveThemeMode(config: DashboardConfig): ThemeMode {
   return config.themeMode === "light" || config.themeMode === "dark" || config.themeMode === "auto" ? config.themeMode : "auto";
 }
 
-export function resolveAgentControlProjectPath(config: DashboardConfig): string {
-  return path.resolve(expandHome(config.agentControlProjectPath?.trim() || process.env.AGENTCONTROL_PROJECT_PATH || APP_ROOT));
+export function resolveAgentHeroProjectPath(config: DashboardConfig): string {
+  return path.resolve(expandHome(config.agentControlProjectPath?.trim() || process.env.AGENTHERO_PROJECT_PATH || process.env.AGENTCONTROL_PROJECT_PATH || APP_ROOT));
 }
 
 export function resolveUpdateCommands(config: DashboardConfig): string[] {
@@ -275,7 +282,10 @@ export function resolveUpdateCommands(config: DashboardConfig): string[] {
     normalized.length &&
     commandKey !== LEGACY_UPDATE_COMMANDS.join("\n") &&
     commandKey !== PREVIOUS_WINDOWS_UPDATE_COMMANDS.join("\n") &&
-    commandKey !== OLDER_WINDOWS_UPDATE_COMMANDS.join("\n")
+    commandKey !== OLDER_WINDOWS_UPDATE_COMMANDS.join("\n") &&
+    commandKey !== PREVIOUS_WINDOWS_UPDATE_COMMANDS_LEGACY.join("\n") &&
+    commandKey !== OLDER_WINDOWS_UPDATE_COMMANDS_LEGACY.join("\n") &&
+    commandKey !== POSIX_UPDATE_COMMANDS_LEGACY.join("\n")
   ) {
     return normalized;
   }

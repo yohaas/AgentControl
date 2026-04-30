@@ -2,7 +2,7 @@ import { mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises"
 import os from "node:os";
 import path from "node:path";
 import matter from "gray-matter";
-import type { AgentDef, AgentProvider, Project } from "@agent-control/shared";
+import type { AgentDef, AgentProvider, Project } from "@agent-hero/shared";
 import { canonicalWslProjectKey, parseWslUncPath, wslUncPath } from "./wsl.js";
 import { APP_ROOT, DEFAULT_BUILT_IN_AGENT_DIR } from "./config.js";
 
@@ -122,9 +122,11 @@ export interface AgentDirectoryConfig {
 export const DEFAULT_AGENT_DIRS: AgentDirectoryConfig = {
   claude: ".claude/agents",
   codex: ".codex/agents",
-  openai: ".agent-control/openai-agents",
+  openai: ".agent-hero/openai-agents",
   builtIn: DEFAULT_BUILT_IN_AGENT_DIR
 };
+const LEGACY_OPENAI_AGENT_DIR = ".agent-control/openai-agents";
+const LEGACY_BUILT_IN_AGENT_DIR = ".agent-control/built-in-agents";
 
 function generalAgentDef(): AgentDef {
   return {
@@ -297,10 +299,15 @@ async function readAgentDir(projectPath: string, relativeDir: string, fallbackPr
 }
 
 async function readAgentDefs(projectPath: string, agentDirs = DEFAULT_AGENT_DIRS): Promise<AgentDef[]> {
+  const openaiAgents = await readAgentDir(projectPath, agentDirs.openai, "openai");
+  const legacyOpenaiAgents =
+    openaiAgents.length === 0 && agentDirs.openai === DEFAULT_AGENT_DIRS.openai
+      ? await readAgentDir(projectPath, LEGACY_OPENAI_AGENT_DIR, "openai")
+      : [];
   const groups = await Promise.all([
     readAgentDir(projectPath, agentDirs.claude, "claude"),
     readAgentDir(projectPath, agentDirs.codex, "codex"),
-    readAgentDir(projectPath, agentDirs.openai, "openai")
+    Promise.resolve([...openaiAgents, ...legacyOpenaiAgents])
   ]);
   const byName = new Map<string, AgentDef>();
   for (const agent of groups.flat()) byName.set(`${agent.provider || "claude"}:${agent.name}`, agent);
@@ -309,7 +316,12 @@ async function readAgentDefs(projectPath: string, agentDirs = DEFAULT_AGENT_DIRS
 
 async function readBuiltInAgentDefs(projectPath: string, agentDirs = DEFAULT_AGENT_DIRS): Promise<AgentDef[]> {
   const agents = await readAgentDir(resolveBuiltInAgentDir(agentDirs.builtIn), ".", undefined, true);
-  return agents.length > 0 ? normalizeAgentColors(agents) : [generalAgentDef()];
+  if (agents.length > 0) return normalizeAgentColors(agents);
+  if (agentDirs.builtIn === DEFAULT_AGENT_DIRS.builtIn) {
+    const legacyAgents = await readAgentDir(resolveBuiltInAgentDir(LEGACY_BUILT_IN_AGENT_DIR), ".", undefined, true);
+    if (legacyAgents.length > 0) return normalizeAgentColors(legacyAgents);
+  }
+  return [generalAgentDef()];
 }
 
 export async function upsertBuiltInAgent(projectPath: string, agent: AgentDef, originalName?: string, agentDirs = DEFAULT_AGENT_DIRS): Promise<void> {

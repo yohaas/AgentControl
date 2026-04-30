@@ -1,9 +1,9 @@
 param(
-  [string]$ServiceName = "AgentControl",
-  [string]$DisplayName = "Agent Control",
+  [string]$ServiceName = "AgentHero",
+  [string]$DisplayName = "AgentHero",
   [string]$RepoPath = "",
   [string]$ServiceDir = "",
-  [string]$UpdateTaskName = "AgentControlUpdate",
+  [string]$UpdateTaskName = "AgentHeroUpdate",
   [string]$WinSWPath = "",
   [string]$WinSWUrl = "https://github.com/winsw/winsw/releases/latest/download/WinSW-x64.exe",
   [switch]$RunAsCurrentUser,
@@ -38,8 +38,8 @@ if (-not (Test-Administrator)) {
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = if ($RepoPath.Trim()) { Resolve-Path $RepoPath } else { Resolve-Path (Join-Path $scriptRoot "..\..") }
 $installDir = if ($ServiceDir.Trim()) { $ServiceDir } else { Join-Path $env:USERPROFILE "Services\$ServiceName" }
-$templatePath = Join-Path $scriptRoot "AgentControl.xml.template"
-$updateScriptPath = Resolve-Path (Join-Path $scriptRoot "..\update-agent-control.ps1")
+$templatePath = Join-Path $scriptRoot "AgentHero.xml.template"
+$updateScriptPath = Resolve-Path (Join-Path $scriptRoot "..\update-agent-hero.ps1")
 $serviceExe = Join-Path $installDir "$ServiceName.exe"
 $serviceXml = Join-Path $installDir "$ServiceName.xml"
 $logDir = Join-Path $installDir "logs"
@@ -106,7 +106,7 @@ if ($existing) {
 if ($RunAsCurrentUser) {
   $defaultUser = [Security.Principal.WindowsIdentity]::GetCurrent().Name
   if (-not $Credential) {
-    $Credential = Get-Credential -UserName $defaultUser -Message "Enter the Windows credentials AgentControl should use to run the service."
+    $Credential = Get-Credential -UserName $defaultUser -Message "Enter the Windows credentials AgentHero should use to run the service."
   }
   $networkCredential = $Credential.GetNetworkCredential()
   if (-not $networkCredential.Password) {
@@ -125,7 +125,7 @@ if (-not $SkipUpdateTask) {
   $task = New-ScheduledTask `
     -Action $taskAction `
     -Principal $taskPrincipal `
-    -Description "Runs AgentControl updates in the interactive user session."
+    -Description "Runs AgentHero updates in the interactive user session."
   Register-ScheduledTask -TaskName $UpdateTaskName -InputObject $task -Force | Out-Host
   Write-Host "Installed scheduled update task: $UpdateTaskName"
 }
@@ -138,7 +138,7 @@ Write-Host "Service directory: $installDir"
 Write-Host "Logs: $logDir"
 
 if ($NoStart) {
-  Write-Host "Service installed but not started. Restart AgentControl or start the service after closing the current instance."
+  Write-Host "Service installed but not started. Restart AgentHero or start the service after closing the current instance."
 } else {
   & $serviceExe start | Out-Host
 }

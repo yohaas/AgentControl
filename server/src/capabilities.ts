@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
-import type { AuthMethod, Capabilities, ProviderCapability } from "@agent-control/shared";
+import type { AuthMethod, Capabilities, ProviderCapability } from "@agent-hero/shared";
 
 const execFileAsync = promisify(execFile);
 
@@ -47,7 +47,7 @@ function resolveWindowsClaudeCommand(commandPath: string): string {
 }
 
 export function resolveClaudeCommand(): string {
-  const configured = process.env.CLAUDE_CODE_CLI || process.env.AGENTCONTROL_CLAUDE_PATH;
+  const configured = process.env.CLAUDE_CODE_CLI || process.env.AGENTHERO_CLAUDE_PATH || process.env.AGENTCONTROL_CLAUDE_PATH;
   if (configured) {
     return process.platform === "win32" ? resolveWindowsClaudeCommand(configured) : configured;
   }
@@ -65,7 +65,7 @@ export function resolveClaudeCommand(): string {
 }
 
 export function resolveCodexCommand(): string {
-  const configured = process.env.CODEX_CLI || process.env.AGENTCONTROL_CODEX_PATH;
+  const configured = process.env.CODEX_CLI || process.env.AGENTHERO_CODEX_PATH || process.env.AGENTCONTROL_CODEX_PATH;
   if (configured) return process.platform === "win32" ? resolveWindowsExecutable(configured) : configured;
   if (process.platform !== "win32") return "codex";
   const npmDir = process.env.APPDATA ? path.join(process.env.APPDATA, "npm") : path.join(os.homedir(), "AppData", "Roaming", "npm");

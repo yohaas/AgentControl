@@ -3,7 +3,7 @@ import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { nanoid } from "nanoid";
 import { spawn as spawnPty, type IPty } from "node-pty";
-import type { Project, TerminalSession, TerminalSnapshot, WsServerEvent } from "@agent-control/shared";
+import type { Project, TerminalSession, TerminalSnapshot, WsServerEvent } from "@agent-hero/shared";
 import { statePath } from "./storage.js";
 import { isWslProject, wslProjectPath } from "./wsl.js";
 
@@ -92,7 +92,7 @@ function bashSequence(commands: string[]): string {
 
 function commandShell(commands: string[]): ShellSpec {
   if (process.platform === "win32") {
-    const command = process.env.AGENT_CONTROL_SHELL?.trim() || "powershell.exe";
+    const command = process.env.AGENT_HERO_SHELL?.trim() || process.env.AGENT_CONTROL_SHELL?.trim() || "powershell.exe";
     const name = shellName(command);
     if (name === "powershell.exe" || name === "pwsh.exe" || name === "powershell" || name === "pwsh") {
       return {
@@ -105,7 +105,7 @@ function commandShell(commands: string[]): ShellSpec {
       args: ["/d", "/s", "/c", commands.map((item) => `(${item}) || exit /b %errorlevel%`).join(" && ")]
     };
   }
-  const command = process.env.AGENT_CONTROL_SHELL || process.env.SHELL || "bash";
+  const command = process.env.AGENT_HERO_SHELL || process.env.AGENT_CONTROL_SHELL || process.env.SHELL || "bash";
   return {
     command,
     args: ["-lc", bashSequence(commands)]
@@ -125,7 +125,7 @@ function defaultShell(historyPath: string, project?: Project): ShellSpec {
     };
   }
   if (process.platform === "win32") {
-    const command = process.env.AGENT_CONTROL_SHELL?.trim() || "powershell.exe";
+    const command = process.env.AGENT_HERO_SHELL?.trim() || process.env.AGENT_CONTROL_SHELL?.trim() || "powershell.exe";
     const name = shellName(command);
     if (name === "powershell.exe" || name === "pwsh.exe" || name === "powershell" || name === "pwsh") {
       return {
@@ -143,7 +143,7 @@ function defaultShell(historyPath: string, project?: Project): ShellSpec {
       args: []
     };
   }
-  const command = process.env.AGENT_CONTROL_SHELL || process.env.SHELL || "bash";
+  const command = process.env.AGENT_HERO_SHELL || process.env.AGENT_CONTROL_SHELL || process.env.SHELL || "bash";
   const existingPromptCommand = process.env.PROMPT_COMMAND;
   const promptCommand = existingPromptCommand
     ? `history -a; history -n; ${existingPromptCommand}`

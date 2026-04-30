@@ -1,7 +1,7 @@
 <service>
   <id>{{SERVICE_ID}}</id>
   <name>{{SERVICE_NAME}}</name>
-  <description>Local Agent Control dashboard server.</description>
+  <description>Local AgentHero dashboard server.</description>
   <executable>{{POWERSHELL_PATH}}</executable>
   <arguments>{{POWERSHELL_ARGUMENTS}}</arguments>
   <workingdirectory>{{REPO_PATH}}</workingdirectory>

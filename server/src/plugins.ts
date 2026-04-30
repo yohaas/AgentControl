@@ -3,7 +3,7 @@ import { readdir, readFile, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
-import type { AgentProvider, ClaudeAvailablePlugin, ClaudeMarketplace, ClaudePlugin, ClaudePluginCatalog } from "@agent-control/shared";
+import type { AgentProvider, ClaudeAvailablePlugin, ClaudeMarketplace, ClaudePlugin, ClaudePluginCatalog } from "@agent-hero/shared";
 import { resolveClaudeCommand, resolveCodexInvocation, type CommandInvocation } from "./capabilities.js";
 
 const execFileAsync = promisify(execFile);

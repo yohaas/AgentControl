@@ -18,11 +18,12 @@ import type {
   ProjectFileResponse,
   ProjectTreeResponse,
   RunningAgent
-} from "@agent-control/shared";
+} from "@agent-hero/shared";
 import type { SettingsState } from "../store/app-store";
 
 let authToken: string | undefined;
-const AUTH_TOKEN_STORAGE_KEY = "agent-control-access-token";
+const AUTH_TOKEN_STORAGE_KEY = "agent-hero-access-token";
+const LEGACY_AUTH_TOKEN_STORAGE_KEY = "agent-control-access-token";
 
 export interface AuthStatus {
   accessTokenEnabled: boolean;
@@ -35,19 +36,27 @@ function endpointPath(input: RequestInfo): string {
   return typeof input === "string" ? input : input instanceof URL ? input.pathname : input.url;
 }
 
-export async function agentControlToken(): Promise<string> {
+function readLocalStorageWithLegacy(key: string, legacyKey: string): string | undefined {
+  const value = window.localStorage.getItem(key) || undefined;
+  if (value) return value;
+  const legacyValue = window.localStorage.getItem(legacyKey) || undefined;
+  if (legacyValue) window.localStorage.setItem(key, legacyValue);
+  return legacyValue;
+}
+
+export async function agentHeroToken(): Promise<string> {
   if (authToken) return authToken;
-  authToken = window.localStorage.getItem(AUTH_TOKEN_STORAGE_KEY) || undefined;
-  if (!authToken) throw new Error("AgentControl access token is required.");
+  authToken = readLocalStorageWithLegacy(AUTH_TOKEN_STORAGE_KEY, LEGACY_AUTH_TOKEN_STORAGE_KEY);
+  if (!authToken) throw new Error("AgentHero access token is required.");
   return authToken;
 }
 
-export function storedAgentControlToken(): string | undefined {
-  authToken = authToken || window.localStorage.getItem(AUTH_TOKEN_STORAGE_KEY) || undefined;
+export function storedAgentHeroToken(): string | undefined {
+  authToken = authToken || readLocalStorageWithLegacy(AUTH_TOKEN_STORAGE_KEY, LEGACY_AUTH_TOKEN_STORAGE_KEY);
   return authToken;
 }
 
-export function setAgentControlToken(token?: string) {
+export function setAgentHeroToken(token?: string) {
   authToken = token?.trim() || undefined;
   if (!authToken) window.localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
   else window.localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, authToken);
@@ -56,15 +65,15 @@ export function setAgentControlToken(token?: string) {
 async function withAuth(input: RequestInfo, init?: RequestInit): Promise<RequestInit | undefined> {
   if (endpointPath(input).startsWith("/api/auth/")) return init;
   const headers = new Headers(init?.headers);
-  const token = window.localStorage.getItem(AUTH_TOKEN_STORAGE_KEY);
-  if (token) headers.set("X-Agent-Control-Token", token);
+  const token = readLocalStorageWithLegacy(AUTH_TOKEN_STORAGE_KEY, LEGACY_AUTH_TOKEN_STORAGE_KEY);
+  if (token) headers.set("X-Agent-Hero-Token", token);
   return { ...init, credentials: "same-origin", headers };
 }
 
 async function authedFetch(input: RequestInfo, init?: RequestInit, retry = true): Promise<Response> {
   const response = await fetch(input, await withAuth(input, init));
   if (response.status === 401 && retry) {
-    setAgentControlToken(undefined);
+    setAgentHeroToken(undefined);
     return authedFetch(input, init, false);
   }
   return response;
@@ -94,7 +103,7 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ token })
     });
-    setAgentControlToken(token);
+    setAgentHeroToken(token);
     return status;
   },
   setupAccessToken: async (token: string) => {
@@ -104,7 +113,7 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ token })
     });
-    setAgentControlToken(token);
+    setAgentHeroToken(token);
     return status;
   },
   projects: () => json<Project[]>("/api/projects"),
@@ -247,8 +256,8 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(settings)
     });
-    if (settings.accessToken?.trim()) setAgentControlToken(settings.accessToken);
-    if (!next.accessTokenEnabled) setAgentControlToken(undefined);
+    if (settings.accessToken?.trim()) setAgentHeroToken(settings.accessToken);
+    if (!next.accessTokenEnabled) setAgentHeroToken(undefined);
     return next;
   }
 };

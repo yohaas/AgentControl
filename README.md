@@ -1,10 +1,10 @@
-# Agent Control
+# AgentHero
 
-Agent Control is a local dashboard for working with multiple AI coding agents side by side. It supports Claude, Codex, and ChatGPT, with project-aware agent discovery, parallel chat sessions, live streaming output, tool and permission visibility, context handoff between agents, plugin management, and built-in project terminals.
+AgentHero is a local dashboard for working with multiple AI coding agents side by side. It supports Claude, Codex, and ChatGPT, with project-aware agent discovery, parallel chat sessions, live streaming output, tool and permission visibility, context handoff between agents, plugin management, and built-in project terminals.
 
 The app is built for local development workflows. It starts an Express/WebSocket server, a Vite/React UI, and provider processes/API streams in the selected project folders.
 
-![Agent Control dashboard](docs/screenshots/dashboard.png)
+![AgentHero dashboard](docs/screenshots/dashboard.png)
 
 See [CHANGELOG.md](CHANGELOG.md) for a date-grouped history of changes with commit links.
 
@@ -26,17 +26,17 @@ See [CHANGELOG.md](CHANGELOG.md) for a date-grouped history of changes with comm
 - Control mode per agent: Ask before edits, Edit automatically, Plan mode, or Bypass permissions.
 - Control effort per agent: low, medium, high, xhigh, or max.
 - Toggle Claude thinking for a session.
-- Use provider-aware slash command autocomplete from AgentControl commands, Claude built-ins, project commands, user commands, plugin commands, and session-reported commands. Commands that require the Claude TUI are shown disabled.
+- Use provider-aware slash command autocomplete from AgentHero commands, Claude built-ins, project commands, user commands, plugin commands, and session-reported commands. Commands that require the Claude TUI are shown disabled.
 - Steer active chats from queued messages, and use `/btw` to inject a note into a running Claude CLI response.
 - Add context from local files, drag/drop files into chat, paste images, and send selected transcript text to another agent.
 - Inspect the selected project from a read-only, resizable File Explorer tile, dock, or popout with lazy file browsing, recursive search, collapsible file browser, line-numbered syntax-highlighted previews, raw/formatted markup previews, side-by-side Git diffs, external open actions, and right-click copy/send context actions.
 - Run project terminals with tabs, command history, rename, split panes, resize, pop out, dock left/right/bottom/float, and kill-on-close behavior.
 - Show Git status for the selected project, including changed files, unpushed commit count, and a Push action.
-- Check the Agent Control GitHub repository on startup, show a quiet update notice beside the connection dot, and launch a terminal with customizable update commands.
+- Check the AgentHero GitHub repository on startup, show a quiet update notice beside the connection dot, and launch a terminal with customizable update commands.
 - Browse, install, enable, and persist Claude/Codex plugins per agent definition when the provider exposes a local plugin catalog.
 - Export/import dashboard config and export chats as Markdown, JSON, or raw Claude stream JSONL.
 - Use light, dark, or automatic color mode.
-- Start, restart, or shut down the Agent Control dev stack from the UI when running in supervised mode.
+- Start, restart, or shut down the AgentHero dev stack from the UI when running in supervised mode.
 
 ## Technology
 
@@ -73,13 +73,13 @@ irm https://claude.ai/install.ps1 | iex
 curl -fsSL https://claude.ai/install.sh | bash
 ```
 
-You can also use package managers such as Homebrew or WinGet when appropriate. After installing, verify that Agent Control can find it:
+You can also use package managers such as Homebrew or WinGet when appropriate. After installing, verify that AgentHero can find it:
 
 ```bash
 claude --version
 ```
 
-On Windows, verify from the same shell you will use to start Agent Control:
+On Windows, verify from the same shell you will use to start AgentHero:
 
 ```powershell
 where.exe claude
@@ -99,7 +99,7 @@ export CLAUDE_CODE_CLI="/path/to/claude"
 
 ## Authenticate Claude
 
-Agent Control uses your existing Claude Code authentication. Authenticate in a normal terminal before launching agents:
+AgentHero uses your existing Claude Code authentication. Authenticate in a normal terminal before launching agents:
 
 ```bash
 claude auth login
@@ -108,11 +108,11 @@ claude auth status --text
 
 You can also run `claude` interactively and use `/login` if prompted.
 
-Claude Code supports several auth methods, including Claude.ai subscription login, Claude Console/API credentials, and enterprise cloud providers. Standard Agent Control agents can use whatever Claude Code can use in your terminal environment. See Anthropic's auth reference for current details: https://code.claude.com/docs/en/authentication
+Claude Code supports several auth methods, including Claude.ai subscription login, Claude Console/API credentials, and enterprise cloud providers. Standard AgentHero agents can use whatever Claude Code can use in your terminal environment. See Anthropic's auth reference for current details: https://code.claude.com/docs/en/authentication
 
-Remote Control is temporarily unavailable in Agent Control. Claude Code can start `claude remote-control`, but Agent Control cannot reliably mirror the live chat transcript from the current CLI. Use claude.ai/code or the Claude mobile app directly for Remote Control sessions until Claude exposes more CLI control.
+Remote Control is temporarily unavailable in AgentHero. Claude Code can start `claude remote-control`, but AgentHero cannot reliably mirror the live chat transcript from the current CLI. Use claude.ai/code or the Claude mobile app directly for Remote Control sessions until Claude exposes more CLI control.
 
-Agent Control requests the selected Claude model on launch. If Claude later reports a different model in stream metadata, Agent Control keeps the selected model visible and adds a system note so you can inspect the raw stream and investigate the mismatch.
+AgentHero requests the selected Claude model on launch. If Claude later reports a different model in stream metadata, AgentHero keeps the selected model visible and adds a system note so you can inspect the raw stream and investigate the mismatch.
 
 ## Install Codex CLI
 
@@ -122,7 +122,7 @@ Install OpenAI Codex CLI with npm:
 npm install -g @openai/codex@latest
 ```
 
-Then verify it from the same shell you will use to start Agent Control:
+Then verify it from the same shell you will use to start AgentHero:
 
 ```bash
 codex --version
@@ -161,7 +161,7 @@ wsl.exe -d Ubuntu --exec sh -lc 'command -v claude; claude --version'
 wsl.exe -d Ubuntu --exec sh -lc 'command -v codex; codex --version'
 ```
 
-Replace `Ubuntu` with the distro shown in Agent Control. If a command is missing, open that distro and install it there:
+Replace `Ubuntu` with the distro shown in AgentHero. If a command is missing, open that distro and install it there:
 
 ```bash
 npm install -g @openai/codex@latest
@@ -174,7 +174,7 @@ For Claude Code in WSL, use Anthropic's Linux install command from the Claude Co
 claude auth login
 ```
 
-## Install Agent Control
+## Install AgentHero
 
 ```bash
 npm install
@@ -191,9 +191,9 @@ This starts:
 - Server/API/WebSocket: http://localhost:4317
 - Vite web app: http://localhost:4318
 
-For the best everyday experience, install Agent Control as a browser app from your browser's address bar or app menu after opening the local URL. This gives it its own window, keeps terminals and popouts feeling app-like, and avoids losing the dashboard among regular browser tabs.
+For the best everyday experience, install AgentHero as a browser app from your browser's address bar or app menu after opening the local URL. This gives it its own window, keeps terminals and popouts feeling app-like, and avoids losing the dashboard among regular browser tabs.
 
-The Vite app proxies API and WebSocket traffic to the server. The server binds to `127.0.0.1` by default. You can enable a required access token from Settings > General > Security; when enabled, the browser must unlock with that token before API or WebSocket control traffic works. The top-bar connection dot is green when connected and red when disconnected. Use `HOST`, `PORT`, `AGENTCONTROL_ACCESS_TOKEN`, and `AGENTCONTROL_ALLOWED_ORIGINS` only when you intentionally need a different local setup.
+The Vite app proxies API and WebSocket traffic to the server. The server binds to `127.0.0.1` by default. You can enable a required access token from Settings > General > Security; when enabled, the browser must unlock with that token before API or WebSocket control traffic works. The top-bar connection dot is green when connected and red when disconnected. Use `HOST`, `PORT`, `AGENTHERO_ACCESS_TOKEN`, and `AGENTHERO_ALLOWED_ORIGINS` only when you intentionally need a different local setup.
 
 For UI-controlled restart/shutdown, run supervised mode instead:
 
@@ -201,7 +201,7 @@ For UI-controlled restart/shutdown, run supervised mode instead:
 npm run dev:supervised
 ```
 
-When supervised mode is active, the connection-dot menu can restart or shut down Agent Control.
+When supervised mode is active, the connection-dot menu can restart or shut down AgentHero.
 
 ## Production Build
 
@@ -219,7 +219,7 @@ npm run start:server
 
 ## Install As A Service
 
-Installing Agent Control as a service is optional, but it makes self-updates and restarts more predictable. Build once before installing the service:
+Installing AgentHero as a service is optional, but it makes self-updates and restarts more predictable. Build once before installing the service:
 
 ```bash
 npm install
@@ -232,19 +232,19 @@ Windows PowerShell can install a WinSW-backed service from the repo template. Ru
 .\scripts\windows\install-service.ps1 -RunAsCurrentUser
 ```
 
-On Windows, Settings also shows Windows service buttons under App updates. Those buttons launch the same installer/uninstaller scripts through a UAC prompt using the configured Agent Control project location. The Install/Reinstall button runs the service as the current Windows user, prompts for that user's credentials, and passes `-NoStart` so the service does not collide with the currently running app. After installing from the app, restart Agent Control or start the service after closing the current instance.
+On Windows, Settings also shows Windows service buttons under App updates. Those buttons launch the same installer/uninstaller scripts through a UAC prompt using the configured AgentHero project location. The Install/Reinstall button runs the service as the current Windows user, prompts for that user's credentials, and passes `-NoStart` so the service does not collide with the currently running app. After installing from the app, restart AgentHero or start the service after closing the current instance.
 
 By default this creates:
 
 ```text
-C:\Users\<you>\Services\AgentControl\AgentControl.exe
-C:\Users\<you>\Services\AgentControl\AgentControl.xml
-C:\Users\<you>\Services\AgentControl\logs\
+C:\Users\<you>\Services\AgentHero\AgentHero.exe
+C:\Users\<you>\Services\AgentHero\AgentHero.xml
+C:\Users\<you>\Services\AgentHero\logs\
 ```
 
-`AgentControl.exe` is the WinSW service wrapper renamed for this service. The script downloads it from WinSW's GitHub release URL, renders `scripts/windows/AgentControl.xml.template` with your repo path, detected `npm.cmd`, PowerShell path, and log directory, installs the service, and starts it unless `-NoStart` is used. To use a local WinSW executable instead of downloading, pass `-WinSWPath`:
+`AgentHero.exe` is the WinSW service wrapper renamed for this service. The script downloads it from WinSW's GitHub release URL, renders `scripts/windows/AgentHero.xml.template` with your repo path, detected `npm.cmd`, PowerShell path, and log directory, installs the service, and starts it unless `-NoStart` is used. To use a local WinSW executable instead of downloading, pass `-WinSWPath`:
 
-The installer also creates a Windows Scheduled Task named `AgentControlUpdate`. The task runs `scripts/update-agent-control.ps1` in the logged-in user's interactive session with highest privileges, so service-triggered updates can show a visible PowerShell window instead of trying to display UI from the non-interactive service session.
+The installer also creates a Windows Scheduled Task named `AgentHeroUpdate`. The task runs `scripts/update-agent-hero.ps1` in the logged-in user's interactive session with highest privileges, so service-triggered updates can show a visible PowerShell window instead of trying to display UI from the non-interactive service session.
 
 If you installed the Windows service before scheduled-task updates were added, rerun the installer to create the task:
 
@@ -255,8 +255,8 @@ If you installed the Windows service before scheduled-task updates were added, r
 You can verify or trigger the update task manually:
 
 ```powershell
-Get-ScheduledTask -TaskName AgentControlUpdate
-Start-ScheduledTask -TaskName AgentControlUpdate
+Get-ScheduledTask -TaskName AgentHeroUpdate
+Start-ScheduledTask -TaskName AgentHeroUpdate
 ```
 
 ```powershell
@@ -290,11 +290,11 @@ Useful Windows installer options:
 - `-Force`: uninstalls/reinstalls an existing service with the same name.
 - `-ServiceName <name>`: installs a differently named service.
 - `-UpdateTaskName <name>`: uses a differently named scheduled update task.
-- `-ServiceDir <path>`: writes the generated service files somewhere other than `~/Services/AgentControl`.
+- `-ServiceDir <path>`: writes the generated service files somewhere other than `~/Services/AgentHero`.
 - `-WinSWPath <path>`: copies a local WinSW executable instead of downloading one.
 - `-SkipUpdateTask`: skips scheduled update task registration.
 
-macOS can run Agent Control as a LaunchAgent. Save this as `~/Library/LaunchAgents/com.agentcontrol.plist`, replacing `/path/to/AgentControl`:
+macOS can run AgentHero as a LaunchAgent. Save this as `~/Library/LaunchAgents/com.agenthero.plist`, replacing `/path/to/AgentHero`:
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -302,12 +302,12 @@ macOS can run Agent Control as a LaunchAgent. Save this as `~/Library/LaunchAgen
 <plist version="1.0">
 <dict>
   <key>Label</key>
-  <string>com.agentcontrol</string>
+  <string>com.agenthero</string>
   <key>ProgramArguments</key>
   <array>
     <string>/bin/zsh</string>
     <string>-lc</string>
-    <string>cd /path/to/AgentControl &amp;&amp; npm run start:server</string>
+    <string>cd /path/to/AgentHero &amp;&amp; npm run start:server</string>
   </array>
   <key>RunAtLoad</key>
   <true/>
@@ -320,18 +320,18 @@ macOS can run Agent Control as a LaunchAgent. Save this as `~/Library/LaunchAgen
 Then load it:
 
 ```bash
-launchctl bootstrap "gui/$UID" ~/Library/LaunchAgents/com.agentcontrol.plist
-launchctl kickstart -k "gui/$UID/com.agentcontrol"
+launchctl bootstrap "gui/$UID" ~/Library/LaunchAgents/com.agenthero.plist
+launchctl kickstart -k "gui/$UID/com.agenthero"
 ```
 
-Linux user services work well with systemd. Save this as `~/.config/systemd/user/AgentControl.service`, replacing `/path/to/AgentControl`:
+Linux user services work well with systemd. Save this as `~/.config/systemd/user/AgentHero.service`, replacing `/path/to/AgentHero`:
 
 ```ini
 [Unit]
-Description=Agent Control
+Description=AgentHero
 
 [Service]
-WorkingDirectory=/path/to/AgentControl
+WorkingDirectory=/path/to/AgentHero
 ExecStart=/usr/bin/env npm run start:server
 Restart=on-failure
 
@@ -343,39 +343,39 @@ Then enable it:
 
 ```bash
 systemctl --user daemon-reload
-systemctl --user enable --now AgentControl
+systemctl --user enable --now AgentHero
 loginctl enable-linger "$USER"
 ```
 
-For a system-wide Linux service, place the unit in `/etc/systemd/system/AgentControl.service`, set `User=<your-user>`, and use `sudo systemctl enable --now AgentControl`.
+For a system-wide Linux service, place the unit in `/etc/systemd/system/AgentHero.service`, set `User=<your-user>`, and use `sudo systemctl enable --now AgentHero`.
 
 ## App Updates
 
-Agent Control can check its GitHub repository on startup and show the update icon in the top bar. The update dialog runs the configured command list from the Agent Control project location in Settings.
+AgentHero can check its GitHub repository on startup and show the update icon in the top bar. The update dialog runs the configured command list from the AgentHero project location in Settings.
 
 Default update behavior is OS-specific:
 
-- Windows runs `scripts/windows/start-update.ps1`. If the `AgentControlUpdate` scheduled task exists, the script starts that task so update output appears in the logged-in user's desktop session. If the task is missing, it falls back to an elevated PowerShell/UAC handoff. The updater runs `git pull`, stops the `AgentControl` service, runs `npm ci` and `npm run build`, then starts the service. This avoids Windows file locks on native modules such as `node-pty`.
-- macOS and Linux run `bash ./scripts/update-agent-control.sh`. Unix filesystems generally allow replacing loaded files, so the script runs `git pull`, `npm ci`, and `npm run build`, then attempts to restart a detected service.
+- Windows runs `scripts/windows/start-update.ps1`. If the `AgentHeroUpdate` scheduled task exists, the script starts that task so update output appears in the logged-in user's desktop session. If the task is missing, it falls back to an elevated PowerShell/UAC handoff. The updater runs `git pull`, stops the `AgentHero` service, runs `npm ci` and `npm run build`, then starts the service. This avoids Windows file locks on native modules such as `node-pty`.
+- macOS and Linux run `bash ./scripts/update-agent-hero.sh`. Unix filesystems generally allow replacing loaded files, so the script runs `git pull`, `npm ci`, and `npm run build`, then attempts to restart a detected service.
 
 Both updater scripts write logs to the system temp directory:
 
 ```text
-agent-control-update.log
+agent-hero-update.log
 ```
 
 You can customize service names and restart behavior:
 
 ```bash
 # macOS/Linux
-AGENTCONTROL_SERVICE_NAME=AgentControl bash ./scripts/update-agent-control.sh
-AGENTCONTROL_LAUNCH_LABEL=com.agentcontrol bash ./scripts/update-agent-control.sh
-AGENTCONTROL_RESTART_COMMAND="systemctl --user restart AgentControl" bash ./scripts/update-agent-control.sh
+AGENTHERO_SERVICE_NAME=AgentHero bash ./scripts/update-agent-hero.sh
+AGENTHERO_LAUNCH_LABEL=com.agenthero bash ./scripts/update-agent-hero.sh
+AGENTHERO_RESTART_COMMAND="systemctl --user restart AgentHero" bash ./scripts/update-agent-hero.sh
 ```
 
 ```powershell
 # Windows
-.\scripts\update-agent-control.ps1 -ServiceName AgentControl
+.\scripts\update-agent-hero.ps1 -ServiceName AgentHero
 ```
 
 If your service manager uses a different service name, update the command in Settings or set the relevant environment variable for the updater script.
@@ -388,15 +388,15 @@ Project behavior:
 
 - The selected project controls which agents and terminals are visible.
 - Closing a project closes that project's agents and terminals.
-- If a project has no project agent files, Agent Control shows a message and defaults the Available Agents panel to Built-In agents.
+- If a project has no project agent files, AgentHero shows a message and defaults the Available Agents panel to Built-In agents.
 - Worktree projects are indented under their parent project in the selector.
-- Project paths are persisted in `~/.agent-control/config.json`.
+- Project paths are persisted in `~/.agent-hero/config.json`.
 
 ## Agent Definitions
 
-Project agent files are discovered from the provider-specific agent directory for the selected project. By default those are `.claude/agents`, `.codex/agents`, and `.agent-control/openai-agents`. Worktree projects inherit project agents from the root project folder, so local agent definitions remain visible when switching into a worktree.
+Project agent files are discovered from the provider-specific agent directory for the selected project. By default those are `.claude/agents`, `.codex/agents`, and `.agent-hero/openai-agents`. Worktree projects inherit project agents from the root project folder, so local agent definitions remain visible when switching into a worktree.
 
-Built-in agent files ship with the repo in `.agent-control/built-in-agents`. They are app-level defaults, not project files. You can add, edit, remove, recolor, or point to a different built-in agent directory from Settings.
+Built-in agent files ship with the repo in `.agent-hero/built-in-agents`. They are app-level defaults, not project files. You can add, edit, remove, recolor, or point to a different built-in agent directory from Settings.
 
 Each Markdown agent file becomes an available agent tile.
 
@@ -459,20 +459,20 @@ The app also exposes provider-specific equivalents where available:
 - OpenAI deep-research oriented options when using deep-research models.
 - Effort selector: low, medium, high, xhigh, max.
 
-Changing mode, thinking, or effort updates the running session immediately when Claude supports it. If a change requires a session restart, Agent Control applies it after the active turn.
+Changing mode, thinking, or effort updates the running session immediately when Claude supports it. If a change requires a session restart, AgentHero applies it after the active turn.
 
 ## Permission Prompts
 
-Standard agents launch Claude with a small AgentControl MCP permission tool:
+Standard agents launch Claude with a small AgentHero MCP permission tool:
 
 - Claude emits a permission-gated tool request.
-- Agent Control marks the matching tool card as awaiting permission.
+- AgentHero marks the matching tool card as awaiting permission.
 - The agent status changes to `awaiting-permission`.
 - Approve/Deny sends the decision back to the running Claude process.
 
 This is used for gated write/edit/tool calls in modes that require approval.
 
-The helper retries permission callbacks across common local hostnames so WSL and native Windows launches can still reach the Agent Control backend when `127.0.0.1` resolves differently inside the provider process.
+The helper retries permission callbacks across common local hostnames so WSL and native Windows launches can still reach the AgentHero backend when `127.0.0.1` resolves differently inside the provider process.
 
 ## Plans And Questions
 
@@ -522,7 +522,7 @@ You can also drag/drop files into chat or paste images.
 
 Slash command autocomplete merges several sources:
 
-- AgentControl-native commands such as `/clear`, `/exit`, `/status`, `/stop`, and `/interrupt`.
+- AgentHero-native commands such as `/clear`, `/exit`, `/status`, `/stop`, and `/interrupt`.
 - Claude built-ins where they work in non-interactive stream-json mode.
 - Project commands from `.claude/commands`.
 - User commands from Claude's user command directories.
@@ -541,13 +541,13 @@ Provider plugin support is shown in the relevant Settings tab and in the launch 
 - Install plugins.
 - Enable plugins.
 
-Agent definitions can persist selected plugin IDs in their frontmatter. On launch, Agent Control attempts to ensure selected plugins are enabled before starting the session. Claude and Codex plugin catalogs are shown when the local CLI exposes them; OpenAI API sessions do not expose a local plugin catalog. Running sessions can also show active plugins, MCP servers, and available tools when the provider reports them.
+Agent definitions can persist selected plugin IDs in their frontmatter. On launch, AgentHero attempts to ensure selected plugins are enabled before starting the session. Claude and Codex plugin catalogs are shown when the local CLI exposes them; OpenAI API sessions do not expose a local plugin catalog. Running sessions can also show active plugins, MCP servers, and available tools when the provider reports them.
 
 ## Remote Control
 
 Remote Control is intentionally hidden from the launch flow for now.
 
-Claude Code can start `claude remote-control --name <agent name> --spawn session`, but the local CLI currently does not provide stable bidirectional transcript/input control for Agent Control. Agent Control can start a usable session, but it cannot reliably show the chat, so new Remote Control launches are disabled until Claude exposes more complete CLI control.
+Claude Code can start `claude remote-control --name <agent name> --spawn session`, but the local CLI currently does not provide stable bidirectional transcript/input control for AgentHero. AgentHero can start a usable session, but it cannot reliably show the chat, so new Remote Control launches are disabled until Claude exposes more complete CLI control.
 
 ## Terminals
 
@@ -564,7 +564,7 @@ Features:
 - Collapsed terminal stream shows the last output line from the last active session.
 - Closing a terminal kills whatever is running in it.
 
-Terminal history is stored per project under `~/.agent-control/terminal-history`.
+Terminal history is stored per project under `~/.agent-hero/terminal-history`.
 
 ## Git Menu
 
@@ -584,7 +584,7 @@ The Worktrees button next to the Git menu opens a tabbed worktree view for the s
 
 - List all worktrees for the repo and switch to any worktree already open as a project.
 - Open and switch to unopened worktrees that are descendants of the current project folder.
-- Create a new worktree from a branch/base ref; created worktrees are added to Agent Control as projects automatically.
+- Create a new worktree from a branch/base ref; created worktrees are added to AgentHero as projects automatically.
 - Use the default sibling worktree folder pattern `<project>-worktrees/<branch>`, with the resolved path shown before creation.
 - Optionally copy local agent files into the worktree when those project agent files are untracked.
 - Merge another worktree's branch into the current project when the current project is clean.
@@ -612,14 +612,14 @@ Settings include:
 
 Stored local files:
 
-- `.agent-control/built-in-agents`: built-in agents shipped with the repo.
-- `~/.agent-control/config.json`: app settings and project paths.
-- `~/.agent-control/secrets.json`: optional locally saved Anthropic/OpenAI API keys and the access token. This file is not included in settings export.
-- `~/.agent-control/state.json`: persisted agents and recent transcripts.
-- `~/.agent-control/attachments`: uploaded/pasted attachments.
-- `~/.agent-control/terminal-history`: shell history per project.
-- `~/.agent-control/mcp`: generated MCP config for AgentControl permission prompts.
-- `~/.agent-dashboard`: legacy storage directory copied into `~/.agent-control` on first use when matching files are missing.
+- `.agent-hero/built-in-agents`: built-in agents shipped with the repo.
+- `~/.agent-hero/config.json`: app settings and project paths.
+- `~/.agent-hero/secrets.json`: optional locally saved Anthropic/OpenAI API keys and the access token. This file is not included in settings export.
+- `~/.agent-hero/state.json`: persisted agents and recent transcripts.
+- `~/.agent-hero/attachments`: uploaded/pasted attachments.
+- `~/.agent-hero/terminal-history`: shell history per project.
+- `~/.agent-hero/mcp`: generated MCP config for AgentHero permission prompts.
+- `~/.agent-control` and `~/.agent-dashboard`: legacy storage directories copied into `~/.agent-hero` on first use when matching files are missing.
 - `~/.claude`: Claude Code credentials, settings, plugins, and command files managed by Claude Code.
 
 ## Environment Variables
@@ -632,19 +632,19 @@ Stored local files:
 - `GIT_PATH`: path to the Git executable.
 - `PROJECTS_ROOT`: fallback projects root used before projects are added manually. Defaults to `~/projects`.
 - `FORCE_FALLBACK_MODEL_SWITCH=1`: forces resume-based model switching for testing.
-- `AGENT_CONTROL_SHELL`: shell used for embedded terminals.
-- `AGENTCONTROL_PERMISSION_URL`: override the permission callback URL used by the permission MCP helper.
-- `AGENTCONTROL_ACCESS_TOKEN`: access token to require when token protection is enabled. `AGENTCONTROL_AUTH_TOKEN` is also accepted for older setups.
+- `AGENT_HERO_SHELL`: shell used for embedded terminals.
+- `AGENTHERO_PERMISSION_URL`: override the permission callback URL used by the permission MCP helper.
+- `AGENTHERO_ACCESS_TOKEN`: access token to require when token protection is enabled. `AGENTHERO_AUTH_TOKEN` is also accepted.
 
 ## Security Notes
 
-Agent Control is a powerful local tool. It can launch Claude Code, run shells, read selected project files as context, install plugins, push Git commits, and stop/restart its own dev server.
+AgentHero is a powerful local tool. It can launch Claude Code, run shells, read selected project files as context, install plugins, push Git commits, and stop/restart its own dev server.
 
 Use it on a trusted machine and avoid exposing port `4317` to a network. The development server is intended for localhost use. Enable the Settings access token before binding beyond localhost. Be careful with Bypass permissions, plugin marketplaces, uploaded attachments, and projects that contain secrets.
 
 ## Disclaimer
 
-Agent Control is provided as-is, without warranties or guarantees of any kind. Use it at your own risk. The authors and contributors are not liable for any loss, damage, data loss, security issue, provider charge, or unintended code change resulting from use of this software or from actions taken by connected AI agents, CLIs, plugins, terminals, or APIs.
+AgentHero is provided as-is, without warranties or guarantees of any kind. Use it at your own risk. The authors and contributors are not liable for any loss, damage, data loss, security issue, provider charge, or unintended code change resulting from use of this software or from actions taken by connected AI agents, CLIs, plugins, terminals, or APIs.
 
 ## Troubleshooting
 
@@ -662,7 +662,7 @@ Not authenticated:
 
 Remote Control unavailable:
 
-- This is expected. Remote Control is temporarily hidden and blocked in Agent Control because the dashboard cannot reliably mirror the chat transcript from the current Claude CLI.
+- This is expected. Remote Control is temporarily hidden and blocked in AgentHero because the dashboard cannot reliably mirror the chat transcript from the current Claude CLI.
 - Use claude.ai/code or the Claude mobile app directly for Remote Control sessions.
 
 No streaming text:
@@ -678,5 +678,5 @@ Plugin appears missing after install:
 
 Open project folder does nothing:
 
-- Restart Agent Control after updating, because the folder opener lives in the backend server.
-- On Windows, Agent Control opens folders through `explorer.exe`; if Explorer is blocked by policy or another process is intercepting folders, test with `explorer.exe <project path>` from PowerShell.
+- Restart AgentHero after updating, because the folder opener lives in the backend server.
+- On Windows, AgentHero opens folders through `explorer.exe`; if Explorer is blocked by policy or another process is intercepting folders, test with `explorer.exe <project path>` from PowerShell.

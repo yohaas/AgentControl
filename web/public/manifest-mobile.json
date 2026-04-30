@@ -1,6 +1,6 @@
 {
-  "name": "Agent Control Mobile",
-  "short_name": "Agent Control",
+  "name": "AgentHero Mobile",
+  "short_name": "AgentHero",
   "description": "Mobile-friendly control surface for local agents.",
   "id": "/mobile",
   "start_url": "/mobile",
