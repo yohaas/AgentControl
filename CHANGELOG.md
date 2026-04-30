@@ -4,13 +4,13 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-04-29
 
-- [pending] Send queued messages one at a time after each agent turn completes
-- [pending] Make terminal hide controls preserve sessions instead of closing or re-docking them
-- [pending] Make bottom-docked File Explorer resizable and remember when Files should reopen as a popout
-- [pending] Preserve File Explorer open state and dock position across browser refreshes
-- [pending] Default File Explorer to the left dock beside the left nav
-- [pending] Hide File Explorer open file and folder actions because service-launched Explorer windows are unreliable
-- [pending] Add a read-only, resizable File Explorer tile, dock, and popout for browsing files, recursive search, collapsible file browser, line-numbered syntax-highlighted previews, raw/formatted markup previews, side-by-side diffs, terminal docking, and right-click copy/send context actions
+- [d6a9d4b](https://github.com/yohaas/AgentControl/commit/d6a9d4b) Send queued messages one at a time after each agent turn completes
+- [41ab4ea](https://github.com/yohaas/AgentControl/commit/41ab4ea) Make terminal hide controls preserve sessions instead of closing or re-docking them
+- [e1ad8b5](https://github.com/yohaas/AgentControl/commit/e1ad8b5) Make bottom-docked File Explorer resizable and remember when Files should reopen as a popout
+- [a7b8c82](https://github.com/yohaas/AgentControl/commit/a7b8c82) Preserve File Explorer open state and dock position across browser refreshes
+- [d2a6858](https://github.com/yohaas/AgentControl/commit/d2a6858) Default File Explorer to the left dock beside the left nav
+- [f593a4d](https://github.com/yohaas/AgentControl/commit/f593a4d) Hide File Explorer open file and folder actions because service-launched Explorer windows are unreliable
+- [8280895](https://github.com/yohaas/AgentControl/commit/8280895) Add a read-only, resizable File Explorer tile, dock, and popout for browsing files, recursive search, collapsible file browser, line-numbered syntax-highlighted previews, raw/formatted markup previews, side-by-side diffs, terminal docking, and right-click copy/send context actions
 - [44f657a](https://github.com/yohaas/AgentControl/commit/44f657a) Keep full-height tiles sized to the remaining space when the terminal docks or minimizes
 - [db090d5](https://github.com/yohaas/AgentControl/commit/db090d5) Fix terminal pane clipping
 - [d83f85e](https://github.com/yohaas/AgentControl/commit/d83f85e) Show a Git credential modal that can open the built-in terminal with `git push`
