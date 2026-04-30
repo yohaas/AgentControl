@@ -1951,6 +1951,38 @@ function AgentActionsMenu({
   );
 }
 
+function MobileAgentActionsMenu({ agent }: { agent: RunningAgent }) {
+  const settings = useAppStore((state) => state.settings);
+
+  function duplicateAgent() {
+    sendCommand({ type: "launch", request: duplicateAgentRequest(agent, settings) });
+  }
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon" title="Chat actions">
+          <EllipsisVertical className="h-4 w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onClick={duplicateAgent}>
+          <Copy className="mr-2 h-4 w-4" />
+          Duplicate
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => sendCommand({ type: "clear", id: agent.id })}>
+          <Trash2 className="mr-2 h-4 w-4" />
+          Clear Chat
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => sendCommand({ type: "kill", id: agent.id })}>
+          <X className="mr-2 h-4 w-4" />
+          Close Chat
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 type NativeSlashCommandResult = "unhandled" | "sent" | "failed";
 
 function nativeSlashResult(sent: boolean): NativeSlashCommandResult {
@@ -12404,6 +12436,11 @@ function MobileSidebar({
     sendCommand({ type: "kill", id: agentId });
   }
 
+  function selectChat(agentId: string) {
+    onSelectAgent(agentId);
+    setCollapsed(true);
+  }
+
   if (collapsed) {
     return (
       <aside className="flex w-14 shrink-0 flex-col overflow-x-hidden border-r border-border bg-card/45">
@@ -12431,20 +12468,11 @@ function MobileSidebar({
                     "grid h-9 w-9 place-items-center rounded-md hover:bg-accent",
                     selectedAgentId === agent.id && "bg-accent"
                   )}
-                  onClick={() => onSelectAgent(agent.id)}
+                  onClick={() => selectChat(agent.id)}
                   title={`${agent.defName}\n${providerLabel(agent.provider)}\n${agent.currentModel}`}
                 >
                   <ActiveAgentDot agent={agent} />
                 </button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="absolute right-0 top-0 h-4 w-4 rounded-full bg-background/90 p-0 text-muted-foreground shadow-sm hover:text-foreground"
-                  title={`Close chat ${agent.displayName}`}
-                  onClick={() => closeChat(agent.id)}
-                >
-                  <X className="h-3 w-3" />
-                </Button>
               </div>
             ))}
           </div>
@@ -12516,7 +12544,7 @@ function MobileSidebar({
                   <button
                     type="button"
                     className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-2 rounded-sm px-1 py-1 text-left"
-                    onClick={() => onSelectAgent(agent.id)}
+                    onClick={() => selectChat(agent.id)}
                   >
                     <ActiveAgentDot agent={agent} />
                     <span className="min-w-0">
@@ -12665,6 +12693,7 @@ function MobileChatPane({ agent, addError }: { agent: RunningAgent; addError: (m
             <Square className="h-4 w-4" />
           </Button>
         )}
+        <MobileAgentActionsMenu agent={agent} />
       </div>
 
       <div ref={rootRef} className="min-h-0 flex-1 overflow-y-auto bg-background px-3 py-4" onScroll={handleTranscriptScroll}>
