@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-04-30
 
+- [3fb0b92](https://github.com/yohaas/AgentControl/commit/3fb0b92) Add optional access token protection
 - [10043aa](https://github.com/yohaas/AgentControl/commit/10043aa) Show mobile thinking indicator
 - [f93d70f](https://github.com/yohaas/AgentControl/commit/f93d70f) Add mobile git status and push control
 - [c4a17ee](https://github.com/yohaas/AgentControl/commit/c4a17ee) Toggle mobile nav from empty space
