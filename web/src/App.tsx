@@ -6939,6 +6939,12 @@ function ProjectInspectorTile({
             Open containing folder
           </ContextMenuItem>
         )}
+        {type === "file" && (
+          <ContextMenuItem onClick={() => void api.openProjectFile(project.id, pathValue, "openWith").catch((error) => addError(error instanceof Error ? error.message : String(error)))}>
+            <ExternalLink className="mr-2 h-4 w-4" />
+            Open with...
+          </ContextMenuItem>
+        )}
         <ContextMenuItem onClick={() => copyText(pathValue)}>
           <Clipboard className="mr-2 h-4 w-4" />
           Copy relative path
@@ -7213,6 +7219,9 @@ function ProjectInspectorTile({
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => selectedPath && void api.openProjectFile(project.id, selectedPath, "containingFolder").catch((error) => addError(error instanceof Error ? error.message : String(error)))}>
                     <FolderOpen className="mr-2 h-4 w-4" /> Open containing folder
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => selectedPath && void api.openProjectFile(project.id, selectedPath, "openWith").catch((error) => addError(error instanceof Error ? error.message : String(error)))}>
+                    <ExternalLink className="mr-2 h-4 w-4" /> Open with...
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => selectedPath && void navigator.clipboard.writeText(selectedPath)}>
                     <Clipboard className="mr-2 h-4 w-4" /> Copy relative path

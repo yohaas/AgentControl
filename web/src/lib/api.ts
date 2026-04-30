@@ -151,13 +151,13 @@ export const api = {
     return json<DirectoryListing>(`/api/filesystem/directories${query ? `?${query}` : ""}`);
   },
   wslDistros: () => json<{ defaultDistro: string; distros: string[] }>("/api/wsl/distros"),
-  openFile: (path: string, mode?: "containingFolder") =>
+  openFile: (path: string, mode?: "containingFolder" | "openWith") =>
     json<{ ok: boolean }>("/api/filesystem/open", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ path, mode })
     }),
-  openProjectFile: (projectId: string, path: string, mode?: "containingFolder") =>
+  openProjectFile: (projectId: string, path: string, mode?: "containingFolder" | "openWith") =>
     json<{ ok: boolean }>("/api/filesystem/open", {
       method: "POST",
       headers: { "Content-Type": "application/json" },

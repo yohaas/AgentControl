@@ -940,18 +940,50 @@ async function removeProjectWorktree(project: Project, request: GitWorktreeRemov
   return { projects, worktrees: await projectWorktrees(project) };
 }
 
-function openWithDefaultApp(filePath: string, options: { file?: boolean } = {}): Promise<void> {
+function openWindowsFolder(folderPath: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    execFile(
+      "powershell.exe",
+      [
+        "-NoProfile",
+        "-NonInteractive",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-Command",
+        "$target = $env:AGENTCONTROL_OPEN_PATH; if (-not $target) { throw 'Open path was not provided.' }; Start-Process -FilePath explorer.exe -ArgumentList @($target)"
+      ],
+      {
+        env: { ...process.env, AGENTCONTROL_OPEN_PATH: folderPath },
+        windowsHide: true
+      },
+      (error, _stdout, stderr) => {
+        if (error) {
+          reject(new Error(stderr.trim() || error.message || "Unable to open folder."));
+          return;
+        }
+        resolve();
+      }
+    );
+  });
+}
+
+function openWindowsFileChooser(filePath: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    execFile("rundll32.exe", ["shell32.dll,OpenAs_RunDLL", filePath], { windowsHide: true }, (error, _stdout, stderr) => {
+      if (error) {
+        reject(new Error(stderr.trim() || error.message || "Unable to open the Open With dialog."));
+        return;
+      }
+      resolve();
+    });
+  });
+}
+
+function openWithDefaultApp(filePath: string, options: { file?: boolean; openWith?: boolean } = {}): Promise<void> {
   if (process.platform === "win32") {
+    if (options.openWith) return openWindowsFileChooser(filePath);
     if (!options.file) {
-      return new Promise((resolve, reject) => {
-        execFile("explorer.exe", [filePath], { windowsHide: true }, (error) => {
-          if (error) {
-            reject(new Error(error.message || "Unable to open folder."));
-            return;
-          }
-          resolve();
-        });
-      });
+      return openWindowsFolder(filePath);
     }
     return new Promise((resolve, reject) => {
       execFile("powershell.exe", [
@@ -966,12 +998,15 @@ function openWithDefaultApp(filePath: string, options: { file?: boolean } = {}):
         windowsHide: true
       }, (error, _stdout, stderr) => {
         if (error) {
-          execFile("explorer.exe", [`/select,${filePath}`], { windowsHide: true }, (selectError) => {
-            if (selectError) {
-              reject(new Error(stderr.trim() || error.message || selectError.message || "Unable to open path."));
-              return;
-            }
-            resolve();
+          openWindowsFileChooser(filePath).then(resolve).catch((openWithError: unknown) => {
+            reject(
+              new Error(
+                stderr.trim() ||
+                  error.message ||
+                  (openWithError instanceof Error ? openWithError.message : String(openWithError)) ||
+                  "Unable to open path."
+              )
+            );
           });
         } else {
           resolve();
@@ -1542,7 +1577,8 @@ app.post("/api/filesystem/open", async (request, response) => {
     return;
   }
 
-  const mode = request.body?.mode === "containingFolder" ? "containingFolder" : "path";
+  const mode =
+    request.body?.mode === "containingFolder" ? "containingFolder" : request.body?.mode === "openWith" ? "openWith" : "path";
   if (requestedProjectId) {
     const project = projectById(requestedProjectId);
     if (!project) {
@@ -1558,7 +1594,7 @@ app.post("/api/filesystem/open", async (request, response) => {
         response.status(400).json({ error: "Path must be a file or directory." });
         return;
       }
-      await openWithDefaultApp(openPath, { file: info.isFile() });
+      await openWithDefaultApp(openPath, { file: info.isFile(), openWith: mode === "openWith" });
       response.json({ ok: true });
     } catch (error) {
       response.status(500).json({ error: error instanceof Error ? error.message : String(error) });
@@ -1579,7 +1615,7 @@ app.post("/api/filesystem/open", async (request, response) => {
       response.status(400).json({ error: "Path must be a file or directory." });
       return;
     }
-    await openWithDefaultApp(openPath, { file: info.isFile() });
+    await openWithDefaultApp(openPath, { file: info.isFile(), openWith: mode === "openWith" });
     response.json({ ok: true });
   } catch (error) {
     response.status(500).json({ error: error instanceof Error ? error.message : String(error) });
