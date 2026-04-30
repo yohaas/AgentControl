@@ -12031,7 +12031,7 @@ export function App() {
       const notificationKey = `${agent.status}:${agent.updatedAt}`;
       nextStatuses[agent.id] = notificationKey;
       if (inputNotificationStatusRef.current[agent.id] === notificationKey) continue;
-      const globalNotificationKey = `${agent.id}:${notificationKey}`;
+      const globalNotificationKey = `${agent.id}:${agent.status}`;
       if (!claimInputNotificationKey(globalNotificationKey)) continue;
       const projectName = projects.find((project) => project.id === agent.projectId)?.name || agent.projectName || "Project";
       const need = agent.status === "awaiting-permission" ? "needs approval" : "needs an answer";
