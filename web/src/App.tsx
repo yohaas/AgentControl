@@ -3722,7 +3722,6 @@ function AppUpdateNotice({ compact = false, hideWhenNoUpdate = false }: { compac
       hidden: true,
       title: "Update AgentControl"
     });
-    setDetailsOpen(false);
   }
 
   const commits = status?.commits || [];
@@ -3849,7 +3848,7 @@ function AppUpdateNotice({ compact = false, hideWhenNoUpdate = false }: { compac
               </Button>
               <Button onClick={runUpdate} disabled={(settings.updateCommands || []).length === 0 || Boolean(updateRun)}>
                 <SquareTerminal className="h-4 w-4" />
-                {updateRun ? "Running..." : "Run Update"}
+                {updateRun ? "Running" : "Run Update"}
               </Button>
             </div>
           </div>
