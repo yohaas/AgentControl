@@ -59,6 +59,7 @@ export interface DashboardConfig {
   themeMode?: ThemeMode;
   updateChecksEnabled?: boolean;
   updateCommands?: string[];
+  inputNotificationsEnabled?: boolean;
 }
 
 export type TerminalDockPosition = "float" | "left" | "bottom" | "right";
@@ -247,4 +248,8 @@ export function resolveUpdateCommands(config: DashboardConfig): string[] {
 
 export function resolveUpdateChecksEnabled(config: DashboardConfig): boolean {
   return config.updateChecksEnabled !== false;
+}
+
+export function resolveInputNotificationsEnabled(config: DashboardConfig): boolean {
+  return config.inputNotificationsEnabled === true;
 }

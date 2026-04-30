@@ -49,6 +49,7 @@ export interface SettingsState {
   themeMode: ThemeMode;
   updateChecksEnabled: boolean;
   updateCommands: string[];
+  inputNotificationsEnabled: boolean;
 }
 
 export type TerminalDockPosition = "float" | "left" | "bottom" | "right";
@@ -87,6 +88,8 @@ interface AppState {
   transcripts: Record<string, TranscriptEvent[]>;
   selectedAgentId?: string;
   focusedAgentId?: string;
+  chatFocusedAgentId?: string;
+  doneAgentIds: Record<string, boolean>;
   capabilities?: Capabilities;
   settings: SettingsState;
   wsConnected: boolean;
@@ -115,6 +118,7 @@ interface AppState {
   setSelectedProject: (id?: string) => void;
   setSelectedAgent: (id?: string) => void;
   setFocusedAgent: (id?: string) => void;
+  setChatFocusedAgent: (id?: string) => void;
   setCapabilities: (capabilities: Capabilities) => void;
   setSettings: (settings: SettingsState) => void;
   setWsConnected: (connected: boolean) => void;
@@ -186,6 +190,7 @@ const defaultSettings: SettingsState = {
   themeMode: "auto",
   updateChecksEnabled: true,
   updateCommands: ["git pull", "npm ci", "npm run build", "Restart-Service AgentControl"],
+  inputNotificationsEnabled: false,
   claudeRuntime: "cli",
   claudeAgentDir: ".claude/agents",
   codexAgentDir: ".codex/agents",
@@ -229,6 +234,7 @@ function normalizeSettings(settings: SettingsState): SettingsState {
     modelProfiles: Array.isArray(settings.modelProfiles) && settings.modelProfiles.length ? settings.modelProfiles : defaultSettings.modelProfiles,
     permissionAllowRules: Array.isArray(settings.permissionAllowRules) ? settings.permissionAllowRules : defaultSettings.permissionAllowRules,
     updateChecksEnabled: settings.updateChecksEnabled !== false,
+    inputNotificationsEnabled: settings.inputNotificationsEnabled === true,
     updateCommands:
       Array.isArray(settings.updateCommands) && settings.updateCommands.some((command) => command.trim())
         ? settings.updateCommands.map((command) => command.trim()).filter(Boolean)
@@ -248,6 +254,10 @@ function normalizeSettings(settings: SettingsState): SettingsState {
 
 function mergeAgent(agent: RunningAgent, patch: Partial<RunningAgent>): RunningAgent {
   return { ...agent, ...patch };
+}
+
+function statusMarksResponseInProgress(status?: RunningAgent["status"]): boolean {
+  return status === "running" || status === "starting" || status === "switching-model";
 }
 
 function withAgent(
@@ -288,6 +298,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   agents: {},
   transcripts: {},
   focusedAgentId: undefined,
+  chatFocusedAgentId: undefined,
+  doneAgentIds: {},
   settings: defaultSettings,
   wsConnected: false,
   errors: [],
@@ -330,6 +342,10 @@ export const useAppStore = create<AppState>((set, get) => ({
         selectedProjectId,
         selectedAgentId: selectedAgent,
         focusedAgentId: focusedAgent,
+        chatFocusedAgentId:
+          state.chatFocusedAgentId && state.agents[state.chatFocusedAgentId]?.projectId === selectedProjectId
+            ? state.chatFocusedAgentId
+            : undefined,
         activeTerminalId: latestTerminalForProject(state.terminalSessions, selectedProjectId)
       };
     }),
@@ -338,10 +354,16 @@ export const useAppStore = create<AppState>((set, get) => ({
       selectedProjectId: id,
       selectedAgentId: undefined,
       focusedAgentId: undefined,
+      chatFocusedAgentId: undefined,
       activeTerminalId: latestTerminalForProject(state.terminalSessions, id)
     })),
   setSelectedAgent: (id) => set({ selectedAgentId: id }),
   setFocusedAgent: (id) => set({ focusedAgentId: id }),
+  setChatFocusedAgent: (id) =>
+    set((state) => ({
+      chatFocusedAgentId: id,
+      doneAgentIds: id ? { ...state.doneAgentIds, [id]: false } : state.doneAgentIds
+    })),
   setCapabilities: (capabilities) => set({ capabilities }),
   setSettings: (settings) => set({ settings: normalizeSettings(settings) }),
   setWsConnected: (connected) =>
@@ -371,6 +393,11 @@ export const useAppStore = create<AppState>((set, get) => ({
         state.focusedAgentId && snapshot.agents.some((agent) => agent.id === state.focusedAgentId)
           ? state.focusedAgentId
           : undefined,
+      chatFocusedAgentId:
+        state.chatFocusedAgentId && snapshot.agents.some((agent) => agent.id === state.chatFocusedAgentId)
+          ? state.chatFocusedAgentId
+          : undefined,
+      doneAgentIds: Object.fromEntries(Object.entries(state.doneAgentIds).filter(([id]) => snapshot.agents.some((agent) => agent.id === id))),
       tileOrder: [
         ...state.tileOrder.filter((id) => snapshot.agents.some((agent) => agent.id === id)),
         ...snapshot.agents.filter((agent) => !state.tileOrder.includes(agent.id)).map((agent) => agent.id)
@@ -391,24 +418,36 @@ export const useAppStore = create<AppState>((set, get) => ({
           transcripts: { ...state.transcripts, [event.agent.id]: state.transcripts[event.agent.id] || [] },
           selectedAgentId: state.selectedAgentId ? event.agent.id : undefined,
           focusedAgentId: event.agent.id,
+          chatFocusedAgentId: undefined,
+          doneAgentIds: { ...state.doneAgentIds, [event.agent.id]: false },
           tileOrder: [...state.tileOrder.filter((id) => id !== event.agent.id), event.agent.id],
           minimizedTiles: Object.fromEntries(Object.entries(state.minimizedTiles).filter(([id]) => id !== event.agent.id))
         }));
         break;
       case "agent.status_changed":
-        set((state) => ({
-          agents: withAgent(state.agents, event.id, (agent) =>
-            mergeAgent(agent, {
-              status: event.status,
-              statusMessage: event.statusMessage,
-              restorable: event.restorable,
-              pid: event.pid,
-              turnStartedAt: event.turnStartedAt,
-              lastTokenUsage: event.lastTokenUsage,
-              updatedAt: event.updatedAt
-            })
-          )
-        }));
+        set((state) => {
+          const previousStatus = state.agents[event.id]?.status;
+          const responseFinishedAwayFromChat =
+            event.status === "idle" && statusMarksResponseInProgress(previousStatus) && state.chatFocusedAgentId !== event.id;
+          const nextDoneAgentIds =
+            responseFinishedAwayFromChat || event.status !== "idle"
+              ? { ...state.doneAgentIds, [event.id]: responseFinishedAwayFromChat }
+              : state.doneAgentIds;
+          return {
+            agents: withAgent(state.agents, event.id, (agent) =>
+              mergeAgent(agent, {
+                status: event.status,
+                statusMessage: event.statusMessage,
+                restorable: event.restorable,
+                pid: event.pid,
+                turnStartedAt: event.turnStartedAt,
+                lastTokenUsage: event.lastTokenUsage,
+                updatedAt: event.updatedAt
+              })
+            ),
+            doneAgentIds: nextDoneAgentIds
+          };
+        });
         break;
       case "agent.model_changed":
         set((state) => ({

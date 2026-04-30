@@ -32,6 +32,7 @@ import remarkGfm from "remark-gfm";
 import {
   ArrowDownAZ,
   ArrowUp,
+  TriangleAlert,
   BellPlus,
   Bot,
   Brain,
@@ -612,6 +613,10 @@ function isAgentBusy(agent: RunningAgent) {
   );
 }
 
+function agentNeedsInput(agent: RunningAgent) {
+  return agent.status === "awaiting-permission" || agent.status === "awaiting-input";
+}
+
 function hasStreamingAssistantText(transcript: TranscriptEvent[]) {
   return transcript.some((event) => event.kind === "assistant_text" && event.streaming);
 }
@@ -716,10 +721,11 @@ function AgentDot({ color, className }: { color: string; className?: string }) {
 function ActiveAgentDot({ agent, className }: { agent: RunningAgent; className?: string }) {
   const busy = isAgentBusy(agent);
   const needsContrast = isLightAgentColor(agent.color);
+  const needsInput = agentNeedsInput(agent);
   return (
     <span
       className={cn(
-        "relative h-3 w-3 shrink-0 overflow-hidden rounded-full",
+        "relative h-3 w-3 shrink-0 rounded-full",
         busy && "animate-pulse",
         className,
         needsContrast && "border border-neutral-950 dark:border-border"
@@ -732,6 +738,12 @@ function ActiveAgentDot({ agent, className }: { agent: RunningAgent; className?:
             "pointer-events-none absolute inset-y-0 left-0 w-1/2 animate-agent-dot-wave bg-gradient-to-r from-transparent to-transparent",
             needsContrast ? "via-neutral-950/80" : "via-white/80"
           )}
+        />
+      )}
+      {needsInput && (
+        <TriangleAlert
+          className="pointer-events-none absolute -right-1.5 -top-1.5 z-10 h-3.5 w-3.5 fill-background text-amber-500 drop-shadow-sm"
+          aria-hidden="true"
         />
       )}
     </span>
@@ -808,15 +820,19 @@ function LastActivityText({
 
 function StatusPill({
   status,
+  done = false,
   onResume,
   onRestart
 }: {
   status: RunningAgent["status"];
+  done?: boolean;
   onResume?: () => void;
   onRestart?: () => void;
 }) {
   const label =
-    status === "running"
+    status === "idle" && done
+      ? "Done"
+      : status === "running"
       ? "Active"
       : status === "starting"
         ? "Starting"
@@ -840,7 +856,9 @@ function StatusPill({
                           ? "Error"
                           : status;
   const className =
-    status === "running"
+    status === "idle" && done
+      ? "border-emerald-500/50 bg-emerald-500/15 text-emerald-700 dark:border-emerald-400/40 dark:text-emerald-200"
+      : status === "running"
       ? "border-blue-500/40 bg-blue-500/10 text-blue-700 dark:border-blue-400/40 dark:bg-blue-500/15 dark:text-blue-200 animate-pulse"
       : status === "idle"
         ? "border-zinc-500/40 bg-zinc-500/10 text-zinc-700 dark:text-zinc-300"
@@ -2711,6 +2729,14 @@ function Header({
   const [layoutColumnsDraft, setLayoutColumnsDraft] = useState(String(settings.tileColumns));
   const selectedProject = projects.find((project) => project.id === selectedProjectId);
   const projectRows = useMemo(() => projectSelectorRows(projects), [projects]);
+  const inputNeededProjectIds = useMemo(
+    () => new Set(Object.values(agentsById).filter(agentNeedsInput).map((agent) => agent.projectId)),
+    [agentsById]
+  );
+  const offProjectInputCount = useMemo(
+    () => Object.values(agentsById).filter((agent) => agentNeedsInput(agent) && agent.projectId !== selectedProjectId).length,
+    [agentsById, selectedProjectId]
+  );
   const projectAgents = useMemo(() => agentsForProject(agentsById, selectedProjectId), [agentsById, selectedProjectId]);
   const agentCount = projectAgents.length;
   const terminalCount = useMemo(
@@ -3062,9 +3088,21 @@ function Header({
         <ChevronLeft className="h-4 w-4" />
       </button>
       <div className="ml-auto flex items-center gap-2">
+        {offProjectInputCount > 0 && (
+          <TriangleAlert
+            className="h-5 w-5 shrink-0 text-amber-500"
+            aria-label={`${offProjectInputCount} agent${offProjectInputCount === 1 ? "" : "s"} need input in another project`}
+          />
+        )}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="w-60 justify-between">
+            <Button
+              variant="outline"
+              className={cn(
+                "w-60 justify-between",
+                selectedProjectId && inputNeededProjectIds.has(selectedProjectId) && "border-amber-500/70 bg-amber-500/10"
+              )}
+            >
               <span className="flex min-w-0 items-center gap-2">
                 <span className="truncate">{selectedProject?.name || "Select project"}</span>
                 <ProjectRuntimeBadge project={selectedProject} />
@@ -3077,9 +3115,14 @@ function Header({
               <DropdownMenuItem
                 key={project.id}
                 onClick={() => setSelectedProject(project.id)}
-                className={cn("justify-between gap-2", depth > 0 && "pl-7")}
+                className={cn(
+                  "justify-between gap-2",
+                  depth > 0 && "pl-7",
+                  inputNeededProjectIds.has(project.id) && "bg-amber-500/10 text-amber-900 focus:bg-amber-500/15 dark:text-amber-100"
+                )}
               >
                 <span className="flex min-w-0 items-center gap-2">
+                  {inputNeededProjectIds.has(project.id) && <TriangleAlert className="h-4 w-4 shrink-0 text-amber-500" />}
                   {depth > 0 && <FolderTree className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
                   <span className="min-w-0">
                     <span className="flex min-w-0 items-center gap-2">
@@ -6046,6 +6089,10 @@ function SettingsDialog() {
   const [tileHeight, setTileHeight] = useState(settings.tileHeight);
   const [tileColumns, setTileColumns] = useState(settings.tileColumns);
   const [pinLastSentMessage, setPinLastSentMessage] = useState(settings.pinLastSentMessage);
+  const [inputNotificationsEnabled, setInputNotificationsEnabled] = useState(settings.inputNotificationsEnabled === true);
+  const [notificationPermission, setNotificationPermission] = useState(
+    typeof Notification === "undefined" ? "unsupported" : Notification.permission
+  );
   const [permissionAllowRules, setPermissionAllowRules] = useState<PermissionAllowRule[]>(settings.permissionAllowRules || []);
   const [updateChecksEnabled, setUpdateChecksEnabled] = useState(settings.updateChecksEnabled !== false);
   const [updateCommandsText, setUpdateCommandsText] = useState((settings.updateCommands || []).join("\n"));
@@ -6079,6 +6126,8 @@ function SettingsDialog() {
     setTileHeight(settings.tileHeight);
     setTileColumns(settings.tileColumns);
     setPinLastSentMessage(settings.pinLastSentMessage);
+    setInputNotificationsEnabled(settings.inputNotificationsEnabled === true);
+    setNotificationPermission(typeof Notification === "undefined" ? "unsupported" : Notification.permission);
     setPermissionAllowRules(settings.permissionAllowRules || []);
     setUpdateChecksEnabled(settings.updateChecksEnabled !== false);
     setUpdateCommandsText((settings.updateCommands || []).join("\n"));
@@ -6114,6 +6163,7 @@ function SettingsDialog() {
         tileHeight,
         tileColumns,
         pinLastSentMessage,
+        inputNotificationsEnabled,
         permissionAllowRules,
         updateChecksEnabled,
         updateCommands: updateCommandsText.split(/\r?\n/).map((command) => command.trim()).filter(Boolean)
@@ -6175,6 +6225,7 @@ function SettingsDialog() {
         tileHeight,
         tileColumns,
         pinLastSentMessage,
+        inputNotificationsEnabled,
         permissionAllowRules,
         updateChecksEnabled,
         updateCommands: updateCommandsText.split(/\r?\n/).map((command) => command.trim()).filter(Boolean)
@@ -6211,6 +6262,8 @@ function SettingsDialog() {
       setTileHeight(next.tileHeight);
       setTileColumns(next.tileColumns);
       setPinLastSentMessage(next.pinLastSentMessage);
+      setInputNotificationsEnabled(next.inputNotificationsEnabled === true);
+      setNotificationPermission(typeof Notification === "undefined" ? "unsupported" : Notification.permission);
       setPermissionAllowRules(next.permissionAllowRules || []);
       setUpdateChecksEnabled(next.updateChecksEnabled !== false);
       setUpdateCommandsText((next.updateCommands || []).join("\n"));
@@ -6219,6 +6272,27 @@ function SettingsDialog() {
     } finally {
       if (importInputRef.current) importInputRef.current.value = "";
     }
+  }
+
+  async function toggleInputNotifications(enabled: boolean) {
+    if (!enabled) {
+      setInputNotificationsEnabled(false);
+      return;
+    }
+    if (typeof Notification === "undefined") {
+      addError("This browser does not support notifications.");
+      setNotificationPermission("unsupported");
+      setInputNotificationsEnabled(false);
+      return;
+    }
+    const permission = Notification.permission === "default" ? await Notification.requestPermission() : Notification.permission;
+    setNotificationPermission(permission);
+    if (permission !== "granted") {
+      addError("Browser notifications are not allowed for AgentControl.");
+      setInputNotificationsEnabled(false);
+      return;
+    }
+    setInputNotificationsEnabled(true);
   }
 
   function setAgentDir(kind: "claude" | "codex" | "openai" | "builtIn", value: string) {
@@ -6276,6 +6350,7 @@ function SettingsDialog() {
       tileHeight !== settings.tileHeight ||
       tileColumns !== settings.tileColumns ||
       pinLastSentMessage !== settings.pinLastSentMessage ||
+      inputNotificationsEnabled !== (settings.inputNotificationsEnabled === true) ||
       permissionAllowRules.map(permissionAllowRuleKey).join("\n") !== (settings.permissionAllowRules || []).map(permissionAllowRuleKey).join("\n") ||
       updateChecksEnabled !== (settings.updateChecksEnabled !== false) ||
       updateCommandsText !== (settings.updateCommands || []).join("\n"),
@@ -6294,6 +6369,7 @@ function SettingsDialog() {
       codexPath,
       defaultAgentMode,
       gitPath,
+      inputNotificationsEnabled,
       menuDisplay,
       openaiAgentDir,
       openaiApiKey,
@@ -6493,6 +6569,21 @@ function SettingsDialog() {
                 <span className="block font-medium">Pin last sent message while scrolling</span>
                 <span className="block text-xs text-muted-foreground">
                   Keep your most recent message visible at the top of a scrolled chat.
+                </span>
+              </span>
+            </label>
+            <label className="flex items-start gap-2 rounded-md border border-border bg-background/50 p-3 text-sm">
+              <input
+                type="checkbox"
+                className="mt-1"
+                checked={inputNotificationsEnabled}
+                onChange={(event) => void toggleInputNotifications(event.target.checked)}
+              />
+              <span>
+                <span className="block font-medium">Notify when agents need input</span>
+                <span className="block text-xs text-muted-foreground">
+                  Show a browser notification for permission prompts or questions.
+                  {notificationPermission === "denied" && " Notifications are blocked in this browser."}
                 </span>
               </span>
             </label>
@@ -11485,9 +11576,11 @@ export function App() {
   const terminalInFileExplorer = useAppStore((state) => state.terminalInFileExplorer);
   const agentsById = useAppStore((state) => state.agents);
   const themeMode = useAppStore((state) => state.settings.themeMode);
+  const inputNotificationsEnabled = useAppStore((state) => state.settings.inputNotificationsEnabled);
   const [poppedOutTerminalIds, setPoppedOutTerminalIds] = useState(readPoppedOutTerminalIds);
   const [serverStartupError, setServerStartupError] = useState<string | undefined>();
   const [serverRetryCount, setServerRetryCount] = useState(0);
+  const inputNotificationStatusRef = useRef<Record<string, RunningAgent["status"]>>({});
   const terminalSideDocked = terminalOpen && !terminalInFileExplorer && (terminalDock === "left" || terminalDock === "right");
   const terminalBottomDocked = terminalOpen && !terminalInFileExplorer && terminalDock === "bottom";
   const fileExplorerSideDocked = fileExplorerOpen && (fileExplorerDock === "left" || fileExplorerDock === "right");
@@ -11595,6 +11688,31 @@ export function App() {
     openTerminalPopout(session.id);
     setTerminalOpen(false);
   }, [activeTerminalId, openTerminalPopout, poppedOutTerminalIds, selectedProjectId, setTerminalOpen, terminalDock, terminalOpen, terminalSessions]);
+
+  useEffect(() => {
+    if (!inputNotificationsEnabled || typeof Notification === "undefined" || Notification.permission !== "granted") {
+      inputNotificationStatusRef.current = {};
+      return;
+    }
+    const nextStatuses: Record<string, RunningAgent["status"]> = {};
+    for (const agent of Object.values(agentsById)) {
+      if (!agentNeedsInput(agent)) continue;
+      nextStatuses[agent.id] = agent.status;
+      if (inputNotificationStatusRef.current[agent.id] === agent.status) continue;
+      const title = agent.status === "awaiting-permission" ? "Agent needs approval" : "Agent needs an answer";
+      const notification = new Notification(title, {
+        body: `${agent.displayName} in ${agent.projectName}`,
+        tag: `agent-control-input-${agent.id}`
+      });
+      notification.onclick = () => {
+        window.focus();
+        useAppStore.getState().setSelectedProject(agent.projectId);
+        useAppStore.getState().setFocusedAgent(agent.id);
+        notification.close();
+      };
+    }
+    inputNotificationStatusRef.current = nextStatuses;
+  }, [agentsById, inputNotificationsEnabled]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {

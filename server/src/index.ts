@@ -43,6 +43,7 @@ import {
   resolveDefaultAgentMode,
   resolveAgentDirs,
   resolveFileExplorerDock,
+  resolveInputNotificationsEnabled,
   resolveModelProfiles,
   resolveModels,
   resolveMenuDisplay,
@@ -1878,6 +1879,7 @@ app.get("/api/settings", (_request, response) => {
     themeMode: resolveThemeMode(config),
     updateChecksEnabled: resolveUpdateChecksEnabled(config),
     updateCommands: resolveUpdateCommands(config),
+    inputNotificationsEnabled: resolveInputNotificationsEnabled(config),
     capabilities
   });
 });
@@ -1971,7 +1973,9 @@ app.put("/api/settings", async (request, response) => {
     fileExplorerDock: resolveFileExplorerDock(body.fileExplorerDock ? body : config),
     themeMode: resolveThemeMode(body.themeMode ? body : config),
     updateChecksEnabled: typeof body.updateChecksEnabled === "boolean" ? body.updateChecksEnabled : resolveUpdateChecksEnabled(config),
-    updateCommands: Array.isArray(body.updateCommands) ? body.updateCommands.map((command) => command.trim()).filter(Boolean) : config.updateCommands
+    updateCommands: Array.isArray(body.updateCommands) ? body.updateCommands.map((command) => command.trim()).filter(Boolean) : config.updateCommands,
+    inputNotificationsEnabled:
+      typeof body.inputNotificationsEnabled === "boolean" ? body.inputNotificationsEnabled : resolveInputNotificationsEnabled(config)
   });
   if (config.claudePath) process.env.AGENTCONTROL_CLAUDE_PATH = config.claudePath;
   else delete process.env.AGENTCONTROL_CLAUDE_PATH;
@@ -2021,6 +2025,7 @@ app.put("/api/settings", async (request, response) => {
     themeMode: resolveThemeMode(config),
     updateChecksEnabled: resolveUpdateChecksEnabled(config),
     updateCommands: resolveUpdateCommands(config),
+    inputNotificationsEnabled: resolveInputNotificationsEnabled(config),
     capabilities
   });
 });
