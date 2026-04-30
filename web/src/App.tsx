@@ -2732,7 +2732,7 @@ function Header({
         <DropdownMenuItem onClick={useFullHeight}>
           <Maximize2 className="mr-2 h-4 w-4" />
           Full Height
-          {(currentTileHeight === 0 || (currentTileHeight === undefined && settings.tileHeight === 0)) && <Check className="ml-auto h-4 w-4" />}
+          {currentTileHeight === 0 && <Check className="ml-auto h-4 w-4" />}
         </DropdownMenuItem>
         <DropdownMenuItem onClick={resetLayout}>
           <RefreshCw className="mr-2 h-4 w-4" />
