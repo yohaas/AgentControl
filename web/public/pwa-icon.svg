@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Agent Control">
+  <rect width="512" height="512" rx="112" fill="#0f172a"/>
+  <g fill="none" stroke="#2dd4bf" stroke-width="40" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M256 176v-72h-72"/>
+    <rect width="288" height="216" x="112" y="176" rx="48"/>
+    <path d="M76 284h36"/>
+    <path d="M400 284h36"/>
+    <path d="M310 266v48"/>
+    <path d="M202 266v48"/>
+  </g>
+</svg>
