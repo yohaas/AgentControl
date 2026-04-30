@@ -1098,6 +1098,10 @@ function pairedTranscriptItems(transcript: TranscriptEvent[]): ToolTranscriptIte
     .filter((item): item is ToolTranscriptItem => Boolean(item));
 }
 
+function shouldExpandTranscriptItemByDefault(item: ToolTranscriptItem, index: number, items: ToolTranscriptItem[]) {
+  return index === items.length - 1 && item.kind === "single" && item.event.kind === "assistant_text" && !item.event.streaming;
+}
+
 function questionToolUseIdSet(transcript: TranscriptEvent[]) {
   return new Set(
     transcript
@@ -8656,13 +8660,14 @@ function AgentTile({
                       </p>
                     ) : (
                       <div className="grid gap-2">
-                        {transcriptItems.map((item) => (
+                        {transcriptItems.map((item, index) => (
                           <TranscriptPreview
                             key={item.kind === "tool_pair" ? item.event.id : item.event.id}
                             item={item}
                             agent={agent}
                             phaseLabel={phaseLabel}
                             latestUserMessageId={pinnedMessage?.id}
+                            defaultExpanded={shouldExpandTranscriptItemByDefault(item, index, transcriptItems)}
                           />
                         ))}
                       </div>
@@ -8680,13 +8685,14 @@ function AgentTile({
                   )
                 ) : (
                   <div className="grid gap-2">
-                    {transcriptItems.map((item) => (
+                    {transcriptItems.map((item, index) => (
                       <TranscriptPreview
                         key={item.kind === "tool_pair" ? item.event.id : item.event.id}
                         item={item}
                         agent={agent}
                         phaseLabel={phaseLabel}
                         latestUserMessageId={pinnedMessage?.id}
+                        defaultExpanded={shouldExpandTranscriptItemByDefault(item, index, transcriptItems)}
                       />
                     ))}
                     {showActivityIndicator && <AgentActivityIndicator agent={agent} compact phaseLabel={phaseLabel} />}
@@ -8863,12 +8869,14 @@ function TranscriptPreview({
   item,
   agent,
   phaseLabel,
-  latestUserMessageId
+  latestUserMessageId,
+  defaultExpanded = false
 }: {
   item: ToolTranscriptItem;
   agent: RunningAgent;
   phaseLabel?: string;
   latestUserMessageId?: string;
+  defaultExpanded?: boolean;
 }) {
   if (item.kind === "tool_pair") {
     return <ToolCard event={item.event} result={item.result} agent={agent} compact />;
@@ -8916,7 +8924,7 @@ function TranscriptPreview({
         style={!isUser ? { borderLeftColor: agentAccentColor(agent.color), borderLeftWidth: 4 } : undefined}
       >
         {showPopout && <ChatBlockPopoutButton source={agent} text={event.text} compact />}
-        <CollapsibleText text={event.text} compact inlineToggle={showPopout} />
+        <CollapsibleText text={event.text} compact inlineToggle={showPopout} defaultExpanded={defaultExpanded} />
         {event.kind === "user" && event.attachments && event.attachments.length > 0 && (
           <span className="mt-2 flex flex-wrap gap-2">
             {event.attachments.map((attachment) =>
@@ -10011,7 +10019,7 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
                 )
               ) : (
                 <>
-                  {transcriptItems.map((item) => (
+                  {transcriptItems.map((item, index) => (
                     <TranscriptItem
                       key={item.kind === "tool_pair" ? item.event.id : item.event.id}
                       item={item}
@@ -10019,6 +10027,7 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
                       phaseLabel={phaseLabel}
                       query={searchQuery}
                       latestUserMessageId={pinnedMessage?.id}
+                      defaultExpanded={shouldExpandTranscriptItemByDefault(item, index, transcriptItems)}
                     />
                   ))}
                   {showActivityIndicator && <AgentActivityIndicator agent={agent} phaseLabel={phaseLabel} />}
@@ -10309,13 +10318,15 @@ function TranscriptItem({
   agent,
   phaseLabel,
   query,
-  latestUserMessageId
+  latestUserMessageId,
+  defaultExpanded = false
 }: {
   item: ToolTranscriptItem;
   agent: RunningAgent;
   phaseLabel?: string;
   query: string;
   latestUserMessageId?: string;
+  defaultExpanded?: boolean;
 }) {
   if (item.kind === "tool_pair") {
     return <ToolCard event={item.event} result={item.result} agent={agent} />;
@@ -10370,7 +10381,7 @@ function TranscriptItem({
             from {event.sourceAgent.displayName}
           </Badge>
         )}
-        <CollapsibleText text={event.text} query={query} inlineToggle={showPopout} />
+        <CollapsibleText text={event.text} query={query} inlineToggle={showPopout} defaultExpanded={defaultExpanded} />
         {event.kind === "assistant_text" && event.streaming && (
           <span className="mt-2 grid gap-1">
             {phaseLabel && <span className="text-[11px] font-medium uppercase tracking-normal text-muted-foreground">{phaseLabel}</span>}
@@ -10397,19 +10408,25 @@ function CollapsibleText({
   text,
   query = "",
   compact = false,
-  inlineToggle = false
+  inlineToggle = false,
+  defaultExpanded = false
 }: {
   text: string;
   query?: string;
   compact?: boolean;
   inlineToggle?: boolean;
+  defaultExpanded?: boolean;
 }) {
   const shouldCollapse = isLongTextBlock(text, compact);
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(defaultExpanded);
 
   useEffect(() => {
     if (query.trim()) setExpanded(true);
   }, [query]);
+
+  useEffect(() => {
+    if (defaultExpanded) setExpanded(true);
+  }, [defaultExpanded]);
 
   if (!shouldCollapse) return <ChatMarkdown text={text} query={query} />;
 
