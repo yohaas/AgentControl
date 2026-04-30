@@ -87,6 +87,7 @@ export interface QueuedMessage {
 
 const MESSAGE_QUEUES_STORAGE_KEY = "agent-control-message-queues";
 const TILE_LAYOUT_STORAGE_KEY = "agent-control-tile-layout";
+const SELECTED_PROJECT_STORAGE_KEY = "agent-control-selected-project";
 const WINDOWS_UPDATE_COMMANDS = [
   "powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\windows\\start-update.ps1"
 ];
@@ -194,6 +195,17 @@ function pruneTileLayout(layout: StoredTileLayout, agentIds: Set<string>): Store
     widths: Object.fromEntries(Object.entries(layout.widths).filter(([id]) => allowed(id))),
     minimized: Object.fromEntries(Object.entries(layout.minimized).filter(([id]) => allowed(id)))
   });
+}
+
+function readStoredSelectedProjectId(): string | undefined {
+  if (typeof window === "undefined") return undefined;
+  return window.localStorage.getItem(SELECTED_PROJECT_STORAGE_KEY) || undefined;
+}
+
+function writeStoredSelectedProjectId(id?: string) {
+  if (typeof window === "undefined") return;
+  if (id) window.localStorage.setItem(SELECTED_PROJECT_STORAGE_KEY, id);
+  else window.localStorage.removeItem(SELECTED_PROJECT_STORAGE_KEY);
 }
 
 interface AppState {
@@ -426,6 +438,7 @@ const initialTileLayout = readStoredTileLayout();
 
 export const useAppStore = create<AppState>((set, get) => ({
   projects: [],
+  selectedProjectId: readStoredSelectedProjectId(),
   agents: {},
   transcripts: {},
   focusedAgentId: undefined,
@@ -460,6 +473,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         state.selectedProjectId && projects.some((project) => project.id === state.selectedProjectId)
           ? state.selectedProjectId
           : projects[0]?.id;
+      writeStoredSelectedProjectId(selectedProjectId);
       const selectedAgent =
         state.selectedAgentId && state.agents[state.selectedAgentId]?.projectId === selectedProjectId
           ? state.selectedAgentId
@@ -481,13 +495,16 @@ export const useAppStore = create<AppState>((set, get) => ({
       };
     }),
   setSelectedProject: (id) =>
-    set((state) => ({
-      selectedProjectId: id,
-      selectedAgentId: undefined,
-      focusedAgentId: undefined,
-      chatFocusedAgentId: undefined,
-      activeTerminalId: latestTerminalForProject(state.terminalSessions, id)
-    })),
+    set((state) => {
+      writeStoredSelectedProjectId(id);
+      return {
+        selectedProjectId: id,
+        selectedAgentId: undefined,
+        focusedAgentId: undefined,
+        chatFocusedAgentId: undefined,
+        activeTerminalId: latestTerminalForProject(state.terminalSessions, id)
+      };
+    }),
   setSelectedAgent: (id) => set({ selectedAgentId: id }),
   setFocusedAgent: (id) => set({ focusedAgentId: id }),
   setChatFocusedAgent: (id) =>
