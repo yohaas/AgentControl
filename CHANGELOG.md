@@ -2,6 +2,10 @@
 
 All notable repository changes are listed newest-first and grouped by commit date.
 
+## 2026-04-30
+
+- [9586f26](https://github.com/yohaas/AgentControl/commit/9586f26) Add an AgentControl GitHub update checker with incoming commits and customizable terminal update commands
+
 ## 2026-04-29
 
 - [d6a9d4b](https://github.com/yohaas/AgentControl/commit/d6a9d4b) Send queued messages one at a time after each agent turn completes
