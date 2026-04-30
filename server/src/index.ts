@@ -319,10 +319,32 @@ function isLoopbackAddress(address: string | undefined): boolean {
   return normalized === "127.0.0.1" || normalized === "::1" || normalized === "::ffff:127.0.0.1";
 }
 
-function isAllowedOrigin(origin: string | undefined): boolean {
+function originMatchesRequestHost(origin: string | undefined, host: string | undefined): boolean {
+  if (!origin || !host) return false;
+  try {
+    const parsed = new URL(origin);
+    const requestHost = host.split(",")[0]?.trim().toLowerCase();
+    return Boolean(requestHost) && parsed.host.toLowerCase() === requestHost;
+  } catch {
+    return false;
+  }
+}
+
+function requestRefererOrigin(request: express.Request): string | undefined {
+  const referer = request.header("referer");
+  if (!referer) return undefined;
+  try {
+    return new URL(referer).origin;
+  } catch {
+    return undefined;
+  }
+}
+
+function isAllowedOrigin(origin: string | undefined, requestHost?: string): boolean {
   if (!origin) return true;
   try {
     const parsed = new URL(origin);
+    if (originMatchesRequestHost(parsed.origin, requestHost)) return true;
     const configured = configuredAllowedOrigins();
     if (configured.length) return configured.includes(parsed.origin);
     return isLoopbackHost(parsed.hostname) && trustedDefaultOrigins().includes(parsed.origin);
@@ -353,12 +375,12 @@ function requestToken(request: express.Request): string | undefined {
 }
 
 function isAuthenticatedRequest(request: express.Request): boolean {
-  return isAllowedOrigin(request.header("origin")) && requestToken(request) === appAuthToken;
+  return isAllowedOrigin(request.header("origin"), request.header("host")) && requestToken(request) === appAuthToken;
 }
 
 function canIssueToken(request: express.Request): boolean {
-  const origin = request.header("origin");
-  if (origin) return isAllowedOrigin(origin);
+  const origin = request.header("origin") || requestRefererOrigin(request);
+  if (origin) return isAllowedOrigin(origin, request.header("host"));
   return isLoopbackAddress(request.socket.remoteAddress);
 }
 
@@ -375,7 +397,8 @@ function webSocketToken(request: http.IncomingMessage): string | undefined {
 
 function isAuthenticatedWebSocket(request: http.IncomingMessage): boolean {
   const origin = typeof request.headers.origin === "string" ? request.headers.origin : undefined;
-  return isAllowedOrigin(origin) && webSocketToken(request) === appAuthToken;
+  const host = typeof request.headers.host === "string" ? request.headers.host : undefined;
+  return isAllowedOrigin(origin, host) && webSocketToken(request) === appAuthToken;
 }
 
 function setAuthCookie(response: express.Response): void {
