@@ -57,6 +57,7 @@ export interface DashboardConfig {
   terminalDock?: TerminalDockPosition;
   fileExplorerDock?: FileExplorerDockPosition;
   themeMode?: ThemeMode;
+  updateCommands?: string[];
 }
 
 export type TerminalDockPosition = "float" | "left" | "bottom" | "right";
@@ -235,4 +236,10 @@ export function resolveFileExplorerDock(config: DashboardConfig): FileExplorerDo
 
 export function resolveThemeMode(config: DashboardConfig): ThemeMode {
   return config.themeMode === "light" || config.themeMode === "dark" || config.themeMode === "auto" ? config.themeMode : "auto";
+}
+
+export function resolveUpdateCommands(config: DashboardConfig): string[] {
+  const commands = Array.isArray(config.updateCommands) ? config.updateCommands : [];
+  const normalized = commands.map((command) => command.trim()).filter(Boolean);
+  return normalized.length ? normalized : ["git pull", "npm ci", "npm run build", "Restart-Service AgentControl"];
 }

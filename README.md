@@ -31,6 +31,7 @@ See [CHANGELOG.md](CHANGELOG.md) for a date-grouped history of changes with comm
 - Inspect the selected project from a read-only, resizable File Explorer tile, dock, or popout with lazy file browsing, recursive search, collapsible file browser, line-numbered syntax-highlighted previews, raw/formatted markup previews, side-by-side Git diffs, external open actions, and right-click copy/send context actions.
 - Run project terminals with tabs, command history, rename, split panes, resize, pop out, dock left/right/bottom/float, and kill-on-close behavior.
 - Show Git status for the selected project, including changed files, unpushed commit count, and a Push action.
+- Check the Agent Control GitHub repository for incoming updates, show incoming commits, and launch a terminal with customizable update commands.
 - Browse, install, enable, and persist Claude/Codex plugins per agent definition when the provider exposes a local plugin catalog.
 - Export/import dashboard config and export chats as Markdown, JSON, or raw Claude stream JSONL.
 - Use light, dark, or automatic color mode.
@@ -432,6 +433,7 @@ Settings use a left navigation and wider right-side content area. Save stays vis
 Settings include:
 
 - General configuration, including project folders, built-in agent directory, config export/import, app paths, and theme.
+- App update commands used by the top-bar update launcher.
 - Provider-specific tabs for Claude, Codex, and OpenAI.
 - Provider model lists with "Get Current Models" for the active provider.
 - Claude runtime selection: Claude CLI or Anthropic API.

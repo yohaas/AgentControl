@@ -100,6 +100,7 @@ import type {
   AgentEffort,
   AgentPermissionMode,
   AgentProvider,
+  AppUpdateStatus,
   ClaudePluginCatalog,
   DirectoryEntry,
   DirectoryListing,
@@ -3128,6 +3129,7 @@ function Header({
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
+        <AppUpdateMenu />
         <GitStatusMenu projectId={selectedProjectId} />
         <WorktreesDialog projectId={selectedProjectId} />
         <Button
@@ -3481,6 +3483,151 @@ function GitStatusMenu({ projectId }: { projectId?: string }) {
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+function AppUpdateMenu() {
+  const settings = useAppStore((state) => state.settings);
+  const showMenuText = settings.menuDisplay === "iconText";
+  const addError = useAppStore((state) => state.addError);
+  const [open, setOpen] = useState(false);
+  const [status, setStatus] = useState<AppUpdateStatus | undefined>();
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    void refresh(false);
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    void refresh(true);
+  }, [open]);
+
+  async function refresh(reportErrors = true) {
+    setLoading(true);
+    try {
+      setStatus(await api.appUpdates());
+    } catch (error) {
+      if (reportErrors) addError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function runUpdate() {
+    const commands = (settings.updateCommands || []).map((command) => command.trim()).filter(Boolean);
+    if (commands.length === 0) return;
+    sendCommand({ type: "terminalStart", command: commands.join("; "), title: "Update AgentControl" });
+    setOpen(false);
+  }
+
+  const commits = status?.commits || [];
+  const updateAvailable = Boolean(status?.updateAvailable);
+
+  return (
+    <DropdownMenu open={open} onOpenChange={setOpen}>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="outline"
+          size={showMenuText ? undefined : "icon"}
+          title="AgentControl updates"
+          className={cn("relative", showMenuText && "gap-2 px-3")}
+        >
+          <FolderDown className="h-4 w-4" />
+          {showMenuText && <span>Updates</span>}
+          {updateAvailable && (
+            <span className="absolute -right-1.5 -top-1.5 h-3.5 w-3.5 rounded-full border border-background bg-red-500" />
+          )}
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-96">
+        <div className="grid gap-3 p-2">
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <div className="text-sm font-medium">AgentControl Updates</div>
+              <div className="truncate text-xs text-muted-foreground">
+                {loading
+                  ? "Checking GitHub..."
+                  : status?.isRepo
+                    ? updateAvailable
+                      ? "Updates available"
+                      : "Up to date"
+                    : status?.message || "Update status unavailable"}
+              </div>
+            </div>
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => void refresh(true)} disabled={loading}>
+              <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
+            </Button>
+          </div>
+
+          {status?.isRepo && (
+            <>
+              <div className="grid gap-1 rounded-md border border-border p-2 text-xs">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-muted-foreground">Branch</span>
+                  <span className="min-w-0 truncate font-mono">{status.branch || "detached"}</span>
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-muted-foreground">Remote</span>
+                  <span className="min-w-0 truncate font-mono" title={status.upstream || status.remoteUrl}>
+                    {status.upstream || status.githubRepo || "origin"}
+                  </span>
+                </div>
+                {status.latestRelease && (
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-muted-foreground">Latest release</span>
+                    <span className="min-w-0 truncate font-mono" title={status.latestRelease.name || status.latestRelease.tagName}>
+                      {status.latestRelease.tagName}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              <div className="grid gap-1">
+                <div className="text-xs font-medium text-muted-foreground">Incoming commits</div>
+                {commits.length === 0 ? (
+                  <div className="rounded-md border border-dashed border-border px-2 py-3 text-center text-xs text-muted-foreground">
+                    No incoming commits found
+                  </div>
+                ) : (
+                  <div className="max-h-44 overflow-y-auto rounded-md border border-border">
+                    {commits.map((commit) => (
+                      <div key={commit.hash} className="grid gap-0.5 border-b border-border px-2 py-1.5 last:border-b-0">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <Badge className="shrink-0 px-1.5 py-0 font-mono text-[10px]">{commit.hash}</Badge>
+                          <span className="min-w-0 truncate text-xs" title={commit.subject}>
+                            {commit.subject}
+                          </span>
+                        </div>
+                        {commit.authorName && (
+                          <div className="truncate pl-[3.25rem] text-[11px] text-muted-foreground" title={commit.authorName}>
+                            {commit.authorName}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="grid gap-1">
+                <div className="text-xs font-medium text-muted-foreground">Commands</div>
+                <div className="rounded-md border border-border bg-muted p-2 font-mono text-xs">
+                  {(settings.updateCommands || []).map((command) => (
+                    <div key={command}>{command}</div>
+                  ))}
+                </div>
+              </div>
+
+              <Button onClick={runUpdate} disabled={!updateAvailable || (settings.updateCommands || []).length === 0}>
+                <SquareTerminal className="h-4 w-4" />
+                Run Update
+              </Button>
+            </>
+          )}
+        </div>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -5901,6 +6048,7 @@ function SettingsDialog() {
   const [tileColumns, setTileColumns] = useState(settings.tileColumns);
   const [pinLastSentMessage, setPinLastSentMessage] = useState(settings.pinLastSentMessage);
   const [permissionAllowRules, setPermissionAllowRules] = useState<PermissionAllowRule[]>(settings.permissionAllowRules || []);
+  const [updateCommandsText, setUpdateCommandsText] = useState((settings.updateCommands || []).join("\n"));
   const [builtInEditor, setBuiltInEditor] = useState<{ open: boolean; agent?: AgentDef; originalName?: string }>({ open: false });
 
   useEffect(() => {
@@ -5932,6 +6080,7 @@ function SettingsDialog() {
     setTileColumns(settings.tileColumns);
     setPinLastSentMessage(settings.pinLastSentMessage);
     setPermissionAllowRules(settings.permissionAllowRules || []);
+    setUpdateCommandsText((settings.updateCommands || []).join("\n"));
   }, [open, settings]);
 
   async function save() {
@@ -5964,7 +6113,8 @@ function SettingsDialog() {
         tileHeight,
         tileColumns,
         pinLastSentMessage,
-        permissionAllowRules
+        permissionAllowRules,
+        updateCommands: updateCommandsText.split(/\r?\n/).map((command) => command.trim()).filter(Boolean)
       });
       setSettings(next);
       setProjects(await api.refresh());
@@ -6023,7 +6173,8 @@ function SettingsDialog() {
         tileHeight,
         tileColumns,
         pinLastSentMessage,
-        permissionAllowRules
+        permissionAllowRules,
+        updateCommands: updateCommandsText.split(/\r?\n/).map((command) => command.trim()).filter(Boolean)
       }
     };
     downloadText("agent-control-config.json", JSON.stringify(payload, null, 2), "application/json");
@@ -6058,6 +6209,7 @@ function SettingsDialog() {
       setTileColumns(next.tileColumns);
       setPinLastSentMessage(next.pinLastSentMessage);
       setPermissionAllowRules(next.permissionAllowRules || []);
+      setUpdateCommandsText((next.updateCommands || []).join("\n"));
     } catch (error) {
       addError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -6120,7 +6272,8 @@ function SettingsDialog() {
       tileHeight !== settings.tileHeight ||
       tileColumns !== settings.tileColumns ||
       pinLastSentMessage !== settings.pinLastSentMessage ||
-      permissionAllowRules.map(permissionAllowRuleKey).join("\n") !== (settings.permissionAllowRules || []).map(permissionAllowRuleKey).join("\n"),
+      permissionAllowRules.map(permissionAllowRuleKey).join("\n") !== (settings.permissionAllowRules || []).map(permissionAllowRuleKey).join("\n") ||
+      updateCommandsText !== (settings.updateCommands || []).join("\n"),
     [
       anthropicApiKey,
       autoApprove,
@@ -6147,7 +6300,8 @@ function SettingsDialog() {
       themeMode,
       tileScrolling,
       tileColumns,
-      tileHeight
+      tileHeight,
+      updateCommandsText
     ]
   );
   const settingsTabs = [
@@ -6361,6 +6515,19 @@ function SettingsDialog() {
                 const file = event.target.files?.[0];
                 if (file) void importConfig(file);
               }}
+            />
+          </section>
+          <section className="grid gap-2 rounded-md border border-border p-3">
+            <div>
+              <h3 className="text-sm font-medium">App update commands</h3>
+              <p className="text-xs text-muted-foreground">One command per line. These run in a project terminal when you launch an update.</p>
+            </div>
+            <Textarea
+              value={updateCommandsText}
+              onChange={(event) => setUpdateCommandsText(event.target.value)}
+              rows={5}
+              className="font-mono text-xs"
+              placeholder="git pull&#10;npm ci&#10;npm run build&#10;Restart-Service AgentControl"
             />
           </section>
           </>

@@ -199,6 +199,35 @@ export interface GitWorktreeRemoveRequest {
   force?: boolean;
 }
 
+export interface AppUpdateCommit {
+  hash: string;
+  subject: string;
+  authorName?: string;
+  committedAt?: string;
+}
+
+export interface AppUpdateRelease {
+  name?: string;
+  tagName: string;
+  htmlUrl?: string;
+  publishedAt?: string;
+}
+
+export interface AppUpdateStatus {
+  isRepo: boolean;
+  checkedAt: string;
+  currentHash?: string;
+  branch?: string;
+  upstream?: string;
+  remoteUrl?: string;
+  githubRepo?: string;
+  latestRelease?: AppUpdateRelease;
+  releaseAvailable: boolean;
+  updateAvailable: boolean;
+  commits: AppUpdateCommit[];
+  message?: string;
+}
+
 export interface RunningAgent {
   id: string;
   provider?: AgentProvider;

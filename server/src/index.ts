@@ -12,6 +12,7 @@ import type { DashboardConfig } from "./config.js";
 import type {
   Capabilities,
   AgentDef,
+  AppUpdateStatus,
   DirectoryEntry,
   GitChangedFile,
   GitStatus,
@@ -53,6 +54,7 @@ import {
   resolveTileScrolling,
   resolveTileColumns,
   resolveTileHeight,
+  resolveUpdateCommands,
   writeConfig,
   writeSecrets
 } from "./config.js";
@@ -65,6 +67,7 @@ import { isWslProject, normalizeWslPath, parseWslUncPath, wslCommandArgs, wslPro
 const PORT = Number(process.env.PORT || 4317);
 const HOST = process.env.HOST || "127.0.0.1";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const appRoot = path.resolve(__dirname, "../..");
 const attachmentsDir = path.join(os.homedir(), ".agent-dashboard", "attachments");
 const controlDir = path.join(os.homedir(), ".agent-dashboard");
 const controlPath = path.join(controlDir, "control.json");
@@ -679,6 +682,97 @@ function parseGitUnpushedCommits(output: string): GitStatus["unpushedCommits"] {
       };
     })
     .filter((commit) => commit.hash && commit.subject);
+}
+
+function parseGithubRemote(remoteUrl: string): string | undefined {
+  const trimmed = remoteUrl.trim();
+  const sshMatch = trimmed.match(/^git@github\.com:([^/]+\/[^/]+?)(?:\.git)?$/i);
+  if (sshMatch) return sshMatch[1];
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.hostname.toLowerCase() !== "github.com") return undefined;
+    const repo = parsed.pathname.replace(/^\/+/, "").replace(/\.git$/i, "");
+    return repo.split("/").length >= 2 ? repo.split("/").slice(0, 2).join("/") : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+async function fetchLatestGithubRelease(repo: string): Promise<AppUpdateStatus["latestRelease"] | undefined> {
+  const response = await fetch(`https://api.github.com/repos/${repo}/releases/latest`, {
+    headers: {
+      Accept: "application/vnd.github+json",
+      "User-Agent": "AgentControl update checker"
+    }
+  });
+  if (response.status === 404) return undefined;
+  if (!response.ok) throw new Error(`GitHub releases returned ${response.status}.`);
+  const body = (await response.json()) as { name?: string; tag_name?: string; html_url?: string; published_at?: string };
+  if (!body.tag_name) return undefined;
+  return {
+    name: body.name,
+    tagName: body.tag_name,
+    htmlUrl: body.html_url,
+    publishedAt: body.published_at
+  };
+}
+
+async function gitRefExists(target: string, ref: string): Promise<boolean> {
+  return gitCommand(target, ["rev-parse", "--verify", "--quiet", ref])
+    .then(() => true)
+    .catch(() => false);
+}
+
+async function gitRefIsAncestor(target: string, ancestor: string, descendant: string): Promise<boolean> {
+  return gitCommand(target, ["merge-base", "--is-ancestor", ancestor, descendant])
+    .then(() => true)
+    .catch(() => false);
+}
+
+async function appUpdateStatus(): Promise<AppUpdateStatus> {
+  const checkedAt = new Date().toISOString();
+  try {
+    const isRepo = (await gitCommand(appRoot, ["rev-parse", "--is-inside-work-tree"])).trim() === "true";
+    if (!isRepo) {
+      return { isRepo: false, checkedAt, releaseAvailable: false, updateAvailable: false, commits: [], message: "AgentControl is not running from a Git repository." };
+    }
+
+    const remoteUrl = (await gitCommand(appRoot, ["remote", "get-url", "origin"])).trim();
+    await gitCommand(appRoot, ["fetch", "--prune", "--tags", "origin"], 120000);
+    const currentHash = (await gitCommand(appRoot, ["rev-parse", "--short", "HEAD"])).trim();
+    const branch = (await gitCommand(appRoot, ["branch", "--show-current"])).trim() || undefined;
+    const upstream = (await gitCommand(appRoot, ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"]).catch(() => "")).trim() || undefined;
+    const compareRef = upstream || (branch ? `origin/${branch}` : undefined);
+    const commits =
+      compareRef && (await gitRefExists(appRoot, compareRef))
+        ? parseGitUnpushedCommits(await gitCommand(appRoot, ["log", "--pretty=format:%h%x1f%s%x1f%an%x1f%cI", `HEAD..${compareRef}`])) || []
+        : [];
+    const githubRepo = parseGithubRemote(remoteUrl);
+    const latestRelease = githubRepo ? await fetchLatestGithubRelease(githubRepo) : undefined;
+    const releaseAvailable = latestRelease ? !(await gitRefIsAncestor(appRoot, latestRelease.tagName, "HEAD")) : false;
+    return {
+      isRepo: true,
+      checkedAt,
+      currentHash,
+      branch,
+      upstream: compareRef,
+      remoteUrl,
+      githubRepo,
+      latestRelease,
+      releaseAvailable,
+      updateAvailable: commits.length > 0 || releaseAvailable,
+      commits
+    };
+  } catch (error) {
+    return {
+      isRepo: false,
+      checkedAt,
+      releaseAvailable: false,
+      updateAvailable: false,
+      commits: [],
+      message: error instanceof Error ? error.message : String(error)
+    };
+  }
 }
 
 function parseGitWorktrees(output: string, currentPath: string): GitWorktree[] {
@@ -1731,6 +1825,10 @@ app.get("/api/admin/status", (_request, response) => {
   response.json({ supervised, pid: process.pid });
 });
 
+app.get("/api/admin/updates", async (_request, response) => {
+  response.json(await appUpdateStatus());
+});
+
 app.post("/api/admin/restart", async (_request, response) => {
   if (!supervised) {
     response.status(409).json({ error: "Restart requires starting AgentControl with npm run dev:supervised." });
@@ -1777,6 +1875,7 @@ app.get("/api/settings", (_request, response) => {
     terminalDock: resolveTerminalDock(config),
     fileExplorerDock: resolveFileExplorerDock(config),
     themeMode: resolveThemeMode(config),
+    updateCommands: resolveUpdateCommands(config),
     capabilities
   });
 });
@@ -1868,7 +1967,8 @@ app.put("/api/settings", async (request, response) => {
     pinLastSentMessage: typeof body.pinLastSentMessage === "boolean" ? body.pinLastSentMessage : resolvePinLastSentMessage(config),
     terminalDock: resolveTerminalDock(body.terminalDock ? body : config),
     fileExplorerDock: resolveFileExplorerDock(body.fileExplorerDock ? body : config),
-    themeMode: resolveThemeMode(body.themeMode ? body : config)
+    themeMode: resolveThemeMode(body.themeMode ? body : config),
+    updateCommands: Array.isArray(body.updateCommands) ? body.updateCommands.map((command) => command.trim()).filter(Boolean) : config.updateCommands
   });
   if (config.claudePath) process.env.AGENTCONTROL_CLAUDE_PATH = config.claudePath;
   else delete process.env.AGENTCONTROL_CLAUDE_PATH;
@@ -1916,6 +2016,7 @@ app.put("/api/settings", async (request, response) => {
     terminalDock: resolveTerminalDock(config),
     fileExplorerDock: resolveFileExplorerDock(config),
     themeMode: resolveThemeMode(config),
+    updateCommands: resolveUpdateCommands(config),
     capabilities
   });
 });

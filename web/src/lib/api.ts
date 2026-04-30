@@ -1,5 +1,6 @@
 import type {
   Capabilities,
+  AppUpdateStatus,
   ClaudePlugin,
   ClaudePluginCatalog,
   DirectoryListing,
@@ -172,6 +173,7 @@ export const api = {
       providers: Partial<Record<ModelProfile["provider"], ModelProfile[]>>;
     }>(`/api/models/latest${provider ? `?provider=${encodeURIComponent(provider)}` : ""}`),
   adminStatus: () => json<{ supervised: boolean; pid: number }>("/api/admin/status"),
+  appUpdates: () => json<AppUpdateStatus>("/api/admin/updates"),
   restartApp: () => json<{ ok: boolean }>("/api/admin/restart", { method: "POST" }),
   shutdownApp: () => json<{ ok: boolean }>("/api/admin/shutdown", { method: "POST" }),
   settings: () => json<SettingsState>("/api/settings"),

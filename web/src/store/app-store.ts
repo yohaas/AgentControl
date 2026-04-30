@@ -47,6 +47,7 @@ export interface SettingsState {
   terminalDock: TerminalDockPosition;
   fileExplorerDock: FileExplorerDockPosition;
   themeMode: ThemeMode;
+  updateCommands: string[];
 }
 
 export type TerminalDockPosition = "float" | "left" | "bottom" | "right";
@@ -182,6 +183,7 @@ const defaultSettings: SettingsState = {
   terminalDock: "bottom",
   fileExplorerDock: "left",
   themeMode: "auto",
+  updateCommands: ["git pull", "npm ci", "npm run build", "Restart-Service AgentControl"],
   claudeRuntime: "cli",
   claudeAgentDir: ".claude/agents",
   codexAgentDir: ".codex/agents",
@@ -224,6 +226,10 @@ function normalizeSettings(settings: SettingsState): SettingsState {
     ...settings,
     modelProfiles: Array.isArray(settings.modelProfiles) && settings.modelProfiles.length ? settings.modelProfiles : defaultSettings.modelProfiles,
     permissionAllowRules: Array.isArray(settings.permissionAllowRules) ? settings.permissionAllowRules : defaultSettings.permissionAllowRules,
+    updateCommands:
+      Array.isArray(settings.updateCommands) && settings.updateCommands.some((command) => command.trim())
+        ? settings.updateCommands.map((command) => command.trim()).filter(Boolean)
+        : defaultSettings.updateCommands,
     defaultAgentMode,
     tileHeight: resolveTileHeight(settings.tileHeight),
     tileColumns: clampNumber(settings.tileColumns, defaultSettings.tileColumns, 1, 6),
