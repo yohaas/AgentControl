@@ -79,6 +79,13 @@ interface LaunchModalState {
   initialPrompt?: string;
 }
 
+interface FilePreviewRequest {
+  id: number;
+  projectId: string;
+  path: string;
+  line?: number;
+}
+
 export interface QueuedMessage {
   id: string;
   text: string;
@@ -233,6 +240,7 @@ interface AppState {
   terminalOpen: boolean;
   fileExplorerOpen: boolean;
   fileExplorerMaximized: boolean;
+  filePreviewRequest?: FilePreviewRequest;
   terminalInFileExplorer: boolean;
   terminalSessions: Record<string, TerminalSession>;
   terminalOutput: Record<string, string[]>;
@@ -268,6 +276,7 @@ interface AppState {
   setTerminalOpen: (open: boolean) => void;
   setFileExplorerOpen: (open: boolean) => void;
   setFileExplorerMaximized: (maximized: boolean) => void;
+  openFilePreview: (projectId: string, path: string, line?: number) => void;
   setFileExplorerDock: (dock: FileExplorerDockPosition) => void;
   setTerminalInFileExplorer: (docked: boolean) => void;
   setActiveTerminal: (id?: string) => void;
@@ -459,6 +468,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   terminalOpen: false,
   fileExplorerOpen: initialFileExplorerOpen(),
   fileExplorerMaximized: false,
+  filePreviewRequest: undefined,
   terminalInFileExplorer: false,
   terminalSessions: {},
   terminalOutput: {},
@@ -891,6 +901,28 @@ export const useAppStore = create<AppState>((set, get) => ({
     });
   },
   setFileExplorerMaximized: (maximized) => set({ fileExplorerMaximized: maximized, fileExplorerOpen: maximized ? true : get().fileExplorerOpen }),
+  openFilePreview: (projectId, path, line) => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("agent-control-file-explorer-open", "true");
+      window.localStorage.setItem("agent-control-file-explorer-popout", "false");
+    }
+    set((state) => {
+      writeStoredSelectedProjectId(projectId);
+      const tileOrder = state.tileOrder.includes("file-explorer") ? state.tileOrder : ["file-explorer", ...state.tileOrder];
+      return {
+        selectedProjectId: projectId,
+        fileExplorerOpen: true,
+        fileExplorerMaximized: state.settings.fileExplorerDock === "tile",
+        tileOrder: writeStoredTileLayout({ order: tileOrder, widths: state.tileWidths, minimized: state.minimizedTiles }).order,
+        filePreviewRequest: {
+          id: Date.now(),
+          projectId,
+          path,
+          line
+        }
+      };
+    });
+  },
   setFileExplorerDock: (dock) => {
     if (typeof window !== "undefined") window.localStorage.setItem("agent-control-file-explorer-open", "true");
     set({ settings: { ...get().settings, fileExplorerDock: dock }, fileExplorerOpen: true, fileExplorerMaximized: false });

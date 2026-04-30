@@ -248,17 +248,40 @@ function highlightedHtml(text = "", pathValue = "", mimeType?: string): string {
   }
 }
 
-function HighlightedCodeBlock({ content = "", path, mimeType }: { content?: string; path: string; mimeType?: string }) {
-  const lineCount = Math.max(1, content.split(/\r?\n/).length);
+function HighlightedCodeBlock({ content = "", path, mimeType, targetLine }: { content?: string; path: string; mimeType?: string; targetLine?: number }) {
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const lines = content.split(/\r?\n/);
+  const highlightedLines = highlightedHtml(content, path, mimeType).split(/\r?\n/);
+  const lineCount = Math.max(1, lines.length);
+
+  useEffect(() => {
+    if (!targetLine || targetLine < 1) return;
+    const root = rootRef.current;
+    const target = root?.querySelector(`[data-preview-line="${targetLine}"]`);
+    if (target instanceof HTMLElement) {
+      window.requestAnimationFrame(() => target.scrollIntoView({ block: "center" }));
+    }
+  }, [content, targetLine]);
+
   return (
-    <div className="grid grid-cols-[auto_minmax(0,1fr)] overflow-auto rounded-md bg-muted/40 font-mono text-xs leading-5">
-      <pre className="select-none border-r border-border/70 px-3 py-3 text-right text-muted-foreground">
-        {Array.from({ length: lineCount }, (_, index) => index + 1).join("\n")}
-      </pre>
-      <pre
-        className="syntax-highlight min-w-0 whitespace-pre-wrap break-words p-3"
-        dangerouslySetInnerHTML={{ __html: highlightedHtml(content, path, mimeType) }}
-      />
+    <div ref={rootRef} className="overflow-auto rounded-md bg-muted/40 font-mono text-xs leading-5">
+      {Array.from({ length: lineCount }, (_, index) => {
+        const lineNumber = index + 1;
+        const selected = targetLine === lineNumber;
+        return (
+          <div
+            key={lineNumber}
+            data-preview-line={lineNumber}
+            className={cn("grid grid-cols-[auto_minmax(0,1fr)]", selected && "bg-primary/15 outline outline-1 outline-primary/40")}
+          >
+            <pre className="select-none border-r border-border/70 px-3 text-right text-muted-foreground">{lineNumber}</pre>
+            <pre
+              className="syntax-highlight min-w-0 whitespace-pre-wrap break-words px-3"
+              dangerouslySetInnerHTML={{ __html: highlightedLines[index] || "&nbsp;" }}
+            />
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -7400,6 +7423,7 @@ function ProjectInspectorTile({
   const setFileExplorerOpen = useAppStore((state) => state.setFileExplorerOpen);
   const setTerminalInFileExplorer = useAppStore((state) => state.setTerminalInFileExplorer);
   const setTerminalOpen = useAppStore((state) => state.setTerminalOpen);
+  const filePreviewRequest = useAppStore((state) => state.filePreviewRequest);
   const settings = useAppStore((state) => state.settings);
   const setSettings = useAppStore((state) => state.setSettings);
   const terminalInFileExplorer = useAppStore((state) => state.terminalInFileExplorer);
@@ -7415,6 +7439,7 @@ function ProjectInspectorTile({
   const [browserCollapsed, setBrowserCollapsed] = useState(false);
   const [browserWidth, setBrowserWidth] = useState(260);
   const [selectedPath, setSelectedPath] = useState("");
+  const [targetLine, setTargetLine] = useState<number | undefined>();
   const [preview, setPreview] = useState<ProjectFileResponse | undefined>();
   const [diff, setDiff] = useState<ProjectDiffResponse | undefined>();
   const [status, setStatus] = useState<GitStatus | undefined>();
@@ -7490,8 +7515,9 @@ function ProjectInspectorTile({
     }
   }
 
-  async function openPreview(pathValue: string, switchMode = true) {
+  async function openPreview(pathValue: string, switchMode = true, line?: number) {
     setSelectedPath(pathValue);
+    setTargetLine(line && line > 0 ? Math.round(line) : undefined);
     if (switchMode) setMode("preview");
     setPreviewView("raw");
     setLoading(true);
@@ -7503,6 +7529,13 @@ function ProjectInspectorTile({
       setLoading(false);
     }
   }
+
+  useEffect(() => {
+    if (!filePreviewRequest || filePreviewRequest.projectId !== project.id) return;
+    setCollapsed(false);
+    setBrowserCollapsed(false);
+    void openPreview(filePreviewRequest.path, true, filePreviewRequest.line);
+  }, [filePreviewRequest?.id, project.id]);
 
   async function openDiff(pathValue: string) {
     setSelectedPath(pathValue);
@@ -7989,7 +8022,7 @@ function ProjectInspectorTile({
                         <ReactMarkdown remarkPlugins={[remarkGfm]}>{preview.content || ""}</ReactMarkdown>
                       </div>
                     ) : (
-                      <HighlightedCodeBlock content={preview.content || ""} path={preview.relativePath} mimeType={preview.mimeType} />
+                      <HighlightedCodeBlock content={preview.content || ""} path={preview.relativePath} mimeType={preview.mimeType} targetLine={targetLine} />
                     )}
                     {preview.truncated && (
                       <Button variant="outline" size="sm" onClick={() => void api.projectFile(project.id, preview.relativePath, true).then(setPreview).catch((error) => addError(error instanceof Error ? error.message : String(error)))}>
@@ -9292,7 +9325,7 @@ function TranscriptPreview({
         style={!isUser ? { borderLeftColor: agentAccentColor(agent.color), borderLeftWidth: 4 } : undefined}
       >
         {showPopout && <ChatBlockPopoutButton source={agent} text={event.text} compact />}
-        <CollapsibleText text={event.text} compact inlineToggle={showPopout} defaultExpanded={defaultExpanded} />
+        <CollapsibleText text={event.text} agent={agent} compact inlineToggle={showPopout} defaultExpanded={defaultExpanded} />
         {event.kind === "user" && event.attachments && event.attachments.length > 0 && (
           <span className="mt-2 flex flex-wrap gap-2">
             {event.attachments.map((attachment) =>
@@ -9797,7 +9830,7 @@ function PlanCard({ event, agent, compact = false }: { event: PlanEvent; agent: 
         {event.answered && <Badge>Answered</Badge>}
       </div>
       <div className="max-w-none rounded-md border border-border bg-background/70 p-3 text-sm leading-6">
-        <ChatMarkdown text={event.plan} query="" />
+        <ChatMarkdown text={event.plan} query="" agent={agent} />
       </div>
       {event.response && (
         <div className="mt-3 rounded-md border border-border bg-background/60 px-3 py-2 text-xs text-muted-foreground">
@@ -10758,7 +10791,7 @@ function TranscriptItem({
             from {event.sourceAgent.displayName}
           </Badge>
         )}
-        <CollapsibleText text={event.text} query={query} inlineToggle={showPopout} defaultExpanded={defaultExpanded} />
+        <CollapsibleText text={event.text} agent={agent} query={query} inlineToggle={showPopout} defaultExpanded={defaultExpanded} />
         {event.kind === "assistant_text" && event.streaming && (
           <span className="mt-2 grid gap-1">
             {phaseLabel && <span className="text-[11px] font-medium uppercase tracking-normal text-muted-foreground">{phaseLabel}</span>}
@@ -10783,12 +10816,14 @@ function TranscriptItem({
 
 function CollapsibleText({
   text,
+  agent,
   query = "",
   compact = false,
   inlineToggle = false,
   defaultExpanded = false
 }: {
   text: string;
+  agent?: RunningAgent;
   query?: string;
   compact?: boolean;
   inlineToggle?: boolean;
@@ -10805,7 +10840,7 @@ function CollapsibleText({
     if (defaultExpanded) setExpanded(true);
   }, [defaultExpanded]);
 
-  if (!shouldCollapse) return <ChatMarkdown text={text} query={query} />;
+  if (!shouldCollapse) return <ChatMarkdown text={text} query={query} agent={agent} />;
 
   function toggleExpanded() {
     setExpanded((value) => !value);
@@ -10847,7 +10882,7 @@ function CollapsibleText({
           }
         }}
       >
-        <ChatMarkdown text={text} query={query} />
+        <ChatMarkdown text={text} query={query} agent={agent} />
       </div>
       {!inlineToggle && (
         <button
@@ -10870,7 +10905,113 @@ function isLongTextBlock(text: string, compact = false) {
   return text.length > (compact ? 420 : 900) || text.split(/\r?\n/).length > (compact ? 8 : 14);
 }
 
-function ChatMarkdown({ text, query }: { text: string; query: string }) {
+interface FileReferenceTarget {
+  projectId: string;
+  path: string;
+  line?: number;
+}
+
+const FILE_PREVIEW_SCHEME = "agent-control-file-preview:";
+const FILE_REFERENCE_PATTERN =
+  /(^|[\s([{"'])(\.{0,2}\/?(?:[\w@.-]+\/)+[\w@.-]+\.[\w+-]+|\.{0,2}\/?(?:[\w@.-]+\/)+[\w@.-]+|[\w@.-]+\.(?:tsx?|jsx?|mjs|cjs|json|md|markdown|css|html?|ya?ml|toml|py|rs|go|java|cs|cpp|c|h|hpp|sh|ps1|sql|xml|svg|txt))(?::(\d+)|#L(\d+))?/g;
+
+function filePreviewHref(target: FileReferenceTarget) {
+  const params = new URLSearchParams({ projectId: target.projectId, path: target.path });
+  if (target.line) params.set("line", String(target.line));
+  return `${FILE_PREVIEW_SCHEME}${params.toString()}`;
+}
+
+function parseFilePreviewHref(href?: string): FileReferenceTarget | undefined {
+  if (!href?.startsWith(FILE_PREVIEW_SCHEME)) return undefined;
+  const params = new URLSearchParams(href.slice(FILE_PREVIEW_SCHEME.length));
+  const projectId = params.get("projectId") || "";
+  const path = params.get("path") || "";
+  const line = Number(params.get("line") || "");
+  if (!projectId || !path) return undefined;
+  return { projectId, path, line: Number.isFinite(line) && line > 0 ? line : undefined };
+}
+
+function normalizeRepoReferencePath(pathValue: string, projectPath?: string) {
+  let normalized = pathValue.trim().replace(/^["'`]+|["'`.,;)]+$/g, "").replace(/\\/g, "/");
+  normalized = normalized.replace(/^\.\/+/, "");
+  const normalizedProject = projectPath?.replace(/\\/g, "/").replace(/\/+$/, "");
+  if (normalizedProject && normalized.toLowerCase().startsWith(`${normalizedProject.toLowerCase()}/`)) {
+    normalized = normalized.slice(normalizedProject.length + 1);
+  }
+  return normalized;
+}
+
+function repoFileReferenceTarget(rawPath: string, agent?: RunningAgent, rawLine?: string): FileReferenceTarget | undefined {
+  if (!agent?.projectId) return undefined;
+  let pathInput = rawPath;
+  let lineInput = rawLine;
+  if (!lineInput) {
+    const lineMatch = /(?::(\d+)|#L(\d+))$/i.exec(pathInput);
+    if (lineMatch) {
+      lineInput = lineMatch[1] || lineMatch[2];
+      pathInput = pathInput.slice(0, lineMatch.index);
+    }
+  }
+  if (/^[a-z][a-z0-9+.-]*:/i.test(pathInput) && !/^[a-z]:[\\/]/i.test(pathInput)) return undefined;
+  const path = normalizeRepoReferencePath(pathInput, agent.projectPath);
+  if (!path || path.startsWith("/") || path.includes(" ") || path.includes("://")) return undefined;
+  if (!path.includes("/") && !/\.[A-Za-z0-9+-]+$/.test(path)) return undefined;
+  const line = Number(lineInput || "");
+  return {
+    projectId: agent.projectId,
+    path,
+    line: Number.isFinite(line) && line > 0 ? Math.round(line) : undefined
+  };
+}
+
+function markdownLinkTarget(href: string | undefined, agent?: RunningAgent): FileReferenceTarget | undefined {
+  const previewTarget = parseFilePreviewHref(href);
+  if (previewTarget) return previewTarget;
+  if (!href || href.startsWith("#") || /^[a-z][a-z0-9+.-]*:/i.test(href)) return undefined;
+  const hashLine = /#L(\d+)$/i.exec(href);
+  const colonLine = !hashLine ? /:(\d+)$/.exec(href) : undefined;
+  const path = href.replace(/#L\d+$/i, "").replace(/:\d+$/, "");
+  return repoFileReferenceTarget(path, agent, hashLine?.[1] || colonLine?.[1]);
+}
+
+function remarkRepoFileLinks(agent?: RunningAgent) {
+  return () => (tree: { children?: unknown[] }) => {
+    function visit(node: { type?: string; value?: string; children?: unknown[] }) {
+      if (!node.children || node.type === "link" || node.type === "code" || node.type === "inlineCode") return;
+      const nextChildren: unknown[] = [];
+      for (const child of node.children) {
+        const childNode = child as { type?: string; value?: string; children?: unknown[] };
+        if (childNode.type === "text" && typeof childNode.value === "string") {
+          let lastIndex = 0;
+          let match: RegExpExecArray | null;
+          FILE_REFERENCE_PATTERN.lastIndex = 0;
+          while ((match = FILE_REFERENCE_PATTERN.exec(childNode.value))) {
+            const prefix = match[1] || "";
+            const rawPath = match[2] || "";
+            const rawLine = match[3] || match[4];
+            const target = repoFileReferenceTarget(rawPath, agent, rawLine);
+            if (!target) continue;
+            const start = match.index + prefix.length;
+            if (start > lastIndex) nextChildren.push({ type: "text", value: childNode.value.slice(lastIndex, start) });
+            const label = `${rawPath}${rawLine ? `:${rawLine}` : ""}`;
+            nextChildren.push({ type: "link", url: filePreviewHref(target), children: [{ type: "text", value: label }] });
+            lastIndex = start + label.length;
+          }
+          if (lastIndex < childNode.value.length) nextChildren.push({ type: "text", value: childNode.value.slice(lastIndex) });
+          if (lastIndex === 0) nextChildren.push(child);
+        } else {
+          visit(childNode);
+          nextChildren.push(child);
+        }
+      }
+      node.children = nextChildren;
+    }
+    visit(tree);
+  };
+}
+
+function ChatMarkdown({ text, query, agent }: { text: string; query: string; agent?: RunningAgent }) {
+  const openFilePreview = useAppStore((state) => state.openFilePreview);
   if (query.trim()) {
     return (
       <span className="whitespace-pre-wrap">
@@ -10882,11 +11023,44 @@ function ChatMarkdown({ text, query }: { text: string; query: string }) {
   return (
     <div className="markdown-content">
       <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
+        remarkPlugins={[remarkGfm, remarkRepoFileLinks(agent)]}
         components={{
-          a: ({ ...props }) => <a {...props} target="_blank" rel="noreferrer" />,
+          a: ({ href, children, ...props }) => {
+            const target = markdownLinkTarget(href, agent);
+            if (target) {
+              return (
+                <a
+                  {...props}
+                  href={href}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    openFilePreview(target.projectId, target.path, target.line);
+                  }}
+                >
+                  {children}
+                </a>
+              );
+            }
+            return <a {...props} href={href} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>{children}</a>;
+          },
           code: ({ className, children, ...props }) => {
             const multiline = String(children).includes("\n");
+            const inlineTarget = !multiline ? repoFileReferenceTarget(String(children), agent) : undefined;
+            if (inlineTarget) {
+              return (
+                <button
+                  type="button"
+                  className="markdown-inline-code text-primary underline decoration-primary/40 underline-offset-2"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    openFilePreview(inlineTarget.projectId, inlineTarget.path, inlineTarget.line);
+                  }}
+                >
+                  {children}
+                </button>
+              );
+            }
             return multiline ? (
               <code className={className} {...props}>
                 {children}
@@ -11081,7 +11255,7 @@ function ChatBlockPopoutButton({
                 onKeyUp={() => capturePopoutSelection()}
                 onContextMenuCapture={preparePopoutContextMenu}
               >
-                {rawView ? <pre className="whitespace-pre-wrap break-words font-mono text-xs leading-5">{text}</pre> : <ChatMarkdown text={text} query="" />}
+                {rawView ? <pre className="whitespace-pre-wrap break-words font-mono text-xs leading-5">{text}</pre> : <ChatMarkdown text={text} query="" agent={source} />}
               </div>
             </ContextMenuTrigger>
             <ContextMenuContent>
