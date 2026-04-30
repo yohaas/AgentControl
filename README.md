@@ -473,6 +473,10 @@ Agent Control is a powerful local tool. It can launch Claude Code, run shells, r
 
 Use it on a trusted machine and avoid exposing port `4317` to a network. The development server is intended for localhost use. Be careful with Bypass permissions, plugin marketplaces, uploaded attachments, and projects that contain secrets.
 
+## Disclaimer
+
+Agent Control is provided as-is, without warranties or guarantees of any kind. Use it at your own risk. The authors and contributors are not liable for any loss, damage, data loss, security issue, provider charge, or unintended code change resulting from use of this software or from actions taken by connected AI agents, CLIs, plugins, terminals, or APIs.
+
 ## Troubleshooting
 
 Claude CLI not found:
