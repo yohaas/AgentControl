@@ -188,6 +188,10 @@ function modelValue(data: Record<string, unknown>): string | undefined {
   return stringValue(data.defaultModel) || stringValue(data.default_model) || stringValue(data.model);
 }
 
+function frontmatterData(data: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(data).filter(([, value]) => value !== undefined));
+}
+
 async function parseAgentFile(filePath: string, fallbackProvider?: AgentProvider, builtIn = false): Promise<AgentDef | null> {
   if (!filePath.endsWith(".md")) return null;
   const raw = await readFile(filePath, "utf8");
@@ -235,10 +239,10 @@ export async function updateAgentPluginsFile(filePath: string, plugins: string[]
   const raw = await readFile(filePath, "utf8");
   const parsed = matter(raw);
   const data = parsed.data as Record<string, unknown>;
-  const next = matter.stringify(parsed.content.trim() ? `${parsed.content.trim()}\n` : "", {
+  const next = matter.stringify(parsed.content.trim() ? `${parsed.content.trim()}\n` : "", frontmatterData({
     ...data,
     plugins
-  });
+  }));
   await writeFile(filePath, next, "utf8");
 }
 
@@ -298,7 +302,7 @@ export async function upsertBuiltInAgent(projectPath: string, agent: AgentDef, o
   await mkdir(agentsPath, { recursive: true });
   if (originalName && originalName !== agent.name) await deleteBuiltInAgent(projectPath, originalName, agentDirs).catch(() => undefined);
   const filePath = path.join(agentsPath, `${agentSlug(agent.name)}.md`);
-  const body = matter.stringify(agent.systemPrompt.trim() ? `${agent.systemPrompt.trim()}\n` : "", {
+  const body = matter.stringify(agent.systemPrompt.trim() ? `${agent.systemPrompt.trim()}\n` : "", frontmatterData({
     name: agent.name,
     description: agent.description || undefined,
     color: agent.color || colorForName(agent.name),
@@ -306,7 +310,7 @@ export async function upsertBuiltInAgent(projectPath: string, agent: AgentDef, o
     defaultModel: agent.defaultModel || undefined,
     tools: agent.tools || [],
     plugins: agent.plugins || []
-  });
+  }));
   await writeFile(filePath, body, "utf8");
 }
 
