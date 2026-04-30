@@ -11854,15 +11854,19 @@ export function App() {
       if (!agentNeedsInput(agent)) continue;
       nextStatuses[agent.id] = agent.status;
       if (inputNotificationStatusRef.current[agent.id] === agent.status) continue;
-      const title = agent.status === "awaiting-permission" ? "Agent needs approval" : "Agent needs an answer";
+      const projectName = agent.projectName || "Project";
+      const title = agent.status === "awaiting-permission" ? `${projectName}: approval needed` : `${projectName}: answer needed`;
       const notification = new Notification(title, {
-        body: `${agent.displayName} in ${agent.projectName}`,
+        body: agent.displayName,
         tag: `agent-control-input-${agent.id}`
       });
       notification.onclick = () => {
+        const store = useAppStore.getState();
         window.focus();
-        useAppStore.getState().setSelectedProject(agent.projectId);
-        useAppStore.getState().setFocusedAgent(agent.id);
+        store.setSelectedAgent(undefined);
+        store.setSelectedProject(agent.projectId);
+        store.setTileMinimized(agent.id, false);
+        store.setFocusedAgent(agent.id);
         notification.close();
       };
     }
