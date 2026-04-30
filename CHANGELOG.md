@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-04-30
 
+- [60597e7](https://github.com/yohaas/AgentControl/commit/60597e7) Make generated access tokens visible
 - [3fb0b92](https://github.com/yohaas/AgentControl/commit/3fb0b92) Add optional access token protection
 - [10043aa](https://github.com/yohaas/AgentControl/commit/10043aa) Show mobile thinking indicator
 - [f93d70f](https://github.com/yohaas/AgentControl/commit/f93d70f) Add mobile git status and push control
