@@ -389,7 +389,7 @@ Project behavior:
 - Closing a project closes that project's agents and terminals.
 - If a project has no project agent files, Agent Control shows a message and defaults the Available Agents panel to Built-In agents.
 - Worktree projects are indented under their parent project in the selector.
-- Project paths are persisted in `~/.agent-dashboard/config.json`.
+- Project paths are persisted in `~/.agent-control/config.json`.
 
 ## Agent Definitions
 
@@ -563,7 +563,7 @@ Features:
 - Collapsed terminal stream shows the last output line from the last active session.
 - Closing a terminal kills whatever is running in it.
 
-Terminal history is stored per project under `~/.agent-dashboard/terminal-history`.
+Terminal history is stored per project under `~/.agent-control/terminal-history`.
 
 ## Git Menu
 
@@ -611,12 +611,13 @@ Settings include:
 Stored local files:
 
 - `.agent-control/built-in-agents`: built-in agents shipped with the repo.
-- `~/.agent-dashboard/config.json`: app settings and project paths.
-- `~/.agent-dashboard/secrets.json`: optional locally saved Anthropic/OpenAI API keys. This file is not included in settings export.
-- `~/.agent-dashboard/state.json`: persisted agents and recent transcripts.
-- `~/.agent-dashboard/attachments`: uploaded/pasted attachments.
-- `~/.agent-dashboard/terminal-history`: shell history per project.
-- `~/.agent-dashboard/mcp`: generated MCP config for AgentControl permission prompts.
+- `~/.agent-control/config.json`: app settings and project paths.
+- `~/.agent-control/secrets.json`: optional locally saved Anthropic/OpenAI API keys. This file is not included in settings export.
+- `~/.agent-control/state.json`: persisted agents and recent transcripts.
+- `~/.agent-control/attachments`: uploaded/pasted attachments.
+- `~/.agent-control/terminal-history`: shell history per project.
+- `~/.agent-control/mcp`: generated MCP config for AgentControl permission prompts.
+- `~/.agent-dashboard`: legacy storage directory copied into `~/.agent-control` on first use when matching files are missing.
 - `~/.claude`: Claude Code credentials, settings, plugins, and command files managed by Claude Code.
 
 ## Environment Variables

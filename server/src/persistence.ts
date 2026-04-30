@@ -1,15 +1,15 @@
 import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
 import type { RunningAgent, TranscriptEvent } from "@agent-control/shared";
+import { migrateLegacyStateDir, statePath as resolveStatePath } from "./storage.js";
 
 export interface PersistedState {
   agents: RunningAgent[];
   transcripts: Record<string, TranscriptEvent[]>;
 }
 
-const stateDir = path.join(os.homedir(), ".agent-dashboard");
-const statePath = path.join(stateDir, "state.json");
+const stateDir = resolveStatePath();
+const persistedStatePath = path.join(stateDir, "state.json");
 
 async function ensurePrivateDir(directory: string): Promise<void> {
   await mkdir(directory, { recursive: true, mode: 0o700 });
@@ -18,8 +18,9 @@ async function ensurePrivateDir(directory: string): Promise<void> {
 
 export async function readPersistedState(): Promise<PersistedState> {
   try {
+    await migrateLegacyStateDir();
     await ensurePrivateDir(stateDir);
-    const raw = await readFile(statePath, "utf8");
+    const raw = await readFile(persistedStatePath, "utf8");
     return JSON.parse(raw) as PersistedState;
   } catch {
     return { agents: [], transcripts: {} };
@@ -34,8 +35,8 @@ export function createStateWriter(getState: () => PersistedState) {
     timer = setTimeout(async () => {
       try {
         await ensurePrivateDir(stateDir);
-        await writeFile(statePath, `${JSON.stringify(getState(), null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
-        await chmod(statePath, 0o600).catch(() => undefined);
+        await writeFile(persistedStatePath, `${JSON.stringify(getState(), null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
+        await chmod(persistedStatePath, 0o600).catch(() => undefined);
       } catch (error) {
         console.error("Failed to persist dashboard state", error);
       }

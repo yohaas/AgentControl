@@ -65,6 +65,7 @@ import {
 import { addMarketplace, enablePlugin, installPlugin, listPlugins, normalizePluginProvider, pluginCatalog, supportsPluginProvider } from "./plugins.js";
 import { AgentRuntimeManager } from "./runtime.js";
 import { deleteBuiltInAgent, scanConfiguredProjects, scanProject, updateAgentPlugins, updateAgentPluginsFile, upsertBuiltInAgent } from "./scanner.js";
+import { STATE_DIR, migrateLegacyStateDir, statePath } from "./storage.js";
 import { TerminalManager } from "./terminal.js";
 import { canonicalWslProjectKey, isWslProject, normalizeWslPath, parseWslUncPath, wslCommandArgs, wslProjectPath, wslUncPath } from "./wsl.js";
 
@@ -72,8 +73,8 @@ const PORT = Number(process.env.PORT || 4317);
 const HOST = process.env.HOST || "127.0.0.1";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const appRoot = path.resolve(__dirname, "../..");
-const attachmentsDir = path.join(os.homedir(), ".agent-dashboard", "attachments");
-const controlDir = path.join(os.homedir(), ".agent-dashboard");
+const attachmentsDir = statePath("attachments");
+const controlDir = STATE_DIR;
 const controlPath = path.join(controlDir, "control.json");
 const openPathLogPath = path.join(controlDir, "open-path.log");
 const supervised = process.env.AGENT_CONTROL_SUPERVISED === "1";
@@ -87,6 +88,7 @@ const openAiModelsDocUrl = "https://developers.openai.com/api/docs/models";
 const codexModelsDocUrl = "https://developers.openai.com/codex/models";
 const fallbackClaudeModelIds = ["claude-opus-4-7", "claude-opus-4-6", "claude-sonnet-4-6", "claude-haiku-4-5"];
 
+await migrateLegacyStateDir();
 let config = await readConfig();
 let secrets = await readSecrets();
 if (config.claudePath) process.env.AGENTCONTROL_CLAUDE_PATH = config.claudePath;

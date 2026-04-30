@@ -4,12 +4,13 @@ import path from "node:path";
 import { nanoid } from "nanoid";
 import { spawn as spawnPty, type IPty } from "node-pty";
 import type { Project, TerminalSession, TerminalSnapshot, WsServerEvent } from "@agent-control/shared";
+import { statePath } from "./storage.js";
 import { isWslProject, wslProjectPath } from "./wsl.js";
 
 const MAX_OUTPUT_CHUNKS = 2000;
 const DEFAULT_COLS = 100;
 const DEFAULT_ROWS = 30;
-const terminalHistoryDir = path.join(os.homedir(), ".agent-dashboard", "terminal-history");
+const terminalHistoryDir = statePath("terminal-history");
 
 interface ShellSpec {
   command: string;

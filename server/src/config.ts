@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { AgentPermissionMode, AutoApproveMode, ModelProfile, PermissionAllowRule } from "@agent-control/shared";
+import { migrateLegacyStateDir, statePath } from "./storage.js";
 
 export const DEFAULT_MODELS = [
   "claude-opus-4-7",
@@ -73,7 +74,7 @@ export type MenuDisplayMode = "iconOnly" | "iconText";
 export type TileScrollingMode = "vertical" | "horizontal";
 export type ExternalEditor = "none" | "vscode" | "cursor" | "custom";
 
-const configDir = path.join(os.homedir(), ".agent-dashboard");
+const configDir = statePath();
 const configPath = path.join(configDir, "config.json");
 const secretsPath = path.join(configDir, "secrets.json");
 export const APP_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -110,6 +111,7 @@ export function expandHome(input: string): string {
 }
 
 async function ensurePrivateConfigDir(): Promise<void> {
+  await migrateLegacyStateDir();
   await mkdir(configDir, { recursive: true, mode: 0o700 });
   await chmod(configDir, 0o700).catch(() => undefined);
 }

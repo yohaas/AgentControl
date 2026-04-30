@@ -3,12 +3,14 @@ import { mkdir, readFile, rm, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-const stateDir = path.join(os.homedir(), ".agent-dashboard");
+const stateDir = path.join(os.homedir(), ".agent-control");
+const legacyStateDir = path.join(os.homedir(), ".agent-dashboard");
 const controlPath = path.join(stateDir, "control.json");
+const legacyControlPath = path.join(legacyStateDir, "control.json");
 const npmCommand = "npm";
 
 let child;
-let lastControlMtime = 0;
+const lastControlMtimes = new Map();
 let stopping = false;
 
 function start() {
@@ -35,13 +37,13 @@ function stopChild() {
   child.kill("SIGTERM");
 }
 
-async function readControlCommand() {
+async function readControlCommand(controlFilePath) {
   try {
-    const info = await stat(controlPath);
-    if (info.mtimeMs <= lastControlMtime) return undefined;
-    lastControlMtime = info.mtimeMs;
-    const raw = await readFile(controlPath, "utf8");
-    await rm(controlPath, { force: true });
+    const info = await stat(controlFilePath);
+    if (info.mtimeMs <= (lastControlMtimes.get(controlFilePath) || 0)) return undefined;
+    lastControlMtimes.set(controlFilePath, info.mtimeMs);
+    const raw = await readFile(controlFilePath, "utf8");
+    await rm(controlFilePath, { force: true });
     return JSON.parse(raw);
   } catch {
     return undefined;
@@ -49,7 +51,7 @@ async function readControlCommand() {
 }
 
 async function pollControl() {
-  const command = await readControlCommand();
+  const command = (await readControlCommand(controlPath)) || (await readControlCommand(legacyControlPath));
   if (!command) return;
 
   if (command.command === "shutdown") {
@@ -69,6 +71,7 @@ async function pollControl() {
 
 await mkdir(stateDir, { recursive: true });
 await rm(controlPath, { force: true });
+await rm(legacyControlPath, { force: true });
 start();
 setInterval(() => void pollControl(), 500);
 

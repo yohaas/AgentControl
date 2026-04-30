@@ -1,6 +1,5 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { nanoid } from "nanoid";
@@ -35,6 +34,7 @@ import { DEFAULT_MODEL_PROFILES } from "./config.js";
 import { resolveClaudeCommand, resolveCodexInvocation } from "./capabilities.js";
 import { listPlugins, supportsPluginProvider } from "./plugins.js";
 import { mergeSlashCommands, normalizeSlashCommandInfo, scanSlashCommands } from "./slash-commands.js";
+import { legacyStatePath, statePath } from "./storage.js";
 import { isWslProject, windowsPathToWslPath, wslCommandArgs, wslProjectPath } from "./wsl.js";
 
 type Broadcast = (event: WsServerEvent) => void;
@@ -1829,7 +1829,7 @@ export class AgentRuntimeManager {
     state.permissionToken ??= nanoid(32);
     state.pendingPermissions ??= new Map();
     this.cleanupPermissionMcpConfig(state);
-    const configDir = path.join(os.homedir(), ".agent-dashboard", "mcp");
+    const configDir = statePath("mcp");
     mkdirSync(configDir, { recursive: true, mode: 0o700 });
     try {
       chmodSync(configDir, 0o700);
@@ -1875,15 +1875,16 @@ export class AgentRuntimeManager {
   }
 
   private cleanupStalePermissionMcpConfigs(): void {
-    const configDir = path.join(os.homedir(), ".agent-dashboard", "mcp");
-    try {
-      for (const entry of readdirSync(configDir, { withFileTypes: true })) {
-        if (entry.isFile() && entry.name.endsWith("-permissions.json")) {
-          rmSync(path.join(configDir, entry.name), { force: true });
+    for (const configDir of [statePath("mcp"), legacyStatePath("mcp")]) {
+      try {
+        for (const entry of readdirSync(configDir, { withFileTypes: true })) {
+          if (entry.isFile() && entry.name.endsWith("-permissions.json")) {
+            rmSync(path.join(configDir, entry.name), { force: true });
+          }
         }
+      } catch {
+        // The directory may not exist yet; stale cleanup is best effort.
       }
-    } catch {
-      // The directory may not exist yet; stale cleanup is best effort.
     }
   }
 
