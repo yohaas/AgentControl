@@ -57,6 +57,7 @@ export interface DashboardConfig {
   terminalDock?: TerminalDockPosition;
   fileExplorerDock?: FileExplorerDockPosition;
   themeMode?: ThemeMode;
+  agentControlProjectPath?: string;
   updateChecksEnabled?: boolean;
   updateCommands?: string[];
   inputNotificationsEnabled?: boolean;
@@ -77,8 +78,23 @@ const configPath = path.join(configDir, "config.json");
 const secretsPath = path.join(configDir, "secrets.json");
 export const APP_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 export const DEFAULT_BUILT_IN_AGENT_DIR = path.join(APP_ROOT, ".agent-control", "built-in-agents");
+const WINDOWS_UPDATE_COMMANDS = [
+  "powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\windows\\start-update.ps1"
+];
+const PREVIOUS_WINDOWS_UPDATE_COMMANDS = [
+  "$script = Join-Path (Get-Location) 'scripts\\update-agent-control.ps1'; $command = \"Write-Host 'Starting AgentControl updater...'; & `\"$script`\"\"; Start-Process powershell -Verb RunAs -WorkingDirectory (Get-Location).Path -ArgumentList @('-NoExit', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', $command)"
+];
+const OLDER_WINDOWS_UPDATE_COMMANDS = [
+  "$script = Join-Path (Get-Location) 'scripts\\update-agent-control.ps1'; $command = \"Write-Host 'Starting AgentControl updater...'; & `\"$script`\"\"; Start-Process powershell -Verb RunAs -WorkingDirectory (Get-Location).Path -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', $command)"
+];
+const POSIX_UPDATE_COMMANDS = ["bash ./scripts/update-agent-control.sh"];
+const LEGACY_UPDATE_COMMANDS = ["git pull", "npm ci", "npm run build", "Restart-Service AgentControl"];
 const LEGACY_BUILT_IN_AGENT_DIR = "~/.agent-control/built-in-agents";
 const LEGACY_REPO_RELATIVE_BUILT_IN_AGENT_DIR = ".agent-control/built-in-agents";
+
+export function defaultUpdateCommands(platform = process.platform): string[] {
+  return platform === "win32" ? WINDOWS_UPDATE_COMMANDS : POSIX_UPDATE_COMMANDS;
+}
 
 export interface DashboardSecrets {
   anthropicApiKey?: string;
@@ -243,10 +259,23 @@ export function resolveThemeMode(config: DashboardConfig): ThemeMode {
   return config.themeMode === "light" || config.themeMode === "dark" || config.themeMode === "auto" ? config.themeMode : "auto";
 }
 
+export function resolveAgentControlProjectPath(config: DashboardConfig): string {
+  return path.resolve(expandHome(config.agentControlProjectPath?.trim() || process.env.AGENTCONTROL_PROJECT_PATH || APP_ROOT));
+}
+
 export function resolveUpdateCommands(config: DashboardConfig): string[] {
   const commands = Array.isArray(config.updateCommands) ? config.updateCommands : [];
   const normalized = commands.map((command) => command.trim()).filter(Boolean);
-  return normalized.length ? normalized : ["git pull", "npm ci", "npm run build", "Restart-Service AgentControl"];
+  const commandKey = normalized.join("\n");
+  if (
+    normalized.length &&
+    commandKey !== LEGACY_UPDATE_COMMANDS.join("\n") &&
+    commandKey !== PREVIOUS_WINDOWS_UPDATE_COMMANDS.join("\n") &&
+    commandKey !== OLDER_WINDOWS_UPDATE_COMMANDS.join("\n")
+  ) {
+    return normalized;
+  }
+  return defaultUpdateCommands();
 }
 
 export function resolveUpdateChecksEnabled(config: DashboardConfig): boolean {

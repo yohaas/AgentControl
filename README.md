@@ -216,6 +216,169 @@ If you already built the app and only want to start the server, use:
 npm run start:server
 ```
 
+## Install As A Service
+
+Installing Agent Control as a service is optional, but it makes self-updates and restarts more predictable. Build once before installing the service:
+
+```bash
+npm install
+npm run build
+```
+
+Windows PowerShell can install a WinSW-backed service from the repo template. Run this from an elevated PowerShell window to install and start the service:
+
+```powershell
+.\scripts\windows\install-service.ps1 -RunAsCurrentUser
+```
+
+On Windows, Settings also shows Windows service buttons under App updates. Those buttons launch the same installer/uninstaller scripts through a UAC prompt using the configured Agent Control project location. The Install/Reinstall button runs the service as the current Windows user, prompts for that user's credentials, and passes `-NoStart` so the service does not collide with the currently running app. After installing from the app, restart Agent Control or start the service after closing the current instance.
+
+By default this creates:
+
+```text
+C:\Users\<you>\Services\AgentControl\AgentControl.exe
+C:\Users\<you>\Services\AgentControl\AgentControl.xml
+C:\Users\<you>\Services\AgentControl\logs\
+```
+
+`AgentControl.exe` is the WinSW service wrapper renamed for this service. The script downloads it from WinSW's GitHub release URL, renders `scripts/windows/AgentControl.xml.template` with your repo path, detected `npm.cmd`, PowerShell path, and log directory, installs the service, and starts it unless `-NoStart` is used. To use a local WinSW executable instead of downloading, pass `-WinSWPath`:
+
+The installer also creates a Windows Scheduled Task named `AgentControlUpdate`. The task runs `scripts/update-agent-control.ps1` in the logged-in user's interactive session with highest privileges, so service-triggered updates can show a visible PowerShell window instead of trying to display UI from the non-interactive service session.
+
+If you installed the Windows service before scheduled-task updates were added, rerun the installer to create the task:
+
+```powershell
+.\scripts\windows\install-service.ps1 -Force -RunAsCurrentUser -NoStart
+```
+
+You can verify or trigger the update task manually:
+
+```powershell
+Get-ScheduledTask -TaskName AgentControlUpdate
+Start-ScheduledTask -TaskName AgentControlUpdate
+```
+
+```powershell
+.\scripts\windows\install-service.ps1 -RunAsCurrentUser -WinSWPath "C:\path\to\WinSW-x64.exe"
+```
+
+Use `-Force` to reinstall an existing service:
+
+```powershell
+.\scripts\windows\install-service.ps1 -Force -RunAsCurrentUser
+```
+
+When installing from the running app, use `-NoStart` to avoid a port conflict:
+
+```powershell
+.\scripts\windows\install-service.ps1 -Force -RunAsCurrentUser -NoStart
+```
+
+To uninstall:
+
+```powershell
+.\scripts\windows\uninstall-service.ps1
+```
+
+Running as your user account lets the service use your user profile, Claude/Codex credentials, OneDrive folders, and user-scoped PATH entries. Windows stores the supplied service password in the Service Control Manager; the generated XML does not include it.
+
+Useful Windows installer options:
+
+- `-RunAsCurrentUser`: prompts for the current user's credentials and configures the service logon account.
+- `-NoStart`: installs/configures the service without starting it.
+- `-Force`: uninstalls/reinstalls an existing service with the same name.
+- `-ServiceName <name>`: installs a differently named service.
+- `-UpdateTaskName <name>`: uses a differently named scheduled update task.
+- `-ServiceDir <path>`: writes the generated service files somewhere other than `~/Services/AgentControl`.
+- `-WinSWPath <path>`: copies a local WinSW executable instead of downloading one.
+- `-SkipUpdateTask`: skips scheduled update task registration.
+
+macOS can run Agent Control as a LaunchAgent. Save this as `~/Library/LaunchAgents/com.agentcontrol.plist`, replacing `/path/to/AgentControl`:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.agentcontrol</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/zsh</string>
+    <string>-lc</string>
+    <string>cd /path/to/AgentControl &amp;&amp; npm run start:server</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+</dict>
+</plist>
+```
+
+Then load it:
+
+```bash
+launchctl bootstrap "gui/$UID" ~/Library/LaunchAgents/com.agentcontrol.plist
+launchctl kickstart -k "gui/$UID/com.agentcontrol"
+```
+
+Linux user services work well with systemd. Save this as `~/.config/systemd/user/AgentControl.service`, replacing `/path/to/AgentControl`:
+
+```ini
+[Unit]
+Description=Agent Control
+
+[Service]
+WorkingDirectory=/path/to/AgentControl
+ExecStart=/usr/bin/env npm run start:server
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
+```
+
+Then enable it:
+
+```bash
+systemctl --user daemon-reload
+systemctl --user enable --now AgentControl
+loginctl enable-linger "$USER"
+```
+
+For a system-wide Linux service, place the unit in `/etc/systemd/system/AgentControl.service`, set `User=<your-user>`, and use `sudo systemctl enable --now AgentControl`.
+
+## App Updates
+
+Agent Control can check its GitHub repository on startup and show the update icon in the top bar. The update dialog runs the configured command list from the Agent Control project location in Settings.
+
+Default update behavior is OS-specific:
+
+- Windows runs `scripts/windows/start-update.ps1`. If the `AgentControlUpdate` scheduled task exists, the script starts that task so update output appears in the logged-in user's desktop session. If the task is missing, it falls back to an elevated PowerShell/UAC handoff. The updater runs `git pull`, stops the `AgentControl` service, runs `npm ci` and `npm run build`, then starts the service. This avoids Windows file locks on native modules such as `node-pty`.
+- macOS and Linux run `bash ./scripts/update-agent-control.sh`. Unix filesystems generally allow replacing loaded files, so the script runs `git pull`, `npm ci`, and `npm run build`, then attempts to restart a detected service.
+
+Both updater scripts write logs to the system temp directory:
+
+```text
+agent-control-update.log
+```
+
+You can customize service names and restart behavior:
+
+```bash
+# macOS/Linux
+AGENTCONTROL_SERVICE_NAME=AgentControl bash ./scripts/update-agent-control.sh
+AGENTCONTROL_LAUNCH_LABEL=com.agentcontrol bash ./scripts/update-agent-control.sh
+AGENTCONTROL_RESTART_COMMAND="systemctl --user restart AgentControl" bash ./scripts/update-agent-control.sh
+```
+
+```powershell
+# Windows
+.\scripts\update-agent-control.ps1 -ServiceName AgentControl
+```
+
+If your service manager uses a different service name, update the command in Settings or set the relevant environment variable for the updater script.
+
 ## Projects
 
 Add a project from the project menu in the top bar. The folder selector can browse your home folder, configured project roots, existing project folders, and configured agent directories; you can also paste a path manually. The folder icon next to the project controls opens the selected project in the system file manager.

@@ -23,6 +23,13 @@ interface TerminalState {
   output: string[];
 }
 
+interface TerminalStartOptions {
+  cwd?: string;
+  requestId?: string;
+  commands?: string[];
+  hidden?: boolean;
+}
+
 function now() {
   return new Date().toISOString();
 }
@@ -47,6 +54,61 @@ function powershellWslCommand(project: Project): string {
     "--cd",
     powershellString(wslProjectPath(project))
   ].join(" ");
+}
+
+function powershellSequence(commands: string[]): string {
+  const lines = [
+    "$ErrorActionPreference = 'Stop'",
+    "try {",
+    "  $commands = @(",
+    ...commands.map((command) => `    ${powershellString(command)}`),
+    "  )",
+    "  foreach ($command in $commands) {",
+    "    Write-Host \"\"",
+    "    Write-Host \"> $command\" -ForegroundColor Cyan",
+    "    Invoke-Expression $command",
+    "    if ($LASTEXITCODE -ne $null -and $LASTEXITCODE -ne 0) { exit $LASTEXITCODE }",
+    "  }",
+    "} catch {",
+    "  Write-Error $_",
+    "  exit 1",
+    "}"
+  ];
+  return lines.join(os.EOL);
+}
+
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, "'\\''")}'`;
+}
+
+function bashSequence(commands: string[]): string {
+  const lines = ["set -e"];
+  for (const command of commands) {
+    lines.push(`printf '\\n> %s\\n' ${shellQuote(command)}`, command);
+  }
+  return lines.join(os.EOL);
+}
+
+function commandShell(commands: string[]): ShellSpec {
+  if (process.platform === "win32") {
+    const command = process.env.AGENT_CONTROL_SHELL?.trim() || "powershell.exe";
+    const name = shellName(command);
+    if (name === "powershell.exe" || name === "pwsh.exe" || name === "powershell" || name === "pwsh") {
+      return {
+        command,
+        args: ["-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", powershellSequence(commands)]
+      };
+    }
+    return {
+      command,
+      args: ["/d", "/s", "/c", commands.map((item) => `(${item}) || exit /b %errorlevel%`).join(" && ")]
+    };
+  }
+  const command = process.env.AGENT_CONTROL_SHELL || process.env.SHELL || "bash";
+  return {
+    command,
+    args: ["-lc", bashSequence(commands)]
+  };
 }
 
 function historyPathForProject(projectId?: string): string {
@@ -112,16 +174,28 @@ export class TerminalManager {
     };
   }
 
-  start(projectId?: string, cols = DEFAULT_COLS, rows = DEFAULT_ROWS, initialCommand?: string, title?: string): TerminalSession {
+  start(
+    projectId?: string,
+    cols = DEFAULT_COLS,
+    rows = DEFAULT_ROWS,
+    initialCommand?: string,
+    title?: string,
+    options: TerminalStartOptions = {}
+  ): TerminalSession {
     const project = projectId ? this.projects().find((candidate) => candidate.id === projectId) : undefined;
-    const shell = defaultShell(historyPathForProject(project?.id || projectId), project);
+    const commands = Array.isArray(options.commands) ? options.commands.map((command) => command.trim()).filter(Boolean) : [];
+    const customCwd = options.cwd?.trim();
+    const shell = commands.length ? commandShell(commands) : defaultShell(historyPathForProject(project?.id || projectId), project);
+    const cwd = project && isWslProject(project) ? wslProjectPath(project) : customCwd || project?.path || process.cwd();
     const timestamp = now();
     const session: TerminalSession = {
       id: nanoid(10),
+      requestId: options.requestId,
+      hidden: options.hidden,
       title,
       projectId: project?.id,
       projectName: project?.name,
-      cwd: project && isWslProject(project) ? wslProjectPath(project) : project?.path || process.cwd(),
+      cwd,
       shell: shell.command,
       cols,
       rows,
@@ -169,7 +243,7 @@ export class TerminalManager {
     });
 
     this.broadcast({ type: "terminal.started", session, output: state.output });
-    if (initialCommand?.trim()) {
+    if (!commands.length && initialCommand?.trim()) {
       pty.write(`${initialCommand.trim()}${process.platform === "win32" ? "\r" : "\n"}`);
     }
     return session;

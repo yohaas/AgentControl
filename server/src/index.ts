@@ -39,6 +39,7 @@ import {
   expandHome,
   readConfig,
   readSecrets,
+  resolveAgentControlProjectPath,
   resolveClaudeRuntime,
   resolveDefaultAgentMode,
   resolveAgentDirs,
@@ -1878,6 +1879,7 @@ app.get("/api/settings", (_request, response) => {
     terminalDock: resolveTerminalDock(config),
     fileExplorerDock: resolveFileExplorerDock(config),
     themeMode: resolveThemeMode(config),
+    agentControlProjectPath: resolveAgentControlProjectPath(config),
     updateChecksEnabled: resolveUpdateChecksEnabled(config),
     updateCommands: resolveUpdateCommands(config),
     inputNotificationsEnabled: resolveInputNotificationsEnabled(config),
@@ -1975,6 +1977,8 @@ app.put("/api/settings", async (request, response) => {
     terminalDock: resolveTerminalDock(body.terminalDock ? body : config),
     fileExplorerDock: resolveFileExplorerDock(body.fileExplorerDock ? body : config),
     themeMode: resolveThemeMode(body.themeMode ? body : config),
+    agentControlProjectPath:
+      typeof body.agentControlProjectPath === "string" ? body.agentControlProjectPath.trim() : resolveAgentControlProjectPath(config),
     updateChecksEnabled: typeof body.updateChecksEnabled === "boolean" ? body.updateChecksEnabled : resolveUpdateChecksEnabled(config),
     updateCommands: Array.isArray(body.updateCommands) ? body.updateCommands.map((command) => command.trim()).filter(Boolean) : config.updateCommands,
     inputNotificationsEnabled:
@@ -2029,6 +2033,7 @@ app.put("/api/settings", async (request, response) => {
     terminalDock: resolveTerminalDock(config),
     fileExplorerDock: resolveFileExplorerDock(config),
     themeMode: resolveThemeMode(config),
+    agentControlProjectPath: resolveAgentControlProjectPath(config),
     updateChecksEnabled: resolveUpdateChecksEnabled(config),
     updateCommands: resolveUpdateCommands(config),
     inputNotificationsEnabled: resolveInputNotificationsEnabled(config),
@@ -2156,7 +2161,12 @@ wss.on("connection", (ws) => {
           runtime.restart(command.id);
           break;
         case "terminalStart":
-          terminals.start(command.projectId, undefined, undefined, command.command, command.title);
+          terminals.start(command.projectId, undefined, undefined, command.command, command.title, {
+            cwd: command.cwd,
+            requestId: command.requestId,
+            commands: command.commands,
+            hidden: command.hidden
+          });
           break;
         case "terminalInput":
           terminals.input(command.id, command.input);

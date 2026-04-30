@@ -2255,7 +2255,7 @@ function planNextStepPrompt(event: PlanEvent, step: PlanNextStep) {
 }
 
 function terminalsForProject(sessionsById: Record<string, TerminalSession>, projectId?: string) {
-  return Object.values(sessionsById).filter((session) => !projectId || session.projectId === projectId);
+  return Object.values(sessionsById).filter((session) => !session.hidden && (!projectId || session.projectId === projectId));
 }
 
 function devCommandStorageKey(projectId: string) {
@@ -3084,11 +3084,12 @@ function Header({
   }
 
   if (docked) {
+    const showCollapsedOfflineDot = sidebarCollapsed && !wsConnected;
     return (
       <header
         className={cn(
           "flex h-14 shrink-0 items-center border-b border-border bg-background",
-          sidebarCollapsed ? "justify-center px-2" : "gap-2 px-3"
+          sidebarCollapsed ? "flex-col justify-end gap-1 px-1 py-1" : "gap-2 px-3"
         )}
       >
         {!sidebarCollapsed && (
@@ -3097,9 +3098,26 @@ function Header({
             <h1 className="min-w-0 flex-1 truncate text-base font-semibold">Agent Control</h1>
           </>
         )}
+        {sidebarCollapsed && (
+          <div className="flex h-5 items-center justify-center gap-1">
+            {showCollapsedOfflineDot && (
+              <span
+                className="grid h-5 w-5 shrink-0 place-items-center rounded-full text-red-400"
+                title="AgentControl is disconnected. The dashboard is not receiving live updates."
+                aria-label="AgentControl disconnected"
+              >
+                <span className="h-2.5 w-2.5 rounded-full bg-current shadow-[0_0_0_3px_rgba(255,255,255,0.06)]" />
+              </span>
+            )}
+            <AppUpdateNotice hideWhenNoUpdate compact />
+          </div>
+        )}
         <button
           type="button"
-          className="grid h-8 w-8 shrink-0 place-items-center rounded-md border border-border bg-background text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className={cn(
+            "grid shrink-0 place-items-center rounded-md border border-border bg-background text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            sidebarCollapsed ? "h-7 w-7" : "h-8 w-8"
+          )}
           onClick={onUndock}
           title="Expand top bar"
           aria-label="Expand top bar"
@@ -3630,12 +3648,16 @@ function GitStatusMenu({ projectId }: { projectId?: string }) {
   );
 }
 
-function AppUpdateNotice() {
+function AppUpdateNotice({ compact = false, hideWhenNoUpdate = false }: { compact?: boolean; hideWhenNoUpdate?: boolean } = {}) {
   const settings = useAppStore((state) => state.settings);
+  const terminalSessions = useAppStore((state) => state.terminalSessions);
   const addError = useAppStore((state) => state.addError);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [status, setStatus] = useState<AppUpdateStatus | undefined>();
   const [loading, setLoading] = useState(false);
+  const [updateRun, setUpdateRun] = useState<{ requestId: string; commands: string[] }>();
+  const [completionOpen, setCompletionOpen] = useState(false);
+  const [restartCountdown, setRestartCountdown] = useState(30);
 
   useEffect(() => {
     if (settings.updateChecksEnabled === false) return;
@@ -3656,122 +3678,193 @@ function AppUpdateNotice() {
     }
   }
 
+  const updateSession = updateRun
+    ? Object.values(terminalSessions).find((session) => session.requestId === updateRun.requestId)
+    : undefined;
+
+  useEffect(() => {
+    if (!updateRun || !updateSession || updateSession.status !== "exited") return;
+    if ((updateSession.exitCode || 0) !== 0) {
+      addError(`AgentControl update command failed with exit code ${updateSession.exitCode ?? "unknown"}.`);
+      setUpdateRun(undefined);
+      return;
+    }
+    setUpdateRun(undefined);
+    setRestartCountdown(30);
+    setCompletionOpen(true);
+  }, [addError, updateRun, updateSession]);
+
+  useEffect(() => {
+    if (!completionOpen) return;
+    if (restartCountdown <= 0) {
+      window.location.reload();
+      return;
+    }
+    const timer = window.setTimeout(() => setRestartCountdown((current) => Math.max(0, current - 1)), 1000);
+    return () => window.clearTimeout(timer);
+  }, [completionOpen, restartCountdown]);
+
   function runUpdate() {
     const commands = (settings.updateCommands || []).map((command) => command.trim()).filter(Boolean);
     if (commands.length === 0) return;
-    sendCommand({ type: "terminalStart", command: commands.join("; "), title: "Update AgentControl" });
+    const requestId =
+      typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `update-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    setUpdateRun({ requestId, commands });
+    sendCommand({
+      type: "terminalStart",
+      requestId,
+      cwd: settings.agentControlProjectPath?.trim() || undefined,
+      commands,
+      hidden: true,
+      title: "Update AgentControl"
+    });
     setDetailsOpen(false);
   }
 
   const commits = status?.commits || [];
   const updateAvailable = Boolean(status?.updateAvailable);
-  if (settings.updateChecksEnabled === false || !updateAvailable) return null;
+  if (settings.updateChecksEnabled === false) return null;
+  if (hideWhenNoUpdate && !updateAvailable) return null;
 
   return (
-    <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        className="h-7 w-7 text-amber-700 hover:text-amber-800 dark:text-amber-200 dark:hover:text-amber-100"
-        title="AgentControl update available"
-        aria-label="AgentControl update available"
-        onClick={() => setDetailsOpen(true)}
-      >
-        <BellPlus className="h-4 w-4" />
-      </Button>
-      <DialogContent className="w-[min(94vw,520px)]">
-        <DialogHeader>
-          <DialogTitle>AgentControl Update</DialogTitle>
-        </DialogHeader>
-        <div className="grid gap-3">
-          <div className="flex items-center justify-between gap-2">
-            <div className="min-w-0 text-sm text-muted-foreground">
-              {loading ? "Checking GitHub..." : status?.checkedAt ? `Checked ${new Date(status.checkedAt).toLocaleString()}` : "Update available"}
+    <>
+      <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className={cn(
+            compact ? "h-5 w-5" : "h-7 w-7",
+            updateAvailable
+              ? "text-amber-600 hover:text-amber-700 dark:text-amber-300 dark:hover:text-amber-200"
+              : "text-muted-foreground hover:text-foreground"
+          )}
+          title={updateAvailable ? "AgentControl update available" : "AgentControl updates"}
+          aria-label={updateAvailable ? "AgentControl update available" : "AgentControl updates"}
+          onClick={() => setDetailsOpen(true)}
+        >
+          <BellPlus className={compact ? "h-3.5 w-3.5" : "h-4 w-4"} />
+        </Button>
+        <DialogContent className="w-[min(94vw,520px)]">
+          <DialogHeader>
+            <DialogTitle>AgentControl Update</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0 text-sm text-muted-foreground">
+                {loading
+                  ? "Checking GitHub..."
+                  : status?.checkedAt
+                    ? `Checked ${new Date(status.checkedAt).toLocaleString()}`
+                    : updateAvailable
+                      ? "Update available"
+                      : "No update status yet"}
+              </div>
+              <Button variant="outline" size="sm" onClick={() => void refresh(true)} disabled={loading}>
+                <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
+                Refresh
+              </Button>
             </div>
-            <Button variant="outline" size="sm" onClick={() => void refresh(true)} disabled={loading}>
-              <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
-              Refresh
-            </Button>
-          </div>
 
-          {status?.isRepo && (
-            <>
-              <div className="grid gap-1 rounded-md border border-border p-2 text-xs">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-muted-foreground">Branch</span>
-                  <span className="min-w-0 truncate font-mono">{status.branch || "detached"}</span>
-                </div>
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-muted-foreground">Remote</span>
-                  <span className="min-w-0 truncate font-mono" title={status.upstream || status.remoteUrl}>
-                    {status.upstream || status.githubRepo || "origin"}
-                  </span>
-                </div>
-                {status.latestRelease && (
+            {status?.isRepo && (
+              <>
+                <div className="grid gap-1 rounded-md border border-border p-2 text-xs">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-muted-foreground">Latest release</span>
-                    <span className="min-w-0 truncate font-mono" title={status.latestRelease.name || status.latestRelease.tagName}>
-                      {status.latestRelease.tagName}
+                    <span className="text-muted-foreground">Branch</span>
+                    <span className="min-w-0 truncate font-mono">{status.branch || "detached"}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-muted-foreground">Remote</span>
+                    <span className="min-w-0 truncate font-mono" title={status.upstream || status.remoteUrl}>
+                      {status.upstream || status.githubRepo || "origin"}
                     </span>
                   </div>
-                )}
-              </div>
-
-              <div className="grid gap-1">
-                <div className="text-xs font-medium text-muted-foreground">Incoming commits</div>
-                {commits.length === 0 ? (
-                  <div className="rounded-md border border-dashed border-border px-2 py-3 text-center text-xs text-muted-foreground">
-                    No incoming commits found
-                  </div>
-                ) : (
-                  <div className="max-h-52 overflow-y-auto rounded-md border border-border">
-                    {commits.map((commit) => (
-                      <div key={commit.hash} className="grid gap-0.5 border-b border-border px-2 py-1.5 last:border-b-0">
-                        <div className="flex min-w-0 items-center gap-2">
-                          <Badge className="shrink-0 px-1.5 py-0 font-mono text-[10px]">{commit.hash}</Badge>
-                          <span className="min-w-0 truncate text-xs" title={commit.subject}>
-                            {commit.subject}
-                          </span>
-                        </div>
-                        {commit.authorName && (
-                          <div className="truncate pl-[3.25rem] text-[11px] text-muted-foreground" title={commit.authorName}>
-                            {commit.authorName}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div className="grid gap-1">
-                <div className="text-xs font-medium text-muted-foreground">Commands</div>
-                <div className="rounded-md border border-border bg-muted p-2 font-mono text-xs">
-                  {(settings.updateCommands || []).map((command) => (
-                    <div key={command}>{command}</div>
-                  ))}
+                  {status.latestRelease && (
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-muted-foreground">Latest release</span>
+                      <span className="min-w-0 truncate font-mono" title={status.latestRelease.name || status.latestRelease.tagName}>
+                        {status.latestRelease.tagName}
+                      </span>
+                    </div>
+                  )}
                 </div>
+
+                <div className="grid gap-1">
+                  <div className="text-xs font-medium text-muted-foreground">Incoming commits</div>
+                  {commits.length === 0 ? (
+                    <div className="rounded-md border border-dashed border-border px-2 py-3 text-center text-xs text-muted-foreground">
+                      No incoming commits found
+                    </div>
+                  ) : (
+                    <div className="max-h-52 overflow-y-auto rounded-md border border-border">
+                      {commits.map((commit) => (
+                        <div key={commit.hash} className="grid gap-0.5 border-b border-border px-2 py-1.5 last:border-b-0">
+                          <div className="flex min-w-0 items-center gap-2">
+                            <Badge className="shrink-0 px-1.5 py-0 font-mono text-[10px]">{commit.hash}</Badge>
+                            <span className="min-w-0 truncate text-xs" title={commit.subject}>
+                              {commit.subject}
+                            </span>
+                          </div>
+                          {commit.authorName && (
+                            <div className="truncate pl-[3.25rem] text-[11px] text-muted-foreground" title={commit.authorName}>
+                              {commit.authorName}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+
+            {!status?.isRepo && status?.message && (
+              <div className="rounded-md border border-border bg-muted p-3 text-sm text-muted-foreground">{status.message}</div>
+            )}
+
+            <div className="grid gap-1">
+              <div className="text-xs font-medium text-muted-foreground">Project location</div>
+              <div className="rounded-md border border-border bg-muted p-2 font-mono text-xs">
+                {settings.agentControlProjectPath || "the AgentControl project folder"}
               </div>
-            </>
-          )}
+            </div>
 
-          {!status?.isRepo && status?.message && (
-            <div className="rounded-md border border-border bg-muted p-3 text-sm text-muted-foreground">{status.message}</div>
-          )}
+            <div className="grid gap-1">
+              <div className="text-xs font-medium text-muted-foreground">Commands</div>
+              <div className="rounded-md border border-border bg-muted p-2 font-mono text-xs">
+                {(settings.updateCommands || []).map((command) => (
+                  <div key={command}>{command}</div>
+                ))}
+              </div>
+              <div className="text-xs text-muted-foreground">Project location and commands can be updated in Settings.</div>
+            </div>
 
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setDetailsOpen(false)}>
-              Close
-            </Button>
-            <Button onClick={runUpdate} disabled={(settings.updateCommands || []).length === 0}>
-              <SquareTerminal className="h-4 w-4" />
-              Run Update
-            </Button>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setDetailsOpen(false)}>
+                Close
+              </Button>
+              <Button onClick={runUpdate} disabled={(settings.updateCommands || []).length === 0 || Boolean(updateRun)}>
+                <SquareTerminal className="h-4 w-4" />
+                {updateRun ? "Running..." : "Run Update"}
+              </Button>
+            </div>
           </div>
-        </div>
-      </DialogContent>
-    </Dialog>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={completionOpen} onOpenChange={setCompletionOpen}>
+        <DialogContent className="w-[min(94vw,420px)]">
+          <DialogHeader>
+            <DialogTitle>Update Complete</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-3 text-sm">
+            <p>Update complete, AgentControl restarting, please refresh in {restartCountdown} seconds.</p>
+            <div className="h-2 overflow-hidden rounded-full bg-muted">
+              <div className="h-full bg-primary transition-all" style={{ width: `${Math.max(0, Math.min(100, (restartCountdown / 30) * 100))}%` }} />
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
@@ -6227,10 +6320,13 @@ function SettingsDialog() {
     typeof Notification === "undefined" ? "unsupported" : Notification.permission
   );
   const [permissionAllowRules, setPermissionAllowRules] = useState<PermissionAllowRule[]>(settings.permissionAllowRules || []);
+  const [agentControlProjectPath, setAgentControlProjectPath] = useState(settings.agentControlProjectPath || "");
+  const [agentControlProjectBrowserOpen, setAgentControlProjectBrowserOpen] = useState(false);
   const [updateChecksEnabled, setUpdateChecksEnabled] = useState(settings.updateChecksEnabled !== false);
   const [updateCommandsText, setUpdateCommandsText] = useState((settings.updateCommands || []).join("\n"));
   const [checkingUpdates, setCheckingUpdates] = useState(false);
   const [settingsUpdateStatus, setSettingsUpdateStatus] = useState<AppUpdateStatus | undefined>();
+  const [windowsServiceStatus, setWindowsServiceStatus] = useState("");
   const [builtInEditor, setBuiltInEditor] = useState<{ open: boolean; agent?: AgentDef; originalName?: string }>({ open: false });
 
   useEffect(() => {
@@ -6266,9 +6362,11 @@ function SettingsDialog() {
     setInputNotificationsEnabled(settings.inputNotificationsEnabled === true);
     setNotificationPermission(typeof Notification === "undefined" ? "unsupported" : Notification.permission);
     setPermissionAllowRules(settings.permissionAllowRules || []);
+    setAgentControlProjectPath(settings.agentControlProjectPath || "");
     setUpdateChecksEnabled(settings.updateChecksEnabled !== false);
     setUpdateCommandsText((settings.updateCommands || []).join("\n"));
     setSettingsUpdateStatus(undefined);
+    setWindowsServiceStatus("");
   }, [open, settings]);
 
   async function save() {
@@ -6305,6 +6403,7 @@ function SettingsDialog() {
         pinLastSentMessage,
         inputNotificationsEnabled,
         permissionAllowRules,
+        agentControlProjectPath,
         updateChecksEnabled,
         updateCommands: updateCommandsText.split(/\r?\n/).map((command) => command.trim()).filter(Boolean)
       });
@@ -6348,6 +6447,25 @@ function SettingsDialog() {
     }
   }
 
+  function runWindowsServiceScript(action: "install" | "uninstall") {
+    const scriptName = action === "install" ? "install-service.ps1" : "uninstall-service.ps1";
+    const extraArgs = action === "install" ? " -Force -RunAsCurrentUser -NoStart" : "";
+    const label = action === "install" ? "Starting AgentControl service installer..." : "Starting AgentControl service uninstaller...";
+    const command = `$script = Join-Path (Get-Location) 'scripts\\windows\\${scriptName}'; $command = "Write-Host '${label}'; & \`"$script\`"${extraArgs}"; Start-Process powershell -Verb RunAs -WorkingDirectory (Get-Location).Path -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', $command)`;
+    sendCommand({
+      type: "terminalStart",
+      cwd: agentControlProjectPath.trim() || undefined,
+      commands: [command],
+      hidden: true,
+      title: action === "install" ? "Install AgentControl service" : "Uninstall AgentControl service"
+    });
+    setWindowsServiceStatus(
+      action === "install"
+        ? "Service installer launched. Approve the Windows UAC prompt. Service installed; restart AgentControl or start the service after closing the current instance."
+        : "Service uninstaller launched. Approve the Windows UAC prompt."
+    );
+  }
+
   function exportConfig() {
     const payload = {
       app: "AgentControl",
@@ -6380,6 +6498,7 @@ function SettingsDialog() {
         pinLastSentMessage,
         inputNotificationsEnabled,
         permissionAllowRules,
+        agentControlProjectPath,
         updateChecksEnabled,
         updateCommands: updateCommandsText.split(/\r?\n/).map((command) => command.trim()).filter(Boolean)
       }
@@ -6420,6 +6539,7 @@ function SettingsDialog() {
       setInputNotificationsEnabled(next.inputNotificationsEnabled === true);
       setNotificationPermission(typeof Notification === "undefined" ? "unsupported" : Notification.permission);
       setPermissionAllowRules(next.permissionAllowRules || []);
+      setAgentControlProjectPath(next.agentControlProjectPath || "");
       setUpdateChecksEnabled(next.updateChecksEnabled !== false);
       setUpdateCommandsText((next.updateCommands || []).join("\n"));
     } catch (error) {
@@ -6497,6 +6617,8 @@ function SettingsDialog() {
   const builtInProject = selectedProject || projects[0];
   const builtInAgentDefs = builtInProject?.builtInAgents?.length ? builtInProject.builtInAgents : [GENERAL_AGENT_DEF];
   const builtInDirectoryDirty = builtInAgentDir !== (settings.builtInAgentDir || DEFAULT_BUILT_IN_AGENT_DIR);
+  const isWindowsClient =
+    typeof navigator !== "undefined" && /win/i.test(`${navigator.platform || ""} ${navigator.userAgent || ""}`);
   const browserInitialPath = agentDirBrowser
     ? agentDirBrowser !== "builtIn" && currentAgentDir(agentDirBrowser).startsWith(".") && selectedProject
       ? `${selectedProject.path}\\${currentAgentDir(agentDirBrowser)}`
@@ -6532,10 +6654,12 @@ function SettingsDialog() {
       pinLastSentMessage !== settings.pinLastSentMessage ||
       inputNotificationsEnabled !== (settings.inputNotificationsEnabled === true) ||
       permissionAllowRules.map(permissionAllowRuleKey).join("\n") !== (settings.permissionAllowRules || []).map(permissionAllowRuleKey).join("\n") ||
+      agentControlProjectPath !== (settings.agentControlProjectPath || "") ||
       updateChecksEnabled !== (settings.updateChecksEnabled !== false) ||
       updateCommandsText !== (settings.updateCommands || []).join("\n"),
     [
       anthropicApiKey,
+      agentControlProjectPath,
       autoApprove,
       builtInAgentDir,
       claudeAgentDir,
@@ -6862,13 +6986,48 @@ function SettingsDialog() {
               </span>
             </label>
             <label className="grid gap-1.5 text-sm">
+              AgentControl project location
+              <div className="flex gap-2">
+                <Input
+                  value={agentControlProjectPath}
+                  onChange={(event) => setAgentControlProjectPath(event.target.value)}
+                  placeholder="AgentControl project folder"
+                />
+                <Button type="button" variant="outline" onClick={() => setAgentControlProjectBrowserOpen(true)}>
+                  <FolderOpen className="h-4 w-4" />
+                  Browse
+                </Button>
+              </div>
+            </label>
+            {isWindowsClient && (
+              <div className="grid gap-2 rounded-md border border-border bg-background/50 p-3">
+                <div>
+                  <div className="text-sm font-medium">Windows service</div>
+                  <p className="text-xs text-muted-foreground">
+                    Install or remove the AgentControl Windows service using the project location above.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" variant="outline" size="sm" onClick={() => runWindowsServiceScript("install")}>
+                    <HardDrive className="h-4 w-4" />
+                    Install / Reinstall
+                  </Button>
+                  <Button type="button" variant="outline" size="sm" onClick={() => runWindowsServiceScript("uninstall")}>
+                    <Trash2 className="h-4 w-4" />
+                    Uninstall
+                  </Button>
+                </div>
+                {windowsServiceStatus && <div className="text-xs text-muted-foreground">{windowsServiceStatus}</div>}
+              </div>
+            )}
+            <label className="grid gap-1.5 text-sm">
               Update commands
             <Textarea
               value={updateCommandsText}
               onChange={(event) => setUpdateCommandsText(event.target.value)}
               rows={5}
               className="font-mono text-xs"
-              placeholder="git pull&#10;npm ci&#10;npm run build&#10;Restart-Service AgentControl"
+              placeholder="powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\start-update.ps1"
             />
             </label>
           </section>
@@ -7192,6 +7351,15 @@ function SettingsDialog() {
         onSelect={(selectedPath) => {
           addProjectPath(selectedPath);
           setProjectFolderBrowserOpen(false);
+        }}
+      />
+      <FolderBrowserDialog
+        open={agentControlProjectBrowserOpen}
+        initialPath={agentControlProjectPath || selectedProject?.path || ""}
+        onOpenChange={setAgentControlProjectBrowserOpen}
+        onSelect={(selectedPath) => {
+          setAgentControlProjectPath(selectedPath);
+          setAgentControlProjectBrowserOpen(false);
         }}
       />
     </>
@@ -8308,6 +8476,7 @@ function AgentTile({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const suppressAutoFocusRef = useRef(false);
   const suppressScrollIntoViewRef = useRef(false);
+  const didInitialTranscriptScrollRef = useRef(false);
   const [showPinnedMessage, setShowPinnedMessage] = useState(false);
   const [contextOpen, setContextOpen] = useState(false);
   const [contextCopyTarget, setContextCopyTarget] = useState<ContextCopyTarget | undefined>();
@@ -8341,6 +8510,21 @@ function AgentTile({
   const hasMultilineDraft = draftLines > 1 || composerWrapped;
   const composerExpanded = hasMultilineDraft && !composerCollapsed;
   useQueuedMessageSender(agent, queue, canType);
+
+  useEffect(() => {
+    didInitialTranscriptScrollRef.current = false;
+  }, [agent.id]);
+
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root || didInitialTranscriptScrollRef.current || transcript.length === 0) return;
+    didInitialTranscriptScrollRef.current = true;
+    window.requestAnimationFrame(() => {
+      root.scrollTop = root.scrollHeight;
+      setShowPinnedMessage(shouldShowPinnedUserMessage(root, pinnedMessage?.id));
+      setShowJumpToBottom(!isNearScrollBottom(root));
+    });
+  }, [agent.id, pinnedMessage?.id, transcript.length]);
 
   useEffect(() => {
     const root = rootRef.current;
@@ -9836,7 +10020,7 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
   const enqueueMessage = useAppStore((state) => state.enqueueMessage);
   const addError = useAppStore((state) => state.addError);
   const settings = useAppStore((state) => state.settings);
-  const scrollTop = useAppStore((state) => state.scrollPositions[agent.id] || 0);
+  const savedScrollTop = useAppStore((state) => state.scrollPositions[agent.id]);
   const setScrollPosition = useAppStore((state) => state.setScrollPosition);
   const setChatFocusedAgent = useAppStore((state) => state.setChatFocusedAgent);
   const searchOpen = useAppStore((state) => state.searchOpen);
@@ -9885,10 +10069,19 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
   useEffect(() => {
     const root = rootRef.current;
     if (!root) return;
-    root.scrollTop = scrollTop;
+    if (savedScrollTop === undefined) {
+      window.requestAnimationFrame(() => {
+        root.scrollTop = root.scrollHeight;
+        setScrollPosition(agent.id, root.scrollTop);
+        setShowPinnedMessage(shouldShowPinnedUserMessage(root, pinnedMessage?.id));
+        setShowJumpToBottom(!isNearScrollBottom(root));
+      });
+      return;
+    }
+    root.scrollTop = savedScrollTop;
     setShowPinnedMessage(shouldShowPinnedUserMessage(root, pinnedMessage?.id));
     setShowJumpToBottom(!isNearScrollBottom(root));
-  }, [agent.id, pinnedMessage?.id, scrollTop]);
+  }, [agent.id, pinnedMessage?.id, savedScrollTop, setScrollPosition]);
 
   useEffect(() => {
     const root = rootRef.current;

@@ -462,6 +462,8 @@ export type TerminalStatus = "running" | "exited";
 
 export interface TerminalSession {
   id: string;
+  requestId?: string;
+  hidden?: boolean;
   title?: string;
   projectId?: string;
   projectName?: string;
@@ -720,8 +722,12 @@ export type WsClientCommand =
     }
   | {
       type: "terminalStart";
+      requestId?: string;
       projectId?: string;
+      cwd?: string;
       command?: string;
+      commands?: string[];
+      hidden?: boolean;
       title?: string;
     }
   | {

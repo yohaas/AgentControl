@@ -47,6 +47,7 @@ export interface SettingsState {
   terminalDock: TerminalDockPosition;
   fileExplorerDock: FileExplorerDockPosition;
   themeMode: ThemeMode;
+  agentControlProjectPath?: string;
   updateChecksEnabled: boolean;
   updateCommands: string[];
   inputNotificationsEnabled: boolean;
@@ -86,6 +87,22 @@ export interface QueuedMessage {
 
 const MESSAGE_QUEUES_STORAGE_KEY = "agent-control-message-queues";
 const TILE_LAYOUT_STORAGE_KEY = "agent-control-tile-layout";
+const WINDOWS_UPDATE_COMMANDS = [
+  "powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\windows\\start-update.ps1"
+];
+const PREVIOUS_WINDOWS_UPDATE_COMMANDS = [
+  "$script = Join-Path (Get-Location) 'scripts\\update-agent-control.ps1'; $command = \"Write-Host 'Starting AgentControl updater...'; & `\"$script`\"\"; Start-Process powershell -Verb RunAs -WorkingDirectory (Get-Location).Path -ArgumentList @('-NoExit', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', $command)"
+];
+const OLDER_WINDOWS_UPDATE_COMMANDS = [
+  "$script = Join-Path (Get-Location) 'scripts\\update-agent-control.ps1'; $command = \"Write-Host 'Starting AgentControl updater...'; & `\"$script`\"\"; Start-Process powershell -Verb RunAs -WorkingDirectory (Get-Location).Path -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', $command)"
+];
+const POSIX_UPDATE_COMMANDS = ["bash ./scripts/update-agent-control.sh"];
+const LEGACY_UPDATE_COMMANDS = ["git pull", "npm ci", "npm run build", "Restart-Service AgentControl"];
+
+function defaultUpdateCommands(): string[] {
+  const platform = typeof navigator === "undefined" ? "" : `${navigator.platform} ${navigator.userAgent}`.toLowerCase();
+  return platform.includes("win") ? WINDOWS_UPDATE_COMMANDS : POSIX_UPDATE_COMMANDS;
+}
 
 interface StoredTileLayout {
   order: string[];
@@ -286,8 +303,9 @@ const defaultSettings: SettingsState = {
   terminalDock: "bottom",
   fileExplorerDock: "left",
   themeMode: "auto",
+  agentControlProjectPath: "",
   updateChecksEnabled: true,
-  updateCommands: ["git pull", "npm ci", "npm run build", "Restart-Service AgentControl"],
+  updateCommands: defaultUpdateCommands(),
   inputNotificationsEnabled: false,
   externalEditor: "none",
   externalEditorUrlTemplate: "",
@@ -338,12 +356,19 @@ function normalizeSettings(settings: SettingsState): SettingsState {
     permissionAllowRules: Array.isArray(settings.permissionAllowRules) ? settings.permissionAllowRules : defaultSettings.permissionAllowRules,
     updateChecksEnabled: settings.updateChecksEnabled !== false,
     inputNotificationsEnabled: settings.inputNotificationsEnabled === true,
+    agentControlProjectPath: typeof settings.agentControlProjectPath === "string" ? settings.agentControlProjectPath : "",
     externalEditor,
     externalEditorUrlTemplate: typeof settings.externalEditorUrlTemplate === "string" ? settings.externalEditorUrlTemplate : "",
-    updateCommands:
-      Array.isArray(settings.updateCommands) && settings.updateCommands.some((command) => command.trim())
-        ? settings.updateCommands.map((command) => command.trim()).filter(Boolean)
-        : defaultSettings.updateCommands,
+    updateCommands: (() => {
+      const normalized = Array.isArray(settings.updateCommands) ? settings.updateCommands.map((command) => command.trim()).filter(Boolean) : [];
+      const commandKey = normalized.join("\n");
+      return normalized.length &&
+        commandKey !== LEGACY_UPDATE_COMMANDS.join("\n") &&
+        commandKey !== PREVIOUS_WINDOWS_UPDATE_COMMANDS.join("\n") &&
+        commandKey !== OLDER_WINDOWS_UPDATE_COMMANDS.join("\n")
+        ? normalized
+        : defaultSettings.updateCommands;
+    })(),
     defaultAgentMode,
     tileHeight: resolveTileHeight(settings.tileHeight),
     tileColumns: clampNumber(settings.tileColumns, defaultSettings.tileColumns, 1, 6),
@@ -691,10 +716,11 @@ export const useAppStore = create<AppState>((set, get) => ({
       case "terminal.snapshot":
         set((state) => {
           const terminalSessions = Object.fromEntries(event.snapshot.sessions.map((session) => [session.id, session]));
+          const visibleSessions = event.snapshot.sessions.filter((session) => !session.hidden);
           const activeTerminalId =
-            state.activeTerminalId && terminalSessions[state.activeTerminalId]
+            state.activeTerminalId && terminalSessions[state.activeTerminalId] && !terminalSessions[state.activeTerminalId].hidden
               ? state.activeTerminalId
-              : event.snapshot.sessions[event.snapshot.sessions.length - 1]?.id;
+              : visibleSessions[visibleSessions.length - 1]?.id;
           return {
             terminalSessions,
             terminalOutput: event.snapshot.output,
@@ -704,10 +730,10 @@ export const useAppStore = create<AppState>((set, get) => ({
         break;
       case "terminal.started":
         set((state) => ({
-          terminalOpen: true,
+          terminalOpen: event.session.hidden ? state.terminalOpen : true,
           terminalSessions: { ...state.terminalSessions, [event.session.id]: event.session },
           terminalOutput: { ...state.terminalOutput, [event.session.id]: event.output },
-          activeTerminalId: event.session.id
+          activeTerminalId: event.session.hidden ? state.activeTerminalId : event.session.id
         }));
         break;
       case "terminal.output":
@@ -743,13 +769,14 @@ export const useAppStore = create<AppState>((set, get) => ({
           const { [event.id]: _closedSession, ...terminalSessions } = state.terminalSessions;
           const { [event.id]: _closedOutput, ...terminalOutput } = state.terminalOutput;
           const remainingIds = Object.keys(terminalSessions);
+          const visibleRemainingIds = remainingIds.filter((id) => !terminalSessions[id]?.hidden);
           const activeTerminalId =
-            state.activeTerminalId === event.id ? remainingIds[remainingIds.length - 1] : state.activeTerminalId;
+            state.activeTerminalId === event.id ? visibleRemainingIds[visibleRemainingIds.length - 1] : state.activeTerminalId;
           return {
             terminalSessions,
             terminalOutput,
             activeTerminalId,
-            terminalOpen: remainingIds.length > 0 ? state.terminalOpen : false
+            terminalOpen: visibleRemainingIds.length > 0 ? state.terminalOpen : false
           };
         });
         break;
