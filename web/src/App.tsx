@@ -12676,7 +12676,7 @@ function MobileChatPane({ agent, addError }: { agent: RunningAgent; addError: (m
     if (isBusy && agent.status !== "awaiting-input") {
       enqueueMessage(agent.id, { text, attachments: [] });
       setDraft(agent.id, "");
-      window.requestAnimationFrame(() => inputRef.current?.focus());
+      window.requestAnimationFrame(() => inputRef.current?.blur());
       return;
     }
     setSending(true);
@@ -12687,7 +12687,7 @@ function MobileChatPane({ agent, addError }: { agent: RunningAgent; addError: (m
         await refreshMobileSnapshot();
       }
       setDraft(agent.id, "");
-      window.requestAnimationFrame(() => inputRef.current?.focus());
+      window.requestAnimationFrame(() => inputRef.current?.blur());
     } catch (error) {
       addError(error instanceof Error ? error.message : String(error));
     } finally {
