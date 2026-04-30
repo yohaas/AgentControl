@@ -751,7 +751,7 @@ function ActiveAgentDot({ agent, className }: { agent: RunningAgent; className?:
       )}
       {needsInput && (
         <TriangleAlert
-          className="pointer-events-none absolute -right-1.5 -top-1.5 z-10 h-3.5 w-3.5 fill-background text-amber-500 drop-shadow-sm"
+          className="pointer-events-none absolute -left-1.5 -top-1.5 z-10 h-3.5 w-3.5 fill-background text-amber-500 drop-shadow-sm"
           aria-hidden="true"
         />
       )}
