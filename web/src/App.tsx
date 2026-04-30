@@ -6431,6 +6431,29 @@ function SettingsDialog() {
     setInputNotificationsEnabled(true);
   }
 
+  async function sendTestInputNotification() {
+    if (typeof Notification === "undefined") {
+      addError("This browser does not support notifications.");
+      setNotificationPermission("unsupported");
+      return;
+    }
+    const permission = Notification.permission === "default" ? await Notification.requestPermission() : Notification.permission;
+    setNotificationPermission(permission);
+    if (permission !== "granted") {
+      addError("Browser notifications are not allowed for AgentControl.");
+      setInputNotificationsEnabled(false);
+      return;
+    }
+    setInputNotificationsEnabled(true);
+    try {
+      new Notification("AgentControl test notification", {
+        body: "Browser notifications are working."
+      });
+    } catch (error) {
+      addError(error instanceof Error ? error.message : String(error));
+    }
+  }
+
   function setAgentDir(kind: "claude" | "codex" | "openai" | "builtIn", value: string) {
     if (kind === "claude") setClaudeAgentDir(value);
     else if (kind === "codex") setCodexAgentDir(value);
@@ -6759,6 +6782,9 @@ function SettingsDialog() {
                   {notificationPermission === "denied" && " Notifications are blocked in this browser."}
                 </span>
               </span>
+              <Button type="button" variant="outline" size="sm" className="ml-auto shrink-0" onClick={() => void sendTestInputNotification()}>
+                Send Test
+              </Button>
             </label>
           </section>
           <section className="grid gap-2 rounded-md border border-border p-3">
@@ -11850,6 +11876,7 @@ export function App() {
   const selectedProjectId = useAppStore((state) => state.selectedProjectId);
   const setSearchOpen = useAppStore((state) => state.setSearchOpen);
   const setSelectedAgent = useAppStore((state) => state.setSelectedAgent);
+  const addError = useAppStore((state) => state.addError);
   const setActiveTerminal = useAppStore((state) => state.setActiveTerminal);
   const setTerminalOpen = useAppStore((state) => state.setTerminalOpen);
   const terminalOpen = useAppStore((state) => state.terminalOpen);
@@ -11986,10 +12013,16 @@ export function App() {
       if (inputNotificationStatusRef.current[agent.id] === agent.status) continue;
       const projectName = agent.projectName || "Project";
       const title = `${projectName} - ${agent.displayName}`;
-      const notification = new Notification(title, {
-        body: agent.status === "awaiting-permission" ? "Approval needed" : "Answer needed",
-        tag: `agent-control-input-${agent.id}`
-      });
+      let notification: Notification;
+      try {
+        notification = new Notification(title, {
+          body: agent.status === "awaiting-permission" ? "Approval needed" : "Answer needed",
+          tag: `agent-control-input-${agent.id}`
+        });
+      } catch (error) {
+        addError(error instanceof Error ? error.message : String(error));
+        continue;
+      }
       notification.onclick = () => {
         const store = useAppStore.getState();
         window.focus();
@@ -12001,7 +12034,7 @@ export function App() {
       };
     }
     inputNotificationStatusRef.current = nextStatuses;
-  }, [agentsById, inputNotificationsEnabled]);
+  }, [addError, agentsById, inputNotificationsEnabled]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
