@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-04-29
 
+- [pending] Default File Explorer to the left dock beside the left nav
 - [pending] Hide File Explorer open file and folder actions because service-launched Explorer windows are unreliable
 - [pending] Add a read-only, resizable File Explorer tile, dock, and popout for browsing files, recursive search, collapsible file browser, line-numbered syntax-highlighted previews, raw/formatted markup previews, side-by-side diffs, terminal docking, and right-click copy/send context actions
 - [44f657a](https://github.com/yohaas/AgentControl/commit/44f657a) Keep full-height tiles sized to the remaining space when the terminal docks or minimizes

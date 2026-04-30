@@ -230,7 +230,7 @@ export function resolveFileExplorerDock(config: DashboardConfig): FileExplorerDo
     config.fileExplorerDock === "right" ||
     config.fileExplorerDock === "bottom"
     ? config.fileExplorerDock
-    : "tile";
+    : "left";
 }
 
 export function resolveThemeMode(config: DashboardConfig): ThemeMode {

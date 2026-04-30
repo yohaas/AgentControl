@@ -180,7 +180,7 @@ const defaultSettings: SettingsState = {
   sidebarWidth: 280,
   pinLastSentMessage: true,
   terminalDock: "bottom",
-  fileExplorerDock: "tile",
+  fileExplorerDock: "left",
   themeMode: "auto",
   claudeRuntime: "cli",
   claudeAgentDir: ".claude/agents",
