@@ -12346,10 +12346,110 @@ export function MobileApp() {
   }
 
   return (
-    <div className="flex h-dvh flex-col overflow-hidden bg-background text-foreground">
-      <header className="flex shrink-0 items-center gap-2 border-b border-border bg-card px-3 py-2">
-        <Select value={selectedProject?.id || ""} onValueChange={(value) => setSelectedProject(value)}>
-          <SelectTrigger className="h-10 min-w-0 flex-1">
+    <div className="flex h-dvh overflow-hidden bg-background text-foreground">
+      <MobileSidebar
+        projects={projects}
+        selectedProject={selectedProject}
+        openChats={openChats}
+        selectedAgentId={selectedAgent?.id}
+        transcripts={transcripts}
+        wsConnected={wsConnected}
+        onSelectProject={setSelectedProject}
+        onSelectAgent={setSelectedAgentId}
+      />
+      <main className="flex min-w-0 flex-1">
+        {selectedAgent ? (
+          <MobileChatPane key={selectedAgent.id} agent={selectedAgent} addError={addError} />
+        ) : (
+          <section className="grid min-h-0 flex-1 place-items-center p-6 text-center text-sm text-muted-foreground">
+            Select a project with existing chats.
+          </section>
+        )}
+      </main>
+      <ErrorStack />
+    </div>
+  );
+}
+
+function MobileSidebar({
+  projects,
+  selectedProject,
+  openChats,
+  selectedAgentId,
+  transcripts,
+  wsConnected,
+  onSelectProject,
+  onSelectAgent
+}: {
+  projects: Project[];
+  selectedProject?: Project;
+  openChats: RunningAgent[];
+  selectedAgentId?: string;
+  transcripts: Record<string, TranscriptEvent[]>;
+  wsConnected: boolean;
+  onSelectProject: (id?: string) => void;
+  onSelectAgent: (id: string) => void;
+}) {
+  const collapsed = useAppStore((state) => state.sidebarCollapsed);
+  const setCollapsed = useAppStore((state) => state.setSidebarCollapsed);
+
+  if (collapsed) {
+    return (
+      <aside className="flex w-14 shrink-0 flex-col overflow-x-hidden border-r border-border bg-card/45">
+        <div className="flex h-14 shrink-0 items-center justify-center border-b border-border">
+          <span
+            className={cn("h-2.5 w-2.5 rounded-full", wsConnected ? "bg-emerald-500" : "bg-red-500")}
+            title={wsConnected ? "Connected" : "Disconnected"}
+            aria-label={wsConnected ? "Connected" : "Disconnected"}
+          />
+        </div>
+        <div className="flex min-h-0 flex-1 flex-col items-center gap-2 py-3">
+          <Button variant="ghost" size="icon" onClick={() => setCollapsed(false)} title="Expand sidebar">
+            <PanelLeftOpen className="h-4 w-4" />
+          </Button>
+          <div className="h-px w-8 bg-border" />
+          <div className="flex min-h-0 flex-1 flex-col items-center gap-2 overflow-y-auto overflow-x-hidden px-1">
+            {openChats.map((agent) => (
+              <button
+                key={agent.id}
+                type="button"
+                className={cn(
+                  "grid h-9 w-9 place-items-center rounded-md hover:bg-accent",
+                  selectedAgentId === agent.id && "bg-accent"
+                )}
+                onClick={() => onSelectAgent(agent.id)}
+                title={`${providerLabel(agent.provider)}: ${agent.displayName}\n${fullLastActivity(agent.updatedAt || agent.launchedAt)}`}
+              >
+                <ActiveAgentDot agent={agent} />
+              </button>
+            ))}
+          </div>
+        </div>
+      </aside>
+    );
+  }
+
+  return (
+    <aside className="flex w-72 shrink-0 flex-col overflow-x-hidden border-r border-border bg-card/45">
+      <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-3">
+        <Bot className="h-5 w-5 shrink-0 text-primary" />
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-sm font-semibold">Agent Control</div>
+          <div className="truncate text-xs text-muted-foreground">Mobile</div>
+        </div>
+        <span
+          className={cn("h-2.5 w-2.5 shrink-0 rounded-full", wsConnected ? "bg-emerald-500" : "bg-red-500")}
+          title={wsConnected ? "Connected" : "Disconnected"}
+          aria-label={wsConnected ? "Connected" : "Disconnected"}
+        />
+        <Button variant="ghost" size="icon" onClick={() => setCollapsed(true)} title="Collapse sidebar">
+          <PanelLeftClose className="h-4 w-4" />
+        </Button>
+      </header>
+
+      <section className="border-b border-border p-3">
+        <Select value={selectedProject?.id || ""} onValueChange={(value) => onSelectProject(value)}>
+          <SelectTrigger className="h-10 min-w-0">
             <SelectValue placeholder="Project" />
           </SelectTrigger>
           <SelectContent>
@@ -12363,59 +12463,49 @@ export function MobileApp() {
             </SelectGroup>
           </SelectContent>
         </Select>
-        <span
-          className={cn("h-3 w-3 shrink-0 rounded-full", wsConnected ? "bg-emerald-500" : "bg-red-500")}
-          title={wsConnected ? "Connected" : "Disconnected"}
-        />
-      </header>
+      </section>
 
-      <main className="flex min-h-0 flex-1 flex-col sm:grid sm:grid-cols-[18rem_minmax(0,1fr)]">
-        <section className="max-h-48 shrink-0 overflow-y-auto border-b border-border bg-card/50 sm:max-h-none sm:border-b-0 sm:border-r">
-          {openChats.length === 0 ? (
-            <div className="p-4 text-sm text-muted-foreground">No open chats in this project.</div>
-          ) : (
-            <div className="grid gap-1 p-2">
-              {openChats.map((agent) => {
-                const transcript = transcripts[agent.id] || EMPTY_TRANSCRIPT;
-                const active = selectedAgent?.id === agent.id;
-                return (
-                  <button
-                    key={agent.id}
-                    type="button"
-                    className={cn(
-                      "grid min-h-16 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 rounded-md border px-2 py-2 text-left",
-                      active ? "border-primary bg-primary/10" : "border-transparent hover:bg-accent/60"
-                    )}
-                    onClick={() => setSelectedAgentId(agent.id)}
-                  >
-                    <AgentDot color={agent.color} />
-                    <span className="min-w-0">
-                      <span className="flex min-w-0 items-center gap-1.5">
-                        <span className="truncate text-sm font-medium">{providerLabel(agent.provider)}: {agent.displayName}</span>
-                        {agentNeedsInput(agent) && <Badge className="shrink-0 border-amber-500/50 bg-amber-500/15 text-amber-800 dark:text-amber-200">!</Badge>}
-                      </span>
-                      <span className="block truncate text-xs text-muted-foreground">
-                        {transcript.length > 0 ? `${transcript.length} events` : "No transcript yet"}
-                      </span>
-                    </span>
-                    <StatusPill status={agent.status} />
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </section>
-
-        {selectedAgent ? (
-          <MobileChatPane key={selectedAgent.id} agent={selectedAgent} addError={addError} />
+      <section className="flex min-h-0 flex-1 flex-col p-3">
+        <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Chats</h2>
+        {openChats.length === 0 ? (
+          <div className="rounded-md border border-dashed border-border px-3 py-5 text-center text-sm text-muted-foreground">
+            No open chats in this project.
+          </div>
         ) : (
-          <section className="grid min-h-0 flex-1 place-items-center p-6 text-center text-sm text-muted-foreground">
-            Select a project with existing chats.
-          </section>
+          <div className="min-h-0 flex-1 space-y-1 overflow-y-auto overflow-x-hidden pr-1">
+            {openChats.map((agent) => {
+              const transcript = transcripts[agent.id] || EMPTY_TRANSCRIPT;
+              const active = selectedAgentId === agent.id;
+              return (
+                <button
+                  key={agent.id}
+                  type="button"
+                  className={cn(
+                    "grid w-full min-h-16 grid-cols-[auto_minmax(0,1fr)] items-center gap-2 rounded-md px-2 py-2 text-left hover:bg-accent",
+                    active && "bg-accent"
+                  )}
+                  onClick={() => onSelectAgent(agent.id)}
+                >
+                  <ActiveAgentDot agent={agent} />
+                  <span className="min-w-0">
+                    <span className="flex min-w-0 items-center gap-1.5">
+                      <span className="truncate text-sm font-medium">{agent.displayName}</span>
+                      {agentNeedsInput(agent) && (
+                        <Badge className="shrink-0 border-amber-500/50 bg-amber-500/15 text-amber-800 dark:text-amber-200">!</Badge>
+                      )}
+                    </span>
+                    <span className="flex min-w-0 items-center justify-between gap-2 text-xs text-muted-foreground">
+                      <span className="truncate">{providerLabel(agent.provider)}</span>
+                      <span className="shrink-0">{transcript.length > 0 ? `${transcript.length} events` : "No transcript"}</span>
+                    </span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         )}
-      </main>
-      <ErrorStack />
-    </div>
+      </section>
+    </aside>
   );
 }
 
