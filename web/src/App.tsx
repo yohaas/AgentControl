@@ -6804,25 +6804,30 @@ function ProjectInspectorTile({
         const changed = status?.files.find((file) => file.path === entry.relativePath || file.path.endsWith(` -> ${entry.relativePath}`));
         return (
           <div key={entry.relativePath}>
-            <button
-              type="button"
-              className={cn(
-                "flex h-7 w-full min-w-0 items-center gap-1.5 rounded-sm px-2 text-left text-xs hover:bg-accent",
-                selectedPath === entry.relativePath && "bg-accent text-accent-foreground"
-              )}
-              style={{ paddingLeft: 8 + depth * 14 }}
-              onClick={() => (entry.type === "directory" ? void toggleDirectory(entry) : void openPreview(entry.relativePath))}
-              title={entry.runtimePath}
-            >
-              {entry.type === "directory" ? (
-                expanded[entry.relativePath] ? <ChevronDown className="h-3.5 w-3.5 shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0" />
-              ) : (
-                <span className="w-3.5 shrink-0" />
-              )}
-              {entry.type === "directory" ? <FolderOpen className="h-3.5 w-3.5 shrink-0" /> : <FileIcon className="h-3.5 w-3.5 shrink-0" />}
-              <span className="truncate">{entry.name}</span>
-              {changed && <Badge className="ml-auto h-5 px-1 text-[10px]">{changed.status}</Badge>}
-            </button>
+            <ContextMenu>
+              <ContextMenuTrigger asChild>
+                <button
+                  type="button"
+                  className={cn(
+                    "flex h-7 w-full min-w-0 items-center gap-1.5 rounded-sm px-2 text-left text-xs hover:bg-accent",
+                    selectedPath === entry.relativePath && "bg-accent text-accent-foreground"
+                  )}
+                  style={{ paddingLeft: 8 + depth * 14 }}
+                  onClick={() => (entry.type === "directory" ? void toggleDirectory(entry) : void openPreview(entry.relativePath))}
+                  title={entry.runtimePath}
+                >
+                  {entry.type === "directory" ? (
+                    expanded[entry.relativePath] ? <ChevronDown className="h-3.5 w-3.5 shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0" />
+                  ) : (
+                    <span className="w-3.5 shrink-0" />
+                  )}
+                  {entry.type === "directory" ? <FolderOpen className="h-3.5 w-3.5 shrink-0" /> : <FileIcon className="h-3.5 w-3.5 shrink-0" />}
+                  <span className="truncate">{entry.name}</span>
+                  {changed && <Badge className="ml-auto h-5 px-1 text-[10px]">{changed.status}</Badge>}
+                </button>
+              </ContextMenuTrigger>
+              {fileBrowserContextMenu(entry.relativePath, entry.hostOpenPath, entry.type)}
+            </ContextMenu>
             {entry.type === "directory" && expanded[entry.relativePath] && renderEntries(entry.relativePath, depth + 1)}
           </div>
         );
@@ -6837,20 +6842,24 @@ function ProjectInspectorTile({
     return searchResults.map((file) => {
       const changed = status?.files.find((item) => item.path === file.path || item.path.endsWith(` -> ${file.path}`));
       return (
-        <button
-          key={file.path}
-          type="button"
-          className={cn(
-            "flex min-h-7 w-full min-w-0 items-center gap-1.5 rounded-sm px-2 py-1 text-left text-xs hover:bg-accent",
-            selectedPath === file.path && "bg-accent text-accent-foreground"
-          )}
-          onClick={() => void openPreview(file.path)}
-          title={file.path}
-        >
-          <FileIcon className="h-3.5 w-3.5 shrink-0" />
-          <span className="min-w-0 flex-1 truncate">{file.path}</span>
-          {changed && <Badge className="ml-auto h-5 px-1 text-[10px]">{changed.status}</Badge>}
-        </button>
+        <ContextMenu key={file.path}>
+          <ContextMenuTrigger asChild>
+            <button
+              type="button"
+              className={cn(
+                "flex min-h-7 w-full min-w-0 items-center gap-1.5 rounded-sm px-2 py-1 text-left text-xs hover:bg-accent",
+                selectedPath === file.path && "bg-accent text-accent-foreground"
+              )}
+              onClick={() => void openPreview(file.path)}
+              title={file.path}
+            >
+              <FileIcon className="h-3.5 w-3.5 shrink-0" />
+              <span className="min-w-0 flex-1 truncate">{file.path}</span>
+              {changed && <Badge className="ml-auto h-5 px-1 text-[10px]">{changed.status}</Badge>}
+            </button>
+          </ContextMenuTrigger>
+          {fileBrowserContextMenu(file.path, file.hostOpenPath, "file")}
+        </ContextMenu>
       );
     });
   }
@@ -6904,6 +6913,91 @@ function ProjectInspectorTile({
 
   function copyText(text: string) {
     void navigator.clipboard.writeText(text).catch((error: unknown) => addError(error instanceof Error ? error.message : String(error)));
+  }
+
+  async function sendFileToAgent(pathValue: string, agent: RunningAgent) {
+    if (agent.remoteControl) return;
+    try {
+      const attachment = await api.addProjectContext(project.id, pathValue);
+      enqueueMessage(agent.id, { text: `Review ${pathValue}`, attachments: [attachment] });
+    } catch (error) {
+      addError(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  function fileBrowserContextMenu(pathValue: string, hostOpenPath: string | undefined, type: "file" | "directory") {
+    const canSend = type === "file" && agents.length > 0;
+    return (
+      <ContextMenuContent>
+        <ContextMenuItem onClick={() => void api.openProjectFile(project.id, pathValue).catch((error) => addError(error instanceof Error ? error.message : String(error)))}>
+          {type === "directory" ? <FolderOpen className="mr-2 h-4 w-4" /> : <ExternalLink className="mr-2 h-4 w-4" />}
+          {type === "directory" ? "Open folder" : "Open file"}
+        </ContextMenuItem>
+        {type === "file" && (
+          <ContextMenuItem onClick={() => void api.openProjectFile(project.id, pathValue, "containingFolder").catch((error) => addError(error instanceof Error ? error.message : String(error)))}>
+            <FolderOpen className="mr-2 h-4 w-4" />
+            Open containing folder
+          </ContextMenuItem>
+        )}
+        <ContextMenuItem onClick={() => copyText(pathValue)}>
+          <Clipboard className="mr-2 h-4 w-4" />
+          Copy relative path
+        </ContextMenuItem>
+        <ContextMenuItem disabled={!hostOpenPath} onClick={() => hostOpenPath && copyText(hostOpenPath)}>
+          <Copy className="mr-2 h-4 w-4" />
+          Copy full path
+        </ContextMenuItem>
+        <ContextMenuSub>
+          <ContextMenuSubTrigger className="flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none focus:bg-accent data-[disabled]:opacity-45" disabled={!canSend}>
+            <span className="flex-1">Send file to</span>
+            <ChevronRight className="ml-4 h-4 w-4 text-muted-foreground" />
+          </ContextMenuSubTrigger>
+          <ContextMenuSubContent>
+            <ContextMenuSub>
+              <ContextMenuSubTrigger className="flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none focus:bg-accent">
+                New agent
+              </ContextMenuSubTrigger>
+              <ContextMenuSubContent>
+                {project.agents.map((def) => (
+                  <ContextMenuItem
+                    key={def.name}
+                    onClick={() =>
+                      openLaunchModal({
+                        projectId: project.id,
+                        defName: def.name,
+                        initialPrompt: `Review ${pathValue}.`
+                      })
+                    }
+                  >
+                    <AgentDot color={def.color} />
+                    <span className="ml-2">{def.name}</span>
+                  </ContextMenuItem>
+                ))}
+              </ContextMenuSubContent>
+            </ContextMenuSub>
+            <ContextMenuSub>
+              <ContextMenuSubTrigger className="flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none focus:bg-accent">
+                Existing agent
+              </ContextMenuSubTrigger>
+              <ContextMenuSubContent>
+                {agents.map((agent) => (
+                  <ContextMenuItem
+                    key={agent.id}
+                    disabled={agent.remoteControl}
+                    onClick={() => void sendFileToAgent(pathValue, agent)}
+                    title={agent.remoteControl ? "Remote Control agents cannot receive dashboard messages." : undefined}
+                  >
+                    <AgentDot color={agent.color} />
+                    <span className="ml-2">{agent.displayName}</span>
+                    {agent.remoteControl && <Badge className="ml-2">RC</Badge>}
+                  </ContextMenuItem>
+                ))}
+              </ContextMenuSubContent>
+            </ContextMenuSub>
+          </ContextMenuSubContent>
+        </ContextMenuSub>
+      </ContextMenuContent>
+    );
   }
 
   function startBrowserResize(event: ReactPointerEvent<HTMLDivElement>) {

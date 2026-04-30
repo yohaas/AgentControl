@@ -495,7 +495,8 @@ async function listProjectFiles(project: Project, query = "", limit = 500): Prom
         path: relativePath,
         name: entry.name,
         size: info.size,
-        modifiedAt: info.mtime.toISOString()
+        modifiedAt: info.mtime.toISOString(),
+        ...pathInfoForProject(project, relativePath)
       });
       if (results.length >= limit) break;
     }
@@ -939,8 +940,19 @@ async function removeProjectWorktree(project: Project, request: GitWorktreeRemov
   return { projects, worktrees: await projectWorktrees(project) };
 }
 
-function openWithDefaultApp(filePath: string): Promise<void> {
+function openWithDefaultApp(filePath: string, options: { file?: boolean } = {}): Promise<void> {
   if (process.platform === "win32") {
+    if (!options.file) {
+      return new Promise((resolve, reject) => {
+        execFile("explorer.exe", [filePath], { windowsHide: true }, (error) => {
+          if (error) {
+            reject(new Error(error.message || "Unable to open folder."));
+            return;
+          }
+          resolve();
+        });
+      });
+    }
     return new Promise((resolve, reject) => {
       execFile("powershell.exe", [
         "-NoProfile",
@@ -954,10 +966,16 @@ function openWithDefaultApp(filePath: string): Promise<void> {
         windowsHide: true
       }, (error, _stdout, stderr) => {
         if (error) {
-          reject(new Error(stderr.trim() || error.message || "Unable to open path."));
-          return;
+          execFile("explorer.exe", [`/select,${filePath}`], { windowsHide: true }, (selectError) => {
+            if (selectError) {
+              reject(new Error(stderr.trim() || error.message || selectError.message || "Unable to open path."));
+              return;
+            }
+            resolve();
+          });
+        } else {
+          resolve();
         }
-        resolve();
       });
     });
   }
@@ -1540,7 +1558,7 @@ app.post("/api/filesystem/open", async (request, response) => {
         response.status(400).json({ error: "Path must be a file or directory." });
         return;
       }
-      await openWithDefaultApp(openPath);
+      await openWithDefaultApp(openPath, { file: info.isFile() });
       response.json({ ok: true });
     } catch (error) {
       response.status(500).json({ error: error instanceof Error ? error.message : String(error) });
@@ -1561,7 +1579,7 @@ app.post("/api/filesystem/open", async (request, response) => {
       response.status(400).json({ error: "Path must be a file or directory." });
       return;
     }
-    await openWithDefaultApp(openPath);
+    await openWithDefaultApp(openPath, { file: info.isFile() });
     response.json({ ok: true });
   } catch (error) {
     response.status(500).json({ error: error instanceof Error ? error.message : String(error) });

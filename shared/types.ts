@@ -94,7 +94,7 @@ export interface DirectoryListing {
   entries: DirectoryEntry[];
 }
 
-export interface ProjectFileEntry {
+export interface ProjectFileEntry extends ProjectPathInfo {
   path: string;
   name: string;
   size: number;
