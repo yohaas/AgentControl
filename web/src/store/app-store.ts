@@ -586,7 +586,8 @@ export const useAppStore = create<AppState>((set, get) => ({
             chatFocusedAgentId: undefined,
             doneAgentIds: { ...state.doneAgentIds, [event.agent.id]: false },
             tileOrder: tileLayout.order,
-            minimizedTiles: tileLayout.minimized
+            minimizedTiles: tileLayout.minimized,
+            sidebarCollapsed: true
           };
         });
         break;
