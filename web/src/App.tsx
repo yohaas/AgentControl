@@ -177,6 +177,7 @@ const FOCUS_AGENT_TILE_EVENT = "agent-control:focus-agent-tile";
 const DEFAULT_BUILT_IN_AGENT_DIR = ".agent-control/built-in-agents";
 const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const INPUT_NOTIFICATION_DEDUPE_MS = 30_000;
+const INPUT_NOTIFICATION_STORAGE_PREFIX = "agent-control-input-notification:";
 const recentInputNotificationKeys = new Map<string, number>();
 hljs.registerLanguage("bash", bash);
 hljs.registerLanguage("css", css);
@@ -633,6 +634,12 @@ function claimInputNotificationKey(key: string) {
     if (nowMs - sentAt > INPUT_NOTIFICATION_DEDUPE_MS) recentInputNotificationKeys.delete(candidate);
   }
   if (recentInputNotificationKeys.has(key)) return false;
+  if (typeof window !== "undefined") {
+    const storageKey = `${INPUT_NOTIFICATION_STORAGE_PREFIX}${key}`;
+    const storedAt = Number(window.localStorage.getItem(storageKey));
+    if (Number.isFinite(storedAt) && nowMs - storedAt <= INPUT_NOTIFICATION_DEDUPE_MS) return false;
+    window.localStorage.setItem(storageKey, String(nowMs));
+  }
   recentInputNotificationKeys.set(key, nowMs);
   return true;
 }
@@ -12027,11 +12034,11 @@ export function App() {
       const globalNotificationKey = `${agent.id}:${notificationKey}`;
       if (!claimInputNotificationKey(globalNotificationKey)) continue;
       const projectName = projects.find((project) => project.id === agent.projectId)?.name || agent.projectName || "Project";
-      const title = `${projectName} - ${agent.displayName}`;
+      const need = agent.status === "awaiting-permission" ? "needs approval" : "needs an answer";
       let notification: Notification;
       try {
-        notification = new Notification(title, {
-          body: agent.status === "awaiting-permission" ? "Approval needed" : "Answer needed"
+        notification = new Notification(projectName, {
+          body: `${agent.displayName} ${need}`
         });
       } catch (error) {
         addError(error instanceof Error ? error.message : String(error));
