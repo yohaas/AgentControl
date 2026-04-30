@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-04-30
 
+- [2195d72](https://github.com/yohaas/AgentControl/commit/2195d72) Launch the installed PWA on `/mobile`
 - [8915bed](https://github.com/yohaas/AgentControl/commit/8915bed) Fix duplicated Codex response text
 - [524c0f6](https://github.com/yohaas/AgentControl/commit/524c0f6) Add a `/mobile` chat view for existing project agents
 - [a5fa790](https://github.com/yohaas/AgentControl/commit/a5fa790) Link chat file references to the File Explorer preview
