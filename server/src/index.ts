@@ -1,5 +1,6 @@
 import http from "node:http";
 import { execFile, spawn } from "node:child_process";
+import { timingSafeEqual } from "node:crypto";
 import { appendFile, chmod, cp, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -81,7 +82,6 @@ const controlPath = path.join(controlDir, "control.json");
 const openPathLogPath = path.join(controlDir, "open-path.log");
 const supervised = process.env.AGENT_CONTROL_SUPERVISED === "1";
 const ignoredContextDirs = new Set([".git", "node_modules", "dist", "build", ".next", ".turbo", ".cache", "coverage"]);
-const appAuthToken = process.env.AGENTCONTROL_AUTH_TOKEN || nanoid(48);
 const authCookieName = "agent_control_token";
 const anthropicModelsApiUrl = "https://api.anthropic.com/v1/models";
 const anthropicModelsDocUrl = "https://docs.anthropic.com/en/docs/about-claude/models/overview";
@@ -377,8 +377,28 @@ function requestToken(request: express.Request): string | undefined {
   return parseCookies(request.header("cookie"))[authCookieName];
 }
 
+function configuredAccessToken(): string | undefined {
+  return process.env.AGENTCONTROL_ACCESS_TOKEN || process.env.AGENTCONTROL_AUTH_TOKEN || secrets.accessToken;
+}
+
+function accessTokenEnabled(): boolean {
+  return config.accessTokenEnabled === true;
+}
+
+function accessTokenConfigured(): boolean {
+  return Boolean(configuredAccessToken());
+}
+
+function tokensEqual(left: string | undefined, right: string | undefined): boolean {
+  if (!left || !right) return false;
+  const leftBuffer = Buffer.from(left);
+  const rightBuffer = Buffer.from(right);
+  return leftBuffer.length === rightBuffer.length && timingSafeEqual(leftBuffer, rightBuffer);
+}
+
 function isAuthenticatedRequest(request: express.Request): boolean {
-  return isAllowedOrigin(request.header("origin"), request.header("host")) && requestToken(request) === appAuthToken;
+  if (!accessTokenEnabled()) return isAllowedOrigin(request.header("origin"), request.header("host"));
+  return isAllowedOrigin(request.header("origin"), request.header("host")) && tokensEqual(requestToken(request), configuredAccessToken());
 }
 
 function canIssueToken(request: express.Request): boolean {
@@ -401,16 +421,36 @@ function webSocketToken(request: http.IncomingMessage): string | undefined {
 function isAuthenticatedWebSocket(request: http.IncomingMessage): boolean {
   const origin = typeof request.headers.origin === "string" ? request.headers.origin : undefined;
   const host = typeof request.headers.host === "string" ? request.headers.host : undefined;
-  return isAllowedOrigin(origin, host) && webSocketToken(request) === appAuthToken;
+  if (!accessTokenEnabled()) return isAllowedOrigin(origin, host);
+  return isAllowedOrigin(origin, host) && tokensEqual(webSocketToken(request), configuredAccessToken());
 }
 
-function setAuthCookie(response: express.Response): void {
-  response.cookie(authCookieName, appAuthToken, {
+function setAuthCookie(response: express.Response, token: string): void {
+  response.cookie(authCookieName, token, {
     httpOnly: true,
     sameSite: "strict",
     secure: false,
     path: "/"
   });
+}
+
+function clearAuthCookie(response: express.Response): void {
+  response.clearCookie(authCookieName, {
+    sameSite: "strict",
+    secure: false,
+    path: "/"
+  });
+}
+
+function authStatus(request: express.Request) {
+  const enabled = accessTokenEnabled();
+  const configured = accessTokenConfigured();
+  return {
+    accessTokenEnabled: enabled,
+    accessTokenConfigured: configured,
+    authenticated: !enabled || (configured && isAuthenticatedRequest(request)),
+    setupRequired: enabled && !configured
+  };
 }
 
 function send(ws: WebSocket, event: WsServerEvent): void {
@@ -1338,22 +1378,62 @@ app.get("/api/health", (_request, response) => {
   response.json({ ok: true });
 });
 
-app.get("/api/auth/token", (request, response) => {
+app.get("/api/auth/status", (request, response) => {
+  response.json(authStatus(request));
+});
+
+app.post("/api/auth/login", (request, response) => {
   if (!canIssueToken(request)) {
     response.status(403).json({ error: "Origin is not allowed." });
     return;
   }
-  setAuthCookie(response);
-  response.json({ token: appAuthToken });
+  if (!accessTokenEnabled()) {
+    clearAuthCookie(response);
+    response.json(authStatus(request));
+    return;
+  }
+  if (!accessTokenConfigured()) {
+    response.status(409).json({ error: "Access token setup is required." });
+    return;
+  }
+  const token = typeof request.body?.token === "string" ? request.body.token : "";
+  if (!tokensEqual(token, configuredAccessToken())) {
+    response.status(401).json({ error: "Access token is incorrect." });
+    return;
+  }
+  setAuthCookie(response, token);
+  response.json({ ...authStatus(request), authenticated: true });
+});
+
+app.post("/api/auth/setup", async (request, response) => {
+  if (!canIssueToken(request)) {
+    response.status(403).json({ error: "Origin is not allowed." });
+    return;
+  }
+  if (!accessTokenEnabled()) {
+    response.status(409).json({ error: "Access tokens are not enabled." });
+    return;
+  }
+  if (accessTokenConfigured()) {
+    response.status(409).json({ error: "Access token is already configured." });
+    return;
+  }
+  const token = typeof request.body?.token === "string" ? request.body.token.trim() : "";
+  if (!token) {
+    response.status(400).json({ error: "Access token is required." });
+    return;
+  }
+  secrets = await writeSecrets({ ...secrets, accessToken: token });
+  setAuthCookie(response, token);
+  response.json({ ...authStatus(request), authenticated: true });
 });
 
 app.use((request, response, next) => {
-  if (request.path === "/api/health" || request.path === "/api/auth/token" || request.path === "/api/permissions/request") {
+  if (request.path === "/api/health" || request.path === "/api/auth/status" || request.path === "/api/auth/login" || request.path === "/api/auth/setup") {
     next();
     return;
   }
   if (!request.path.startsWith("/api/")) {
-    setAuthCookie(response);
     next();
     return;
   }
@@ -2000,6 +2080,8 @@ app.get("/api/settings", (_request, response) => {
     inputNotificationsEnabled: resolveInputNotificationsEnabled(config),
     externalEditor: resolveExternalEditor(config),
     externalEditorUrlTemplate: config.externalEditorUrlTemplate || "",
+    accessTokenEnabled: accessTokenEnabled(),
+    accessTokenSaved: accessTokenConfigured(),
     capabilities
   });
 });
@@ -2055,11 +2137,24 @@ app.post("/api/plugins/marketplaces", async (request, response) => {
 });
 
 app.put("/api/settings", async (request, response) => {
-  const body = request.body as DashboardConfig & { anthropicApiKey?: string; openaiApiKey?: string; clearAnthropicApiKey?: boolean; clearOpenaiApiKey?: boolean };
-  if (typeof body.anthropicApiKey === "string" || typeof body.openaiApiKey === "string" || body.clearAnthropicApiKey || body.clearOpenaiApiKey) {
+  const body = request.body as DashboardConfig & {
+    anthropicApiKey?: string;
+    openaiApiKey?: string;
+    accessToken?: string;
+    clearAnthropicApiKey?: boolean;
+    clearOpenaiApiKey?: boolean;
+  };
+  if (
+    typeof body.anthropicApiKey === "string" ||
+    typeof body.openaiApiKey === "string" ||
+    typeof body.accessToken === "string" ||
+    body.clearAnthropicApiKey ||
+    body.clearOpenaiApiKey
+  ) {
     secrets = await writeSecrets({
       anthropicApiKey: body.clearAnthropicApiKey ? undefined : body.anthropicApiKey?.trim() || secrets.anthropicApiKey,
-      openaiApiKey: body.clearOpenaiApiKey ? undefined : body.openaiApiKey?.trim() || secrets.openaiApiKey
+      openaiApiKey: body.clearOpenaiApiKey ? undefined : body.openaiApiKey?.trim() || secrets.openaiApiKey,
+      accessToken: body.accessToken?.trim() || secrets.accessToken
     });
     if (body.clearAnthropicApiKey) delete process.env.ANTHROPIC_API_KEY;
     if (body.clearOpenaiApiKey) delete process.env.OPENAI_API_KEY;
@@ -2100,7 +2195,8 @@ app.put("/api/settings", async (request, response) => {
       typeof body.inputNotificationsEnabled === "boolean" ? body.inputNotificationsEnabled : resolveInputNotificationsEnabled(config),
     externalEditor: resolveExternalEditor(body.externalEditor ? body : config),
     externalEditorUrlTemplate:
-      typeof body.externalEditorUrlTemplate === "string" ? body.externalEditorUrlTemplate.trim() : config.externalEditorUrlTemplate
+      typeof body.externalEditorUrlTemplate === "string" ? body.externalEditorUrlTemplate.trim() : config.externalEditorUrlTemplate,
+    accessTokenEnabled: typeof body.accessTokenEnabled === "boolean" ? body.accessTokenEnabled : config.accessTokenEnabled
   });
   if (config.claudePath) process.env.AGENTCONTROL_CLAUDE_PATH = config.claudePath;
   else delete process.env.AGENTCONTROL_CLAUDE_PATH;
@@ -2154,6 +2250,8 @@ app.put("/api/settings", async (request, response) => {
     inputNotificationsEnabled: resolveInputNotificationsEnabled(config),
     externalEditor: resolveExternalEditor(config),
     externalEditorUrlTemplate: config.externalEditorUrlTemplate || "",
+    accessTokenEnabled: accessTokenEnabled(),
+    accessTokenSaved: accessTokenConfigured(),
     capabilities
   });
 });
@@ -2323,6 +2421,6 @@ server.listen(PORT, HOST, () => {
   const displayHost = HOST === "0.0.0.0" || HOST === "::" ? "localhost" : HOST;
   console.log(`AgentControl web app available at http://${displayHost}:${PORT}`);
   console.log(`AgentControl API/WebSocket server listening on http://${HOST}:${PORT}`);
-  console.log("AgentControl API/WebSocket authentication is enabled.");
+  console.log(`AgentControl access token ${accessTokenEnabled() ? "is enabled" : "is disabled"}.`);
   console.log(`Configured projects=${config.projectPaths?.length || 0}`);
 });

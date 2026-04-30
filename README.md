@@ -193,7 +193,7 @@ This starts:
 
 For the best everyday experience, install Agent Control as a browser app from your browser's address bar or app menu after opening the local URL. This gives it its own window, keeps terminals and popouts feeling app-like, and avoids losing the dashboard among regular browser tabs.
 
-The Vite app proxies API and WebSocket traffic to the server. The server binds to `127.0.0.1` by default and protects API/WebSocket control traffic with a per-process local token. The top-bar connection dot is green when connected and red when disconnected. Use `HOST`, `PORT`, `AGENTCONTROL_AUTH_TOKEN`, and `AGENTCONTROL_ALLOWED_ORIGINS` only when you intentionally need a different local setup.
+The Vite app proxies API and WebSocket traffic to the server. The server binds to `127.0.0.1` by default. You can enable a required access token from Settings > General > Security; when enabled, the browser must unlock with that token before API or WebSocket control traffic works. The top-bar connection dot is green when connected and red when disconnected. Use `HOST`, `PORT`, `AGENTCONTROL_ACCESS_TOKEN`, and `AGENTCONTROL_ALLOWED_ORIGINS` only when you intentionally need a different local setup.
 
 For UI-controlled restart/shutdown, run supervised mode instead:
 
@@ -597,6 +597,7 @@ Settings use a left navigation and wider right-side content area. Save stays vis
 Settings include:
 
 - General configuration, including project folders, built-in agent directory, config export/import, app paths, and theme.
+- Optional access-token protection, with token generation and first-run setup when enabled before a token is saved.
 - App update checks and commands used by the top-bar update notice.
 - Provider-specific tabs for Claude, Codex, and OpenAI.
 - Provider model lists with "Get Current Models" for the active provider.
@@ -613,7 +614,7 @@ Stored local files:
 
 - `.agent-control/built-in-agents`: built-in agents shipped with the repo.
 - `~/.agent-control/config.json`: app settings and project paths.
-- `~/.agent-control/secrets.json`: optional locally saved Anthropic/OpenAI API keys. This file is not included in settings export.
+- `~/.agent-control/secrets.json`: optional locally saved Anthropic/OpenAI API keys and the access token. This file is not included in settings export.
 - `~/.agent-control/state.json`: persisted agents and recent transcripts.
 - `~/.agent-control/attachments`: uploaded/pasted attachments.
 - `~/.agent-control/terminal-history`: shell history per project.
@@ -633,12 +634,13 @@ Stored local files:
 - `FORCE_FALLBACK_MODEL_SWITCH=1`: forces resume-based model switching for testing.
 - `AGENT_CONTROL_SHELL`: shell used for embedded terminals.
 - `AGENTCONTROL_PERMISSION_URL`: override the permission callback URL used by the permission MCP helper.
+- `AGENTCONTROL_ACCESS_TOKEN`: access token to require when token protection is enabled. `AGENTCONTROL_AUTH_TOKEN` is also accepted for older setups.
 
 ## Security Notes
 
 Agent Control is a powerful local tool. It can launch Claude Code, run shells, read selected project files as context, install plugins, push Git commits, and stop/restart its own dev server.
 
-Use it on a trusted machine and avoid exposing port `4317` to a network. The development server is intended for localhost use. Be careful with Bypass permissions, plugin marketplaces, uploaded attachments, and projects that contain secrets.
+Use it on a trusted machine and avoid exposing port `4317` to a network. The development server is intended for localhost use. Enable the Settings access token before binding beyond localhost. Be careful with Bypass permissions, plugin marketplaces, uploaded attachments, and projects that contain secrets.
 
 ## Disclaimer
 

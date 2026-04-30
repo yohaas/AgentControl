@@ -54,6 +54,9 @@ export interface SettingsState {
   inputNotificationsEnabled: boolean;
   externalEditor: ExternalEditor;
   externalEditorUrlTemplate?: string;
+  accessTokenEnabled: boolean;
+  accessTokenSaved?: boolean;
+  accessToken?: string;
 }
 
 export type TerminalDockPosition = "float" | "left" | "bottom" | "right";
@@ -343,6 +346,7 @@ const defaultSettings: SettingsState = {
   inputNotificationsEnabled: false,
   externalEditor: "none",
   externalEditorUrlTemplate: "",
+  accessTokenEnabled: false,
   claudeRuntime: "cli",
   claudeAgentDir: ".claude/agents",
   codexAgentDir: ".codex/agents",
@@ -390,6 +394,8 @@ function normalizeSettings(settings: SettingsState): SettingsState {
     permissionAllowRules: Array.isArray(settings.permissionAllowRules) ? settings.permissionAllowRules : defaultSettings.permissionAllowRules,
     updateChecksEnabled: settings.updateChecksEnabled !== false,
     inputNotificationsEnabled: settings.inputNotificationsEnabled === true,
+    accessTokenEnabled: settings.accessTokenEnabled === true,
+    accessTokenSaved: settings.accessTokenSaved === true,
     agentControlProjectPath: typeof settings.agentControlProjectPath === "string" ? settings.agentControlProjectPath : "",
     externalEditor,
     externalEditorUrlTemplate: typeof settings.externalEditorUrlTemplate === "string" ? settings.externalEditorUrlTemplate : "",

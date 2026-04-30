@@ -1,6 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { App, FileExplorerPopoutApp, MobileApp, TerminalPopoutApp } from "./App";
+import { App, AuthGate, FileExplorerPopoutApp, MobileApp, TerminalPopoutApp } from "./App";
 import "./index.css";
 
 const Root =
@@ -14,6 +14,8 @@ const Root =
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <Root />
+    <AuthGate>
+      <Root />
+    </AuthGate>
   </React.StrictMode>
 );

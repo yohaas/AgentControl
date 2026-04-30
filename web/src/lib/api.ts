@@ -22,7 +22,14 @@ import type {
 import type { SettingsState } from "../store/app-store";
 
 let authToken: string | undefined;
-let authTokenPromise: Promise<string> | undefined;
+const AUTH_TOKEN_STORAGE_KEY = "agent-control-access-token";
+
+export interface AuthStatus {
+  accessTokenEnabled: boolean;
+  accessTokenConfigured: boolean;
+  authenticated: boolean;
+  setupRequired: boolean;
+}
 
 function endpointPath(input: RequestInfo): string {
   return typeof input === "string" ? input : input instanceof URL ? input.pathname : input.url;
@@ -30,32 +37,34 @@ function endpointPath(input: RequestInfo): string {
 
 export async function agentControlToken(): Promise<string> {
   if (authToken) return authToken;
-  authTokenPromise ??= fetch("/api/auth/token", { credentials: "same-origin" })
-    .then(async (response) => {
-      if (!response.ok) throw new Error(await response.text());
-      const body = (await response.json()) as { token?: string };
-      if (!body.token) throw new Error("AgentControl auth token was not returned.");
-      authToken = body.token;
-      return body.token;
-    })
-    .finally(() => {
-      authTokenPromise = undefined;
-    });
-  return authTokenPromise;
+  authToken = window.localStorage.getItem(AUTH_TOKEN_STORAGE_KEY) || undefined;
+  if (!authToken) throw new Error("AgentControl access token is required.");
+  return authToken;
+}
+
+export function storedAgentControlToken(): string | undefined {
+  authToken = authToken || window.localStorage.getItem(AUTH_TOKEN_STORAGE_KEY) || undefined;
+  return authToken;
+}
+
+export function setAgentControlToken(token?: string) {
+  authToken = token?.trim() || undefined;
+  if (!authToken) window.localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
+  else window.localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, authToken);
 }
 
 async function withAuth(input: RequestInfo, init?: RequestInit): Promise<RequestInit | undefined> {
   if (endpointPath(input).startsWith("/api/auth/")) return init;
-  const token = await agentControlToken();
   const headers = new Headers(init?.headers);
-  headers.set("X-Agent-Control-Token", token);
+  const token = window.localStorage.getItem(AUTH_TOKEN_STORAGE_KEY);
+  if (token) headers.set("X-Agent-Control-Token", token);
   return { ...init, credentials: "same-origin", headers };
 }
 
 async function authedFetch(input: RequestInfo, init?: RequestInit, retry = true): Promise<Response> {
   const response = await fetch(input, await withAuth(input, init));
   if (response.status === 401 && retry) {
-    authToken = undefined;
+    setAgentControlToken(undefined);
     return authedFetch(input, init, false);
   }
   return response;
@@ -77,6 +86,27 @@ async function json<T>(input: RequestInfo, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  authStatus: () => json<AuthStatus>("/api/auth/status"),
+  login: async (token: string) => {
+    const status = await json<AuthStatus>("/api/auth/login", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token })
+    });
+    setAgentControlToken(token);
+    return status;
+  },
+  setupAccessToken: async (token: string) => {
+    const status = await json<AuthStatus>("/api/auth/setup", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token })
+    });
+    setAgentControlToken(token);
+    return status;
+  },
   projects: () => json<Project[]>("/api/projects"),
   agents: () => json<RunningAgent[]>("/api/agents"),
   agentSnapshot: () => json<AgentSnapshot>("/api/agent-snapshot"),
@@ -211,10 +241,14 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
     }),
-  saveSettings: (settings: SettingsState) =>
-    json<SettingsState>("/api/settings", {
+  saveSettings: async (settings: SettingsState) => {
+    const next = await json<SettingsState>("/api/settings", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(settings)
-    })
+    });
+    if (settings.accessToken?.trim()) setAgentControlToken(settings.accessToken);
+    if (!next.accessTokenEnabled) setAgentControlToken(undefined);
+    return next;
+  }
 };

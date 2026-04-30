@@ -69,6 +69,7 @@ import {
   Home,
   Info,
   Image as ImageIcon,
+  KeyRound,
   LayoutGrid,
   Loader2,
   Maximize2,
@@ -180,6 +181,105 @@ const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const INPUT_NOTIFICATION_DEDUPE_MS = 30_000;
 const INPUT_NOTIFICATION_STORAGE_PREFIX = "agent-control-input-notification:";
 const recentInputNotificationKeys = new Map<string, number>();
+
+function generateAccessToken(): string {
+  const bytes = new Uint8Array(32);
+  window.crypto.getRandomValues(bytes);
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+export function AuthGate({ children }: { children: ReactNode }) {
+  const [status, setStatus] = useState<"checking" | "ready" | "login" | "setup" | "offline">("checking");
+  const [token, setToken] = useState("");
+  const [error, setError] = useState("");
+
+  async function refreshStatus() {
+    setError("");
+    setStatus("checking");
+    try {
+      const next = await api.authStatus();
+      if (next.setupRequired) setStatus("setup");
+      else if (next.authenticated) setStatus("ready");
+      else setStatus("login");
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : String(nextError));
+      setStatus("offline");
+    }
+  }
+
+  useEffect(() => {
+    void refreshStatus();
+  }, []);
+
+  async function submit() {
+    const trimmed = token.trim();
+    if (!trimmed) {
+      setError("Access token is required.");
+      return;
+    }
+    try {
+      const next = status === "setup" ? await api.setupAccessToken(trimmed) : await api.login(trimmed);
+      setStatus(next.authenticated ? "ready" : next.setupRequired ? "setup" : "login");
+      setError("");
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : String(nextError));
+    }
+  }
+
+  if (status === "ready") return <>{children}</>;
+
+  return (
+    <div className="grid min-h-dvh place-items-center bg-background p-4 text-foreground">
+      <div className="grid w-full max-w-sm gap-4 rounded-md border border-border bg-card p-5 shadow-sm">
+        <div className="flex items-center gap-3">
+          <div className="grid h-9 w-9 place-items-center rounded-md bg-primary text-primary-foreground">
+            <KeyRound className="h-4 w-4" />
+          </div>
+          <div>
+            <h1 className="text-base font-semibold">{status === "setup" ? "Set Access Token" : "AgentControl Access"}</h1>
+            <p className="text-xs text-muted-foreground">
+              {status === "setup" ? "Create the token required to use this server." : "Enter the access token configured for this server."}
+            </p>
+          </div>
+        </div>
+        <Input
+          autoFocus
+          type="password"
+          value={token}
+          onChange={(event) => setToken(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") void submit();
+          }}
+          placeholder="Access token"
+        />
+        {error && <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">{error}</div>}
+        <div className="flex flex-wrap justify-end gap-2">
+          {status === "setup" && (
+            <Button type="button" variant="outline" onClick={() => setToken(generateAccessToken())}>
+              Generate Token
+            </Button>
+          )}
+          {status === "offline" && (
+            <Button type="button" variant="outline" onClick={() => void refreshStatus()}>
+              Retry
+            </Button>
+          )}
+          {status !== "checking" && status !== "offline" && (
+            <Button type="button" onClick={() => void submit()}>
+              {status === "setup" ? "Save Token" : "Unlock"}
+            </Button>
+          )}
+          {status === "checking" && (
+            <Button type="button" disabled>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Checking
+            </Button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 hljs.registerLanguage("bash", bash);
 hljs.registerLanguage("css", css);
 hljs.registerLanguage("diff", diffLanguage);
@@ -6379,6 +6479,8 @@ function SettingsDialog() {
   const [tileColumns, setTileColumns] = useState(settings.tileColumns);
   const [pinLastSentMessage, setPinLastSentMessage] = useState(settings.pinLastSentMessage);
   const [inputNotificationsEnabled, setInputNotificationsEnabled] = useState(settings.inputNotificationsEnabled === true);
+  const [accessTokenEnabled, setAccessTokenEnabled] = useState(settings.accessTokenEnabled === true);
+  const [accessToken, setAccessToken] = useState("");
   const [notificationPermission, setNotificationPermission] = useState(
     typeof Notification === "undefined" ? "unsupported" : Notification.permission
   );
@@ -6423,6 +6525,8 @@ function SettingsDialog() {
     setTileColumns(settings.tileColumns);
     setPinLastSentMessage(settings.pinLastSentMessage);
     setInputNotificationsEnabled(settings.inputNotificationsEnabled === true);
+    setAccessTokenEnabled(settings.accessTokenEnabled === true);
+    setAccessToken("");
     setNotificationPermission(typeof Notification === "undefined" ? "unsupported" : Notification.permission);
     setPermissionAllowRules(settings.permissionAllowRules || []);
     setAgentControlProjectPath(settings.agentControlProjectPath || "");
@@ -6465,6 +6569,8 @@ function SettingsDialog() {
         tileColumns,
         pinLastSentMessage,
         inputNotificationsEnabled,
+        accessTokenEnabled,
+        accessToken: accessToken.trim() || undefined,
         permissionAllowRules,
         agentControlProjectPath,
         updateChecksEnabled,
@@ -6560,6 +6666,8 @@ function SettingsDialog() {
         tileColumns,
         pinLastSentMessage,
         inputNotificationsEnabled,
+        accessTokenEnabled,
+        accessTokenSaved: settings.accessTokenSaved,
         permissionAllowRules,
         agentControlProjectPath,
         updateChecksEnabled,
@@ -6600,6 +6708,8 @@ function SettingsDialog() {
       setTileColumns(next.tileColumns);
       setPinLastSentMessage(next.pinLastSentMessage);
       setInputNotificationsEnabled(next.inputNotificationsEnabled === true);
+      setAccessTokenEnabled(next.accessTokenEnabled === true);
+      setAccessToken("");
       setNotificationPermission(typeof Notification === "undefined" ? "unsupported" : Notification.permission);
       setPermissionAllowRules(next.permissionAllowRules || []);
       setAgentControlProjectPath(next.agentControlProjectPath || "");
@@ -6716,6 +6826,8 @@ function SettingsDialog() {
       tileColumns !== settings.tileColumns ||
       pinLastSentMessage !== settings.pinLastSentMessage ||
       inputNotificationsEnabled !== (settings.inputNotificationsEnabled === true) ||
+      accessTokenEnabled !== (settings.accessTokenEnabled === true) ||
+      Boolean(accessToken.trim()) ||
       permissionAllowRules.map(permissionAllowRuleKey).join("\n") !== (settings.permissionAllowRules || []).map(permissionAllowRuleKey).join("\n") ||
       agentControlProjectPath !== (settings.agentControlProjectPath || "") ||
       updateChecksEnabled !== (settings.updateChecksEnabled !== false) ||
@@ -6739,6 +6851,8 @@ function SettingsDialog() {
       externalEditorUrlTemplate,
       gitPath,
       inputNotificationsEnabled,
+      accessToken,
+      accessTokenEnabled,
       menuDisplay,
       openaiAgentDir,
       openaiApiKey,
@@ -6857,6 +6971,41 @@ function SettingsDialog() {
               Git path
               <Input value={gitPath} onChange={(event) => setGitPath(event.target.value)} placeholder="git" />
             </label>
+          </section>
+          <section className="grid gap-3 rounded-md border border-border p-3">
+            <div>
+              <h3 className="text-sm font-medium">Security</h3>
+              <p className="text-xs text-muted-foreground">Require an access token before the browser can use the API or WebSocket.</p>
+            </div>
+            <label className="flex items-start gap-2 rounded-md border border-border bg-background/50 p-3 text-sm">
+              <input
+                type="checkbox"
+                className="mt-1"
+                checked={accessTokenEnabled}
+                onChange={(event) => setAccessTokenEnabled(event.target.checked)}
+              />
+              <span>
+                <span className="block font-medium">Require access token</span>
+                <span className="block text-xs text-muted-foreground">
+                  {settings.accessTokenSaved ? "A token is saved. Enter a new token to replace it." : "No access token is saved yet."}
+                </span>
+              </span>
+            </label>
+            <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+              <label className="grid min-w-0 gap-1.5 text-sm">
+                Access token
+                <Input
+                  type="password"
+                  value={accessToken}
+                  onChange={(event) => setAccessToken(event.target.value)}
+                  placeholder={settings.accessTokenSaved ? "Leave blank to keep current token" : "Enter or generate a token"}
+                />
+              </label>
+              <Button type="button" variant="outline" className="self-end" onClick={() => setAccessToken(generateAccessToken())}>
+                <KeyRound className="h-4 w-4" />
+                Generate Token
+              </Button>
+            </div>
           </section>
           <section className="grid gap-3 rounded-md border border-border p-3">
             <div>

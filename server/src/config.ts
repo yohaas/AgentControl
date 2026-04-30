@@ -64,6 +64,7 @@ export interface DashboardConfig {
   inputNotificationsEnabled?: boolean;
   externalEditor?: ExternalEditor;
   externalEditorUrlTemplate?: string;
+  accessTokenEnabled?: boolean;
 }
 
 export type TerminalDockPosition = "float" | "left" | "bottom" | "right";
@@ -100,6 +101,7 @@ export function defaultUpdateCommands(platform = process.platform): string[] {
 export interface DashboardSecrets {
   anthropicApiKey?: string;
   openaiApiKey?: string;
+  accessToken?: string;
 }
 
 export function expandHome(input: string): string {

@@ -1,6 +1,6 @@
 import type { WsClientCommand, WsServerEvent } from "@agent-control/shared";
 import { useAppStore } from "../store/app-store";
-import { agentControlToken } from "./api";
+import { storedAgentControlToken } from "./api";
 
 let socket: WebSocket | undefined;
 let reconnectTimer: number | undefined;
@@ -8,9 +8,10 @@ let attempt = 0;
 let connecting = false;
 let lastSyncedMessageQueues = "";
 
-function wsUrl(token: string) {
+function wsUrl(token?: string) {
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  return `${protocol}//${window.location.host}/ws?token=${encodeURIComponent(token)}`;
+  const query = token ? `?token=${encodeURIComponent(token)}` : "";
+  return `${protocol}//${window.location.host}/ws${query}`;
 }
 
 export async function connectWebSocket() {
@@ -21,17 +22,7 @@ export async function connectWebSocket() {
   }
 
   connecting = true;
-  let token: string;
-  try {
-    token = await agentControlToken();
-  } catch (error) {
-    connecting = false;
-    useAppStore.getState().addError(error instanceof Error ? error.message : String(error));
-    const delay = Math.min(10000, 500 * 2 ** attempt);
-    attempt += 1;
-    reconnectTimer = window.setTimeout(() => void connectWebSocket(), delay);
-    return;
-  }
+  const token = storedAgentControlToken();
 
   const nextSocket = new WebSocket(wsUrl(token));
   socket = nextSocket;
