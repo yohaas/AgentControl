@@ -11048,7 +11048,12 @@ function TerminalPanel({
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size={showMenuText ? "sm" : "icon"} className={showMenuText ? "gap-1 px-2" : "h-8 w-8"} title={`Terminal: ${terminalDockOption.label}`}>
                 <CurrentDockIcon className="h-4 w-4" />
-                {showMenuText && <ChevronDown className="h-4 w-4" />}
+                {showMenuText && (
+                  <>
+                    Dock
+                    <ChevronDown className="h-4 w-4" />
+                  </>
+                )}
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
