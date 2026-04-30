@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-04-30
 
+- [2c244d6](https://github.com/yohaas/AgentControl/commit/2c244d6) Add HTTP fallbacks for mobile chat actions
 - [d59701b](https://github.com/yohaas/AgentControl/commit/d59701b) Fix repeated assistant transcript text
 - [d59701b](https://github.com/yohaas/AgentControl/commit/d59701b) Preserve unsent chat drafts when the backend is unavailable
 - [2195d72](https://github.com/yohaas/AgentControl/commit/2195d72) Launch the installed PWA on `/mobile`
