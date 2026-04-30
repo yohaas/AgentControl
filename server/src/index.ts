@@ -1518,13 +1518,37 @@ app.get("/api/filesystem/directories", async (request, response) => {
 
 app.post("/api/filesystem/open", async (request, response) => {
   const requestedPath = typeof request.body?.path === "string" ? request.body.path.trim() : "";
-  if (!requestedPath) {
+  const requestedProjectId = typeof request.body?.projectId === "string" ? request.body.projectId : "";
+  if (!requestedPath && !requestedProjectId) {
     response.status(400).json({ error: "File path is required." });
     return;
   }
 
-  const filePath = path.resolve(requestedPath);
   const mode = request.body?.mode === "containingFolder" ? "containingFolder" : "path";
+  if (requestedProjectId) {
+    const project = projectById(requestedProjectId);
+    if (!project) {
+      response.status(404).json({ error: "Project not found." });
+      return;
+    }
+    try {
+      const { relativePath } = assertProjectPath(project, requestedPath);
+      const projectPath = pathInfoForProject(project, relativePath).hostOpenPath;
+      const openPath = mode === "containingFolder" ? path.dirname(projectPath) : projectPath;
+      const info = await stat(openPath);
+      if (!info.isFile() && !info.isDirectory()) {
+        response.status(400).json({ error: "Path must be a file or directory." });
+        return;
+      }
+      await openWithDefaultApp(openPath);
+      response.json({ ok: true });
+    } catch (error) {
+      response.status(500).json({ error: error instanceof Error ? error.message : String(error) });
+    }
+    return;
+  }
+
+  const filePath = path.resolve(requestedPath);
   const openPath = mode === "containingFolder" ? path.dirname(filePath) : filePath;
   if (!isOpenablePath(openPath)) {
     response.status(400).json({ error: "Path must be inside an open project or the built-in agent directory." });

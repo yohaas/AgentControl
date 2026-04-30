@@ -157,6 +157,12 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ path, mode })
     }),
+  openProjectFile: (projectId: string, path: string, mode?: "containingFolder") =>
+    json<{ ok: boolean }>("/api/filesystem/open", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ projectId, path, mode })
+    }),
   refresh: () => json<Project[]>("/api/refresh", { method: "POST" }),
   capabilities: () => json<Capabilities>("/api/capabilities"),
   latestModels: (provider?: ModelProfile["provider"]) =>

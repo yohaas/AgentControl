@@ -6993,7 +6993,7 @@ function ProjectInspectorTile({
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
           {showMenuText && "Refresh"}
         </Button>
-        <Button variant="ghost" size={showMenuText ? "sm" : "icon"} className={showMenuText ? "gap-1 px-2" : undefined} title="Open project folder" onClick={() => void api.openFile(project.path).catch((error) => addError(error instanceof Error ? error.message : String(error)))}>
+        <Button variant="ghost" size={showMenuText ? "sm" : "icon"} className={showMenuText ? "gap-1 px-2" : undefined} title="Open project folder" onClick={() => void api.openProjectFile(project.id, "").catch((error) => addError(error instanceof Error ? error.message : String(error)))}>
           <FolderOpen className="h-4 w-4" />
           {showMenuText && "Open"}
         </Button>
@@ -7114,10 +7114,10 @@ function ProjectInspectorTile({
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => selectedPath && void api.openFile(preview?.hostOpenPath || diff?.hostOpenPath || selectedPath).catch((error) => addError(error instanceof Error ? error.message : String(error)))}>
+                  <DropdownMenuItem onClick={() => selectedPath && void api.openProjectFile(project.id, selectedPath).catch((error) => addError(error instanceof Error ? error.message : String(error)))}>
                     <ExternalLink className="mr-2 h-4 w-4" /> Open file
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => selectedPath && void api.openFile(preview?.hostOpenPath || diff?.hostOpenPath || selectedPath, "containingFolder").catch((error) => addError(error instanceof Error ? error.message : String(error)))}>
+                  <DropdownMenuItem onClick={() => selectedPath && void api.openProjectFile(project.id, selectedPath, "containingFolder").catch((error) => addError(error instanceof Error ? error.message : String(error)))}>
                     <FolderOpen className="mr-2 h-4 w-4" /> Open containing folder
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => selectedPath && void navigator.clipboard.writeText(selectedPath)}>
