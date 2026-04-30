@@ -7654,7 +7654,8 @@ function ProjectInspectorTile({
   function fileBrowserContextMenu(pathValue: string, hostOpenPath: string | undefined, type: "file" | "directory") {
     const launchableAgents = agentDefsWithSources(project);
     const canSend = type === "file" && (launchableAgents.length > 0 || agents.length > 0);
-    const editorUrl = externalEditorUrl(settings, hostOpenPath);
+    const editorLine = type === "file" ? 1 : undefined;
+    const editorUrl = externalEditorUrl(settings, hostOpenPath, editorLine);
     const editorLabel = externalEditorLabel(settings.externalEditor);
     return (
       <ContextMenuContent>
@@ -7666,7 +7667,7 @@ function ProjectInspectorTile({
           <Copy className="mr-2 h-4 w-4" />
           Copy full path
         </ContextMenuItem>
-        <ContextMenuItem disabled={!editorUrl} onClick={() => openExternalEditor(settings, hostOpenPath)}>
+        <ContextMenuItem disabled={!editorUrl} onClick={() => openExternalEditor(settings, hostOpenPath, editorLine)}>
           <ExternalLink className="mr-2 h-4 w-4" />
           Open in {editorLabel}
         </ContextMenuItem>
@@ -7779,7 +7780,7 @@ function ProjectInspectorTile({
   const changedFiles = status?.files || [];
   const selectedChanged = changedFiles.find((file) => file.path === selectedPath || file.path.endsWith(` -> ${selectedPath}`));
   const selectedHostOpenPath = preview?.hostOpenPath || diff?.hostOpenPath;
-  const selectedExternalEditorUrl = externalEditorUrl(settings, selectedHostOpenPath);
+  const selectedExternalEditorUrl = externalEditorUrl(settings, selectedHostOpenPath, 1);
 
   return (
     <section
@@ -7932,7 +7933,7 @@ function ProjectInspectorTile({
                   className="h-7 w-7"
                   disabled={!selectedExternalEditorUrl}
                   title={`Open in ${externalEditorLabel(settings.externalEditor)}`}
-                  onClick={() => openExternalEditor(settings, selectedHostOpenPath)}
+                  onClick={() => openExternalEditor(settings, selectedHostOpenPath, 1)}
                 >
                   <ExternalLink className="h-4 w-4" />
                 </Button>
@@ -7950,7 +7951,7 @@ function ProjectInspectorTile({
                   <DropdownMenuItem onClick={() => copyText(preview?.hostOpenPath || diff?.hostOpenPath || selectedPath)}>
                     <Copy className="mr-2 h-4 w-4" /> Copy full path
                   </DropdownMenuItem>
-                  <DropdownMenuItem disabled={!selectedExternalEditorUrl} onClick={() => openExternalEditor(settings, selectedHostOpenPath)}>
+                  <DropdownMenuItem disabled={!selectedExternalEditorUrl} onClick={() => openExternalEditor(settings, selectedHostOpenPath, 1)}>
                     <ExternalLink className="mr-2 h-4 w-4" /> Open in {externalEditorLabel(settings.externalEditor)}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
