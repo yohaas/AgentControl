@@ -2714,6 +2714,7 @@ function Header({
   const tileOrder = useAppStore((state) => state.tileOrder);
   const setTileOrder = useAppStore((state) => state.setTileOrder);
   const setSelectedAgent = useAppStore((state) => state.setSelectedAgent);
+  const setFocusedAgent = useAppStore((state) => state.setFocusedAgent);
   const terminalOpen = useAppStore((state) => state.terminalOpen);
   const fileExplorerOpen = useAppStore((state) => state.fileExplorerOpen);
   const terminalInFileExplorer = useAppStore((state) => state.terminalInFileExplorer);
@@ -2749,7 +2750,11 @@ function Header({
         .map((agent) => {
           const projectName = projects.find((candidate) => candidate.id === agent.projectId)?.name || agent.projectName;
           const need = agent.status === "awaiting-permission" ? "needs approval" : "needs an answer";
-          return `${projectName}: ${agent.displayName} ${need}`;
+          return {
+            agentId: agent.id,
+            projectId: agent.projectId,
+            label: `${projectName}: ${agent.displayName} ${need}`
+          };
         }),
     [agentsById, projects, selectedProjectId]
   );
@@ -3105,13 +3110,21 @@ function Header({
       </button>
       <div className="ml-auto flex items-center gap-2">
         {offProjectInputAlerts.length > 0 && (
-          <span
+          <button
+            type="button"
             className="grid h-5 w-5 shrink-0 place-items-center text-amber-500"
-            title={offProjectInputAlerts.join("\n")}
-            aria-label={offProjectInputAlerts.join("; ")}
+            title={offProjectInputAlerts.map((alert) => alert.label).join("\n")}
+            aria-label={offProjectInputAlerts.map((alert) => alert.label).join("; ")}
+            onClick={() => {
+              const alert = offProjectInputAlerts[0];
+              if (!alert) return;
+              setSelectedAgent(undefined);
+              setSelectedProject(alert.projectId);
+              setFocusedAgent(alert.agentId);
+            }}
           >
             <TriangleAlert className="h-5 w-5" />
-          </span>
+          </button>
         )}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
