@@ -2632,7 +2632,7 @@ function preferredProviderModeModel(
     if (mode === "speed") {
       return firstModelMatching(models, "gpt-5.3-codex-spark", (model) => /spark|mini|codex-mini/i.test(model));
     }
-    return firstModelMatching(models, "gpt-5.3-codex", (model) => /codex/i.test(model) && !/spark|mini|latest/i.test(model));
+    return models[0] || "gpt-5.3-codex";
   }
   if (mode === "deepResearch") {
     return firstModelMatching(models, "o3-deep-research", (model) => /deep-research/i.test(model) && !/mini/i.test(model));
