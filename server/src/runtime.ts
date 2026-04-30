@@ -2545,9 +2545,15 @@ export class AgentRuntimeManager {
 
   private appendAssistantText(state: AgentProcessState, text: string, forceNew = false, streaming = true): void {
     if (!text && !forceNew) return;
-    const existing = state.streamingAssistantId
+    const existingStreaming = state.streamingAssistantId
       ? state.transcript.find((event) => event.id === state.streamingAssistantId && event.kind === "assistant_text")
       : undefined;
+    const lastEvent = state.transcript.at(-1);
+    const existing =
+      existingStreaming ||
+      (lastEvent?.kind === "assistant_text" && (forceNew || text === lastEvent.text || text.startsWith(lastEvent.text))
+        ? lastEvent
+        : undefined);
 
     if (!forceNew && existing?.kind === "assistant_text" && text.length >= existing.text.length && text.startsWith(existing.text)) {
       this.updateTranscript(state, {
