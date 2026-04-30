@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-04-30
 
+- [892b0f2](https://github.com/yohaas/AgentControl/commit/892b0f2) Recheck for AgentControl updates every six hours while the app stays open
 - [a13d0b2](https://github.com/yohaas/AgentControl/commit/a13d0b2) Persist queued chat messages across browser refreshes
 - [ea0d067](https://github.com/yohaas/AgentControl/commit/ea0d067) Add a circular jump-to-bottom button when chat transcripts are scrolled upward
 - [5ae4d81](https://github.com/yohaas/AgentControl/commit/5ae4d81) Show input-needed alerts across projects and add optional browser notifications
