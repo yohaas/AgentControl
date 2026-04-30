@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-04-30
 
+- [19a9ac6](https://github.com/yohaas/AgentControl/commit/19a9ac6) Allow same-host mobile API and WebSocket auth
 - [cedcf8b](https://github.com/yohaas/AgentControl/commit/cedcf8b) Merge final assistant snapshots after stream stop
 - [2c244d6](https://github.com/yohaas/AgentControl/commit/2c244d6) Add HTTP fallbacks for mobile chat actions
 - [d59701b](https://github.com/yohaas/AgentControl/commit/d59701b) Fix repeated assistant transcript text
