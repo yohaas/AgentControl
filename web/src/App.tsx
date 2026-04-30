@@ -3113,7 +3113,7 @@ function Header({
           <button
             type="button"
             className="grid h-5 w-5 shrink-0 place-items-center text-amber-500"
-            title={offProjectInputAlerts.map((alert) => alert.label).join("\n")}
+            title={[...offProjectInputAlerts.map((alert) => alert.label), "Click to open"].join("\n")}
             aria-label={offProjectInputAlerts.map((alert) => alert.label).join("; ")}
             onClick={() => {
               const alert = offProjectInputAlerts[0];
