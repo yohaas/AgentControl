@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-04-30
 
+- [c4a17ee](https://github.com/yohaas/AgentControl/commit/c4a17ee) Toggle mobile nav from empty space
 - [84fa284](https://github.com/yohaas/AgentControl/commit/84fa284) Refine mobile chat navigation actions
 - [b266473](https://github.com/yohaas/AgentControl/commit/b266473) Fix markdown text duplication
 - [7c8febe](https://github.com/yohaas/AgentControl/commit/7c8febe) Add mobile nav new and close chat controls
