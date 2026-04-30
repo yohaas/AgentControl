@@ -6682,8 +6682,10 @@ function ProjectInspectorTile({
   const setFileExplorerOpen = useAppStore((state) => state.setFileExplorerOpen);
   const setTerminalInFileExplorer = useAppStore((state) => state.setTerminalInFileExplorer);
   const setTerminalOpen = useAppStore((state) => state.setTerminalOpen);
+  const settings = useAppStore((state) => state.settings);
+  const setSettings = useAppStore((state) => state.setSettings);
   const terminalInFileExplorer = useAppStore((state) => state.terminalInFileExplorer);
-  const showMenuText = useAppStore((state) => state.settings.menuDisplay === "iconText");
+  const showMenuText = settings.menuDisplay === "iconText";
   const [collapsed, setCollapsed] = useState(false);
   const [tree, setTree] = useState<Record<string, ProjectTreeEntry[]>>({});
   const [expanded, setExpanded] = useState<Record<string, boolean>>({ "": true });
@@ -6882,15 +6884,19 @@ function ProjectInspectorTile({
     }
   }
 
-  function changeFileExplorerDock(nextDock: FileExplorerDockPosition) {
+  async function changeFileExplorerDock(nextDock: FileExplorerDockPosition) {
     setFileExplorerDock(nextDock);
     setFileExplorerMaximized(false);
+    try {
+      const next = await api.saveSettings({ ...settings, fileExplorerDock: nextDock });
+      setSettings(next);
+    } catch (error) {
+      addError(error instanceof Error ? error.message : String(error));
+    }
   }
 
   function minimizeFileExplorer() {
-    setFileExplorerDock("tile");
-    setFileExplorerMaximized(false);
-    setFileExplorerOpen(true);
+    void changeFileExplorerDock("tile");
   }
 
   function currentExplorerText() {
@@ -7099,7 +7105,7 @@ function ProjectInspectorTile({
               ["right", PanelRight, "Dock right"],
               ["tile", LayoutGrid, "Tile"]
             ] as const).map(([value, Icon, label]) => (
-              <DropdownMenuItem key={value} onClick={() => changeFileExplorerDock(value)}>
+              <DropdownMenuItem key={value} onClick={() => void changeFileExplorerDock(value)}>
                 <Icon className="mr-2 h-4 w-4" />
                 <span className="min-w-24">{label}</span>
                 <Check className={cn("ml-auto h-4 w-4", value === dock ? "opacity-100" : "opacity-0")} />

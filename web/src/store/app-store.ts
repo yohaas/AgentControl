@@ -189,6 +189,11 @@ const defaultSettings: SettingsState = {
   builtInAgentDir: ".agent-control/built-in-agents"
 };
 
+function initialFileExplorerOpen(): boolean {
+  if (typeof window === "undefined") return true;
+  return window.localStorage.getItem("agent-control-file-explorer-open") !== "false";
+}
+
 function clampNumber(value: unknown, fallback: number, min: number, max: number): number {
   const parsed = typeof value === "number" ? value : Number(value);
   if (!Number.isFinite(parsed)) return fallback;
@@ -287,7 +292,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   currentTileHeight: undefined,
   sidebarCollapsed: false,
   terminalOpen: false,
-  fileExplorerOpen: true,
+  fileExplorerOpen: initialFileExplorerOpen(),
   fileExplorerMaximized: false,
   terminalInFileExplorer: false,
   terminalSessions: {},
@@ -656,14 +661,19 @@ export const useAppStore = create<AppState>((set, get) => ({
   setCurrentTileHeight: (height) => set({ currentTileHeight: height }),
   setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
   setTerminalOpen: (open) => set({ terminalOpen: open }),
-  setFileExplorerOpen: (open) =>
+  setFileExplorerOpen: (open) => {
+    if (typeof window !== "undefined") window.localStorage.setItem("agent-control-file-explorer-open", String(open));
     set({
       fileExplorerOpen: open,
       fileExplorerMaximized: open ? get().fileExplorerMaximized : false,
       terminalInFileExplorer: open ? get().terminalInFileExplorer : false
-    }),
+    });
+  },
   setFileExplorerMaximized: (maximized) => set({ fileExplorerMaximized: maximized, fileExplorerOpen: maximized ? true : get().fileExplorerOpen }),
-  setFileExplorerDock: (dock) => set({ settings: { ...get().settings, fileExplorerDock: dock }, fileExplorerOpen: true, fileExplorerMaximized: false }),
+  setFileExplorerDock: (dock) => {
+    if (typeof window !== "undefined") window.localStorage.setItem("agent-control-file-explorer-open", "true");
+    set({ settings: { ...get().settings, fileExplorerDock: dock }, fileExplorerOpen: true, fileExplorerMaximized: false });
+  },
   setTerminalInFileExplorer: (docked) => set({ terminalInFileExplorer: docked }),
   setActiveTerminal: (id) =>
     set((state) => ({
