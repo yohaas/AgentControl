@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-04-30
 
+- [bcef1ed](https://github.com/yohaas/AgentControl/commit/bcef1ed) Fix mobile chat scrolling and wrapping
 - [8681b3e](https://github.com/yohaas/AgentControl/commit/8681b3e) Add a collapsible mobile left nav
 - [19a9ac6](https://github.com/yohaas/AgentControl/commit/19a9ac6) Allow same-host mobile API and WebSocket auth
 - [cedcf8b](https://github.com/yohaas/AgentControl/commit/cedcf8b) Merge final assistant snapshots after stream stop
