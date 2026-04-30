@@ -6929,22 +6929,6 @@ function ProjectInspectorTile({
     const canSend = type === "file" && agents.length > 0;
     return (
       <ContextMenuContent>
-        <ContextMenuItem onClick={() => void api.openProjectFile(project.id, pathValue).catch((error) => addError(error instanceof Error ? error.message : String(error)))}>
-          {type === "directory" ? <FolderOpen className="mr-2 h-4 w-4" /> : <ExternalLink className="mr-2 h-4 w-4" />}
-          {type === "directory" ? "Open folder" : "Open file"}
-        </ContextMenuItem>
-        {type === "file" && (
-          <ContextMenuItem onClick={() => void api.openProjectFile(project.id, pathValue, "containingFolder").catch((error) => addError(error instanceof Error ? error.message : String(error)))}>
-            <FolderOpen className="mr-2 h-4 w-4" />
-            Open containing folder
-          </ContextMenuItem>
-        )}
-        {type === "file" && (
-          <ContextMenuItem onClick={() => void api.openProjectFile(project.id, pathValue, "openWith").catch((error) => addError(error instanceof Error ? error.message : String(error)))}>
-            <ExternalLink className="mr-2 h-4 w-4" />
-            Open with...
-          </ContextMenuItem>
-        )}
         <ContextMenuItem onClick={() => copyText(pathValue)}>
           <Clipboard className="mr-2 h-4 w-4" />
           Copy relative path
@@ -7093,10 +7077,6 @@ function ProjectInspectorTile({
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
           {showMenuText && "Refresh"}
         </Button>
-        <Button variant="ghost" size={showMenuText ? "sm" : "icon"} className={showMenuText ? "gap-1 px-2" : undefined} title="Open project folder" onClick={() => void api.openProjectFile(project.id, "").catch((error) => addError(error instanceof Error ? error.message : String(error)))}>
-          <FolderOpen className="h-4 w-4" />
-          {showMenuText && "Open"}
-        </Button>
         <Button variant={terminalInFileExplorer ? "default" : "ghost"} size={showMenuText ? "sm" : "icon"} className={showMenuText ? "gap-1 px-2" : undefined} onClick={terminalInFileExplorer ? undockTerminalFromFileExplorer : dockTerminalHere} title={terminalInFileExplorer ? "Move terminal back to main window" : "Dock terminal to File Explorer"}>
           <SquareTerminal className="h-4 w-4" />
           {showMenuText && "Terminal"}
@@ -7214,15 +7194,6 @@ function ProjectInspectorTile({
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => selectedPath && void api.openProjectFile(project.id, selectedPath).catch((error) => addError(error instanceof Error ? error.message : String(error)))}>
-                    <ExternalLink className="mr-2 h-4 w-4" /> Open file
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => selectedPath && void api.openProjectFile(project.id, selectedPath, "containingFolder").catch((error) => addError(error instanceof Error ? error.message : String(error)))}>
-                    <FolderOpen className="mr-2 h-4 w-4" /> Open containing folder
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => selectedPath && void api.openProjectFile(project.id, selectedPath, "openWith").catch((error) => addError(error instanceof Error ? error.message : String(error)))}>
-                    <ExternalLink className="mr-2 h-4 w-4" /> Open with...
-                  </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => selectedPath && void navigator.clipboard.writeText(selectedPath)}>
                     <Clipboard className="mr-2 h-4 w-4" /> Copy relative path
                   </DropdownMenuItem>
@@ -7244,7 +7215,7 @@ function ProjectInspectorTile({
                   {mode === "preview" ? (
                 preview ? preview.binary ? (
                   <div className="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">
-                    Binary file. Size {formatBytes(preview.size)}. Use the file actions menu to open it externally.
+                    Binary file. Size {formatBytes(preview.size)}.
                   </div>
                 ) : (
                   <div className="grid gap-2">
