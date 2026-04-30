@@ -54,6 +54,7 @@ if ($service) {
 
 Write-UpdateLog ""
 Write-UpdateLog "AgentControl update complete."
-Write-UpdateLog "You may close this window. Please wait 30 seconds and refresh Agent Control."
+Write-UpdateLog "Wait 30 seconds and refresh AgentControl."
 Write-UpdateLog "Log written to $logPath"
-Start-Sleep -Seconds 5
+Read-Host "Press Enter to close this window"
+exit 0
