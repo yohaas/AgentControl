@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-04-30
 
+- [d502bc9](https://github.com/yohaas/AgentControl/commit/d502bc9) Enable file explorer send actions for built-in agents
 - [930698d](https://github.com/yohaas/AgentControl/commit/930698d) Keep the updater window on a completion prompt
 - [e444661](https://github.com/yohaas/AgentControl/commit/e444661) Keep the update dialog open while update commands run
 - [3de35f6](https://github.com/yohaas/AgentControl/commit/3de35f6) Fix WSL file explorer send and external editor actions
