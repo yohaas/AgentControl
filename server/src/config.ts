@@ -55,10 +55,12 @@ export interface DashboardConfig {
   sidebarWidth?: number;
   pinLastSentMessage?: boolean;
   terminalDock?: TerminalDockPosition;
+  fileExplorerDock?: FileExplorerDockPosition;
   themeMode?: ThemeMode;
 }
 
 export type TerminalDockPosition = "float" | "left" | "bottom" | "right";
+export type FileExplorerDockPosition = "tile" | "left" | "bottom" | "right";
 export type ThemeMode = "auto" | "light" | "dark";
 export type ClaudeRuntime = "cli" | "api";
 export type MenuDisplayMode = "iconOnly" | "iconText";
@@ -220,6 +222,15 @@ export function resolveTerminalDock(config: DashboardConfig): TerminalDockPositi
     config.terminalDock === "bottom"
     ? config.terminalDock
     : "bottom";
+}
+
+export function resolveFileExplorerDock(config: DashboardConfig): FileExplorerDockPosition {
+  return config.fileExplorerDock === "tile" ||
+    config.fileExplorerDock === "left" ||
+    config.fileExplorerDock === "right" ||
+    config.fileExplorerDock === "bottom"
+    ? config.fileExplorerDock
+    : "tile";
 }
 
 export function resolveThemeMode(config: DashboardConfig): ThemeMode {

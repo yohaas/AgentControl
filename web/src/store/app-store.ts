@@ -45,10 +45,12 @@ export interface SettingsState {
   sidebarWidth: number;
   pinLastSentMessage: boolean;
   terminalDock: TerminalDockPosition;
+  fileExplorerDock: FileExplorerDockPosition;
   themeMode: ThemeMode;
 }
 
 export type TerminalDockPosition = "float" | "left" | "bottom" | "right";
+export type FileExplorerDockPosition = "tile" | "left" | "bottom" | "right";
 export type ThemeMode = "auto" | "light" | "dark";
 export type ClaudeRuntime = "cli" | "api";
 export type MenuDisplayMode = "iconOnly" | "iconText";
@@ -97,6 +99,9 @@ interface AppState {
   currentTileHeight?: number;
   sidebarCollapsed: boolean;
   terminalOpen: boolean;
+  fileExplorerOpen: boolean;
+  fileExplorerMaximized: boolean;
+  terminalInFileExplorer: boolean;
   terminalSessions: Record<string, TerminalSession>;
   terminalOutput: Record<string, string[]>;
   activeTerminalId?: string;
@@ -128,6 +133,10 @@ interface AppState {
   setCurrentTileHeight: (height?: number) => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
   setTerminalOpen: (open: boolean) => void;
+  setFileExplorerOpen: (open: boolean) => void;
+  setFileExplorerMaximized: (maximized: boolean) => void;
+  setFileExplorerDock: (dock: FileExplorerDockPosition) => void;
+  setTerminalInFileExplorer: (docked: boolean) => void;
   setActiveTerminal: (id?: string) => void;
   openLaunchModal: (state?: Partial<LaunchModalState>) => void;
   closeLaunchModal: () => void;
@@ -171,6 +180,7 @@ const defaultSettings: SettingsState = {
   sidebarWidth: 280,
   pinLastSentMessage: true,
   terminalDock: "bottom",
+  fileExplorerDock: "tile",
   themeMode: "auto",
   claudeRuntime: "cli",
   claudeAgentDir: ".claude/agents",
@@ -194,6 +204,9 @@ function normalizeSettings(settings: SettingsState): SettingsState {
   const terminalDock = ["float", "left", "bottom", "right"].includes(settings.terminalDock)
     ? settings.terminalDock
     : defaultSettings.terminalDock;
+  const fileExplorerDock = ["tile", "left", "bottom", "right"].includes(settings.fileExplorerDock)
+    ? settings.fileExplorerDock
+    : defaultSettings.fileExplorerDock;
   const defaultAgentMode = ["default", "acceptEdits", "plan", "bypassPermissions"].includes(settings.defaultAgentMode)
     ? settings.defaultAgentMode
     : defaultSettings.defaultAgentMode;
@@ -211,6 +224,7 @@ function normalizeSettings(settings: SettingsState): SettingsState {
     tileColumns: clampNumber(settings.tileColumns, defaultSettings.tileColumns, 1, 6),
     sidebarWidth: clampNumber(settings.sidebarWidth, defaultSettings.sidebarWidth, 240, 420),
     terminalDock,
+    fileExplorerDock,
     themeMode,
     claudeRuntime,
     menuDisplay,
@@ -273,6 +287,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   currentTileHeight: undefined,
   sidebarCollapsed: false,
   terminalOpen: false,
+  fileExplorerOpen: true,
+  fileExplorerMaximized: false,
+  terminalInFileExplorer: false,
   terminalSessions: {},
   terminalOutput: {},
   activeTerminalId: undefined,
@@ -639,6 +656,15 @@ export const useAppStore = create<AppState>((set, get) => ({
   setCurrentTileHeight: (height) => set({ currentTileHeight: height }),
   setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
   setTerminalOpen: (open) => set({ terminalOpen: open }),
+  setFileExplorerOpen: (open) =>
+    set({
+      fileExplorerOpen: open,
+      fileExplorerMaximized: open ? get().fileExplorerMaximized : false,
+      terminalInFileExplorer: open ? get().terminalInFileExplorer : false
+    }),
+  setFileExplorerMaximized: (maximized) => set({ fileExplorerMaximized: maximized, fileExplorerOpen: maximized ? true : get().fileExplorerOpen }),
+  setFileExplorerDock: (dock) => set({ settings: { ...get().settings, fileExplorerDock: dock }, fileExplorerOpen: true, fileExplorerMaximized: false }),
+  setTerminalInFileExplorer: (docked) => set({ terminalInFileExplorer: docked }),
   setActiveTerminal: (id) =>
     set((state) => ({
       activeTerminalId: id,

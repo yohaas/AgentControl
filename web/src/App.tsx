@@ -39,6 +39,7 @@ import {
   Eye,
   File as FileIcon,
   FileCode2,
+  FileStack,
   FileText,
   FolderDown,
   FolderOpen,
@@ -136,7 +137,16 @@ import { getSelectionInRoot, useTextSelection } from "./hooks/use-text-selection
 import { api } from "./lib/api";
 import { cn, downloadText, formatDuration, prettyJson } from "./lib/utils";
 import { connectWebSocket, disconnectWebSocket, sendCommand } from "./lib/ws-client";
-import { useAppStore, type ClaudeRuntime, type MenuDisplayMode, type QueuedMessage, type SettingsState, type ThemeMode, type TileScrollingMode } from "./store/app-store";
+import {
+  useAppStore,
+  type ClaudeRuntime,
+  type FileExplorerDockPosition,
+  type MenuDisplayMode,
+  type QueuedMessage,
+  type SettingsState,
+  type ThemeMode,
+  type TileScrollingMode
+} from "./store/app-store";
 
 const DEFAULT_MODEL = "claude-sonnet-4-6";
 const EMPTY_TRANSCRIPT: TranscriptEvent[] = [];
@@ -2540,8 +2550,10 @@ function Header({
   const setTileOrder = useAppStore((state) => state.setTileOrder);
   const setSelectedAgent = useAppStore((state) => state.setSelectedAgent);
   const terminalOpen = useAppStore((state) => state.terminalOpen);
+  const fileExplorerOpen = useAppStore((state) => state.fileExplorerOpen);
   const terminalSessions = useAppStore((state) => state.terminalSessions);
   const setTerminalOpen = useAppStore((state) => state.setTerminalOpen);
+  const setFileExplorerOpen = useAppStore((state) => state.setFileExplorerOpen);
   const wsConnected = useAppStore((state) => state.wsConnected);
   const setProjects = useAppStore((state) => state.setProjects);
   const setSettings = useAppStore((state) => state.setSettings);
@@ -2987,6 +2999,17 @@ function Header({
           </DropdownMenuContent>
         </DropdownMenu>
         <AddProjectDialog open={addProjectOpen} onOpenChange={setAddProjectOpen} showTrigger={false} />
+        <Button
+          variant={fileExplorerOpen ? "default" : "outline"}
+          size={showMenuText ? undefined : "icon"}
+          className={showMenuText ? "gap-2 px-3" : undefined}
+          disabled={!selectedProjectId}
+          onClick={() => setFileExplorerOpen(!fileExplorerOpen)}
+          title={fileExplorerOpen ? "Close File Explorer" : "Open File Explorer"}
+        >
+          <FileStack className="h-4 w-4" />
+          {showMenuText && <span>Files</span>}
+        </Button>
         <Button
           variant={terminalOpen ? "default" : "outline"}
           size={showMenuText ? undefined : "icon"}
@@ -6504,14 +6527,46 @@ function SettingsDialog() {
   );
 }
 
-function ProjectInspectorTile({ project, agents }: { project: Project; agents: RunningAgent[] }) {
+function ProjectInspectorTile({
+  project,
+  agents,
+  height = 520,
+  width,
+  defaultWidth = "min(720px, 100%)",
+  fill = false,
+  tile = false,
+  dock = "tile",
+  poppedOutTerminalIds = new Set<string>(),
+  onMove,
+  onClose
+}: {
+  project: Project;
+  agents: RunningAgent[];
+  height?: number;
+  width?: number;
+  defaultWidth?: string;
+  fill?: boolean;
+  tile?: boolean;
+  dock?: FileExplorerDockPosition;
+  poppedOutTerminalIds?: Set<string>;
+  onMove?: (sourceId: string, targetId: string) => void;
+  onClose?: () => void;
+}) {
   const addError = useAppStore((state) => state.addError);
   const enqueueMessage = useAppStore((state) => state.enqueueMessage);
+  const setSelectedAgent = useAppStore((state) => state.setSelectedAgent);
+  const setFileExplorerDock = useAppStore((state) => state.setFileExplorerDock);
+  const setFileExplorerMaximized = useAppStore((state) => state.setFileExplorerMaximized);
+  const setTerminalInFileExplorer = useAppStore((state) => state.setTerminalInFileExplorer);
+  const setTerminalOpen = useAppStore((state) => state.setTerminalOpen);
+  const terminalInFileExplorer = useAppStore((state) => state.terminalInFileExplorer);
   const [collapsed, setCollapsed] = useState(false);
   const [tree, setTree] = useState<Record<string, ProjectTreeEntry[]>>({});
   const [expanded, setExpanded] = useState<Record<string, boolean>>({ "": true });
   const [filter, setFilter] = useState("");
+  const [searchResults, setSearchResults] = useState<ProjectFileEntry[]>([]);
   const [mode, setMode] = useState<"preview" | "diff" | "details">("preview");
+  const [previewView, setPreviewView] = useState<"raw" | "formatted">("raw");
   const [selectedPath, setSelectedPath] = useState("");
   const [preview, setPreview] = useState<ProjectFileResponse | undefined>();
   const [diff, setDiff] = useState<ProjectDiffResponse | undefined>();
@@ -6520,6 +6575,12 @@ function ProjectInspectorTile({ project, agents }: { project: Project; agents: R
   const [loading, setLoading] = useState(false);
   const previewRootId = `project-inspector-preview-${project.id}`;
   const targetAgent = agents.find((agent) => agent.id === targetAgentId) || agents[0];
+  const normalizedFilter = filter.trim().toLowerCase();
+  const canFormatPreview = Boolean(
+    preview &&
+      !preview.binary &&
+      (/\.(md|markdown)$/i.test(preview.relativePath) || /markdown/i.test(preview.mimeType))
+  );
 
   useEffect(() => {
     setTargetAgentId((current) => (current && agents.some((agent) => agent.id === current) ? current : agents[0]?.id || ""));
@@ -6553,6 +6614,25 @@ function ProjectInspectorTile({ project, agents }: { project: Project; agents: R
     void refresh();
   }, [project.id]);
 
+  useEffect(() => {
+    if (!normalizedFilter) {
+      setSearchResults([]);
+      return;
+    }
+    let cancelled = false;
+    api
+      .projectFiles(project.id, normalizedFilter)
+      .then((files) => {
+        if (!cancelled) setSearchResults(files);
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) addError(error instanceof Error ? error.message : String(error));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [addError, normalizedFilter, project.id]);
+
   async function toggleDirectory(entry: ProjectTreeEntry) {
     if (expanded[entry.relativePath]) {
       setExpanded((current) => ({ ...current, [entry.relativePath]: false }));
@@ -6569,6 +6649,7 @@ function ProjectInspectorTile({ project, agents }: { project: Project; agents: R
   async function openPreview(pathValue: string, switchMode = true) {
     setSelectedPath(pathValue);
     if (switchMode) setMode("preview");
+    setPreviewView("raw");
     setLoading(true);
     try {
       setPreview(await api.projectFile(project.id, pathValue));
@@ -6616,9 +6697,8 @@ function ProjectInspectorTile({ project, agents }: { project: Project; agents: R
 
   function renderEntries(pathValue = "", depth = 0): ReactNode {
     const entries = tree[pathValue] || [];
-    const normalizedFilter = filter.trim().toLowerCase();
     return entries
-      .filter((entry) => !normalizedFilter || entry.relativePath.toLowerCase().includes(normalizedFilter))
+      .filter((entry) => !normalizedFilter || entry.type === "directory" || entry.relativePath.toLowerCase().includes(normalizedFilter))
       .map((entry) => {
         const changed = status?.files.find((file) => file.path === entry.relativePath || file.path.endsWith(` -> ${entry.relativePath}`));
         return (
@@ -6648,49 +6728,145 @@ function ProjectInspectorTile({ project, agents }: { project: Project; agents: R
       });
   }
 
+  function renderSearchResults(): ReactNode {
+    if (!normalizedFilter) return renderEntries();
+    if (searchResults.length === 0) {
+      return <div className="px-2 py-3 text-xs text-muted-foreground">No matching files.</div>;
+    }
+    return searchResults.map((file) => {
+      const changed = status?.files.find((item) => item.path === file.path || item.path.endsWith(` -> ${file.path}`));
+      return (
+        <button
+          key={file.path}
+          type="button"
+          className={cn(
+            "flex min-h-7 w-full min-w-0 items-center gap-1.5 rounded-sm px-2 py-1 text-left text-xs hover:bg-accent",
+            selectedPath === file.path && "bg-accent text-accent-foreground"
+          )}
+          onClick={() => void openPreview(file.path)}
+          title={file.path}
+        >
+          <FileIcon className="h-3.5 w-3.5 shrink-0" />
+          <span className="min-w-0 flex-1 truncate">{file.path}</span>
+          {changed && <Badge className="ml-auto h-5 px-1 text-[10px]">{changed.status}</Badge>}
+        </button>
+      );
+    });
+  }
+
+  function dockTerminalHere() {
+    setTerminalInFileExplorer(true);
+    setTerminalOpen(true);
+  }
+
   const changedFiles = status?.files || [];
   const selectedChanged = changedFiles.find((file) => file.path === selectedPath || file.path.endsWith(` -> ${selectedPath}`));
 
   return (
-    <section className="relative flex min-h-0 min-w-80 max-w-full flex-col rounded-md border border-border bg-card/70" style={{ height: collapsed ? undefined : 520, flex: "0 0 min(720px, 100%)" }}>
+    <section
+      className="relative flex min-h-0 min-w-80 max-w-full flex-col overflow-hidden rounded-md border border-border bg-card/70"
+      style={{ height: collapsed ? undefined : fill ? "100%" : height, flex: fill ? "1 1 auto" : `0 0 ${width ? `${width}px` : defaultWidth}` }}
+      onDragOver={(event) => event.preventDefault()}
+      onDrop={(event) => {
+        if (!onMove) return;
+        event.preventDefault();
+        onMove(event.dataTransfer.getData("application/x-agent-id") || event.dataTransfer.getData("text/plain"), "file-explorer");
+      }}
+    >
       <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-3">
-        <FolderTree className="h-5 w-5 text-primary" />
+        {tile && (
+          <span
+            className="cursor-grab text-muted-foreground"
+            draggable
+            onDragStart={(event) => {
+              event.dataTransfer.setData("application/x-agent-id", "file-explorer");
+              event.dataTransfer.setData("text/plain", "file-explorer");
+            }}
+            title="Drag to reorder File Explorer"
+          >
+            <GripVertical className="h-4 w-4 shrink-0" />
+          </span>
+        )}
+        <FileStack className="h-5 w-5 text-primary" />
         <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-semibold">Project Inspector</div>
+          <div className="truncate text-sm font-semibold">File Explorer</div>
           <div className="truncate text-xs text-muted-foreground">{project.name}</div>
         </div>
-        <Button variant="ghost" size="icon" title="Refresh inspector" onClick={() => void refresh()}>
+        <Button variant="ghost" size="icon" title="Refresh File Explorer" onClick={() => void refresh()}>
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
         </Button>
         <Button variant="ghost" size="icon" title="Open project folder" onClick={() => void api.openFile(project.path).catch((error) => addError(error instanceof Error ? error.message : String(error)))}>
           <FolderOpen className="h-4 w-4" />
         </Button>
-        <Button variant="ghost" size="icon" onClick={() => setCollapsed((value) => !value)} title={collapsed ? "Restore inspector" : "Collapse inspector"}>
+        <Button variant="ghost" size="icon" onClick={dockTerminalHere} title="Dock terminal to File Explorer">
+          <SquareTerminal className="h-4 w-4" />
+        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" title={`File Explorer location: ${dock}`}>
+              <PanelBottom className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {([
+              ["tile", LayoutGrid, "Tile"],
+              ["left", PanelLeft, "Dock left"],
+              ["bottom", PanelBottom, "Dock bottom"],
+              ["right", PanelRight, "Dock right"]
+            ] as const).map(([value, Icon, label]) => (
+              <DropdownMenuItem key={value} onClick={() => setFileExplorerDock(value)}>
+                <Icon className="mr-2 h-4 w-4" />
+                <span className="min-w-24">{label}</span>
+                <Check className={cn("ml-auto h-4 w-4", value === dock ? "opacity-100" : "opacity-0")} />
+              </DropdownMenuItem>
+            ))}
+            <DropdownMenuItem onClick={() => window.open(`/file-explorer-popout?projectId=${encodeURIComponent(project.id)}`, "agent-control-file-explorer", "popup,width=1100,height=760")}>
+              <PictureInPicture2 className="mr-2 h-4 w-4" />
+              Pop out
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        {tile && (
+          <Button variant="ghost" size="icon" onClick={() => setFileExplorerMaximized(true)} title="Maximize File Explorer">
+            <Maximize2 className="h-4 w-4" />
+          </Button>
+        )}
+        <Button variant="ghost" size="icon" onClick={() => setCollapsed((value) => !value)} title={collapsed ? "Restore File Explorer" : "Collapse File Explorer"}>
           {collapsed ? <ChevronDown className="h-4 w-4" /> : <Minimize2 className="h-4 w-4" />}
         </Button>
+        {onClose && (
+          <Button variant="ghost" size="icon" onClick={onClose} title="Close File Explorer">
+            <X className="h-4 w-4" />
+          </Button>
+        )}
       </div>
       {!collapsed && (
         <div className="grid min-h-0 flex-1 grid-cols-[240px_minmax(0,1fr)]">
-          <aside className="min-h-0 border-r border-border">
+          <aside className="flex min-h-0 flex-col border-r border-border">
             <div className="border-b border-border p-2">
               <div className="relative">
                 <Search className="pointer-events-none absolute left-2 top-2 h-3.5 w-3.5 text-muted-foreground" />
-                <Input className="h-8 pl-7 text-xs" value={filter} onChange={(event) => setFilter(event.target.value)} placeholder="Filter files" />
+                <Input className="h-8 pl-7 text-xs" value={filter} onChange={(event) => setFilter(event.target.value)} placeholder="Search files" title="Search files and subfolders" />
               </div>
             </div>
-            <div className="h-full min-h-0 overflow-auto p-1">{renderEntries()}</div>
+            <div className="min-h-0 flex-1 overflow-auto p-1">{renderSearchResults()}</div>
           </aside>
           <div className="flex min-w-0 flex-col">
             <div className="flex shrink-0 flex-wrap items-center gap-1 border-b border-border px-2 py-2">
-              <Button variant={mode === "preview" ? "secondary" : "ghost"} size="sm" className="h-7 gap-1 px-2" onClick={() => selectedPath && void openPreview(selectedPath)}>
+              <Button variant={mode === "preview" ? "secondary" : "ghost"} size="sm" className="h-7 gap-1 px-2" title="Show file preview" onClick={() => selectedPath && void openPreview(selectedPath)}>
                 <Eye className="h-3.5 w-3.5" /> Preview
               </Button>
-              <Button variant={mode === "diff" ? "secondary" : "ghost"} size="sm" className="h-7 gap-1 px-2" disabled={!selectedPath} onClick={() => selectedPath && void openDiff(selectedPath)}>
+              <Button variant={mode === "diff" ? "secondary" : "ghost"} size="sm" className="h-7 gap-1 px-2" disabled={!selectedPath} title="Show Git diff for selected file" onClick={() => selectedPath && void openDiff(selectedPath)}>
                 <GitBranch className="h-3.5 w-3.5" /> Diff
               </Button>
-              <Button variant={mode === "details" ? "secondary" : "ghost"} size="sm" className="h-7 gap-1 px-2" disabled={!selectedPath} onClick={() => setMode("details")}>
+              <Button variant={mode === "details" ? "secondary" : "ghost"} size="sm" className="h-7 gap-1 px-2" disabled={!selectedPath} title="Show file details" onClick={() => setMode("details")}>
                 <Info className="h-3.5 w-3.5" /> Details
               </Button>
+              {mode === "preview" && canFormatPreview && (
+                <Button variant="outline" size="sm" className="h-7 gap-1 px-2" title="Toggle raw and formatted markup view" onClick={() => setPreviewView((view) => (view === "raw" ? "formatted" : "raw"))}>
+                  <CodeXml className="h-3.5 w-3.5" /> {previewView === "raw" ? "Formatted" : "Raw"}
+                </Button>
+              )}
               <div className="min-w-0 flex-1 truncate px-2 text-xs text-muted-foreground">{selectedPath || project.path}</div>
               <Select value={targetAgent?.id || ""} onValueChange={setTargetAgentId}>
                 <SelectTrigger className="h-7 w-36 text-xs"><SelectValue placeholder="Target chat" /></SelectTrigger>
@@ -6698,7 +6874,7 @@ function ProjectInspectorTile({ project, agents }: { project: Project; agents: R
                   {agents.map((agent) => <SelectItem key={agent.id} value={agent.id}>{agent.displayName}</SelectItem>)}
                 </SelectContent>
               </Select>
-              <Button variant="outline" size="sm" className="h-7 px-2" disabled={!selectedPath || !targetAgent} onClick={() => void addFileToChat()}>
+              <Button variant="outline" size="sm" className="h-7 px-2" disabled={!selectedPath || !targetAgent} title="Add selected file to target chat" onClick={() => void addFileToChat()}>
                 <MessageSquare className="h-3.5 w-3.5" />
               </Button>
               <DropdownMenu>
@@ -6738,7 +6914,13 @@ function ProjectInspectorTile({ project, agents }: { project: Project; agents: R
                       <span>{formatDateTime(preview.modifiedAt)}</span>
                       {preview.truncated && <Badge>truncated</Badge>}
                     </div>
-                    <pre className="min-h-0 whitespace-pre-wrap break-words rounded-md bg-muted/40 p-3 font-mono text-xs leading-5">{preview.content}</pre>
+                    {canFormatPreview && previewView === "formatted" ? (
+                      <div className="prose prose-sm max-w-none rounded-md bg-muted/40 p-3 text-foreground dark:prose-invert">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{preview.content || ""}</ReactMarkdown>
+                      </div>
+                    ) : (
+                      <pre className="min-h-0 whitespace-pre-wrap break-words rounded-md bg-muted/40 p-3 font-mono text-xs leading-5">{preview.content}</pre>
+                    )}
                     {preview.truncated && (
                       <Button variant="outline" size="sm" onClick={() => void api.projectFile(project.id, preview.relativePath, true).then(setPreview).catch((error) => addError(error instanceof Error ? error.message : String(error)))}>
                         Load full file
@@ -6789,6 +6971,7 @@ function ProjectInspectorTile({ project, agents }: { project: Project; agents: R
           </div>
         </div>
       )}
+      {!collapsed && terminalInFileExplorer && <TerminalPanel embedded poppedOutTerminalIds={poppedOutTerminalIds} />}
     </section>
   );
 }
@@ -6798,6 +6981,9 @@ function AgentPanel() {
   const selectedProjectId = useAppStore((state) => state.selectedProjectId);
   const projects = useAppStore((state) => state.projects);
   const agentsById = useAppStore((state) => state.agents);
+  const fileExplorerMaximized = useAppStore((state) => state.fileExplorerMaximized);
+  const fileExplorerDock = useAppStore((state) => state.settings.fileExplorerDock);
+  const setFileExplorerMaximized = useAppStore((state) => state.setFileExplorerMaximized);
   const selectedAgent = selectedAgentId ? agentsById[selectedAgentId] : undefined;
   const agent = selectedAgent && (!selectedProjectId || selectedAgent.projectId === selectedProjectId) ? selectedAgent : undefined;
   const project = projects.find((candidate) => candidate.id === selectedProjectId) || projects[0];
@@ -6808,6 +6994,22 @@ function AgentPanel() {
       ),
     [agentsById, selectedProjectId]
   );
+
+  if (fileExplorerMaximized && project) {
+    return (
+      <main className="min-w-0 flex-1 overflow-hidden p-4">
+        <ProjectInspectorTile
+          project={project}
+          agents={agents}
+          height={undefined}
+          defaultWidth="100%"
+          fill
+          dock={fileExplorerDock}
+          onClose={() => setFileExplorerMaximized(false)}
+        />
+      </main>
+    );
+  }
 
   if (agent) {
     return agent.remoteControl ? <RemoteControlPanel agent={agent} /> : <StandardAgentPanel agent={agent} />;
@@ -6821,6 +7023,10 @@ function AgentTileGrid({ agents, project }: { agents: RunningAgent[]; project?: 
   const settings = useAppStore((state) => state.settings);
   const currentTileHeight = useAppStore((state) => state.currentTileHeight);
   const terminalOpen = useAppStore((state) => state.terminalOpen);
+  const fileExplorerOpen = useAppStore((state) => state.fileExplorerOpen);
+  const fileExplorerDock = useAppStore((state) => state.settings.fileExplorerDock);
+  const setFileExplorerOpen = useAppStore((state) => state.setFileExplorerOpen);
+  const poppedOutTerminalIds = useMemo(readPoppedOutTerminalIds, []);
   const configuredTileHeight = currentTileHeight ?? settings.tileHeight;
   const tileColumns = settings.tileColumns || 2;
   const horizontalScrolling = settings.tileScrolling === "horizontal";
@@ -6829,14 +7035,17 @@ function AgentTileGrid({ agents, project }: { agents: RunningAgent[]; project?: 
   const [fullTileHeight, setFullTileHeight] = useState(TILE_MIN_HEIGHT);
   const [rowHeights, setRowHeights] = useState<number[]>([]);
   const tileHeight = configuredTileHeight === 0 ? fullTileHeight : configuredTileHeight;
-  const orderedAgents = useMemo(() => {
+  const fileExplorerTileOpen = Boolean(project && fileExplorerOpen && fileExplorerDock === "tile");
+  const tileItems = useMemo(() => {
     const byId = new Map(agents.map((agent) => [agent.id, agent]));
-    return [
-      ...tileOrder.map((id) => byId.get(id)).filter((agent): agent is RunningAgent => Boolean(agent)),
-      ...agents.filter((agent) => !tileOrder.includes(agent.id))
+    const ids = [
+      ...tileOrder.filter((id) => id === "file-explorer" ? fileExplorerTileOpen : byId.has(id)),
+      ...(fileExplorerTileOpen && !tileOrder.includes("file-explorer") ? ["file-explorer"] : []),
+      ...agents.filter((agent) => !tileOrder.includes(agent.id)).map((agent) => agent.id)
     ];
-  }, [agents, tileOrder]);
-  const totalTiles = orderedAgents.length + (project ? 1 : 0);
+    return ids.map((id) => (id === "file-explorer" ? ({ kind: "fileExplorer" as const, id }) : ({ kind: "agent" as const, id, agent: byId.get(id)! }))).filter((item) => item.kind === "fileExplorer" || Boolean(item.agent));
+  }, [agents, fileExplorerTileOpen, tileOrder]);
+  const totalTiles = tileItems.length;
   const rowCount = horizontalScrolling ? 1 : Math.max(1, Math.ceil(totalTiles / tileColumns));
 
   useEffect(() => {
@@ -6863,7 +7072,7 @@ function AgentTileGrid({ agents, project }: { agents: RunningAgent[]; project?: 
 
   function moveTile(sourceId: string, targetId: string) {
     if (sourceId === targetId) return;
-    const ids = orderedAgents.map((agent) => agent.id);
+    const ids = tileItems.map((item) => item.id);
     const sourceIndex = ids.indexOf(sourceId);
     const targetIndex = ids.indexOf(targetId);
     if (sourceIndex < 0 || targetIndex < 0) return;
@@ -6895,26 +7104,42 @@ function AgentTileGrid({ agents, project }: { agents: RunningAgent[]; project?: 
     });
   }
 
-  if (agents.length === 0 && !project) {
+  if (agents.length === 0 && !fileExplorerTileOpen) {
     return <div className="grid flex-1 place-items-center text-sm text-muted-foreground">No agents open.</div>;
   }
 
   return (
     <main ref={mainRef} className="min-w-0 flex-1 overflow-auto">
       <div className={cn("flex items-start gap-4 p-4", horizontalScrolling ? "flex-nowrap" : "flex-wrap")}>
-        {project && <ProjectInspectorTile project={project} agents={agents} />}
-        {orderedAgents.map((agent, index) => {
-          const rowIndex = horizontalScrolling ? 0 : Math.floor((index + (project ? 1 : 0)) / tileColumns);
+        {tileItems.map((item, index) => {
+          const rowIndex = horizontalScrolling ? 0 : Math.floor(index / tileColumns);
           const rowHeight = rowHeights[rowIndex] ?? tileHeight;
+          const defaultWidth = `calc((100% - ${(tileColumns - 1) * 1}rem) / ${tileColumns})`;
+          if (item.kind === "fileExplorer") {
+            return project ? (
+              <ProjectInspectorTile
+                key={item.id}
+                project={project}
+                agents={agents}
+                height={rowHeight}
+                defaultWidth={defaultWidth}
+                tile
+                dock={fileExplorerDock}
+                poppedOutTerminalIds={poppedOutTerminalIds}
+                onMove={moveTile}
+                onClose={() => setFileExplorerOpen(false)}
+              />
+            ) : null;
+          }
           return (
             <AgentTile
-              key={agent.id}
-              agent={agent}
+              key={item.agent.id}
+              agent={item.agent}
               height={rowHeight}
               previousRowHeight={rowIndex > 0 ? rowHeights[rowIndex - 1] ?? tileHeight : undefined}
               rowIndex={rowIndex}
-              width={tileWidths[agent.id]}
-              defaultWidth={`calc((100% - ${(tileColumns - 1) * 1}rem) / ${tileColumns})`}
+              width={tileWidths[item.agent.id]}
+              defaultWidth={defaultWidth}
               onMove={moveTile}
               onHeightChange={(nextHeight) => setRowHeight(rowIndex, nextHeight)}
               onHeightChangeFromTop={
@@ -6925,6 +7150,39 @@ function AgentTileGrid({ agents, project }: { agents: RunningAgent[]; project?: 
         })}
       </div>
     </main>
+  );
+}
+
+function FileExplorerDockPanel({
+  project,
+  agents,
+  dock,
+  poppedOutTerminalIds
+}: {
+  project?: Project;
+  agents: RunningAgent[];
+  dock: FileExplorerDockPosition;
+  poppedOutTerminalIds: Set<string>;
+}) {
+  const setFileExplorerOpen = useAppStore((state) => state.setFileExplorerOpen);
+  if (!project) return null;
+  return (
+    <section
+      className={cn(
+        "flex min-h-0 shrink-0 flex-col overflow-hidden bg-card",
+        dock === "left" ? "h-full w-[420px] border-r border-border" : dock === "right" ? "h-full w-[420px] border-l border-border" : "h-[min(56vh,560px)] border-t border-border"
+      )}
+    >
+      <ProjectInspectorTile
+        project={project}
+        agents={agents}
+        fill
+        defaultWidth="100%"
+        dock={dock}
+        poppedOutTerminalIds={poppedOutTerminalIds}
+        onClose={() => setFileExplorerOpen(false)}
+      />
+    </section>
   );
 }
 
@@ -9899,11 +10157,13 @@ function TerminalPane({
 function TerminalPanel({
   popout = false,
   popoutTerminalId,
-  poppedOutTerminalIds = new Set<string>()
+  poppedOutTerminalIds = new Set<string>(),
+  embedded = false
 }: {
   popout?: boolean;
   popoutTerminalId?: string;
   poppedOutTerminalIds?: Set<string>;
+  embedded?: boolean;
 } = {}) {
   const projects = useAppStore((state) => state.projects);
   const selectedProjectId = useAppStore((state) => state.selectedProjectId);
@@ -9921,8 +10181,8 @@ function TerminalPanel({
   const [detachedBounds, setDetachedBounds] = useState({ left: 96, top: 72, width: 960, height: 520 });
   const [visiblePaneIds, setVisiblePaneIds] = useState<string[]>([]);
   const pendingSplitRef = useRef(false);
-  const floating = !popout && terminalDock === "float";
-  const sideDock = !popout && (terminalDock === "left" || terminalDock === "right");
+  const floating = !popout && !embedded && terminalDock === "float";
+  const sideDock = !popout && !embedded && (terminalDock === "left" || terminalDock === "right");
   const poppedOutKey = useMemo(() => [...poppedOutTerminalIds].sort().join("|"), [poppedOutTerminalIds]);
   const sessions = useMemo(
     () => {
@@ -10128,7 +10388,9 @@ function TerminalPanel({
   const terminalDockOption = TERMINAL_DOCK_OPTIONS.find((option) => option.value === terminalDock) || TERMINAL_DOCK_OPTIONS[2];
   const CurrentDockIcon = terminalDockOption.icon;
   const PopoutDockIcon = terminalDock === "float" ? PanelBottom : CurrentDockIcon;
-  const panelStyle: CSSProperties | undefined = popout
+  const panelStyle: CSSProperties | undefined = embedded
+    ? { height: 260, minHeight: 220, flex: "0 0 260px" }
+    : popout
     ? undefined
     : floating
       ? detachedBounds
@@ -10140,7 +10402,9 @@ function TerminalPanel({
     <section
       className={cn(
         "flex min-h-0 shrink-0 flex-col overflow-hidden border-border bg-card",
-        popout
+        embedded
+          ? "relative border-t"
+          : popout
           ? "h-screen border-0"
           : floating
             ? "fixed z-40 rounded-md border shadow-2xl"
@@ -10152,7 +10416,7 @@ function TerminalPanel({
       )}
       style={panelStyle}
     >
-      {!popout && terminalDock === "bottom" && (
+      {!embedded && !popout && terminalDock === "bottom" && (
         <div className="absolute -top-1 left-0 right-0 h-2 cursor-ns-resize hover:bg-primary/25" onPointerDown={startResize} title="Drag to resize terminal" />
       )}
       {sideDock && (
@@ -10239,7 +10503,7 @@ function TerminalPanel({
           <Trash2 className="h-4 w-4" />
           Clear
         </Button>
-        {!popout && (
+        {!popout && !embedded && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm" className="gap-1 px-2" title={`Terminal: ${terminalDockOption.label}`}>
@@ -10271,7 +10535,7 @@ function TerminalPanel({
           <Button variant="ghost" size="icon" onClick={() => window.close()} title="Close window">
             <X className="h-4 w-4" />
           </Button>
-        ) : (
+        ) : embedded ? null : (
           <Button variant="ghost" size="icon" onClick={() => setTerminalOpen(false)} title="Minimize terminal">
             <ChevronDown className="h-4 w-4" />
           </Button>
@@ -10442,6 +10706,7 @@ export function App() {
   const setProjects = useAppStore((state) => state.setProjects);
   const setCapabilities = useAppStore((state) => state.setCapabilities);
   const setSettings = useAppStore((state) => state.setSettings);
+  const projects = useAppStore((state) => state.projects);
   const openLaunchModal = useAppStore((state) => state.openLaunchModal);
   const selectedAgentId = useAppStore((state) => state.selectedAgentId);
   const selectedProjectId = useAppStore((state) => state.selectedProjectId);
@@ -10453,12 +10718,20 @@ export function App() {
   const terminalSessions = useAppStore((state) => state.terminalSessions);
   const activeTerminalId = useAppStore((state) => state.activeTerminalId);
   const terminalDock = useAppStore((state) => state.settings.terminalDock);
+  const fileExplorerOpen = useAppStore((state) => state.fileExplorerOpen);
+  const fileExplorerDock = useAppStore((state) => state.settings.fileExplorerDock);
+  const terminalInFileExplorer = useAppStore((state) => state.terminalInFileExplorer);
+  const agentsById = useAppStore((state) => state.agents);
   const themeMode = useAppStore((state) => state.settings.themeMode);
   const [poppedOutTerminalIds, setPoppedOutTerminalIds] = useState(readPoppedOutTerminalIds);
   const [serverStartupError, setServerStartupError] = useState<string | undefined>();
   const [serverRetryCount, setServerRetryCount] = useState(0);
-  const terminalSideDocked = terminalOpen && (terminalDock === "left" || terminalDock === "right");
-  const terminalBottomDocked = terminalOpen && terminalDock === "bottom";
+  const terminalSideDocked = terminalOpen && !terminalInFileExplorer && (terminalDock === "left" || terminalDock === "right");
+  const terminalBottomDocked = terminalOpen && !terminalInFileExplorer && terminalDock === "bottom";
+  const fileExplorerSideDocked = fileExplorerOpen && (fileExplorerDock === "left" || fileExplorerDock === "right");
+  const fileExplorerBottomDocked = fileExplorerOpen && fileExplorerDock === "bottom";
+  const selectedProject = useMemo(() => projects.find((project) => project.id === selectedProjectId) || projects[0], [projects, selectedProjectId]);
+  const projectAgents = useMemo(() => agentsForProject(agentsById, selectedProjectId), [agentsById, selectedProjectId]);
   const [topBarDocked, setTopBarDockedState] = useState(() => window.localStorage.getItem("agent-control-top-bar-docked") === "true");
   useThemeMode(themeMode);
 
@@ -10601,11 +10874,17 @@ export function App() {
           {terminalSideDocked && terminalDock === "left" && (
             <TerminalPanel poppedOutTerminalIds={poppedOutTerminalIds} />
           )}
+          {fileExplorerSideDocked && fileExplorerDock === "left" && (
+            <FileExplorerDockPanel project={selectedProject} agents={projectAgents} dock={fileExplorerDock} poppedOutTerminalIds={poppedOutTerminalIds} />
+          )}
           <Sidebar topSlot={<Header docked onUndock={() => setTopBarDocked(false)} />} />
           <div className="flex min-w-0 flex-1 flex-col">
             <WorktreeTabs />
             <div className="flex min-h-0 flex-1">
               <AgentPanel />
+              {fileExplorerSideDocked && fileExplorerDock === "right" && (
+                <FileExplorerDockPanel project={selectedProject} agents={projectAgents} dock={fileExplorerDock} poppedOutTerminalIds={poppedOutTerminalIds} />
+              )}
               {terminalSideDocked && terminalDock === "right" && (
                 <TerminalPanel poppedOutTerminalIds={poppedOutTerminalIds} />
               )}
@@ -10620,16 +10899,25 @@ export function App() {
             {terminalSideDocked && terminalDock === "left" && (
               <TerminalPanel poppedOutTerminalIds={poppedOutTerminalIds} />
             )}
+            {fileExplorerSideDocked && fileExplorerDock === "left" && (
+              <FileExplorerDockPanel project={selectedProject} agents={projectAgents} dock={fileExplorerDock} poppedOutTerminalIds={poppedOutTerminalIds} />
+            )}
             <Sidebar />
             <AgentPanel />
+            {fileExplorerSideDocked && fileExplorerDock === "right" && (
+              <FileExplorerDockPanel project={selectedProject} agents={projectAgents} dock={fileExplorerDock} poppedOutTerminalIds={poppedOutTerminalIds} />
+            )}
             {terminalSideDocked && terminalDock === "right" && (
               <TerminalPanel poppedOutTerminalIds={poppedOutTerminalIds} />
             )}
           </div>
         </>
       )}
+      {fileExplorerBottomDocked && (
+        <FileExplorerDockPanel project={selectedProject} agents={projectAgents} dock={fileExplorerDock} poppedOutTerminalIds={poppedOutTerminalIds} />
+      )}
       {terminalBottomDocked && <TerminalPanel poppedOutTerminalIds={poppedOutTerminalIds} />}
-      {!terminalOpen && <TerminalMinimizedDock poppedOutTerminalIds={poppedOutTerminalIds} />}
+      {!terminalOpen && !terminalInFileExplorer && <TerminalMinimizedDock poppedOutTerminalIds={poppedOutTerminalIds} />}
       <LaunchDialog />
       <SendDialog />
       <ErrorStack />
@@ -10676,6 +10964,52 @@ export function TerminalPopoutApp() {
   return (
     <div className="h-screen overflow-hidden bg-background text-foreground">
       <TerminalPanel popout popoutTerminalId={requestedTerminalId} />
+      <ErrorStack />
+    </div>
+  );
+}
+
+export function FileExplorerPopoutApp() {
+  const setProjects = useAppStore((state) => state.setProjects);
+  const setCapabilities = useAppStore((state) => state.setCapabilities);
+  const setSettings = useAppStore((state) => state.setSettings);
+  const setSelectedProject = useAppStore((state) => state.setSelectedProject);
+  const projects = useAppStore((state) => state.projects);
+  const selectedProjectId = useAppStore((state) => state.selectedProjectId);
+  const agentsById = useAppStore((state) => state.agents);
+  const addError = useAppStore((state) => state.addError);
+  const themeMode = useAppStore((state) => state.settings.themeMode);
+  const params = new URLSearchParams(window.location.search);
+  const requestedProjectId = params.get("projectId") || undefined;
+  useThemeMode(themeMode);
+
+  useEffect(() => {
+    void Promise.all([api.projects(), api.capabilities(), api.settings()])
+      .then(([nextProjects, capabilities, settings]) => {
+        setProjects(nextProjects);
+        setCapabilities(capabilities);
+        setSettings(settings);
+        if (requestedProjectId && nextProjects.some((project) => project.id === requestedProjectId)) {
+          setSelectedProject(requestedProjectId);
+        } else if (nextProjects[0]) {
+          setSelectedProject(nextProjects[0].id);
+        }
+      })
+      .catch((error: unknown) => addError(error instanceof Error ? error.message : String(error)));
+    connectWebSocket();
+    return () => disconnectWebSocket();
+  }, [addError, requestedProjectId, setCapabilities, setProjects, setSelectedProject, setSettings]);
+
+  const project = projects.find((candidate) => candidate.id === selectedProjectId) || projects[0];
+  const agents = useMemo(() => agentsForProject(agentsById, selectedProjectId), [agentsById, selectedProjectId]);
+
+  return (
+    <div className="h-screen overflow-hidden bg-background p-3 text-foreground">
+      {project ? (
+        <ProjectInspectorTile project={project} agents={agents} fill defaultWidth="100%" onClose={() => window.close()} />
+      ) : (
+        <div className="grid h-full place-items-center text-sm text-muted-foreground">No project open.</div>
+      )}
       <ErrorStack />
     </div>
   );

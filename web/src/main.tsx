@@ -1,9 +1,14 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { App, TerminalPopoutApp } from "./App";
+import { App, FileExplorerPopoutApp, TerminalPopoutApp } from "./App";
 import "./index.css";
 
-const Root = window.location.pathname === "/terminal-popout" ? TerminalPopoutApp : App;
+const Root =
+  window.location.pathname === "/terminal-popout"
+    ? TerminalPopoutApp
+    : window.location.pathname === "/file-explorer-popout"
+      ? FileExplorerPopoutApp
+      : App;
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
