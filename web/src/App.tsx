@@ -235,6 +235,21 @@ function highlightedHtml(text = "", pathValue = "", mimeType?: string): string {
   }
 }
 
+function HighlightedCodeBlock({ content = "", path, mimeType }: { content?: string; path: string; mimeType?: string }) {
+  const lineCount = Math.max(1, content.split(/\r?\n/).length);
+  return (
+    <div className="grid grid-cols-[auto_minmax(0,1fr)] overflow-auto rounded-md bg-muted/40 font-mono text-xs leading-5">
+      <pre className="select-none border-r border-border/70 px-3 py-3 text-right text-muted-foreground">
+        {Array.from({ length: lineCount }, (_, index) => index + 1).join("\n")}
+      </pre>
+      <pre
+        className="syntax-highlight min-w-0 whitespace-pre-wrap break-words p-3"
+        dangerouslySetInnerHTML={{ __html: highlightedHtml(content, path, mimeType) }}
+      />
+    </div>
+  );
+}
+
 interface SideBySideDiffRow {
   kind: "hunk" | "context" | "remove" | "add" | "change";
   oldLine?: number;
@@ -2652,6 +2667,7 @@ function Header({
   const terminalSessions = useAppStore((state) => state.terminalSessions);
   const setTerminalOpen = useAppStore((state) => state.setTerminalOpen);
   const setFileExplorerOpen = useAppStore((state) => state.setFileExplorerOpen);
+  const setTerminalInFileExplorer = useAppStore((state) => state.setTerminalInFileExplorer);
   const wsConnected = useAppStore((state) => state.wsConnected);
   const setProjects = useAppStore((state) => state.setProjects);
   const setSettings = useAppStore((state) => state.setSettings);
@@ -2759,6 +2775,11 @@ function Header({
   }
 
   function toggleTerminal() {
+    if (terminalInFileExplorer) {
+      setTerminalInFileExplorer(false);
+      setTerminalOpen(true);
+      return;
+    }
     if (!terminalOpen && terminalCount === 0) {
       sendCommand({ type: "terminalStart", projectId: selectedProjectId });
     }
@@ -6976,7 +6997,7 @@ function ProjectInspectorTile({
           <FolderOpen className="h-4 w-4" />
           {showMenuText && "Open"}
         </Button>
-        <Button variant={terminalInFileExplorer ? "secondary" : "ghost"} size={showMenuText ? "sm" : "icon"} className={showMenuText ? "gap-1 px-2" : undefined} onClick={terminalInFileExplorer ? undockTerminalFromFileExplorer : dockTerminalHere} title={terminalInFileExplorer ? "Move terminal back to main window" : "Dock terminal to File Explorer"}>
+        <Button variant={terminalInFileExplorer ? "default" : "ghost"} size={showMenuText ? "sm" : "icon"} className={showMenuText ? "gap-1 px-2" : undefined} onClick={terminalInFileExplorer ? undockTerminalFromFileExplorer : dockTerminalHere} title={terminalInFileExplorer ? "Move terminal back to main window" : "Dock terminal to File Explorer"}>
           <SquareTerminal className="h-4 w-4" />
           {showMenuText && "Terminal"}
         </Button>
@@ -7136,10 +7157,7 @@ function ProjectInspectorTile({
                         <ReactMarkdown remarkPlugins={[remarkGfm]}>{preview.content || ""}</ReactMarkdown>
                       </div>
                     ) : (
-                      <pre
-                        className="syntax-highlight min-h-0 overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted/40 p-3 font-mono text-xs leading-5"
-                        dangerouslySetInnerHTML={{ __html: highlightedHtml(preview.content || "", preview.relativePath, preview.mimeType) }}
-                      />
+                      <HighlightedCodeBlock content={preview.content || ""} path={preview.relativePath} mimeType={preview.mimeType} />
                     )}
                     {preview.truncated && (
                       <Button variant="outline" size="sm" onClick={() => void api.projectFile(project.id, preview.relativePath, true).then(setPreview).catch((error) => addError(error instanceof Error ? error.message : String(error)))}>
@@ -7512,14 +7530,40 @@ function FileExplorerDockPanel({
   poppedOutTerminalIds: Set<string>;
 }) {
   const setFileExplorerOpen = useAppStore((state) => state.setFileExplorerOpen);
+  const [width, setWidth] = useState(420);
   if (!project) return null;
+  const sideDock = dock === "left" || dock === "right";
+  function startSideResize(event: ReactPointerEvent<HTMLDivElement>) {
+    if (!sideDock) return;
+    event.preventDefault();
+    const startX = event.clientX;
+    const startWidth = width;
+    const direction = dock === "left" ? 1 : -1;
+    const onMove = (moveEvent: PointerEvent) => {
+      setWidth(Math.min(760, Math.max(320, startWidth + direction * (moveEvent.clientX - startX))));
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp, { once: true });
+  }
   return (
     <section
       className={cn(
-        "flex min-h-0 shrink-0 flex-col overflow-hidden bg-card",
-        dock === "left" ? "h-full w-[420px] border-r border-border" : dock === "right" ? "h-full w-[420px] border-l border-border" : "h-[min(56vh,560px)] border-t border-border"
+        "relative flex min-h-0 shrink-0 flex-col overflow-hidden bg-card",
+        dock === "left" ? "h-full border-r border-border" : dock === "right" ? "h-full border-l border-border" : "h-[min(56vh,560px)] border-t border-border"
       )}
+      style={sideDock ? { width, minWidth: width, maxWidth: width, flex: `0 0 ${width}px` } : undefined}
     >
+      {sideDock && (
+        <div
+          className={cn("absolute top-0 z-20 h-full w-2 cursor-ew-resize hover:bg-primary/25", dock === "left" ? "-right-1" : "-left-1")}
+          onPointerDown={startSideResize}
+          title="Drag to resize File Explorer"
+        />
+      )}
       <ProjectInspectorTile
         project={project}
         agents={agents}
@@ -10519,6 +10563,7 @@ function TerminalPanel({
   const activeTerminalId = useAppStore((state) => state.activeTerminalId);
   const setActiveTerminal = useAppStore((state) => state.setActiveTerminal);
   const setTerminalOpen = useAppStore((state) => state.setTerminalOpen);
+  const setTerminalInFileExplorer = useAppStore((state) => state.setTerminalInFileExplorer);
   const settings = useAppStore((state) => state.settings);
   const setSettings = useAppStore((state) => state.setSettings);
   const addError = useAppStore((state) => state.addError);
@@ -10884,7 +10929,19 @@ function TerminalPanel({
           <Button variant="ghost" size="icon" onClick={() => window.close()} title="Close window">
             <X className="h-4 w-4" />
           </Button>
-        ) : embedded ? null : (
+        ) : embedded ? (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => {
+              setTerminalInFileExplorer(false);
+              setTerminalOpen(false);
+            }}
+            title="Minimize terminal"
+          >
+            <ChevronDown className="h-4 w-4" />
+          </Button>
+        ) : (
           <Button variant="ghost" size="icon" onClick={() => setTerminalOpen(false)} title="Minimize terminal">
             <ChevronDown className="h-4 w-4" />
           </Button>
@@ -11220,13 +11277,13 @@ export function App() {
     <div className="flex h-screen min-w-[900px] flex-col overflow-hidden bg-background text-foreground">
       {topBarDocked ? (
         <div className="flex min-h-0 flex-1">
+          <Sidebar topSlot={<Header docked onUndock={() => setTopBarDocked(false)} />} />
           {terminalSideDocked && terminalDock === "left" && (
             <TerminalPanel poppedOutTerminalIds={poppedOutTerminalIds} />
           )}
           {fileExplorerSideDocked && fileExplorerDock === "left" && (
             <FileExplorerDockPanel project={selectedProject} agents={projectAgents} dock={fileExplorerDock} poppedOutTerminalIds={poppedOutTerminalIds} />
           )}
-          <Sidebar topSlot={<Header docked onUndock={() => setTopBarDocked(false)} />} />
           <div className="flex min-w-0 flex-1 flex-col">
             <WorktreeTabs />
             <div className="flex min-h-0 flex-1">
@@ -11245,13 +11302,13 @@ export function App() {
           <Header onDock={() => setTopBarDocked(true)} />
           <WorktreeTabs />
           <div className="flex min-h-0 flex-1">
+            <Sidebar />
             {terminalSideDocked && terminalDock === "left" && (
               <TerminalPanel poppedOutTerminalIds={poppedOutTerminalIds} />
             )}
             {fileExplorerSideDocked && fileExplorerDock === "left" && (
               <FileExplorerDockPanel project={selectedProject} agents={projectAgents} dock={fileExplorerDock} poppedOutTerminalIds={poppedOutTerminalIds} />
             )}
-            <Sidebar />
             <AgentPanel />
             {fileExplorerSideDocked && fileExplorerDock === "right" && (
               <FileExplorerDockPanel project={selectedProject} agents={projectAgents} dock={fileExplorerDock} poppedOutTerminalIds={poppedOutTerminalIds} />
