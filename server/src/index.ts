@@ -1,6 +1,6 @@
 import http from "node:http";
 import { execFile, spawn } from "node:child_process";
-import { chmod, cp, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { appendFile, chmod, cp, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -68,6 +68,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const attachmentsDir = path.join(os.homedir(), ".agent-dashboard", "attachments");
 const controlDir = path.join(os.homedir(), ".agent-dashboard");
 const controlPath = path.join(controlDir, "control.json");
+const openPathLogPath = path.join(controlDir, "open-path.log");
 const supervised = process.env.AGENT_CONTROL_SUPERVISED === "1";
 const ignoredContextDirs = new Set([".git", "node_modules", "dist", "build", ".next", ".turbo", ".cache", "coverage"]);
 const appAuthToken = process.env.AGENTCONTROL_AUTH_TOKEN || nanoid(48);
@@ -940,32 +941,41 @@ async function removeProjectWorktree(project: Project, request: GitWorktreeRemov
   return { projects, worktrees: await projectWorktrees(project) };
 }
 
+function logOpenPath(message: string, level: "info" | "error" = "info"): void {
+  const line = `[${new Date().toISOString()}] [open-path] ${message}`;
+  if (level === "error") console.error(line);
+  else console.info(line);
+  void mkdir(controlDir, { recursive: true, mode: 0o700 })
+    .then(() => appendFile(openPathLogPath, `${line}\n`, { encoding: "utf8", mode: 0o600 }))
+    .catch((error: unknown) => console.error(`[open-path] failed to write log file: ${error instanceof Error ? error.message : String(error)}`));
+}
+
 function spawnDetached(command: string, args: string[]): Promise<void> {
   try {
-    console.info(`[open-path] spawn detached command=${command} args=${JSON.stringify(args)}`);
+    logOpenPath(`spawn detached command=${command} args=${JSON.stringify(args)}`);
     const child = spawn(command, args, {
       detached: true,
       stdio: "ignore",
       windowsHide: false
     });
     child.on("error", (error) => {
-      console.error(`[open-path] detached spawn error command=${command}: ${error.message}`);
+      logOpenPath(`detached spawn error command=${command}: ${error.message}`, "error");
     });
     child.unref();
     return Promise.resolve();
   } catch (error) {
-    console.error(`[open-path] detached spawn threw command=${command}: ${error instanceof Error ? error.stack || error.message : String(error)}`);
+    logOpenPath(`detached spawn threw command=${command}: ${error instanceof Error ? error.stack || error.message : String(error)}`, "error");
     return Promise.reject(error);
   }
 }
 
 function openWindowsFolder(folderPath: string): Promise<void> {
-  console.info(`[open-path] spawning explorer.exe for folder: ${folderPath}`);
+  logOpenPath(`spawning explorer.exe for folder: ${folderPath}`);
   return spawnDetached("explorer.exe", [folderPath]);
 }
 
 function openWindowsFileChooser(filePath: string): Promise<void> {
-  console.info(`[open-path] spawning Open With dialog for file: ${filePath}`);
+  logOpenPath(`spawning Open With dialog for file: ${filePath}`);
   return spawnDetached("rundll32.exe", ["shell32.dll,OpenAs_RunDLL", filePath]);
 }
 
@@ -1563,7 +1573,7 @@ app.post("/api/filesystem/open", async (request, response) => {
   const requestedPath = typeof request.body?.path === "string" ? request.body.path.trim() : "";
   const requestedProjectId = typeof request.body?.projectId === "string" ? request.body.projectId : "";
   const requestedMode = typeof request.body?.mode === "string" ? request.body.mode : "path";
-  console.info(`[open-path] request mode=${requestedMode} projectId=${requestedProjectId || "(none)"} path=${requestedPath || "(project root)"}`);
+  logOpenPath(`request mode=${requestedMode} projectId=${requestedProjectId || "(none)"} path=${requestedPath || "(project root)"}`);
   if (!requestedPath && !requestedProjectId) {
     response.status(400).json({ error: "File path is required." });
     return;
@@ -1581,18 +1591,18 @@ app.post("/api/filesystem/open", async (request, response) => {
       const { relativePath } = assertProjectPath(project, requestedPath);
       const projectPath = pathInfoForProject(project, relativePath).hostOpenPath;
       const openPath = mode === "containingFolder" ? path.dirname(projectPath) : projectPath;
-      console.info(`[open-path] resolved project=${project.name} relative=${relativePath || "."} host=${projectPath} open=${openPath}`);
+      logOpenPath(`resolved project=${project.name} relative=${relativePath || "."} host=${projectPath} open=${openPath}`);
       const info = await stat(openPath);
-      console.info(`[open-path] stat file=${info.isFile()} directory=${info.isDirectory()} size=${info.size}`);
+      logOpenPath(`stat file=${info.isFile()} directory=${info.isDirectory()} size=${info.size}`);
       if (!info.isFile() && !info.isDirectory()) {
         response.status(400).json({ error: "Path must be a file or directory." });
         return;
       }
       await openWithDefaultApp(openPath, { file: info.isFile(), openWith: mode === "openWith" });
-      console.info(`[open-path] launched ok open=${openPath}`);
+      logOpenPath(`launched ok open=${openPath}`);
       response.json({ ok: true });
     } catch (error) {
-      console.error(`[open-path] failed: ${error instanceof Error ? error.stack || error.message : String(error)}`);
+      logOpenPath(`failed: ${error instanceof Error ? error.stack || error.message : String(error)}`, "error");
       response.status(500).json({ error: error instanceof Error ? error.message : String(error) });
     }
     return;
@@ -1600,7 +1610,7 @@ app.post("/api/filesystem/open", async (request, response) => {
 
   const filePath = path.resolve(requestedPath);
   const openPath = mode === "containingFolder" ? path.dirname(filePath) : filePath;
-  console.info(`[open-path] resolved direct file=${filePath} open=${openPath}`);
+  logOpenPath(`resolved direct file=${filePath} open=${openPath}`);
   if (!isOpenablePath(openPath)) {
     response.status(400).json({ error: "Path must be inside an open project or the built-in agent directory." });
     return;
@@ -1608,16 +1618,16 @@ app.post("/api/filesystem/open", async (request, response) => {
 
   try {
     const info = await stat(openPath);
-    console.info(`[open-path] stat file=${info.isFile()} directory=${info.isDirectory()} size=${info.size}`);
+    logOpenPath(`stat file=${info.isFile()} directory=${info.isDirectory()} size=${info.size}`);
     if (!info.isFile() && !info.isDirectory()) {
       response.status(400).json({ error: "Path must be a file or directory." });
       return;
     }
     await openWithDefaultApp(openPath, { file: info.isFile(), openWith: mode === "openWith" });
-    console.info(`[open-path] launched ok open=${openPath}`);
+    logOpenPath(`launched ok open=${openPath}`);
     response.json({ ok: true });
   } catch (error) {
-    console.error(`[open-path] failed: ${error instanceof Error ? error.stack || error.message : String(error)}`);
+    logOpenPath(`failed: ${error instanceof Error ? error.stack || error.message : String(error)}`, "error");
     response.status(500).json({ error: error instanceof Error ? error.message : String(error) });
   }
 });
