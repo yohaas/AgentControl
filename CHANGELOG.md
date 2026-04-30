@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-04-29
 
+- [pending] Make bottom-docked File Explorer resizable and remember when Files should reopen as a popout
 - [pending] Preserve File Explorer open state and dock position across browser refreshes
 - [pending] Default File Explorer to the left dock beside the left nav
 - [pending] Hide File Explorer open file and folder actions because service-launched Explorer windows are unreliable

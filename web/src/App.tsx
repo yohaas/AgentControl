@@ -166,6 +166,7 @@ const EMPTY_QUEUE: QueuedMessage[] = [];
 const TERMINAL_DOCK_MESSAGE = "agent-control:dock-terminal";
 const TERMINAL_DOCK_STORAGE_KEY = "agent-control-terminal-dock-request";
 const TERMINAL_POPOUT_STORAGE_KEY = "agent-control-popped-out-terminals";
+const FILE_EXPLORER_POPOUT_STORAGE_KEY = "agent-control-file-explorer-popout";
 const DEFAULT_BUILT_IN_AGENT_DIR = ".agent-control/built-in-agents";
 hljs.registerLanguage("bash", bash);
 hljs.registerLanguage("css", css);
@@ -2812,6 +2813,25 @@ function Header({
     setDevCommand(trimmed);
   }
 
+  function openFileExplorerPopoutFromHeader() {
+    if (!selectedProjectId) return false;
+    const popup = window.open(`/file-explorer-popout?projectId=${encodeURIComponent(selectedProjectId)}`, "agent-control-file-explorer", "popup,width=1100,height=760");
+    if (!popup) return false;
+    window.localStorage.setItem(FILE_EXPLORER_POPOUT_STORAGE_KEY, "true");
+    setFileExplorerOpen(false);
+    return true;
+  }
+
+  function toggleFileExplorer() {
+    if (fileExplorerOpen) {
+      setFileExplorerOpen(false);
+      return;
+    }
+    if (window.localStorage.getItem(FILE_EXPLORER_POPOUT_STORAGE_KEY) === "true" && openFileExplorerPopoutFromHeader()) return;
+    window.localStorage.setItem(FILE_EXPLORER_POPOUT_STORAGE_KEY, "false");
+    setFileExplorerOpen(true);
+  }
+
   async function saveDisplaySettings(patch: Partial<Pick<typeof settings, "tileHeight" | "tileColumns">>) {
     try {
       const next = await api.saveSettings({ ...settings, ...patch });
@@ -3124,7 +3144,7 @@ function Header({
           size={showMenuText ? undefined : "icon"}
           className={showMenuText ? "gap-2 px-3" : undefined}
           disabled={!selectedProjectId}
-          onClick={() => setFileExplorerOpen(!fileExplorerOpen)}
+          onClick={toggleFileExplorer}
           title={fileExplorerOpen ? "Close File Explorer" : "Open File Explorer"}
         >
           <FileStack className="h-4 w-4" />
@@ -6880,12 +6900,14 @@ function ProjectInspectorTile({
   function openFileExplorerPopout() {
     const popup = window.open(`/file-explorer-popout?projectId=${encodeURIComponent(project.id)}`, "agent-control-file-explorer", "popup,width=1100,height=760");
     if (popup) {
+      window.localStorage.setItem(FILE_EXPLORER_POPOUT_STORAGE_KEY, "true");
       setFileExplorerOpen(false);
       setFileExplorerMaximized(false);
     }
   }
 
   async function changeFileExplorerDock(nextDock: FileExplorerDockPosition) {
+    window.localStorage.setItem(FILE_EXPLORER_POPOUT_STORAGE_KEY, "false");
     setFileExplorerDock(nextDock);
     setFileExplorerMaximized(false);
     try {
@@ -7509,7 +7531,7 @@ function AgentTileGrid({ agents, project }: { agents: RunningAgent[]; project?: 
       observer?.disconnect();
       window.removeEventListener("resize", updateFullTileHeight);
     };
-  }, [configuredTileHeight, settings.terminalDock, terminalOpen]);
+  }, [configuredTileHeight, fileExplorerDock, fileExplorerOpen, settings.terminalDock, terminalOpen]);
 
   useEffect(() => {
     const clamped = Math.min(TILE_MAX_HEIGHT, Math.max(TILE_MIN_HEIGHT, tileHeight));
@@ -7614,8 +7636,25 @@ function FileExplorerDockPanel({
 }) {
   const setFileExplorerOpen = useAppStore((state) => state.setFileExplorerOpen);
   const [width, setWidth] = useState(420);
+  const [height, setHeight] = useState(320);
   if (!project) return null;
   const sideDock = dock === "left" || dock === "right";
+  const bottomDock = dock === "bottom";
+  function startResize(event: ReactPointerEvent<HTMLDivElement>) {
+    if (!bottomDock) return;
+    event.preventDefault();
+    const startY = event.clientY;
+    const startHeight = height;
+    const onMove = (moveEvent: PointerEvent) => {
+      setHeight(Math.min(760, Math.max(220, startHeight + startY - moveEvent.clientY)));
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp, { once: true });
+  }
   function startSideResize(event: ReactPointerEvent<HTMLDivElement>) {
     if (!sideDock) return;
     event.preventDefault();
@@ -7632,14 +7671,22 @@ function FileExplorerDockPanel({
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp, { once: true });
   }
+  const panelStyle: CSSProperties | undefined = sideDock
+    ? { width, minWidth: width, maxWidth: width, flex: `0 0 ${width}px` }
+    : bottomDock
+      ? { height, minHeight: height, maxHeight: height, flex: `0 0 ${height}px` }
+      : undefined;
   return (
     <section
       className={cn(
         "relative flex min-h-0 shrink-0 flex-col overflow-hidden bg-card",
-        dock === "left" ? "h-full border-r border-border" : dock === "right" ? "h-full border-l border-border" : "h-[min(56vh,560px)] border-t border-border"
+        dock === "left" ? "h-full border-r border-border" : dock === "right" ? "h-full border-l border-border" : "border-t border-border"
       )}
-      style={sideDock ? { width, minWidth: width, maxWidth: width, flex: `0 0 ${width}px` } : undefined}
+      style={panelStyle}
     >
+      {bottomDock && (
+        <div className="absolute -top-1 left-0 right-0 z-20 h-2 cursor-ns-resize hover:bg-primary/25" onPointerDown={startResize} title="Drag to resize File Explorer" />
+      )}
       {sideDock && (
         <div
           className={cn("absolute top-0 z-20 h-full w-2 cursor-ew-resize hover:bg-primary/25", dock === "left" ? "-right-1" : "-left-1")}
