@@ -11071,13 +11071,13 @@ function TerminalPanel({
               setTerminalInFileExplorer(false);
               setTerminalOpen(false);
             }}
-            title="Minimize terminal"
+            title="Hide terminal"
           >
-            <ChevronDown className="h-4 w-4" />
+            <X className="h-4 w-4" />
           </Button>
         ) : (
-          <Button variant="ghost" size="icon" onClick={() => setTerminalOpen(false)} title="Minimize terminal">
-            <ChevronDown className="h-4 w-4" />
+          <Button variant="ghost" size="icon" onClick={() => setTerminalOpen(false)} title="Hide terminal">
+            <X className="h-4 w-4" />
           </Button>
         )}
       </div>
