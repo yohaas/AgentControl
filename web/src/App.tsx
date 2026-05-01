@@ -2158,9 +2158,12 @@ function ChatVisibilityMenu({ agent }: { agent: RunningAgent }) {
 
   return (
     <DropdownMenuSub>
-      <DropdownMenuSubTrigger>
-        <Eye className="mr-2 h-4 w-4" />
-        Chat visibility
+      <DropdownMenuSubTrigger className="justify-between gap-3">
+        <span className="flex items-center">
+          <Eye className="mr-2 h-4 w-4" />
+          Chat visibility
+        </span>
+        <ChevronRight className="h-4 w-4" />
       </DropdownMenuSubTrigger>
       <DropdownMenuSubContent>
         <DropdownMenuItem onClick={() => setChatTranscriptDetail(agent.id, undefined)}>
