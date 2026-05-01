@@ -397,11 +397,31 @@ export async function scanProject(projectPath: string, agentDirs = DEFAULT_AGENT
   };
 }
 
-export async function scanConfiguredProjects(projectPaths: string[], agentDirs = DEFAULT_AGENT_DIRS): Promise<Project[]> {
+async function fallbackConfiguredWslProject(projectPath: string, agentDirs = DEFAULT_AGENT_DIRS): Promise<Project | null> {
+  const wsl = parseWslUncPath(projectPath);
+  if (!wsl) return null;
+  const normalizedPath = wslUncPath(wsl.distro, wsl.wslPath);
+  return {
+    id: projectId(normalizedPath),
+    name: path.basename(normalizedPath),
+    path: normalizedPath,
+    ...projectRuntimeFields(normalizedPath),
+    agents: [],
+    builtInAgents: await readBuiltInAgentDefs(normalizedPath, agentDirs)
+  };
+}
+
+export async function scanConfiguredProjects(projectPaths: string[], agentDirs = DEFAULT_AGENT_DIRS, existingProjects: Project[] = []): Promise<Project[]> {
   const resolvedProjectPaths = projectPaths.map((projectPath) => path.resolve(expandHome(projectPath)));
   const projects = (
     await Promise.all(
-      resolvedProjectPaths.map((projectPath) => scanProject(projectPath, agentDirs, nearestAgentSourcePath(projectPath, resolvedProjectPaths)).catch(() => null))
+      resolvedProjectPaths.map(async (projectPath) => {
+        const scanned = await scanProject(projectPath, agentDirs, nearestAgentSourcePath(projectPath, resolvedProjectPaths)).catch(() => null);
+        if (scanned) return scanned;
+        if (!parseWslUncPath(projectPath)) return null;
+        const existing = existingProjects.find((candidate) => normalizedProjectPath(candidate.path) === normalizedProjectPath(projectPath));
+        return existing || fallbackConfiguredWslProject(projectPath, agentDirs);
+      })
     )
   ).filter((project): project is Project => Boolean(project));
 

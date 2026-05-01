@@ -1090,7 +1090,7 @@ async function copyLocalAgentFiles(projectPath: string, targetPath: string): Pro
 }
 
 async function refreshConfiguredProjects(): Promise<Project[]> {
-  projects = config.projectPaths?.length ? await scanConfiguredProjects(config.projectPaths, agentDirs) : [];
+  projects = config.projectPaths?.length ? await scanConfiguredProjects(config.projectPaths, agentDirs, projects) : [];
   return projects;
 }
 
@@ -1699,7 +1699,7 @@ app.post("/api/projects", async (request, response) => {
 
   const projectPaths = Array.from(new Set([...(config.projectPaths || []), project.path]));
   config = await writeConfig({ ...config, projectPaths });
-  projects = await scanConfiguredProjects(projectPaths, agentDirs);
+  projects = await scanConfiguredProjects(projectPaths, agentDirs, projects);
   response.json(projects);
 });
 
@@ -1716,7 +1716,7 @@ app.delete("/api/projects/:id", async (request, response) => {
   const closePath = normalizedProjectPath(project.path);
   const projectPaths = (config.projectPaths || []).filter((projectPath) => normalizedProjectPath(projectPath) !== closePath);
   config = await writeConfig({ ...config, projectPaths });
-  projects = await scanConfiguredProjects(projectPaths, agentDirs);
+  projects = await scanConfiguredProjects(projectPaths, agentDirs, projects);
   response.json(projects);
 });
 
@@ -2309,7 +2309,7 @@ app.put("/api/settings", async (request, response) => {
   }
   capabilities = await detectCapabilities();
   projectsRoot = resolveProjectsRoot(config);
-  projects = config.projectPaths?.length ? await scanConfiguredProjects(config.projectPaths, agentDirs) : [];
+  projects = config.projectPaths?.length ? await scanConfiguredProjects(config.projectPaths, agentDirs, projects) : [];
   response.json({
     projectsRoot,
     projectPaths: config.projectPaths || [],
