@@ -406,6 +406,17 @@ function isAuthenticatedRequest(request: express.Request): boolean {
   return isAllowedOrigin(request.header("origin"), request.header("host")) && tokensEqual(requestToken(request), configuredAccessToken());
 }
 
+function isAuthExemptApiPath(pathname: string): boolean {
+  return (
+    pathname === "/api/health" ||
+    pathname === "/api/auth/status" ||
+    pathname === "/api/auth/login" ||
+    pathname === "/api/auth/logout" ||
+    pathname === "/api/auth/setup" ||
+    pathname === "/api/permissions/request"
+  );
+}
+
 function canIssueToken(request: express.Request): boolean {
   const origin = request.header("origin") || requestRefererOrigin(request);
   if (origin) return isAllowedOrigin(origin, request.header("host"));
@@ -1445,13 +1456,7 @@ app.post("/api/auth/setup", async (request, response) => {
 });
 
 app.use((request, response, next) => {
-  if (
-    request.path === "/api/health" ||
-    request.path === "/api/auth/status" ||
-    request.path === "/api/auth/login" ||
-    request.path === "/api/auth/logout" ||
-    request.path === "/api/auth/setup"
-  ) {
+  if (isAuthExemptApiPath(request.path)) {
     next();
     return;
   }
@@ -2021,7 +2026,16 @@ app.post("/api/permissions/request", async (request, response) => {
       })
     );
   } catch (error) {
-    response.status(500).json({ error: error instanceof Error ? error.message : String(error) });
+    const message = error instanceof Error ? error.message : String(error);
+    if (message === "Permission request token is invalid.") {
+      response.status(401).json({ error: message });
+      return;
+    }
+    if (message === "Agent not found.") {
+      response.status(404).json({ error: message });
+      return;
+    }
+    response.status(500).json({ error: message });
   }
 });
 
