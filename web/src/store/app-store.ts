@@ -102,6 +102,8 @@ const SELECTED_PROJECT_STORAGE_KEY = "agent-hero-selected-project";
 const LEGACY_MESSAGE_QUEUES_STORAGE_KEY = "agent-control-message-queues";
 const LEGACY_TILE_LAYOUT_STORAGE_KEY = "agent-control-tile-layout";
 const LEGACY_SELECTED_PROJECT_STORAGE_KEY = "agent-control-selected-project";
+const SIDEBAR_COLLAPSED_STORAGE_KEY = "agent-hero-sidebar-collapsed";
+const LEGACY_SIDEBAR_COLLAPSED_STORAGE_KEY = "agent-control-sidebar-collapsed";
 const FILE_EXPLORER_OPEN_STORAGE_KEY = "agent-hero-file-explorer-open";
 const LEGACY_FILE_EXPLORER_OPEN_STORAGE_KEY = "agent-control-file-explorer-open";
 const FILE_EXPLORER_POPOUT_STORAGE_KEY = "agent-hero-file-explorer-popout";
@@ -409,6 +411,16 @@ function initialFileExplorerOpen(): boolean {
   return readLocalStorageWithLegacy(FILE_EXPLORER_OPEN_STORAGE_KEY, LEGACY_FILE_EXPLORER_OPEN_STORAGE_KEY) !== "false";
 }
 
+function readStoredSidebarCollapsed(): boolean {
+  if (typeof window === "undefined") return false;
+  return readLocalStorageWithLegacy(SIDEBAR_COLLAPSED_STORAGE_KEY, LEGACY_SIDEBAR_COLLAPSED_STORAGE_KEY) === "true";
+}
+
+function writeStoredSidebarCollapsed(collapsed: boolean) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(SIDEBAR_COLLAPSED_STORAGE_KEY, String(collapsed));
+}
+
 function clampNumber(value: unknown, fallback: number, min: number, max: number): number {
   const parsed = typeof value === "number" ? value : Number(value);
   if (!Number.isFinite(parsed)) return fallback;
@@ -568,7 +580,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   tileWidths: initialTileLayout.widths,
   minimizedTiles: initialTileLayout.minimized,
   currentTileHeight: undefined,
-  sidebarCollapsed: false,
+  sidebarCollapsed: readStoredSidebarCollapsed(),
   terminalOpen: false,
   terminalProjectUi: {},
   fileExplorerOpen: initialFileExplorerOpen(),
@@ -693,6 +705,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         break;
       case "agent.launched":
         set((state) => {
+          writeStoredSidebarCollapsed(true);
           const tileLayout = writeStoredTileLayout({
             order: [...state.tileOrder.filter((id) => id !== event.agent.id), event.agent.id],
             widths: state.tileWidths,
@@ -1044,7 +1057,10 @@ export const useAppStore = create<AppState>((set, get) => ({
       return { minimizedTiles: writeStoredTileLayout({ order: state.tileOrder, widths: state.tileWidths, minimized: minimizedTiles }).minimized };
     }),
   setCurrentTileHeight: (height) => set({ currentTileHeight: height }),
-  setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
+  setSidebarCollapsed: (collapsed) => {
+    writeStoredSidebarCollapsed(collapsed);
+    set({ sidebarCollapsed: collapsed });
+  },
   setTerminalOpen: (open) =>
     set((state) => ({
       terminalOpen: open,
