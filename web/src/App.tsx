@@ -12682,9 +12682,6 @@ function MobileSidebar({
             contentClassName="w-[min(calc(100vw-1rem),20rem)]"
             hideWhenNoPendingPushes
           />
-          <Button variant="ghost" size="icon" onClick={() => void logout()} title="Log out" aria-label="Log out">
-            <LogOut className="h-4 w-4" />
-          </Button>
           <div className="h-px w-8 bg-border" />
           <div className="flex min-h-0 flex-1 flex-col items-center gap-2 overflow-y-auto overflow-x-hidden px-1" data-mobile-nav-empty-toggle>
             {openChats.map((agent) => (
