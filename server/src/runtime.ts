@@ -1511,18 +1511,8 @@ export class AgentRuntimeManager {
   saveChat(id: string): void {
     const state = this.requiredState(id);
     if (state.transcript.length === 0) throw new Error("No chat transcript to save.");
-    const timestamp = now();
     const existing = this.savedChats.find((chat) => chat.id === id);
-    const saved: SavedChat = {
-      id,
-      projectId: state.agent.projectId,
-      projectName: state.agent.projectName,
-      projectPath: state.agent.projectPath,
-      agent: { ...state.agent, pid: undefined, statusMessage: undefined, updatedAt: timestamp },
-      transcript: state.transcript.slice(-TRANSCRIPT_PERSIST_LIMIT),
-      savedAt: existing?.savedAt || timestamp,
-      updatedAt: timestamp
-    };
+    const saved = this.savedChatFromState(state, existing?.savedAt);
     this.savedChats = [saved, ...this.savedChats.filter((chat) => chat.id !== id)];
     this.broadcast({ type: "agent.snapshot", snapshot: this.snapshot() });
     this.persist();
@@ -1630,6 +1620,29 @@ export class AgentRuntimeManager {
       transcripts[id] = state.transcript.slice(-TRANSCRIPT_PERSIST_LIMIT);
     }
     return { agents, transcripts, savedChats: this.savedChats };
+  }
+
+  private savedChatFromState(state: AgentProcessState, savedAt?: string): SavedChat {
+    const timestamp = now();
+    return {
+      id: state.agent.id,
+      projectId: state.agent.projectId,
+      projectName: state.agent.projectName,
+      projectPath: state.agent.projectPath,
+      agent: { ...state.agent, pid: undefined, statusMessage: undefined, updatedAt: timestamp },
+      transcript: state.transcript.slice(-TRANSCRIPT_PERSIST_LIMIT),
+      savedAt: savedAt || timestamp,
+      updatedAt: timestamp
+    };
+  }
+
+  private syncSavedChat(state: AgentProcessState): void {
+    const index = this.savedChats.findIndex((chat) => chat.id === state.agent.id);
+    if (index < 0) return;
+    const existing = this.savedChats[index];
+    const lastSavedEvent = existing.transcript.at(-1);
+    if (lastSavedEvent && !state.transcript.some((event) => event.id === lastSavedEvent.id)) return;
+    this.savedChats[index] = this.savedChatFromState(state, existing.savedAt);
   }
 
   private uniqueDisplayName(projectId: string, base: string, exceptAgentId?: string): string {
@@ -2639,6 +2652,7 @@ export class AgentRuntimeManager {
 
   private pushTranscript(state: AgentProcessState, event: TranscriptEvent): void {
     state.transcript.push(event);
+    this.syncSavedChat(state);
     this.broadcast({ type: "agent.transcript", id: state.agent.id, event });
     this.persist();
   }
@@ -2646,6 +2660,7 @@ export class AgentRuntimeManager {
   private updateTranscript(state: AgentProcessState, event: TranscriptEvent): void {
     const index = state.transcript.findIndex((candidate) => candidate.id === event.id);
     if (index >= 0) state.transcript[index] = event;
+    this.syncSavedChat(state);
     this.broadcast({ type: "agent.transcript_updated", id: state.agent.id, event });
     this.persist();
   }
