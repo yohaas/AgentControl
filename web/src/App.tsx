@@ -623,10 +623,10 @@ const CHAT_FONT_OPTIONS = [
   { label: "Courier New", value: "\"Courier New\", Courier, monospace" }
 ] as const;
 const CHAT_TRANSCRIPT_DETAIL_OPTIONS = [
-  { value: "responses", label: "Responses only" },
   { value: "actions", label: "Actions" },
   { value: "detailed", label: "Detailed" },
-  { value: "raw", label: "Raw" }
+  { value: "raw", label: "Raw" },
+  { value: "responses", label: "Responses only" }
 ] as const;
 
 type ChatDisplaySettings = SettingsState & {
