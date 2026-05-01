@@ -1387,10 +1387,22 @@ function filteredTranscriptItems(items: ToolTranscriptItem[], detail: ChatTransc
   if (detail === "detailed" || detail === "raw") return items;
   return items.filter((item) => {
     const event = item.kind === "tool_pair" ? item.event : item.event;
+    if (transcriptItemNeedsFeedback(item)) return true;
     if (event.kind === "user" || event.kind === "assistant_text" || event.kind === "questions" || event.kind === "plan") return true;
     if (detail === "actions") return event.kind === "tool_use" || event.kind === "tool_result";
     return false;
   });
+}
+
+function transcriptItemNeedsFeedback(item: ToolTranscriptItem): boolean {
+  const event = item.kind === "tool_pair" ? item.event : item.event;
+  if (event.kind === "questions") return !event.answered;
+  if (event.kind === "plan") return !event.answered;
+  return event.kind === "tool_use" && Boolean(event.awaitingPermission);
+}
+
+function requiredFeedbackTranscriptItems(items: ToolTranscriptItem[]): ToolTranscriptItem[] {
+  return items.filter(transcriptItemNeedsFeedback);
 }
 
 function shouldExpandTranscriptItemByDefault(item: ToolTranscriptItem, index: number, items: ToolTranscriptItem[]) {
@@ -8984,6 +8996,7 @@ function AgentTile({
   const chatTranscriptDetail = normalizeChatTranscriptDetail(settings.chatTranscriptDetail);
   const transcriptItems = useMemo(() => pairedTranscriptItems(transcript), [transcript]);
   const displayedTranscriptItems = useMemo(() => filteredTranscriptItems(transcriptItems, chatTranscriptDetail), [chatTranscriptDetail, transcriptItems]);
+  const requiredFeedbackItems = useMemo(() => requiredFeedbackTranscriptItems(transcriptItems), [transcriptItems]);
   const draft = useAppStore((state) => state.drafts[agent.id] || "");
   const setDraft = useAppStore((state) => state.setDraft);
   const queue = useAppStore((state) => state.messageQueues[agent.id] || EMPTY_QUEUE);
@@ -9584,7 +9597,10 @@ function AgentTile({
                     )}
                   </div>
                 ) : visibleTranscriptViewMode === "raw" ? (
-                  <RawStreamView agent={agent} transcript={transcript} compact />
+                  <div className="grid gap-3">
+                    <RequiredFeedbackPanel items={requiredFeedbackItems} agent={agent} compact />
+                    <RawStreamView agent={agent} transcript={transcript} compact />
+                  </div>
                 ) : transcript.length === 0 || displayedTranscriptItems.length === 0 ? (
                   showActivityIndicator ? (
                     <AgentActivityIndicator agent={agent} compact phaseLabel={phaseLabel} />
@@ -10437,6 +10453,36 @@ function PlanCard({ event, agent, compact = false }: { event: PlanEvent; agent: 
   );
 }
 
+function RequiredFeedbackPanel({
+  items,
+  agent,
+  compact = false
+}: {
+  items: ToolTranscriptItem[];
+  agent: RunningAgent;
+  compact?: boolean;
+}) {
+  if (items.length === 0) return null;
+  return (
+    <section className="grid gap-2 rounded-md border border-amber-300/60 bg-amber-500/10 p-2" aria-label="Required feedback">
+      <div className={cn("flex items-center gap-2 font-medium text-amber-50", compact ? "text-xs" : "text-sm")}>
+        <Hand className="h-4 w-4 shrink-0" />
+        <span>Feedback required</span>
+      </div>
+      <div className="grid gap-2">
+        {items.map((item, index) => (
+          <TranscriptPreview
+            key={item.kind === "tool_pair" ? item.event.id : item.event.id}
+            item={item}
+            agent={agent}
+            defaultExpanded={index === items.length - 1}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function RawStreamView({ agent, transcript, compact = false }: { agent: RunningAgent; transcript: TranscriptEvent[]; compact?: boolean }) {
   const addError = useAppStore((state) => state.addError);
   const [raw, setRaw] = useState("");
@@ -10582,6 +10628,7 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
   const chatTranscriptDetail = normalizeChatTranscriptDetail(settings.chatTranscriptDetail);
   const transcriptItems = useMemo(() => pairedTranscriptItems(transcript), [transcript]);
   const displayedTranscriptItems = useMemo(() => filteredTranscriptItems(transcriptItems, chatTranscriptDetail), [chatTranscriptDetail, transcriptItems]);
+  const requiredFeedbackItems = useMemo(() => requiredFeedbackTranscriptItems(transcriptItems), [transcriptItems]);
   const draft = useAppStore((state) => state.drafts[agent.id] || "");
   const setDraft = useAppStore((state) => state.setDraft);
   const queue = useAppStore((state) => state.messageQueues[agent.id] || EMPTY_QUEUE);
@@ -10963,7 +11010,10 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
                 <PinnedUserMessage event={pinnedMessage} onJump={() => scrollToLatestUserMessage(rootRef.current)} />
               )}
               {visibleTranscriptViewMode === "raw" ? (
-                <RawStreamView agent={agent} transcript={transcript} />
+                <>
+                  <RequiredFeedbackPanel items={requiredFeedbackItems} agent={agent} />
+                  <RawStreamView agent={agent} transcript={transcript} />
+                </>
               ) : transcript.length === 0 || displayedTranscriptItems.length === 0 ? (
                 showActivityIndicator ? (
                   <AgentActivityIndicator agent={agent} phaseLabel={phaseLabel} />
@@ -13165,6 +13215,7 @@ function MobileChatPane({ agent, addError }: { agent: RunningAgent; addError: (m
   const wsConnected = useAppStore((state) => state.wsConnected);
   const transcriptItems = useMemo(() => pairedTranscriptItems(transcript), [transcript]);
   const displayedTranscriptItems = useMemo(() => filteredTranscriptItems(transcriptItems, chatTranscriptDetail), [chatTranscriptDetail, transcriptItems]);
+  const requiredFeedbackItems = useMemo(() => requiredFeedbackTranscriptItems(transcriptItems), [transcriptItems]);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const didInitialTranscriptScrollRef = useRef(false);
@@ -13286,7 +13337,10 @@ function MobileChatPane({ agent, addError }: { agent: RunningAgent; addError: (m
       <div className="relative min-h-0 min-w-0 max-w-full flex-1">
         <div ref={rootRef} className="h-full overflow-y-auto overflow-x-hidden bg-background px-3 py-4" onScroll={handleTranscriptScroll}>
           {visibleTranscriptViewMode === "raw" ? (
-            <RawStreamView agent={agent} transcript={transcript} compact />
+            <div className="grid gap-3">
+              <RequiredFeedbackPanel items={requiredFeedbackItems} agent={agent} compact />
+              <RawStreamView agent={agent} transcript={transcript} compact />
+            </div>
           ) : displayedTranscriptItems.length === 0 ? (
             showActivityIndicator ? (
               <AgentActivityIndicator agent={agent} compact phaseLabel={phaseLabel} />
