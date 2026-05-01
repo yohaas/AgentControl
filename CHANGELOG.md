@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-04-30
 
+- [edded70](https://github.com/yohaas/AgentHero/commit/edded70) Add pause and resume controls for active chat auto-scroll.
 - [cdfb0b3](https://github.com/yohaas/AgentHero/commit/cdfb0b3) Preserve mobile queued messages across reloads.
 - [e960d87](https://github.com/yohaas/AgentHero/commit/e960d87) Add chat status pills to the expanded mobile left menu.
 - [6989bc9](https://github.com/yohaas/AgentHero/commit/6989bc9) Add a mobile logout button that clears the saved access token and auth cookie.
