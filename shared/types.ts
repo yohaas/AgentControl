@@ -758,6 +758,10 @@ export type WsClientCommand =
       savedChatId: string;
     }
   | {
+      type: "forkChat";
+      id: string;
+    }
+  | {
       type: "resume";
       id: string;
     }

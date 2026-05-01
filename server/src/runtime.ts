@@ -1504,6 +1504,7 @@ export class AgentRuntimeManager {
     state.streamingAssistantId = undefined;
     state.rawLines = [];
     state.activeTurn = false;
+    this.savedChats = this.savedChats.filter((chat) => chat.id !== id);
     this.broadcast({ type: "agent.snapshot", snapshot: this.snapshot() });
     this.persist();
   }
@@ -1566,6 +1567,38 @@ export class AgentRuntimeManager {
     const next = this.savedChats.filter((chat) => chat.id !== savedChatId);
     if (next.length === this.savedChats.length) return;
     this.savedChats = next;
+    this.broadcast({ type: "agent.snapshot", snapshot: this.snapshot() });
+    this.persist();
+  }
+
+  forkChat(id: string): void {
+    const state = this.requiredState(id);
+    if (state.transcript.length === 0) throw new Error("No chat transcript to fork.");
+    const timestamp = now();
+    const provider = state.agent.provider || "claude";
+    const forkedAgent: RunningAgent = {
+      ...state.agent,
+      id: nanoid(),
+      displayName: this.uniqueDisplayName(state.agent.projectId, `${state.agent.displayName} Fork`),
+      status: provider === "openai" || provider === "codex" ? "idle" : "paused",
+      statusMessage: `Forked from ${state.agent.displayName}.`,
+      launchedAt: timestamp,
+      updatedAt: timestamp,
+      pid: undefined,
+      sessionId: undefined,
+      restorable: false
+    };
+    const forkedState: AgentProcessState = {
+      agent: forkedAgent,
+      def: this.findAgentDef(forkedAgent),
+      transcript: state.transcript.map((event) => ({ ...event, agentId: forkedAgent.id })),
+      rawLines: [],
+      stdoutBuffer: "",
+      stderrBuffer: "",
+      reportedModelWarnings: new Set()
+    };
+    this.states.set(forkedAgent.id, forkedState);
+    this.broadcast({ type: "agent.launched", agent: forkedAgent });
     this.broadcast({ type: "agent.snapshot", snapshot: this.snapshot() });
     this.persist();
   }

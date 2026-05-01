@@ -2260,11 +2260,15 @@ function AgentActionsMenu({
           <Copy className="mr-2 h-4 w-4" />
           Duplicate
         </DropdownMenuItem>
-        <DropdownMenuItem title={hasSavedCopy ? "Clears only the open chat. The saved copy stays in Saved Chats." : undefined} onClick={() => sendCommand({ type: "clear", id: agent.id })}>
+        <DropdownMenuItem disabled={transcripts.length === 0} onClick={() => sendCommand({ type: "forkChat", id: agent.id })}>
+          <GitBranch className="mr-2 h-4 w-4" />
+          Fork Chat
+        </DropdownMenuItem>
+        <DropdownMenuItem title={hasSavedCopy ? "Clears the open chat and its saved copy." : undefined} onClick={() => sendCommand({ type: "clear", id: agent.id })}>
           <Trash2 className="mr-2 h-4 w-4" />
           <span className="flex flex-col">
             <span>Clear Chat</span>
-            {hasSavedCopy && <span className="text-[11px] text-muted-foreground">Saved copy kept</span>}
+            {hasSavedCopy && <span className="text-[11px] text-muted-foreground">Also clears saved copy</span>}
           </span>
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => sendCommand({ type: "kill", id: agent.id })}>
@@ -2310,11 +2314,15 @@ function MobileAgentActionsMenu({ agent }: { agent: RunningAgent }) {
           <Copy className="mr-2 h-4 w-4" />
           Duplicate
         </DropdownMenuItem>
-        <DropdownMenuItem title={hasSavedCopy ? "Clears only the open chat. The saved copy stays in Saved Chats." : undefined} onClick={() => sendCommand({ type: "clear", id: agent.id })}>
+        <DropdownMenuItem onClick={() => sendCommand({ type: "forkChat", id: agent.id })}>
+          <GitBranch className="mr-2 h-4 w-4" />
+          Fork Chat
+        </DropdownMenuItem>
+        <DropdownMenuItem title={hasSavedCopy ? "Clears the open chat and its saved copy." : undefined} onClick={() => sendCommand({ type: "clear", id: agent.id })}>
           <Trash2 className="mr-2 h-4 w-4" />
           <span className="flex flex-col">
             <span>Clear Chat</span>
-            {hasSavedCopy && <span className="text-[11px] text-muted-foreground">Saved copy kept</span>}
+            {hasSavedCopy && <span className="text-[11px] text-muted-foreground">Also clears saved copy</span>}
           </span>
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => sendCommand({ type: "kill", id: agent.id })}>

@@ -2482,6 +2482,9 @@ wss.on("connection", (ws) => {
         case "deleteSavedChat":
           runtime.deleteSavedChat(command.savedChatId);
           break;
+        case "forkChat":
+          runtime.forkChat(command.id);
+          break;
         case "resume":
           runtime.resume(command.id);
           break;
