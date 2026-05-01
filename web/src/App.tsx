@@ -3382,7 +3382,7 @@ function Header({
       <button
         type="button"
         className="absolute top-[calc(50%-2px)] grid h-8 w-8 -translate-y-1/2 place-items-center rounded-md border border-border bg-background text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        style={{ left: Math.max(16, (sidebarCollapsed ? 56 : settings.sidebarWidth || 280) - 40) }}
+        style={{ left: Math.max(16, (settings.sidebarWidth || 280) - 40) }}
         onClick={onDock}
         title="Dock top bar to left nav"
         aria-label="Dock top bar to left nav"
