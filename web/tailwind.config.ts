@@ -37,8 +37,8 @@ export default {
           "100%": { boxShadow: "0 0 0 9px hsl(var(--primary) / 0)" }
         },
         "agent-dot-wave": {
-          "0%": { transform: "translateX(-140%)" },
-          "100%": { transform: "translateX(240%)" }
+          "0%": { transform: "translateX(0%)" },
+          "100%": { transform: "translateX(100%)" }
         }
       },
       animation: {
