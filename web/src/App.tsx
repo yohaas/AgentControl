@@ -940,6 +940,10 @@ function OpenAiLogo({ className }: { className?: string }) {
   );
 }
 
+function AgentHeroLogo({ className }: { className?: string }) {
+  return <img src="/favicon.svg" alt="" aria-hidden="true" className={cn("shrink-0", className)} />;
+}
+
 function ProviderIcon({
   provider,
   className,
@@ -3284,7 +3288,7 @@ function Header({
       >
         {!sidebarCollapsed && (
           <>
-            <Bot className="h-5 w-5 shrink-0 text-primary" />
+            <AgentHeroLogo className="h-5 w-5" />
             <h1 className="min-w-0 flex-1 truncate text-base font-semibold">AgentHero</h1>
           </>
         )}
@@ -3326,7 +3330,7 @@ function Header({
       )}
     >
       <div className="flex min-w-0 items-center gap-2">
-        <Bot className="h-5 w-5 text-primary" />
+        <AgentHeroLogo className="h-5 w-5" />
         <h1 className="truncate text-base font-semibold">AgentHero</h1>
         {supervised ? (
           <DropdownMenu open={connectionMenuOpen} onOpenChange={setConnectionMenuOpen}>
@@ -12433,8 +12437,8 @@ function ServerOfflinePage({ error, onRetry }: { error?: string; onRetry: () => 
     <div className="grid min-h-screen place-items-center bg-background p-6 text-foreground">
       <main className="w-full max-w-2xl rounded-md border border-border bg-card p-6 shadow-lg">
         <div className="mb-5 flex items-center gap-3">
-          <span className="grid h-10 w-10 place-items-center rounded-md bg-primary/10 text-primary">
-            <Bot className="h-5 w-5" />
+          <span className="grid h-10 w-10 place-items-center">
+            <AgentHeroLogo className="h-10 w-10" />
           </span>
           <div>
             <h1 className="text-lg font-semibold">Start AgentHero</h1>
@@ -12671,7 +12675,7 @@ function MobileSidebar({
   return (
     <aside className="flex w-72 shrink-0 flex-col overflow-x-hidden border-r border-border bg-card/45" onClick={toggleOnEmptyNavTap}>
       <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-3">
-        <Bot className="h-5 w-5 shrink-0 text-primary" />
+        <AgentHeroLogo className="h-5 w-5" />
         <div className="min-w-0 flex-1">
           <div className="truncate text-sm font-semibold">AgentHero</div>
           <div className="truncate text-xs text-muted-foreground">Mobile</div>
