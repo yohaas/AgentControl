@@ -5023,25 +5023,6 @@ function Sidebar({ topSlot }: { topSlot?: ReactNode }) {
             >
               <Plus className="h-3.5 w-3.5" />
             </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-6 w-6" title="Sort running agents">
-                  <ArrowDownAZ className="h-3.5 w-3.5" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start">
-                <DropdownMenuItem onClick={() => setRunningSort("lastActivity")}>
-                  Sort by last activity
-                  <Check className={cn("ml-auto h-4 w-4", runningSort === "lastActivity" ? "opacity-100" : "opacity-0")} />
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setRunningSort("type")}>
-                  Sort by type
-                  <Check className={cn("ml-auto h-4 w-4", runningSort === "type" ? "opacity-100" : "opacity-0")} />
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-          <div className="flex items-center gap-2">
             {running.length > 0 && (
               <Button
                 variant="ghost"
@@ -5058,6 +5039,25 @@ function Sidebar({ topSlot }: { topSlot?: ReactNode }) {
                 <X className="h-3.5 w-3.5" />
               </Button>
             )}
+          </div>
+          <div className="flex items-center gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-10 w-10" title="Sort running agents">
+                  <ArrowDownAZ className="h-5 w-5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                <DropdownMenuItem onClick={() => setRunningSort("lastActivity")}>
+                  Sort by last activity
+                  <Check className={cn("ml-auto h-4 w-4", runningSort === "lastActivity" ? "opacity-100" : "opacity-0")} />
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setRunningSort("type")}>
+                  Sort by type
+                  <Check className={cn("ml-auto h-4 w-4", runningSort === "type" ? "opacity-100" : "opacity-0")} />
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Button
               variant="ghost"
               size="icon"
