@@ -6390,7 +6390,7 @@ function ComposerModeMenu({
   );
 }
 
-function LaunchDialog() {
+function LaunchDialog({ onLaunchRequested }: { onLaunchRequested?: (request: LaunchRequest) => void }) {
   const projects = useAppStore((state) => state.projects);
   const selectedProjectId = useAppStore((state) => state.selectedProjectId);
   const modal = useAppStore((state) => state.launchModal);
@@ -6592,21 +6592,19 @@ function LaunchDialog() {
           return;
         }
       }
-      sendCommand({
-        type: "launch",
-        request: {
-          projectId,
-          defName,
-          agentSource,
-          displayName,
-          provider,
-          model,
-          initialPrompt,
-          remoteControl: false,
-          permissionMode: settings.defaultAgentMode,
-          autoApprove: settings.autoApprove
-        }
-      });
+      const request: LaunchRequest = {
+        projectId,
+        defName,
+        agentSource,
+        displayName,
+        provider,
+        model,
+        initialPrompt,
+        remoteControl: false,
+        permissionMode: settings.defaultAgentMode,
+        autoApprove: settings.autoApprove
+      };
+      if (sendCommand({ type: "launch", request })) onLaunchRequested?.(request);
       closeLaunchModal();
     } catch (error) {
       addError(error instanceof Error ? error.message : String(error));
@@ -13211,6 +13209,11 @@ function isMobileOpenChat(agent: RunningAgent, transcript: TranscriptEvent[]) {
   return MOBILE_CHAT_STATUSES.has(agent.status) || transcript.length > 0 || agent.restorable;
 }
 
+type PendingMobileLaunch = {
+  projectId: string;
+  existingAgentIds: Set<string>;
+};
+
 export function MobileApp() {
   const setProjects = useAppStore((state) => state.setProjects);
   const setCapabilities = useAppStore((state) => state.setCapabilities);
@@ -13224,6 +13227,7 @@ export function MobileApp() {
   const wsConnected = useAppStore((state) => state.wsConnected);
   const themeMode = useAppStore((state) => state.settings.themeMode);
   const addError = useAppStore((state) => state.addError);
+  const pendingLaunchRef = useRef<PendingMobileLaunch | undefined>(undefined);
   const [selectedAgentId, setSelectedAgentIdState] = useState<string | undefined>(() =>
     readLocalStorageWithLegacy(MOBILE_SELECTED_AGENT_STORAGE_KEY)
   );
@@ -13236,6 +13240,16 @@ export function MobileApp() {
     if (id) window.localStorage.setItem(MOBILE_SELECTED_AGENT_STORAGE_KEY, id);
     else window.localStorage.removeItem(MOBILE_SELECTED_AGENT_STORAGE_KEY);
   }, []);
+
+  const trackMobileLaunch = useCallback(
+    (request: LaunchRequest) => {
+      pendingLaunchRef.current = {
+        projectId: request.projectId,
+        existingAgentIds: new Set(Object.keys(agentsById))
+      };
+    },
+    [agentsById]
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -13278,6 +13292,22 @@ export function MobileApp() {
     setSelectedAgentId(selectedAgent.id);
   }, [selectedAgent, selectedAgentId]);
 
+  useEffect(() => {
+    const pendingLaunch = pendingLaunchRef.current;
+    if (!pendingLaunch) return;
+    const launchedAgent = Object.values(agentsById)
+      .filter(
+        (agent) =>
+          agent.projectId === pendingLaunch.projectId &&
+          !pendingLaunch.existingAgentIds.has(agent.id) &&
+          isMobileOpenChat(agent, transcripts[agent.id] || EMPTY_TRANSCRIPT)
+      )
+      .sort((left, right) => timestampValue(right.launchedAt) - timestampValue(left.launchedAt))[0];
+    if (!launchedAgent) return;
+    pendingLaunchRef.current = undefined;
+    setSelectedAgentId(launchedAgent.id);
+  }, [agentsById, setSelectedAgentId, transcripts]);
+
   if (serverStartupError) {
     return <ServerOfflinePage error={serverStartupError} onRetry={() => setServerRetryCount((count) => count + 1)} />;
   }
@@ -13302,7 +13332,7 @@ export function MobileApp() {
           </section>
         )}
       </main>
-      <LaunchDialog />
+      <LaunchDialog onLaunchRequested={trackMobileLaunch} />
       <ErrorStack />
     </div>
   );
