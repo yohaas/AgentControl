@@ -12773,7 +12773,6 @@ function MobileSidebar({
                     <span className="min-w-0">
                       <span className="flex min-w-0 items-center gap-1.5">
                         <span className="truncate text-sm font-medium">{agent.defName}</span>
-                        <StatusPill status={agent.status} done={Boolean(doneAgentIds[agent.id])} />
                         {agentNeedsInput(agent) && (
                           <Badge className="shrink-0 border-amber-500/50 bg-amber-500/15 text-amber-800 dark:text-amber-200">!</Badge>
                         )}
