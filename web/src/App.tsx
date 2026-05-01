@@ -2201,6 +2201,7 @@ function AgentActionsMenu({
 }) {
   const addError = useAppStore((state) => state.addError);
   const settings = useAppStore((state) => state.settings);
+  const hasSavedCopy = useAppStore((state) => state.savedChats.some((chat) => chat.id === agent.id));
   const isBusy = isAgentBusy(agent);
 
   function duplicateAgent() {
@@ -2241,9 +2242,12 @@ function AgentActionsMenu({
           <Copy className="mr-2 h-4 w-4" />
           Duplicate
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => sendCommand({ type: "clear", id: agent.id })}>
+        <DropdownMenuItem title={hasSavedCopy ? "Clears only the open chat. The saved copy stays in Saved Chats." : undefined} onClick={() => sendCommand({ type: "clear", id: agent.id })}>
           <Trash2 className="mr-2 h-4 w-4" />
-          Clear Chat
+          <span className="flex flex-col">
+            <span>Clear Chat</span>
+            {hasSavedCopy && <span className="text-[11px] text-muted-foreground">Saved copy kept</span>}
+          </span>
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => sendCommand({ type: "kill", id: agent.id })}>
           <X className="mr-2 h-4 w-4" />
@@ -2256,6 +2260,7 @@ function AgentActionsMenu({
 
 function MobileAgentActionsMenu({ agent }: { agent: RunningAgent }) {
   const settings = useAppStore((state) => state.settings);
+  const hasSavedCopy = useAppStore((state) => state.savedChats.some((chat) => chat.id === agent.id));
 
   function duplicateAgent() {
     sendCommand({ type: "launch", request: duplicateAgentRequest(agent, settings) });
@@ -2282,9 +2287,12 @@ function MobileAgentActionsMenu({ agent }: { agent: RunningAgent }) {
           <Copy className="mr-2 h-4 w-4" />
           Duplicate
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => sendCommand({ type: "clear", id: agent.id })}>
+        <DropdownMenuItem title={hasSavedCopy ? "Clears only the open chat. The saved copy stays in Saved Chats." : undefined} onClick={() => sendCommand({ type: "clear", id: agent.id })}>
           <Trash2 className="mr-2 h-4 w-4" />
-          Clear Chat
+          <span className="flex flex-col">
+            <span>Clear Chat</span>
+            {hasSavedCopy && <span className="text-[11px] text-muted-foreground">Saved copy kept</span>}
+          </span>
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => sendCommand({ type: "kill", id: agent.id })}>
           <X className="mr-2 h-4 w-4" />
