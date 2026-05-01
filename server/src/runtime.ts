@@ -2521,6 +2521,7 @@ export class AgentRuntimeManager {
       .split(/\s+/)
       .map((token) => token.replace(/^["']|["']$/g, ""))
       .filter(Boolean);
+    if (/^cd$/i.test(tokens[0] || "")) return "cd";
     const packageManagerIndex = tokens.findIndex((token) => /^(npm|pnpm|yarn|bun)(?:\.(?:cmd|exe))?$/i.test(token));
     if (packageManagerIndex >= 0) {
       const packageManager = tokens[packageManagerIndex].replace(/\.(?:cmd|exe)$/i, "").toLowerCase();
