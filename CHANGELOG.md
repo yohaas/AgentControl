@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-04-30
 
+- [e4e8b46](https://github.com/yohaas/AgentHero/commit/e4e8b46) Add common system font presets for chat display settings.
 - [b121d69](https://github.com/yohaas/AgentHero/commit/b121d69) Add chat font family and size display settings.
 - [edded70](https://github.com/yohaas/AgentHero/commit/edded70) Add pause and resume controls for active chat auto-scroll.
 - [cdfb0b3](https://github.com/yohaas/AgentHero/commit/cdfb0b3) Preserve mobile queued messages across reloads.
