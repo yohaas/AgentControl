@@ -43,7 +43,7 @@ export default {
       },
       animation: {
         "model-flash": "model-flash 900ms ease-out",
-        "agent-dot-wave": "agent-dot-wave 1.15s linear infinite"
+        "agent-dot-wave": "agent-dot-wave 1.6s linear infinite"
       }
     }
   },
