@@ -941,7 +941,7 @@ function OpenAiLogo({ className }: { className?: string }) {
 }
 
 function AgentHeroLogo({ className }: { className?: string }) {
-  return <img src="/favicon.svg" alt="" aria-hidden="true" className={cn("shrink-0", className)} />;
+  return <img src="/pwa-icon-192.png" alt="" aria-hidden="true" className={cn("shrink-0", className)} />;
 }
 
 function ProviderIcon({
