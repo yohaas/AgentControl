@@ -90,6 +90,12 @@ interface FilePreviewRequest {
   line?: number;
 }
 
+interface TerminalProjectUiState {
+  open: boolean;
+  inFileExplorer: boolean;
+  activeTerminalId?: string;
+}
+
 const MESSAGE_QUEUES_STORAGE_KEY = "agent-hero-message-queues";
 const TILE_LAYOUT_STORAGE_KEY = "agent-hero-tile-layout";
 const SELECTED_PROJECT_STORAGE_KEY = "agent-hero-selected-project";
@@ -296,6 +302,7 @@ interface AppState {
   currentTileHeight?: number;
   sidebarCollapsed: boolean;
   terminalOpen: boolean;
+  terminalProjectUi: Record<string, TerminalProjectUiState>;
   fileExplorerOpen: boolean;
   fileExplorerMaximized: boolean;
   filePreviewRequest?: FilePreviewRequest;
@@ -502,9 +509,41 @@ function agentMap(agents: RunningAgent[]) {
 
 function latestTerminalForProject(terminals: Record<string, TerminalSession>, projectId?: string) {
   return Object.values(terminals)
-    .filter((terminal) => !projectId || terminal.projectId === projectId)
+    .filter((terminal) => !terminal.hidden && (!projectId || terminal.projectId === projectId))
     .sort((left, right) => +new Date(left.startedAt) - +new Date(right.startedAt))
     .at(-1)?.id;
+}
+
+function visibleTerminalsForProject(terminals: Record<string, TerminalSession>, projectId?: string) {
+  return Object.values(terminals).filter((terminal) => !terminal.hidden && (!projectId || terminal.projectId === projectId));
+}
+
+function saveCurrentProjectTerminalUi(state: AppState): Record<string, TerminalProjectUiState> {
+  if (!state.selectedProjectId) return state.terminalProjectUi;
+  return {
+    ...state.terminalProjectUi,
+    [state.selectedProjectId]: {
+      open: state.terminalOpen,
+      inFileExplorer: state.terminalInFileExplorer,
+      activeTerminalId: state.activeTerminalId
+    }
+  };
+}
+
+function terminalUiForProject(state: AppState, projectId: string | undefined, terminalProjectUi = state.terminalProjectUi) {
+  const projectTerminals = visibleTerminalsForProject(state.terminalSessions, projectId);
+  const projectTerminalIds = new Set(projectTerminals.map((terminal) => terminal.id));
+  const stored = projectId ? terminalProjectUi[projectId] : undefined;
+  const activeTerminalId =
+    stored?.activeTerminalId && projectTerminalIds.has(stored.activeTerminalId)
+      ? stored.activeTerminalId
+      : latestTerminalForProject(state.terminalSessions, projectId);
+  const terminalOpen = Boolean(stored?.open && projectTerminals.length > 0);
+  return {
+    terminalOpen,
+    terminalInFileExplorer: terminalOpen ? Boolean(stored?.inFileExplorer) : false,
+    activeTerminalId
+  };
 }
 
 const TRANSIENT_WS_NOT_CONNECTED_ERROR = "Backend server not running.";
@@ -531,6 +570,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   currentTileHeight: undefined,
   sidebarCollapsed: false,
   terminalOpen: false,
+  terminalProjectUi: {},
   fileExplorerOpen: initialFileExplorerOpen(),
   fileExplorerMaximized: false,
   filePreviewRequest: undefined,
@@ -557,6 +597,9 @@ export const useAppStore = create<AppState>((set, get) => ({
         state.focusedAgentId && state.agents[state.focusedAgentId]?.projectId === selectedProjectId
           ? state.focusedAgentId
           : undefined;
+      const terminalProjectUi =
+        state.selectedProjectId && state.selectedProjectId !== selectedProjectId ? saveCurrentProjectTerminalUi(state) : state.terminalProjectUi;
+      const terminalUi = terminalUiForProject(state, selectedProjectId, terminalProjectUi);
       return {
         projects,
         selectedProjectId,
@@ -566,18 +609,22 @@ export const useAppStore = create<AppState>((set, get) => ({
           state.chatFocusedAgentId && state.agents[state.chatFocusedAgentId]?.projectId === selectedProjectId
             ? state.chatFocusedAgentId
             : undefined,
-        activeTerminalId: latestTerminalForProject(state.terminalSessions, selectedProjectId)
+        terminalProjectUi,
+        ...terminalUi
       };
     }),
   setSelectedProject: (id) =>
     set((state) => {
       writeStoredSelectedProjectId(id);
+      const terminalProjectUi = saveCurrentProjectTerminalUi(state);
+      const terminalUi = terminalUiForProject(state, id, terminalProjectUi);
       return {
         selectedProjectId: id,
         selectedAgentId: undefined,
         focusedAgentId: undefined,
         chatFocusedAgentId: undefined,
-        activeTerminalId: latestTerminalForProject(state.terminalSessions, id)
+        terminalProjectUi,
+        ...terminalUi
       };
     }),
   setSelectedAgent: (id) => set({ selectedAgentId: id }),
@@ -819,25 +866,38 @@ export const useAppStore = create<AppState>((set, get) => ({
       case "terminal.snapshot":
         set((state) => {
           const terminalSessions = Object.fromEntries(event.snapshot.sessions.map((session) => [session.id, session]));
-          const visibleSessions = event.snapshot.sessions.filter((session) => !session.hidden);
-          const activeTerminalId =
-            state.activeTerminalId && terminalSessions[state.activeTerminalId] && !terminalSessions[state.activeTerminalId].hidden
-              ? state.activeTerminalId
-              : visibleSessions[visibleSessions.length - 1]?.id;
+          const terminalUi = terminalUiForProject({ ...state, terminalSessions }, state.selectedProjectId);
           return {
             terminalSessions,
             terminalOutput: event.snapshot.output,
-            activeTerminalId
+            ...terminalUi
           };
         });
         break;
       case "terminal.started":
-        set((state) => ({
-          terminalOpen: event.session.hidden ? state.terminalOpen : true,
-          terminalSessions: { ...state.terminalSessions, [event.session.id]: event.session },
-          terminalOutput: { ...state.terminalOutput, [event.session.id]: event.output },
-          activeTerminalId: event.session.hidden ? state.activeTerminalId : event.session.id
-        }));
+        set((state) => {
+          const terminalSessions = { ...state.terminalSessions, [event.session.id]: event.session };
+          const sessionProjectId = event.session.projectId;
+          const selectedSession = !sessionProjectId || sessionProjectId === state.selectedProjectId;
+          const terminalProjectUi =
+            !event.session.hidden && sessionProjectId
+              ? {
+                  ...state.terminalProjectUi,
+                  [sessionProjectId]: {
+                    open: true,
+                    inFileExplorer: state.terminalProjectUi[sessionProjectId]?.inFileExplorer || false,
+                    activeTerminalId: event.session.id
+                  }
+                }
+              : state.terminalProjectUi;
+          return {
+            terminalOpen: !event.session.hidden && selectedSession ? true : state.terminalOpen,
+            terminalProjectUi,
+            terminalSessions,
+            terminalOutput: { ...state.terminalOutput, [event.session.id]: event.output },
+            activeTerminalId: !event.session.hidden && selectedSession ? event.session.id : state.activeTerminalId
+          };
+        });
         break;
       case "terminal.output":
         set((state) => ({
@@ -871,15 +931,31 @@ export const useAppStore = create<AppState>((set, get) => ({
         set((state) => {
           const { [event.id]: _closedSession, ...terminalSessions } = state.terminalSessions;
           const { [event.id]: _closedOutput, ...terminalOutput } = state.terminalOutput;
-          const remainingIds = Object.keys(terminalSessions);
-          const visibleRemainingIds = remainingIds.filter((id) => !terminalSessions[id]?.hidden);
+          const closedProjectId = _closedSession?.projectId;
+          const selectedVisibleRemainingIds = visibleTerminalsForProject(terminalSessions, state.selectedProjectId).map((terminal) => terminal.id);
+          const closedProjectVisibleRemainingIds = visibleTerminalsForProject(terminalSessions, closedProjectId).map((terminal) => terminal.id);
           const activeTerminalId =
-            state.activeTerminalId === event.id ? visibleRemainingIds[visibleRemainingIds.length - 1] : state.activeTerminalId;
+            state.activeTerminalId === event.id ? selectedVisibleRemainingIds[selectedVisibleRemainingIds.length - 1] : state.activeTerminalId;
+          const terminalProjectUi =
+            closedProjectId && state.terminalProjectUi[closedProjectId]
+              ? {
+                  ...state.terminalProjectUi,
+                  [closedProjectId]: {
+                    ...state.terminalProjectUi[closedProjectId],
+                    open: closedProjectVisibleRemainingIds.length > 0 ? state.terminalProjectUi[closedProjectId].open : false,
+                    activeTerminalId:
+                      state.terminalProjectUi[closedProjectId].activeTerminalId === event.id
+                        ? closedProjectVisibleRemainingIds[closedProjectVisibleRemainingIds.length - 1]
+                        : state.terminalProjectUi[closedProjectId].activeTerminalId
+                  }
+                }
+              : state.terminalProjectUi;
           return {
             terminalSessions,
             terminalOutput,
+            terminalProjectUi,
             activeTerminalId,
-            terminalOpen: visibleRemainingIds.length > 0 ? state.terminalOpen : false
+            terminalOpen: selectedVisibleRemainingIds.length > 0 ? state.terminalOpen : false
           };
         });
         break;
@@ -969,13 +1045,40 @@ export const useAppStore = create<AppState>((set, get) => ({
     }),
   setCurrentTileHeight: (height) => set({ currentTileHeight: height }),
   setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
-  setTerminalOpen: (open) => set({ terminalOpen: open }),
+  setTerminalOpen: (open) =>
+    set((state) => ({
+      terminalOpen: open,
+      terminalInFileExplorer: open ? state.terminalInFileExplorer : false,
+      terminalProjectUi: state.selectedProjectId
+        ? {
+            ...state.terminalProjectUi,
+            [state.selectedProjectId]: {
+              open,
+              inFileExplorer: open ? state.terminalInFileExplorer : false,
+              activeTerminalId: state.activeTerminalId
+            }
+          }
+        : state.terminalProjectUi
+    })),
   setFileExplorerOpen: (open) => {
     if (typeof window !== "undefined") window.localStorage.setItem(FILE_EXPLORER_OPEN_STORAGE_KEY, String(open));
-    set({
-      fileExplorerOpen: open,
-      fileExplorerMaximized: open ? get().fileExplorerMaximized : false,
-      terminalInFileExplorer: open ? get().terminalInFileExplorer : false
+    set((state) => {
+      const terminalInFileExplorer = open ? state.terminalInFileExplorer : false;
+      return {
+        fileExplorerOpen: open,
+        fileExplorerMaximized: open ? state.fileExplorerMaximized : false,
+        terminalInFileExplorer,
+        terminalProjectUi: state.selectedProjectId
+          ? {
+              ...state.terminalProjectUi,
+              [state.selectedProjectId]: {
+                open: state.terminalOpen,
+                inFileExplorer: terminalInFileExplorer,
+                activeTerminalId: state.activeTerminalId
+              }
+            }
+          : state.terminalProjectUi
+      };
     });
   },
   setFileExplorerMaximized: (maximized) => set({ fileExplorerMaximized: maximized, fileExplorerOpen: maximized ? true : get().fileExplorerOpen }),
@@ -1026,10 +1129,34 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (typeof window !== "undefined") window.localStorage.setItem(FILE_EXPLORER_OPEN_STORAGE_KEY, "true");
     set({ settings: { ...get().settings, fileExplorerDock: dock }, fileExplorerOpen: true, fileExplorerMaximized: false });
   },
-  setTerminalInFileExplorer: (docked) => set({ terminalInFileExplorer: docked }),
+  setTerminalInFileExplorer: (docked) =>
+    set((state) => ({
+      terminalInFileExplorer: docked,
+      terminalProjectUi: state.selectedProjectId
+        ? {
+            ...state.terminalProjectUi,
+            [state.selectedProjectId]: {
+              open: state.terminalOpen,
+              inFileExplorer: docked,
+              activeTerminalId: state.activeTerminalId
+            }
+          }
+        : state.terminalProjectUi
+    })),
   setActiveTerminal: (id) =>
     set((state) => ({
       activeTerminalId: id,
+      terminalProjectUi:
+        id && state.selectedProjectId
+          ? {
+              ...state.terminalProjectUi,
+              [state.selectedProjectId]: {
+                open: state.terminalOpen,
+                inFileExplorer: state.terminalInFileExplorer,
+                activeTerminalId: id
+              }
+            }
+          : state.terminalProjectUi,
       terminalSessions: id
         ? withTerminal(state.terminalSessions, id, (terminal) => ({ ...terminal, updatedAt: new Date().toISOString() }))
         : state.terminalSessions
