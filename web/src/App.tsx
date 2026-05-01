@@ -63,6 +63,7 @@ import {
   FolderTree,
   Forward,
   GitBranch,
+  GitFork,
   GripVertical,
   Gauge,
   HardDrive,
@@ -2261,7 +2262,7 @@ function AgentActionsMenu({
           Duplicate
         </DropdownMenuItem>
         <DropdownMenuItem disabled={transcripts.length === 0} onClick={() => sendCommand({ type: "forkChat", id: agent.id })}>
-          <GitBranch className="mr-2 h-4 w-4" />
+          <GitFork className="mr-2 h-4 w-4" />
           Fork Chat
         </DropdownMenuItem>
         <DropdownMenuItem title={hasSavedCopy ? "Clears the open chat and its saved copy." : undefined} onClick={() => sendCommand({ type: "clear", id: agent.id })}>
@@ -2315,7 +2316,7 @@ function MobileAgentActionsMenu({ agent }: { agent: RunningAgent }) {
           Duplicate
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => sendCommand({ type: "forkChat", id: agent.id })}>
-          <GitBranch className="mr-2 h-4 w-4" />
+          <GitFork className="mr-2 h-4 w-4" />
           Fork Chat
         </DropdownMenuItem>
         <DropdownMenuItem title={hasSavedCopy ? "Clears the open chat and its saved copy." : undefined} onClick={() => sendCommand({ type: "clear", id: agent.id })}>
