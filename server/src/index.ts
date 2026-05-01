@@ -2426,6 +2426,9 @@ wss.on("connection", (ws) => {
         case "kill":
           runtime.kill(command.id);
           break;
+        case "rename":
+          runtime.rename(command.id, command.displayName);
+          break;
         case "interrupt":
           runtime.interrupt(command.id);
           break;

@@ -675,6 +675,16 @@ export class AgentRuntimeManager {
     }
   }
 
+  rename(id: string, displayName: string): void {
+    const state = this.requiredState(id);
+    const trimmed = displayName.trim().slice(0, 120);
+    if (!trimmed) throw new Error("Chat name cannot be blank.");
+    state.agent.displayName = this.uniqueDisplayName(state.agent.projectId, trimmed, state.agent.id);
+    state.agent.updatedAt = now();
+    this.broadcast({ type: "agent.snapshot", snapshot: this.snapshot() });
+    this.persist();
+  }
+
   setModel(id: string, model: string): void {
     const state = this.requiredState(id);
     if (state.agent.remoteControl) throw new Error("Remote Control agents cannot switch models from the dashboard.");
@@ -1546,10 +1556,10 @@ export class AgentRuntimeManager {
     return { agents, transcripts };
   }
 
-  private uniqueDisplayName(projectId: string, base: string): string {
+  private uniqueDisplayName(projectId: string, base: string, exceptAgentId?: string): string {
     const existing = new Set(
       [...this.states.values()]
-        .filter((state) => state.agent.projectId === projectId)
+        .filter((state) => state.agent.projectId === projectId && state.agent.id !== exceptAgentId)
         .map((state) => state.agent.displayName)
     );
     if (!existing.has(base)) return base;

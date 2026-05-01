@@ -2150,6 +2150,14 @@ function duplicateAgentRequest(agent: RunningAgent, settings: SettingsState): La
   };
 }
 
+function renameAgent(agent: RunningAgent) {
+  const nextName = window.prompt("Rename chat", agent.displayName);
+  if (nextName === null) return;
+  const trimmed = nextName.trim();
+  if (!trimmed || trimmed === agent.displayName) return;
+  sendCommand({ type: "rename", id: agent.id, displayName: trimmed });
+}
+
 function ChatVisibilityMenu({ agent }: { agent: RunningAgent }) {
   const settings = useAppStore((state) => state.settings);
   const override = useAppStore((state) => state.chatTranscriptDetails[agent.id]);
@@ -2219,6 +2227,10 @@ function AgentActionsMenu({
         )}
         {!agent.remoteControl && <ChatVisibilityMenu agent={agent} />}
         <ExportChatMenu agent={agent} transcripts={transcripts} addError={addError} />
+        <DropdownMenuItem onClick={() => renameAgent(agent)}>
+          <Pencil className="mr-2 h-4 w-4" />
+          Rename
+        </DropdownMenuItem>
         <DropdownMenuItem onClick={duplicateAgent}>
           <Copy className="mr-2 h-4 w-4" />
           Duplicate
@@ -2252,6 +2264,10 @@ function MobileAgentActionsMenu({ agent }: { agent: RunningAgent }) {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         {!agent.remoteControl && <ChatVisibilityMenu agent={agent} />}
+        <DropdownMenuItem onClick={() => renameAgent(agent)}>
+          <Pencil className="mr-2 h-4 w-4" />
+          Rename
+        </DropdownMenuItem>
         <DropdownMenuItem onClick={duplicateAgent}>
           <Copy className="mr-2 h-4 w-4" />
           Duplicate

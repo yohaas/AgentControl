@@ -661,6 +661,11 @@ export type WsClientCommand =
       id: string;
     }
   | {
+      type: "rename";
+      id: string;
+      displayName: string;
+    }
+  | {
       type: "interrupt";
       id: string;
     }
