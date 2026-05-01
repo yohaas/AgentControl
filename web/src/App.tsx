@@ -9771,12 +9771,12 @@ function TranscriptPreview({
   const showPopout = isLongTextBlock(event.text, true);
   return (
     <div
-      className={cn("flex min-w-0 max-w-full overflow-hidden", isUser && "justify-end")}
+      className={cn("flex w-full min-w-0 max-w-full overflow-hidden", isUser && "justify-end")}
       data-latest-user-message={event.id === latestUserMessageId ? "true" : undefined}
     >
       <div
         className={cn(
-          "relative min-w-0 max-w-[86%] overflow-hidden whitespace-pre-wrap break-words [overflow-wrap:anywhere] rounded-md border border-border px-3 py-2 text-sm leading-5",
+          "relative box-border min-w-0 max-w-[86%] overflow-hidden whitespace-pre-wrap break-words [overflow-wrap:anywhere] rounded-md border border-border px-3 py-2 text-sm leading-5",
           isUser ? "user-question bg-primary text-primary-foreground" : "bg-background/60",
           showPopout && "pr-16"
         )}
@@ -13223,7 +13223,7 @@ function MobileChatPane({ agent, addError }: { agent: RunningAgent; addError: (m
               <div className="grid min-h-full place-items-center text-center text-sm text-muted-foreground">No transcript yet.</div>
             )
           ) : (
-            <div className="grid min-w-0 max-w-full gap-3">
+            <div className="grid w-full min-w-0 max-w-full gap-3 overflow-hidden">
               {transcriptItems.map((item, index) => (
                 <TranscriptPreview
                   key={item.kind === "tool_pair" ? item.event.id : item.event.id}
