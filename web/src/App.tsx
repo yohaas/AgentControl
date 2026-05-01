@@ -8915,10 +8915,16 @@ function AgentTile({
   const setSelectedAgent = useAppStore((state) => state.setSelectedAgent);
   const setFocusedAgent = useAppStore((state) => state.setFocusedAgent);
   const setChatFocusedAgent = useAppStore((state) => state.setChatFocusedAgent);
+  const selectedAgentId = useAppStore((state) => state.selectedAgentId);
+  const focusedAgentId = useAppStore((state) => state.focusedAgentId);
+  const chatFocusedAgentId = useAppStore((state) => state.chatFocusedAgentId);
+  const searchOpen = useAppStore((state) => state.searchOpen);
+  const searchQuery = useAppStore((state) => state.searchQuery);
+  const setSearchOpen = useAppStore((state) => state.setSearchOpen);
+  const setSearchQuery = useAppStore((state) => state.setSearchQuery);
   const setTileWidth = useAppStore((state) => state.setTileWidth);
   const tileMinimized = useAppStore((state) => Boolean(state.minimizedTiles[agent.id]));
   const setTileMinimized = useAppStore((state) => state.setTileMinimized);
-  const focusedAgentId = useAppStore((state) => state.focusedAgentId);
   const done = useAppStore((state) => Boolean(state.doneAgentIds[agent.id]));
   const [attachments, setAttachments] = useState<MessageAttachment[]>([]);
   const [activeSlashIndex, setActiveSlashIndex] = useState(0);
@@ -8928,6 +8934,7 @@ function AgentTile({
   const rootRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
   const suppressAutoFocusRef = useRef(false);
   const suppressScrollIntoViewRef = useRef(false);
   const didInitialTranscriptScrollRef = useRef(false);
@@ -8940,6 +8947,10 @@ function AgentTile({
   const [autoScrollPaused, setAutoScrollPaused] = useState(false);
   const [slashMenuOpen, setSlashMenuOpen] = useState(false);
   const [slashMenuSuppressed, setSlashMenuSuppressed] = useState(false);
+  const [searchMatchCase, setSearchMatchCase] = useState(false);
+  const [searchWholeWord, setSearchWholeWord] = useState(false);
+  const [searchMatchCount, setSearchMatchCount] = useState(0);
+  const [activeSearchMatchIndex, setActiveSearchMatchIndex] = useState(-1);
   const composerDragDepthRef = useRef(0);
   const isBusy = isAgentBusy(agent);
   const visibleTranscriptViewMode = chatTranscriptDetail === "raw" ? "raw" : "chat";
@@ -8965,6 +8976,11 @@ function AgentTile({
 
   const hasMultilineDraft = draftLines > 1 || composerWrapped;
   const composerExpanded = hasMultilineDraft && !composerCollapsed;
+  const searchActive = searchOpen && !selectedAgentId && (chatFocusedAgentId === agent.id || focusedAgentId === agent.id);
+  const searchOptions = useMemo<ChatSearchOptions>(
+    () => ({ matchCase: searchMatchCase, wholeWord: searchWholeWord }),
+    [searchMatchCase, searchWholeWord]
+  );
   useQueuedMessageSender(agent, queue, canType);
 
   useEffect(() => {
@@ -9046,11 +9062,55 @@ function AgentTile({
   }, [composerCollapsed, hasMultilineDraft]);
 
   useEffect(() => {
+    if (!searchActive) return;
+    window.requestAnimationFrame(() => searchInputRef.current?.focus());
+  }, [searchActive]);
+
+  useEffect(() => {
+    if (!searchActive || !searchQuery.trim()) {
+      setSearchMatchCount(0);
+      setActiveSearchMatchIndex(-1);
+      return;
+    }
+    const frame = window.requestAnimationFrame(() => {
+      const count = rootRef.current?.querySelectorAll("mark[data-chat-search-match]").length || 0;
+      setSearchMatchCount(count);
+      setActiveSearchMatchIndex((current) => {
+        if (count === 0) return -1;
+        if (current < 0) return 0;
+        return Math.min(current, count - 1);
+      });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [displayedTranscriptItems, searchActive, searchOptions, searchQuery, visibleTranscriptViewMode]);
+
+  useEffect(() => {
+    const marks = Array.from(rootRef.current?.querySelectorAll<HTMLElement>("mark[data-chat-search-match]") || []);
+    marks.forEach((mark, index) => {
+      mark.dataset.active = index === activeSearchMatchIndex ? "true" : "false";
+    });
+    const activeMark = activeSearchMatchIndex >= 0 ? marks[activeSearchMatchIndex] : undefined;
+    activeMark?.scrollIntoView({ block: "center", inline: "nearest" });
+  }, [activeSearchMatchIndex, searchMatchCount, searchOptions, searchQuery]);
+
+  useEffect(() => {
     const measure = () => setComposerWrapped(composerNeedsExpansion(inputRef.current, 36));
     measure();
     window.addEventListener("resize", measure);
     return () => window.removeEventListener("resize", measure);
   }, [draft]);
+
+  function closeChatSearch() {
+    setSearchOpen(false);
+    setSearchMatchCount(0);
+    setActiveSearchMatchIndex(-1);
+    window.requestAnimationFrame(() => inputRef.current?.focus());
+  }
+
+  function moveSearchMatch(delta: number) {
+    if (searchMatchCount <= 0) return;
+    setActiveSearchMatchIndex((current) => (current < 0 ? 0 : (current + delta + searchMatchCount) % searchMatchCount));
+  }
 
   function activateTile(focusInput = false, scrollIntoView = true) {
     suppressAutoFocusRef.current = !focusInput;
@@ -9426,6 +9486,50 @@ function AgentTile({
       </div>
       {!tileMinimized && (
         <>
+          {searchActive && (
+            <div className="flex flex-wrap items-center gap-2 border-b border-border bg-background/95 px-3 py-2">
+              <Search className="h-4 w-4 text-muted-foreground" />
+              <Input
+                ref={searchInputRef}
+                className="h-8 min-w-0 flex-1"
+                value={searchQuery}
+                onChange={(event) => {
+                  setSearchQuery(event.target.value);
+                  setActiveSearchMatchIndex(-1);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    moveSearchMatch(event.shiftKey ? -1 : 1);
+                  } else if (event.key === "Escape") {
+                    event.preventDefault();
+                    closeChatSearch();
+                  }
+                }}
+                placeholder="Search chat"
+              />
+              <span className="w-14 text-center text-xs tabular-nums text-muted-foreground">
+                {searchQuery.trim() ? (searchMatchCount > 0 ? `${activeSearchMatchIndex + 1}/${searchMatchCount}` : "0/0") : "0/0"}
+              </span>
+              <Button type="button" variant="ghost" size="icon" className="h-8 w-8" title="Previous match" disabled={searchMatchCount === 0} onClick={() => moveSearchMatch(-1)}>
+                <ChevronUp className="h-4 w-4" />
+              </Button>
+              <Button type="button" variant="ghost" size="icon" className="h-8 w-8" title="Next match" disabled={searchMatchCount === 0} onClick={() => moveSearchMatch(1)}>
+                <ChevronDown className="h-4 w-4" />
+              </Button>
+              <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <input type="checkbox" checked={searchMatchCase} onChange={(event) => setSearchMatchCase(event.target.checked)} />
+                Match case
+              </label>
+              <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <input type="checkbox" checked={searchWholeWord} onChange={(event) => setSearchWholeWord(event.target.checked)} />
+                Whole word
+              </label>
+              <Button type="button" variant="ghost" size="icon" className="ml-auto h-8 w-8" title="Close search" onClick={closeChatSearch}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
           {rowIndex > 0 && (
             <div
               className="absolute left-0 right-0 top-0 z-20 h-2 cursor-ns-resize rounded-t-md hover:bg-primary/20"
@@ -9493,6 +9597,8 @@ function AgentTile({
                             item={item}
                             agent={agent}
                             phaseLabel={phaseLabel}
+                            query={searchActive ? searchQuery : ""}
+                            searchOptions={searchOptions}
                             latestUserMessageId={pinnedMessage?.id}
                             defaultExpanded={shouldExpandTranscriptItemByDefault(item, index, displayedTranscriptItems)}
                           />
@@ -9521,6 +9627,8 @@ function AgentTile({
                         item={item}
                         agent={agent}
                         phaseLabel={phaseLabel}
+                        query={searchActive ? searchQuery : ""}
+                        searchOptions={searchOptions}
                         latestUserMessageId={pinnedMessage?.id}
                         defaultExpanded={shouldExpandTranscriptItemByDefault(item, index, displayedTranscriptItems)}
                       />
@@ -9707,12 +9815,16 @@ function TranscriptPreview({
   item,
   agent,
   phaseLabel,
+  query = "",
+  searchOptions,
   latestUserMessageId,
   defaultExpanded = false
 }: {
   item: ToolTranscriptItem;
   agent: RunningAgent;
   phaseLabel?: string;
+  query?: string;
+  searchOptions?: ChatSearchOptions;
   latestUserMessageId?: string;
   defaultExpanded?: boolean;
 }) {
@@ -9766,7 +9878,7 @@ function TranscriptPreview({
         }}
       >
         {showPopout && <ChatBlockPopoutButton source={agent} text={event.text} compact />}
-        <CollapsibleText text={event.text} agent={agent} compact inlineToggle={showPopout} defaultExpanded={defaultExpanded} />
+        <CollapsibleText text={event.text} agent={agent} query={query} searchOptions={searchOptions} compact inlineToggle={showPopout} defaultExpanded={defaultExpanded} />
         {event.kind === "user" && event.attachments && event.attachments.length > 0 && (
           <span className="mt-2 flex flex-wrap gap-2">
             {event.attachments.map((attachment) =>
@@ -13946,7 +14058,6 @@ export function App() {
       } else if (event.key.toLowerCase() === "f" && activeChatAgentId) {
         event.preventDefault();
         event.stopPropagation();
-        setSelectedAgent(activeChatAgentId);
         setSearchOpen(true);
       } else if (event.key.toLowerCase() === "k") {
         event.preventDefault();
