@@ -154,6 +154,9 @@ import { Input } from "./components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "./components/ui/popover";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "./components/ui/select";
 import { Textarea } from "./components/ui/textarea";
+import { SettingsAppearanceTab } from "./components/settings/SettingsAppearanceTab";
+import { SettingsGeneralTab } from "./components/settings/SettingsGeneralTab";
+import { SettingsUpdatesTab } from "./components/settings/SettingsUpdatesTab";
 import { getSelectionInRoot, useTextSelection } from "./hooks/use-text-selection";
 import { api, setAgentHeroToken } from "./lib/api";
 import { cn, downloadText, formatDuration, prettyJson } from "./lib/utils";
@@ -6700,7 +6703,7 @@ function SettingsDialog() {
   const [open, setOpen] = useState(false);
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const [projectPaths, setProjectPaths] = useState(settings.projectPaths || []);
-  const [settingsTab, setSettingsTab] = useState<"general" | "builtIn" | "claude" | "codex" | "openai">("general");
+  const [settingsTab, setSettingsTab] = useState<"general" | "appearance" | "builtIn" | "claude" | "codex" | "openai" | "updates">("general");
   const [claudeModelsText, setClaudeModelsText] = useState(providerModelsText(settings, "claude"));
   const [codexModelsText, setCodexModelsText] = useState(providerModelsText(settings, "codex"));
   const [openaiModelsText, setOpenaiModelsText] = useState(providerModelsText(settings, "openai"));
@@ -7150,11 +7153,15 @@ function SettingsDialog() {
     ]
   );
   const settingsTabs = [
-    ["general", "General"],
-    ["builtIn", "Built-In Agents"],
-    ["claude", "Claude"],
-    ["codex", "Codex"],
-    ["openai", "OpenAI"]
+    { type: "tab", value: "general", label: "General" },
+    { type: "tab", value: "appearance", label: "Appearance" },
+    { type: "divider" },
+    { type: "tab", value: "builtIn", label: "Built-In Agents" },
+    { type: "tab", value: "claude", label: "Claude" },
+    { type: "tab", value: "codex", label: "Codex" },
+    { type: "tab", value: "openai", label: "OpenAI" },
+    { type: "divider" },
+    { type: "tab", value: "updates", label: "Updates" }
   ] as const;
 
   async function deleteBuiltIn(agent: AgentDef) {
@@ -7186,394 +7193,89 @@ function SettingsDialog() {
         </DialogHeader>
         <div className="grid h-[72vh] min-h-0 grid-cols-[180px_minmax(0,1fr)] gap-4">
           <nav className="flex min-h-0 flex-col gap-1 rounded-md border border-border bg-muted/30 p-2 text-sm">
-            {settingsTabs.map(([tab, label]) => (
-              <button
-                key={tab}
-                type="button"
-                className={cn(
-                  "rounded px-3 py-2 text-left text-muted-foreground hover:bg-accent hover:text-foreground",
-                  settingsTab === tab && "bg-background text-foreground shadow-sm"
-                )}
-                onClick={() => setSettingsTab(tab)}
-              >
-                {label}
-              </button>
-            ))}
+            {settingsTabs.map((item, index) =>
+              item.type === "divider" ? (
+                <div key={`divider-${index}`} className="my-1 border-t border-border" />
+              ) : (
+                <button
+                  key={item.value}
+                  type="button"
+                  className={cn(
+                    "rounded px-3 py-2 text-left text-muted-foreground hover:bg-accent hover:text-foreground",
+                    settingsTab === item.value && "bg-background text-foreground shadow-sm"
+                  )}
+                  onClick={() => setSettingsTab(item.value)}
+                >
+                  {item.label}
+                </button>
+              )
+            )}
           </nav>
           <div className="flex min-h-0 flex-col">
             <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pr-1">
           {settingsTab === "general" && (
-            <>
-          <section className="grid gap-2 rounded-md border border-border p-3">
-            <div className="flex items-center justify-between gap-2">
-              <div>
-                <h3 className="text-sm font-medium">Project folders</h3>
-                <p className="text-xs text-muted-foreground">Choose folders to load into AgentHero.</p>
-              </div>
-              <Button type="button" variant="outline" size="sm" onClick={() => setProjectFolderBrowserOpen(true)}>
-                <FolderOpen className="h-4 w-4" />
-                Add Folder
-              </Button>
-            </div>
-            <div className="grid gap-1.5">
-              {projectPaths.length === 0 ? (
-                <p className="rounded-md border border-dashed border-border px-3 py-5 text-center text-sm text-muted-foreground">
-                  No project folders selected.
-                </p>
-              ) : (
-                projectPaths.map((projectPath) => (
-                  <div key={projectPath} className="flex min-w-0 items-center gap-2 rounded-md border border-border bg-background/50 px-2 py-2">
-                    <FolderOpen className="h-4 w-4 shrink-0 text-muted-foreground" />
-                    <span className="min-w-0 flex-1 truncate font-mono text-xs" title={projectPath}>
-                      {projectPath}
-                    </span>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                      title="Remove project folder"
-                      onClick={() => setProjectPaths((current) => current.filter((item) => item !== projectPath))}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ))
-              )}
-            </div>
-          </section>
-          <section className="grid gap-2 rounded-md border border-border p-3">
-            <div>
-              <h3 className="text-sm font-medium">Paths</h3>
-              <p className="text-xs text-muted-foreground">Leave blank to auto-detect from PATH or environment variables.</p>
-            </div>
-            <label className="grid gap-1.5 text-sm">
-              Git path
-              <Input value={gitPath} onChange={(event) => setGitPath(event.target.value)} placeholder="git" />
-            </label>
-          </section>
-          <section className="grid gap-3 rounded-md border border-border p-3">
-            <div>
-              <h3 className="text-sm font-medium">Security</h3>
-              <p className="text-xs text-muted-foreground">Require an access token before the browser can use the API or WebSocket.</p>
-            </div>
-            <label className="flex items-start gap-2 rounded-md border border-border bg-background/50 p-3 text-sm">
-              <input
-                type="checkbox"
-                className="mt-1"
-                checked={accessTokenEnabled}
-                onChange={(event) => setAccessTokenEnabled(event.target.checked)}
-              />
-              <span>
-                <span className="block font-medium">Require access token</span>
-                <span className="block text-xs text-muted-foreground">
-                  {settings.accessTokenSaved ? "A token is saved. Enter a new token to replace it." : "No access token is saved yet."}
-                </span>
-              </span>
-            </label>
-            <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
-              <label className="grid min-w-0 gap-1.5 text-sm">
-                Access token
-                <Input
-                  type="text"
-                  value={accessToken}
-                  onChange={(event) => setAccessToken(event.target.value)}
-                  placeholder={settings.accessTokenSaved ? "Leave blank to keep current token" : "Enter or generate a token"}
-                />
-              </label>
-              <Button type="button" variant="outline" className="self-end" onClick={() => setAccessToken(generateAccessToken())}>
-                <KeyRound className="h-4 w-4" />
-                Generate Token
-              </Button>
-            </div>
-          </section>
-          <section className="grid gap-3 rounded-md border border-border p-3">
-            <div>
-              <h3 className="text-sm font-medium">Appearance</h3>
-              <p className="text-xs text-muted-foreground">Control the app theme and chat layout.</p>
-            </div>
-            <div className="grid gap-2 sm:grid-cols-5">
-              <label className="grid min-w-0 gap-1.5 text-sm">
-                Color mode
-                <Select value={themeMode} onValueChange={(value) => setThemeMode(value as ThemeMode)}>
-                  <SelectTrigger className="px-2">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="auto">Auto</SelectItem>
-                    <SelectItem value="light">Light</SelectItem>
-                    <SelectItem value="dark">Dark</SelectItem>
-                  </SelectContent>
-                </Select>
-              </label>
-              <label className="grid min-w-0 gap-1.5 text-sm">
-                Menu display
-                <Select value={menuDisplay} onValueChange={(value) => setMenuDisplay(value as MenuDisplayMode)}>
-                  <SelectTrigger className="px-2">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="iconOnly">Icon Only</SelectItem>
-                    <SelectItem value="iconText">Icon + Text</SelectItem>
-                  </SelectContent>
-                </Select>
-              </label>
-              <label className="grid min-w-0 gap-1.5 text-sm">
-                Scrolling
-                <Select value={tileScrolling} onValueChange={(value) => setTileScrolling(value as TileScrollingMode)}>
-                  <SelectTrigger className="px-2">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="vertical">Vertical</SelectItem>
-                    <SelectItem value="horizontal">Horizontal</SelectItem>
-                  </SelectContent>
-                </Select>
-              </label>
-              <label className="grid min-w-0 gap-1.5 text-sm">
-                <span>
-                  Tile height <span className="text-xs text-muted-foreground">(0 = full height)</span>
-                </span>
-                <Input
-                  type="number"
-                  min={0}
-                  max={TILE_MAX_HEIGHT}
-                  value={tileHeight}
-                  className="px-2"
-                  onChange={(event) => setTileHeight(Number(event.target.value))}
-                />
-              </label>
-              <label className="grid min-w-0 gap-1.5 text-sm">
-                Columns
-                <Input
-                  type="number"
-                  min={1}
-                  max={6}
-                  step={1}
-                  value={tileColumns}
-                  className="px-2"
-                  onChange={(event) => setTileColumns(Number(event.target.value))}
-                />
-              </label>
-            </div>
-            <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_10rem_12rem]">
-              <label className="grid min-w-0 gap-1.5 text-sm">
-                Chat font
-                <Select value={chatFontSelectValue(chatFontFamily)} onValueChange={(value) => setChatFontFamily(chatFontValueFromSelect(value))}>
-                  <SelectTrigger className="px-2">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {CHAT_FONT_OPTIONS.map((option) => (
-                      <SelectItem key={option.label} value={option.value || CHAT_FONT_DEFAULT_VALUE}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                    {normalizeChatFontFamily(chatFontFamily) &&
-                      !CHAT_FONT_OPTIONS.some((option) => option.value === normalizeChatFontFamily(chatFontFamily)) && (
-                        <SelectItem value={normalizeChatFontFamily(chatFontFamily)}>
-                          Custom: {normalizeChatFontFamily(chatFontFamily)}
-                        </SelectItem>
-                      )}
-                  </SelectContent>
-                </Select>
-              </label>
-              <label className="grid min-w-0 gap-1.5 text-sm">
-                Chat font size
-                <Input
-                  type="number"
-                  min={CHAT_FONT_SIZE_MIN}
-                  max={CHAT_FONT_SIZE_MAX}
-                  step={1}
-                  value={chatFontSize}
-                  className="px-2"
-                  onChange={(event) => setChatFontSize(Number(event.target.value))}
-                />
-              </label>
-              <label className="grid min-w-0 gap-1.5 text-sm">
-                Chat detail
-                <Select value={chatTranscriptDetail} onValueChange={(value) => setChatTranscriptDetail(value as ChatTranscriptDetailMode)}>
-                  <SelectTrigger className="px-2">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {CHAT_TRANSCRIPT_DETAIL_OPTIONS.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </label>
-            </div>
-            <label className="flex items-start gap-2 rounded-md border border-border bg-background/50 p-3 text-sm">
-              <input
-                type="checkbox"
-                className="mt-1"
-                checked={pinLastSentMessage}
-                onChange={(event) => setPinLastSentMessage(event.target.checked)}
-              />
-              <span>
-                <span className="block font-medium">Pin last sent message while scrolling</span>
-                <span className="block text-xs text-muted-foreground">
-                  Keep your most recent message visible at the top of a scrolled chat.
-                </span>
-              </span>
-            </label>
-            <div className="grid gap-2 rounded-md border border-border bg-background/50 p-3">
-              <div className="grid gap-2 sm:grid-cols-[220px_minmax(0,1fr)]">
-                <label className="grid min-w-0 gap-1.5 text-sm">
-                  External editor
-                  <Select value={externalEditor} onValueChange={(value) => setExternalEditor(value as ExternalEditor)}>
-                    <SelectTrigger className="px-2">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">None</SelectItem>
-                      <SelectItem value="vscode">VS Code</SelectItem>
-                      <SelectItem value="cursor">Cursor</SelectItem>
-                      <SelectItem value="custom">Custom URL</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </label>
-                {externalEditor === "custom" && (
-                  <label className="grid min-w-0 gap-1.5 text-sm">
-                    URL template
-                    <Input
-                      value={externalEditorUrlTemplate}
-                      onChange={(event) => setExternalEditorUrlTemplate(event.target.value)}
-                      placeholder="myeditor://open?file={encodedPath}&line={line}"
-                    />
-                  </label>
-                )}
-              </div>
-              {externalEditor === "custom" && (
-                <p className="text-xs text-muted-foreground">
-                  Custom templates support {"{path}"}, {"{encodedPath}"}, and {"{line}"}.
-                </p>
-              )}
-            </div>
-            <label className="flex items-start gap-2 rounded-md border border-border bg-background/50 p-3 text-sm">
-              <input
-                type="checkbox"
-                className="mt-1"
-                checked={inputNotificationsEnabled}
-                onChange={(event) => void toggleInputNotifications(event.target.checked)}
-              />
-              <span>
-                <span className="block font-medium">Notify when agents need input</span>
-                <span className="block text-xs text-muted-foreground">
-                  Show a browser notification for permission prompts or questions.
-                  {notificationPermission === "denied" && " Notifications are blocked in this browser."}
-                </span>
-              </span>
-              <Button type="button" variant="outline" size="sm" className="ml-auto shrink-0" onClick={() => void sendTestInputNotification()}>
-                Send Test
-              </Button>
-            </label>
-          </section>
-          <section className="grid gap-2 rounded-md border border-border p-3">
-            <div>
-              <h3 className="text-sm font-medium">Configuration</h3>
-              <p className="text-xs text-muted-foreground">Export or import this app's settings.</p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button variant="outline" onClick={exportConfig}>
-                <Clipboard className="h-4 w-4" />
-                Export Config
-              </Button>
-              <Button variant="outline" onClick={() => importInputRef.current?.click()}>
-                <FolderOpen className="h-4 w-4" />
-                Import Config
-              </Button>
-            </div>
-            <input
-              ref={importInputRef}
-              type="file"
-              accept="application/json,.json"
-              className="hidden"
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                if (file) void importConfig(file);
-              }}
+            <SettingsGeneralTab
+              settings={settings}
+              projectPaths={projectPaths}
+              setProjectPaths={setProjectPaths}
+              gitPath={gitPath}
+              setGitPath={setGitPath}
+              accessTokenEnabled={accessTokenEnabled}
+              setAccessTokenEnabled={setAccessTokenEnabled}
+              accessToken={accessToken}
+              setAccessToken={setAccessToken}
+              importInputRef={importInputRef}
+              onAddProjectFolder={() => setProjectFolderBrowserOpen(true)}
+              onExportConfig={exportConfig}
+              onImportConfig={(file) => void importConfig(file)}
             />
-          </section>
-          <section className="grid gap-2 rounded-md border border-border p-3">
-            <div className="flex items-center justify-between gap-2">
-              <div>
-                <h3 className="text-sm font-medium">App updates</h3>
-                <p className="text-xs text-muted-foreground">Check GitHub on startup and run your preferred update commands from a terminal.</p>
-              </div>
-              <Button type="button" variant="outline" size="sm" onClick={() => void checkAppUpdatesNow()} disabled={checkingUpdates}>
-                {checkingUpdates ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                Check Now
-              </Button>
-            </div>
-            {settingsUpdateStatus && (
-              <div className="rounded-md border border-border bg-muted px-3 py-2 text-xs text-muted-foreground">
-                {settingsUpdateStatus.isRepo
-                  ? `${settingsUpdateStatus.updateAvailable ? "Updates available" : "No updates found"} at ${new Date(settingsUpdateStatus.checkedAt).toLocaleString()}.`
-                  : settingsUpdateStatus.message || "Update status unavailable."}
-              </div>
-            )}
-            <label className="flex items-start gap-2 rounded-md border border-border bg-background/50 p-3 text-sm">
-              <input
-                type="checkbox"
-                className="mt-1"
-                checked={updateChecksEnabled}
-                onChange={(event) => setUpdateChecksEnabled(event.target.checked)}
-              />
-              <span>
-                <span className="block font-medium">Check for updates on startup</span>
-              </span>
-            </label>
-            <label className="grid gap-1.5 text-sm">
-              AgentHero project location
-              <div className="flex gap-2">
-                <Input
-                  value={agentControlProjectPath}
-                  onChange={(event) => setAgentHeroProjectPath(event.target.value)}
-                  placeholder="AgentHero project folder"
-                />
-                <Button type="button" variant="outline" onClick={() => setAgentHeroProjectBrowserOpen(true)}>
-                  <FolderOpen className="h-4 w-4" />
-                  Browse
-                </Button>
-              </div>
-            </label>
-            {isWindowsClient && (
-              <div className="grid gap-2 rounded-md border border-border bg-background/50 p-3">
-                <div>
-                  <div className="text-sm font-medium">Windows service</div>
-                  <p className="text-xs text-muted-foreground">
-                    Install or remove the AgentHero Windows service using the project location above.
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <Button type="button" variant="outline" size="sm" onClick={() => runWindowsServiceScript("install")}>
-                    <HardDrive className="h-4 w-4" />
-                    Install / Reinstall
-                  </Button>
-                  <Button type="button" variant="outline" size="sm" onClick={() => runWindowsServiceScript("uninstall")}>
-                    <Trash2 className="h-4 w-4" />
-                    Uninstall
-                  </Button>
-                </div>
-                {windowsServiceStatus && <div className="text-xs text-muted-foreground">{windowsServiceStatus}</div>}
-              </div>
-            )}
-            <label className="grid gap-1.5 text-sm">
-              Update commands
-            <Textarea
-              value={updateCommandsText}
-              onChange={(event) => setUpdateCommandsText(event.target.value)}
-              rows={5}
-              className="font-mono text-xs"
-              placeholder="powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\start-update.ps1"
+          )}
+          {settingsTab === "appearance" && (
+            <SettingsAppearanceTab
+              themeMode={themeMode}
+              setThemeMode={setThemeMode}
+              menuDisplay={menuDisplay}
+              setMenuDisplay={setMenuDisplay}
+              tileScrolling={tileScrolling}
+              setTileScrolling={setTileScrolling}
+              tileHeight={tileHeight}
+              setTileHeight={setTileHeight}
+              tileColumns={tileColumns}
+              setTileColumns={setTileColumns}
+              chatFontFamily={chatFontFamily}
+              setChatFontFamily={setChatFontFamily}
+              chatFontSize={chatFontSize}
+              setChatFontSize={setChatFontSize}
+              chatTranscriptDetail={chatTranscriptDetail}
+              setChatTranscriptDetail={setChatTranscriptDetail}
+              pinLastSentMessage={pinLastSentMessage}
+              setPinLastSentMessage={setPinLastSentMessage}
+              externalEditor={externalEditor}
+              setExternalEditor={setExternalEditor}
+              externalEditorUrlTemplate={externalEditorUrlTemplate}
+              setExternalEditorUrlTemplate={setExternalEditorUrlTemplate}
+              inputNotificationsEnabled={inputNotificationsEnabled}
+              notificationPermission={notificationPermission}
+              onToggleInputNotifications={(enabled) => void toggleInputNotifications(enabled)}
+              onSendTestInputNotification={() => void sendTestInputNotification()}
             />
-            </label>
-          </section>
-          </>
+          )}
+          {settingsTab === "updates" && (
+            <SettingsUpdatesTab
+              updateChecksEnabled={updateChecksEnabled}
+              setUpdateChecksEnabled={setUpdateChecksEnabled}
+              checkingUpdates={checkingUpdates}
+              settingsUpdateStatus={settingsUpdateStatus}
+              onCheckUpdatesNow={() => void checkAppUpdatesNow()}
+              agentControlProjectPath={agentControlProjectPath}
+              setAgentHeroProjectPath={setAgentHeroProjectPath}
+              onBrowseProjectPath={() => setAgentHeroProjectBrowserOpen(true)}
+              isWindowsClient={isWindowsClient}
+              onRunWindowsServiceScript={runWindowsServiceScript}
+              windowsServiceStatus={windowsServiceStatus}
+              updateCommandsText={updateCommandsText}
+              setUpdateCommandsText={setUpdateCommandsText}
+            />
           )}
           {settingsTab === "builtIn" && (
             <>
