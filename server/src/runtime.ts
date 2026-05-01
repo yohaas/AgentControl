@@ -23,6 +23,7 @@ import type {
   PermissionAllowRule,
   RemoteControlState,
   RunningAgent,
+  SavedChat,
   SendToCommand,
   SlashCommandInfo,
   TokenUsage,
@@ -195,6 +196,7 @@ function readAttachmentContext(attachment: MessageAttachment): string {
 export class AgentRuntimeManager {
   private readonly states = new Map<string, AgentProcessState>();
   private readonly persist: () => void;
+  private savedChats: SavedChat[] = [];
 
   constructor(
     private readonly getProjects: ProjectProvider,
@@ -252,6 +254,7 @@ export class AgentRuntimeManager {
 
   async loadPersistedState(): Promise<void> {
     const persisted = await readPersistedState();
+    this.savedChats = persisted.savedChats || [];
     for (const agent of persisted.agents) {
       const persistedStatus = agent.status as AgentStatus | "restorable";
       const def = this.findAgentDef(agent);
@@ -292,6 +295,7 @@ export class AgentRuntimeManager {
     return {
       agents: this.listAgents(),
       transcripts,
+      savedChats: this.savedChats,
       capabilities: this.getCapabilities()
     };
   }
@@ -1504,6 +1508,78 @@ export class AgentRuntimeManager {
     this.persist();
   }
 
+  saveChat(id: string): void {
+    const state = this.requiredState(id);
+    if (state.transcript.length === 0) throw new Error("No chat transcript to save.");
+    const timestamp = now();
+    const existing = this.savedChats.find((chat) => chat.id === id);
+    const saved: SavedChat = {
+      id,
+      projectId: state.agent.projectId,
+      projectName: state.agent.projectName,
+      projectPath: state.agent.projectPath,
+      agent: { ...state.agent, pid: undefined, statusMessage: undefined, updatedAt: timestamp },
+      transcript: state.transcript.slice(-TRANSCRIPT_PERSIST_LIMIT),
+      savedAt: existing?.savedAt || timestamp,
+      updatedAt: timestamp
+    };
+    this.savedChats = [saved, ...this.savedChats.filter((chat) => chat.id !== id)];
+    this.broadcast({ type: "agent.snapshot", snapshot: this.snapshot() });
+    this.persist();
+  }
+
+  restoreSavedChat(savedChatId: string): void {
+    const saved = this.savedChats.find((chat) => chat.id === savedChatId);
+    if (!saved) throw new Error("Saved chat not found.");
+    const existing = this.states.get(saved.agent.id);
+    if (existing?.child && !existing.child.killed) throw new Error("Close the running chat before restoring this saved chat.");
+    if (existing?.activeTurn) throw new Error("Wait for the current response to finish before restoring this saved chat.");
+
+    const timestamp = now();
+    const restoredAgent: RunningAgent = {
+      ...saved.agent,
+      projectId: saved.projectId,
+      projectName: saved.projectName,
+      projectPath: saved.projectPath,
+      status: saved.agent.provider === "openai" || saved.agent.provider === "codex" ? "idle" : "paused",
+      statusMessage: "Saved chat restored.",
+      pid: undefined,
+      restorable: Boolean(saved.agent.sessionId && (saved.agent.provider || "claude") === "claude"),
+      updatedAt: timestamp
+    };
+    const restoredState: AgentProcessState = existing || {
+      agent: restoredAgent,
+      def: this.findAgentDef(restoredAgent),
+      transcript: [],
+      rawLines: [],
+      stdoutBuffer: "",
+      stderrBuffer: "",
+      reportedModelWarnings: new Set()
+    };
+    restoredState.agent = restoredAgent;
+    restoredState.def = this.findAgentDef(restoredAgent);
+    restoredState.transcript = saved.transcript.slice();
+    restoredState.rawLines = [];
+    restoredState.stdoutBuffer = "";
+    restoredState.stderrBuffer = "";
+    restoredState.streamingAssistantId = undefined;
+    restoredState.activeTurn = false;
+    restoredState.interrupting = false;
+    restoredState.exiting = false;
+    restoredState.apiAbort = undefined;
+    this.states.set(restoredAgent.id, restoredState);
+    this.broadcast({ type: "agent.snapshot", snapshot: this.snapshot() });
+    this.persist();
+  }
+
+  deleteSavedChat(savedChatId: string): void {
+    const next = this.savedChats.filter((chat) => chat.id !== savedChatId);
+    if (next.length === this.savedChats.length) return;
+    this.savedChats = next;
+    this.broadcast({ type: "agent.snapshot", snapshot: this.snapshot() });
+    this.persist();
+  }
+
   interrupt(id: string): void {
     const state = this.requiredState(id);
     if (state.apiAbort) {
@@ -1553,7 +1629,7 @@ export class AgentRuntimeManager {
     for (const [id, state] of this.states.entries()) {
       transcripts[id] = state.transcript.slice(-TRANSCRIPT_PERSIST_LIMIT);
     }
-    return { agents, transcripts };
+    return { agents, transcripts, savedChats: this.savedChats };
   }
 
   private uniqueDisplayName(projectId: string, base: string, exceptAgentId?: string): string {

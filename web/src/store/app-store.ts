@@ -10,6 +10,7 @@ import type {
   Project,
   QueuedMessage,
   RunningAgent,
+  SavedChat,
   TerminalSession,
   TranscriptEvent,
   WsServerEvent
@@ -297,6 +298,7 @@ interface AppState {
   selectedProjectId?: string;
   agents: Record<string, RunningAgent>;
   transcripts: Record<string, TranscriptEvent[]>;
+  savedChats: SavedChat[];
   selectedAgentId?: string;
   focusedAgentId?: string;
   chatFocusedAgentId?: string;
@@ -648,6 +650,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   selectedProjectId: readStoredSelectedProjectId(),
   agents: {},
   transcripts: {},
+  savedChats: [],
   focusedAgentId: undefined,
   chatFocusedAgentId: undefined,
   doneAgentIds: {},
@@ -768,6 +771,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       return {
         agents: agentMap(snapshot.agents),
         transcripts: snapshot.transcripts,
+        savedChats: snapshot.savedChats || [],
         capabilities: snapshot.capabilities || state.capabilities,
         messageQueues: snapshot.messageQueues
           ? mergeMessageQueues(snapshot.messageQueues, state.messageQueues, agentIds)

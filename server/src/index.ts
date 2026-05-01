@@ -2473,6 +2473,15 @@ wss.on("connection", (ws) => {
         case "clearAll":
           runtime.clearAll(command.projectId);
           break;
+        case "saveChat":
+          runtime.saveChat(command.id);
+          break;
+        case "restoreSavedChat":
+          runtime.restoreSavedChat(command.savedChatId);
+          break;
+        case "deleteSavedChat":
+          runtime.deleteSavedChat(command.savedChatId);
+          break;
         case "resume":
           runtime.resume(command.id);
           break;

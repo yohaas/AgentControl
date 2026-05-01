@@ -456,8 +456,20 @@ export interface ClaudePluginCatalog {
 export interface AgentSnapshot {
   agents: RunningAgent[];
   transcripts: Record<string, TranscriptEvent[]>;
+  savedChats?: SavedChat[];
   capabilities?: Capabilities;
   messageQueues?: Record<string, QueuedMessage[]>;
+}
+
+export interface SavedChat {
+  id: string;
+  projectId: string;
+  projectName: string;
+  projectPath: string;
+  agent: RunningAgent;
+  transcript: TranscriptEvent[];
+  savedAt: string;
+  updatedAt: string;
 }
 
 export interface QueuedMessage {
@@ -732,6 +744,18 @@ export type WsClientCommand =
   | {
       type: "clearAll";
       projectId?: string;
+    }
+  | {
+      type: "saveChat";
+      id: string;
+    }
+  | {
+      type: "restoreSavedChat";
+      savedChatId: string;
+    }
+  | {
+      type: "deleteSavedChat";
+      savedChatId: string;
     }
   | {
       type: "resume";

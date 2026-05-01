@@ -1,11 +1,12 @@
 import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { RunningAgent, TranscriptEvent } from "@agent-hero/shared";
+import type { RunningAgent, SavedChat, TranscriptEvent } from "@agent-hero/shared";
 import { migrateLegacyStateDir, statePath as resolveStatePath } from "./storage.js";
 
 export interface PersistedState {
   agents: RunningAgent[];
   transcripts: Record<string, TranscriptEvent[]>;
+  savedChats?: SavedChat[];
 }
 
 const stateDir = resolveStatePath();
@@ -21,9 +22,10 @@ export async function readPersistedState(): Promise<PersistedState> {
     await migrateLegacyStateDir();
     await ensurePrivateDir(stateDir);
     const raw = await readFile(persistedStatePath, "utf8");
-    return JSON.parse(raw) as PersistedState;
+    const parsed = JSON.parse(raw) as PersistedState;
+    return { agents: parsed.agents || [], transcripts: parsed.transcripts || {}, savedChats: parsed.savedChats || [] };
   } catch {
-    return { agents: [], transcripts: {} };
+    return { agents: [], transcripts: {}, savedChats: [] };
   }
 }
 

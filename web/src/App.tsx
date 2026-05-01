@@ -76,6 +76,7 @@ import {
   Loader2,
   Maximize2,
   MessageSquare,
+  MessagesSquare,
   Minimize2,
   EllipsisVertical,
   PanelLeftClose,
@@ -2228,6 +2229,10 @@ function AgentActionsMenu({
         )}
         {!agent.remoteControl && <ChatVisibilityMenu agent={agent} />}
         <ExportChatMenu agent={agent} transcripts={transcripts} addError={addError} />
+        <DropdownMenuItem disabled={transcripts.length === 0} onClick={() => sendCommand({ type: "saveChat", id: agent.id })}>
+          <Save className="mr-2 h-4 w-4" />
+          Save Chat
+        </DropdownMenuItem>
         <DropdownMenuItem onClick={() => renameAgent(agent)}>
           <Pencil className="mr-2 h-4 w-4" />
           Rename
@@ -2265,6 +2270,10 @@ function MobileAgentActionsMenu({ agent }: { agent: RunningAgent }) {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         {!agent.remoteControl && <ChatVisibilityMenu agent={agent} />}
+        <DropdownMenuItem onClick={() => sendCommand({ type: "saveChat", id: agent.id })}>
+          <Save className="mr-2 h-4 w-4" />
+          Save Chat
+        </DropdownMenuItem>
         <DropdownMenuItem onClick={() => renameAgent(agent)}>
           <Pencil className="mr-2 h-4 w-4" />
           Rename
@@ -5246,10 +5255,12 @@ function Sidebar({ topSlot }: { topSlot?: ReactNode }) {
   const projects = useAppStore((state) => state.projects);
   const selectedProjectId = useAppStore((state) => state.selectedProjectId);
   const agentsById = useAppStore((state) => state.agents);
+  const savedChats = useAppStore((state) => state.savedChats);
   const selectedAgentId = useAppStore((state) => state.selectedAgentId);
   const focusedAgentId = useAppStore((state) => state.focusedAgentId);
   const doneAgentIds = useAppStore((state) => state.doneAgentIds);
   const setSelectedAgent = useAppStore((state) => state.setSelectedAgent);
+  const setFocusedAgent = useAppStore((state) => state.setFocusedAgent);
   const setTileMinimized = useAppStore((state) => state.setTileMinimized);
   const openLaunchModal = useAppStore((state) => state.openLaunchModal);
   const collapsed = useAppStore((state) => state.sidebarCollapsed);
@@ -5258,6 +5269,7 @@ function Sidebar({ topSlot }: { topSlot?: ReactNode }) {
   const setSettings = useAppStore((state) => state.setSettings);
   const addError = useAppStore((state) => state.addError);
   const [runningSort, setRunningSort] = useState<"lastActivity" | "type">("lastActivity");
+  const [savedSort, setSavedSort] = useState<"date" | "type">("date");
   const [agentTab, setAgentTab] = useState<"project" | "builtIn">("builtIn");
   const [availableOpen, setAvailableOpen] = useState(true);
 
@@ -5284,6 +5296,19 @@ function Sidebar({ topSlot }: { topSlot?: ReactNode }) {
     [agentsById, runningSort, selectedProjectId]
   );
   const activeAgentId = selectedAgentId || focusedAgentId;
+  const projectSavedChats = useMemo(
+    () =>
+      savedChats
+        .filter((chat) => chat.projectId === selectedProjectId)
+        .sort((left, right) =>
+          savedSort === "type"
+            ? left.agent.defName.localeCompare(right.agent.defName, undefined, { sensitivity: "base" }) ||
+              left.agent.displayName.localeCompare(right.agent.displayName, undefined, { sensitivity: "base" }) ||
+              timestampValue(right.updatedAt) - timestampValue(left.updatedAt)
+            : timestampValue(right.updatedAt) - timestampValue(left.updatedAt)
+        ),
+    [savedChats, savedSort, selectedProjectId]
+  );
   const sidebarWidth = settings.sidebarWidth || 280;
 
   useEffect(() => {
@@ -5511,6 +5536,76 @@ function Sidebar({ topSlot }: { topSlot?: ReactNode }) {
               </div>
             ))
           )}
+        </div>
+        <div className="mt-3 shrink-0 border-t border-border pt-3">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <div className="flex min-w-0 items-center gap-2">
+              <MessagesSquare className="h-4 w-4 text-muted-foreground" />
+              <h2 className="truncate text-xs font-semibold uppercase tracking-wide text-muted-foreground">Saved Chats</h2>
+              {projectSavedChats.length > 0 && <Badge>{projectSavedChats.length}</Badge>}
+            </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-7 w-7" title="Sort saved chats">
+                  <ArrowDownAZ className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                <DropdownMenuItem onClick={() => setSavedSort("date")}>
+                  Sort by date
+                  <Check className={cn("ml-auto h-4 w-4", savedSort === "date" ? "opacity-100" : "opacity-0")} />
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setSavedSort("type")}>
+                  Sort by type
+                  <Check className={cn("ml-auto h-4 w-4", savedSort === "type" ? "opacity-100" : "opacity-0")} />
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+          <div className="max-h-44 space-y-1 overflow-y-auto overflow-x-hidden pr-1">
+            {projectSavedChats.length === 0 ? (
+              <p className="rounded-md border border-dashed border-border px-3 py-4 text-center text-xs text-muted-foreground">
+                No saved chats.
+              </p>
+            ) : (
+              projectSavedChats.map((chat) => (
+                <div key={chat.id} className="flex w-full items-center gap-1 rounded-md px-1 py-1 hover:bg-accent">
+                  <button
+                    className="flex min-w-0 flex-1 items-center gap-2 rounded-sm px-1 py-1 text-left"
+                    title={`${chat.agent.displayName}\nSaved ${new Date(chat.updatedAt).toLocaleString()}`}
+                    onClick={() => {
+                      if (sendCommand({ type: "restoreSavedChat", savedChatId: chat.id })) {
+                        setSelectedAgent(undefined);
+                        setFocusedAgent(chat.agent.id);
+                        setTileMinimized(chat.agent.id, false);
+                      }
+                    }}
+                  >
+                    <AgentDot color={chat.agent.color} />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm">{chat.agent.displayName}</span>
+                      <span className="block truncate text-[11px] text-muted-foreground">
+                        {chat.agent.defName} · {new Date(chat.updatedAt).toLocaleDateString([], { month: "short", day: "numeric" })}
+                      </span>
+                    </span>
+                  </button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
+                    title={`Delete saved chat ${chat.agent.displayName}`}
+                    onClick={() => {
+                      if (window.confirm(`Delete saved chat "${chat.agent.displayName}"?`)) {
+                        sendCommand({ type: "deleteSavedChat", savedChatId: chat.id });
+                      }
+                    }}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              ))
+            )}
+          </div>
         </div>
       </section>
       <section className="mt-auto shrink-0 border-t border-border p-3">
