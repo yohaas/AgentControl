@@ -1000,12 +1000,14 @@ function StatusPill({
   status,
   done = false,
   onResume,
-  onRestart
+  onRestart,
+  className
 }: {
   status: RunningAgent["status"];
   done?: boolean;
   onResume?: () => void;
   onRestart?: () => void;
+  className?: string;
 }) {
   const label =
     status === "idle" && done
@@ -1033,7 +1035,7 @@ function StatusPill({
                         : status === "error"
                           ? "Error"
                           : status;
-  const className =
+  const statusClassName =
     status === "idle" && done
       ? "border-emerald-500/50 bg-emerald-500/15 text-emerald-700 dark:border-emerald-400/40 dark:text-emerald-200"
       : status === "running"
@@ -1060,9 +1062,10 @@ function StatusPill({
     <Badge
       className={cn(
         "inline-flex items-center gap-1 capitalize",
-        className,
+        statusClassName,
         canResume && "cursor-pointer hover:bg-purple-500/25",
-        canRestart && "cursor-pointer hover:bg-red-500/25"
+        canRestart && "cursor-pointer hover:bg-red-500/25",
+        className
       )}
       role={interactive ? "button" : undefined}
       tabIndex={interactive ? 0 : undefined}
@@ -12611,6 +12614,7 @@ function MobileSidebar({
   const collapsed = useAppStore((state) => state.sidebarCollapsed);
   const setCollapsed = useAppStore((state) => state.setSidebarCollapsed);
   const openLaunchModal = useAppStore((state) => state.openLaunchModal);
+  const doneAgentIds = useAppStore((state) => state.doneAgentIds);
   const selectedProjectId = selectedProject?.id;
 
   function newChat() {
@@ -12769,11 +12773,13 @@ function MobileSidebar({
                     <span className="min-w-0">
                       <span className="flex min-w-0 items-center gap-1.5">
                         <span className="truncate text-sm font-medium">{agent.defName}</span>
+                        <StatusPill status={agent.status} done={Boolean(doneAgentIds[agent.id])} />
                         {agentNeedsInput(agent) && (
                           <Badge className="shrink-0 border-amber-500/50 bg-amber-500/15 text-amber-800 dark:text-amber-200">!</Badge>
                         )}
                       </span>
                       <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+                        <StatusPill status={agent.status} done={Boolean(doneAgentIds[agent.id])} className="shrink-0 px-1.5 py-0 text-[10px] leading-4" />
                         <span className="shrink-0">{providerLabel(agent.provider)}</span>
                         <span aria-hidden="true">·</span>
                         <span className="truncate">{agent.currentModel}</span>
