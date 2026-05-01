@@ -175,6 +175,14 @@
     @apply max-w-full overflow-x-hidden whitespace-pre-wrap break-words rounded-md border border-border bg-muted/70 p-3 text-xs leading-5 [overflow-wrap:anywhere];
   }
 
+  .markdown-code-block {
+    @apply relative my-2 max-w-full;
+  }
+
+  .markdown-content .markdown-code-block pre {
+    @apply my-0 pb-9;
+  }
+
   .markdown-content pre code {
     @apply whitespace-pre-wrap break-words bg-transparent p-0 font-mono text-inherit [overflow-wrap:anywhere];
   }

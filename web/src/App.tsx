@@ -4,6 +4,7 @@ import {
   useRef,
   useState,
   useCallback,
+  isValidElement,
   type ComponentProps,
   type ComponentType,
   type ClipboardEvent as ReactClipboardEvent,
@@ -11472,11 +11473,6 @@ function CollapsibleText({
     setExpanded((value) => !value);
   }
 
-  function toggleFromText() {
-    if (window.getSelection()?.toString()) return;
-    toggleExpanded();
-  }
-
   return (
     <div className="relative grid gap-2">
       {inlineToggle && (
@@ -11493,20 +11489,10 @@ function CollapsibleText({
         </button>
       )}
       <div
-        role="button"
-        tabIndex={0}
         className={cn(
-          "min-w-0 cursor-pointer rounded-sm break-words outline-none [overflow-wrap:anywhere] hover:bg-accent/40 focus-visible:ring-2 focus-visible:ring-ring",
+          "min-w-0 rounded-sm break-words outline-none [overflow-wrap:anywhere]",
           !expanded && (compact ? "max-h-32 overflow-hidden" : "max-h-48 overflow-hidden")
         )}
-        title={expanded ? "Collapse response" : "Expand response"}
-        onClick={toggleFromText}
-        onKeyDown={(event) => {
-          if (event.key === "Enter" || event.key === " ") {
-            event.preventDefault();
-            toggleExpanded();
-          }
-        }}
       >
         <ChatMarkdown text={text} query={query} agent={agent} />
       </div>
@@ -11638,6 +11624,46 @@ function remarkRepoFileLinks(agent?: RunningAgent) {
   };
 }
 
+function reactNodeText(node: ReactNode): string {
+  if (node === null || node === undefined || typeof node === "boolean") return "";
+  if (typeof node === "string" || typeof node === "number") return String(node);
+  if (Array.isArray(node)) return node.map(reactNodeText).join("");
+  if (isValidElement<{ children?: ReactNode }>(node)) return reactNodeText(node.props.children);
+  return "";
+}
+
+function MarkdownCodeBlock({ children, className, ...props }: ComponentProps<"pre">) {
+  const addError = useAppStore((state) => state.addError);
+  const codeText = reactNodeText(children).replace(/\n$/, "");
+  const multiline = codeText.includes("\n");
+
+  function copyCode(event: ReactMouseEvent<HTMLButtonElement>) {
+    event.stopPropagation();
+    void navigator.clipboard.writeText(codeText).catch((error: unknown) => {
+      addError(error instanceof Error ? error.message : String(error));
+    });
+  }
+
+  return (
+    <div className="markdown-code-block group">
+      <pre className={className} {...props}>
+        {children}
+      </pre>
+      {multiline && (
+        <button
+          type="button"
+          className="absolute bottom-2 right-2 grid h-7 w-7 place-items-center rounded-md border border-border bg-background/90 text-foreground opacity-80 shadow-sm hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          title="Copy code"
+          aria-label="Copy code"
+          onClick={copyCode}
+        >
+          <Copy className="h-3.5 w-3.5" />
+        </button>
+      )}
+    </div>
+  );
+}
+
 function ChatMarkdown({ text, query, agent }: { text: string; query: string; agent?: RunningAgent }) {
   const openFilePreview = useAppStore((state) => state.openFilePreview);
   if (query.trim()) {
@@ -11653,6 +11679,7 @@ function ChatMarkdown({ text, query, agent }: { text: string; query: string; age
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkRepoFileLinks(agent)]}
         components={{
+          pre: MarkdownCodeBlock,
           a: ({ href, children, ...props }) => {
             const target = markdownLinkTarget(href, agent);
             if (target) {
