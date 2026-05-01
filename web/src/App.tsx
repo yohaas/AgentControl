@@ -13228,17 +13228,38 @@ function MobileChatPane({ agent, addError }: { agent: RunningAgent; addError: (m
   const requiredFeedbackItems = useMemo(() => requiredFeedbackTranscriptItems(transcriptItems), [transcriptItems]);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const didInitialTranscriptScrollRef = useRef(false);
+  const [attachments, setAttachments] = useState<MessageAttachment[]>([]);
+  const [contextOpen, setContextOpen] = useState(false);
+  const [composerCollapsed, setComposerCollapsed] = useState(false);
+  const [activeSlashIndex, setActiveSlashIndex] = useState(0);
+  const [slashMenuOpen, setSlashMenuOpen] = useState(false);
+  const [slashMenuSuppressed, setSlashMenuSuppressed] = useState(false);
   const [sending, setSending] = useState(false);
   const [showJumpToBottom, setShowJumpToBottom] = useState(false);
   const [autoScrollPaused, setAutoScrollPaused] = useState(false);
+  const [composerWrapped, setComposerWrapped] = useState(false);
   const isBusy = isAgentBusy(agent);
   const visibleTranscriptViewMode = chatTranscriptDetail === "raw" ? "raw" : "chat";
   const canType = agentHasProcess(agent);
+  const canAttach = !agent.remoteControl;
   const showAutoScrollControl = visibleTranscriptViewMode === "chat" && hasActiveAutoScrollStatus(agent);
   const showActivityIndicator = isBusy && agent.status !== "awaiting-input" && !hasStreamingAssistantText(transcript);
   const latestUser = latestUserMessage(transcript);
   const phaseLabel = isBusy ? executingPlanPhase(transcript) : undefined;
+  const rawSlashSuggestions = useMemo(
+    () => slashCommandSuggestions(draft, modelIdsForProvider(settings, agent.provider || "claude"), agent.slashCommands, agent.provider || "claude"),
+    [agent.provider, agent.slashCommands, draft, settings]
+  );
+  const pickerSlashSuggestions = useMemo(
+    () => slashCommandSuggestions("", modelIdsForProvider(settings, agent.provider || "claude"), agent.slashCommands, agent.provider || "claude", true),
+    [agent.provider, agent.slashCommands, settings]
+  );
+  const slashSuggestions = slashMenuOpen ? pickerSlashSuggestions : slashMenuSuppressed ? [] : rawSlashSuggestions;
+  const draftLines = draftLineCount(draft);
+  const hasMultilineDraft = draftLines > 1 || composerWrapped;
+  const composerExpanded = hasMultilineDraft && !composerCollapsed;
   useQueuedMessageSender(agent, queue, canType);
 
   useEffect(() => {
@@ -13250,6 +13271,21 @@ function MobileChatPane({ agent, addError }: { agent: RunningAgent; addError: (m
   useEffect(() => {
     if (!hasActiveAutoScrollStatus(agent)) setAutoScrollPaused(false);
   }, [agent.status]);
+
+  useEffect(() => {
+    setActiveSlashIndex(0);
+  }, [slashSuggestions.length, draft]);
+
+  useEffect(() => {
+    if (!hasMultilineDraft && composerCollapsed) setComposerCollapsed(false);
+  }, [composerCollapsed, hasMultilineDraft]);
+
+  useEffect(() => {
+    const measure = () => setComposerWrapped(composerNeedsExpansion(inputRef.current, 44));
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [draft]);
 
   useEffect(() => {
     const root = rootRef.current;
@@ -13285,31 +13321,210 @@ function MobileChatPane({ agent, addError }: { agent: RunningAgent; addError: (m
   }
 
   async function send() {
-    const text = draft.trim();
-    if (!text || sending) return;
+    if ((!draft.trim() && attachments.length === 0) || sending) return;
     if (!canType) {
       addError("This chat is not ready to receive messages.");
       return;
     }
-    if (isBusy && agent.status !== "awaiting-input") {
-      enqueueMessage(agent.id, { text, attachments: [] });
+    if (agent.remoteControl && attachments.length > 0) {
+      addError("Remote Control stdin bridge does not support attachments yet.");
+      return;
+    }
+    const injectedText = injectedMessageText(agent, draft);
+    if (injectedText) {
+      const sentBySocket = wsConnected
+        ? isBusy
+          ? sendCommand({ type: "injectMessage", id: agent.id, text: injectedText, attachments })
+          : sendCommand({ type: "userMessage", id: agent.id, text: injectedText, attachments })
+        : false;
+      if (!sentBySocket) {
+        try {
+          await api.sendAgentMessage(agent.id, injectedText, attachments);
+          await refreshMobileSnapshot();
+        } catch (error) {
+          addError(error instanceof Error ? error.message : String(error));
+          return;
+        }
+      }
       setDraft(agent.id, "");
+      setComposerCollapsed(false);
+      setAttachments([]);
+      window.requestAnimationFrame(() => inputRef.current?.blur());
+      return;
+    }
+    const nativeResult = handleNativeSlashCommand(agent, draft);
+    if (nativeResult !== "unhandled") {
+      if (nativeResult === "failed") return;
+      setDraft(agent.id, "");
+      setComposerCollapsed(false);
+      setAttachments([]);
+      return;
+    }
+    if (isBusy && agent.status !== "awaiting-input") {
+      enqueueMessage(agent.id, { text: draft, attachments });
+      setDraft(agent.id, "");
+      setComposerCollapsed(false);
+      setAttachments([]);
       window.requestAnimationFrame(() => inputRef.current?.blur());
       return;
     }
     setSending(true);
     try {
-      const sentBySocket = wsConnected && sendCommand({ type: "userMessage", id: agent.id, text, attachments: [] });
+      const sentBySocket = wsConnected && sendCommand({ type: "userMessage", id: agent.id, text: draft, attachments });
       if (!sentBySocket) {
-        await api.sendAgentMessage(agent.id, text);
+        await api.sendAgentMessage(agent.id, draft, attachments);
         await refreshMobileSnapshot();
       }
       setDraft(agent.id, "");
+      setComposerCollapsed(false);
+      setAttachments([]);
       window.requestAnimationFrame(() => inputRef.current?.blur());
     } catch (error) {
       addError(error instanceof Error ? error.message : String(error));
     } finally {
       setSending(false);
+    }
+  }
+
+  function selectTypedSlashCommand(value: string) {
+    setDraft(agent.id, value);
+    setSlashMenuOpen(false);
+    setSlashMenuSuppressed(false);
+    window.requestAnimationFrame(() => inputRef.current?.focus());
+  }
+
+  function runSlashCommand(value: string) {
+    const commandText = value.trim();
+    setSlashMenuOpen(false);
+    setSlashMenuSuppressed(false);
+    setActiveSlashIndex(0);
+    if (!commandText) {
+      window.requestAnimationFrame(() => inputRef.current?.focus());
+      return;
+    }
+    if (handleNativeSlashCommand(agent, commandText) !== "unhandled") {
+      window.requestAnimationFrame(() => inputRef.current?.focus());
+      return;
+    }
+    if (!canType) {
+      window.requestAnimationFrame(() => inputRef.current?.focus());
+      return;
+    }
+    const injectedText = injectedMessageText(agent, commandText);
+    if (injectedText) {
+      if (wsConnected && isBusy) sendCommand({ type: "injectMessage", id: agent.id, text: injectedText, attachments: [] });
+      else if (wsConnected) sendCommand({ type: "userMessage", id: agent.id, text: injectedText, attachments: [] });
+      else {
+        void api
+          .sendAgentMessage(agent.id, injectedText, [])
+          .then(refreshMobileSnapshot)
+          .catch((error: unknown) => addError(error instanceof Error ? error.message : String(error)));
+      }
+    } else if (isBusy) enqueueMessage(agent.id, { text: commandText, attachments: [] });
+    else if (wsConnected) sendCommand({ type: "userMessage", id: agent.id, text: commandText, attachments: [] });
+    else {
+      void api
+        .sendAgentMessage(agent.id, commandText, [])
+        .then(refreshMobileSnapshot)
+        .catch((error: unknown) => addError(error instanceof Error ? error.message : String(error)));
+    }
+    window.requestAnimationFrame(() => inputRef.current?.focus());
+  }
+
+  function toggleSlashMenu() {
+    setSlashMenuOpen((open) => !open);
+    setSlashMenuSuppressed(false);
+    setActiveSlashIndex(0);
+    window.requestAnimationFrame(() => inputRef.current?.focus());
+  }
+
+  function handleComposerKeyDown(event: ReactKeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key === "Tab" && event.shiftKey) {
+      event.preventDefault();
+      sendNextComposerMode(agent, settings);
+      return;
+    }
+    if (slashSuggestions.length > 0) {
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        setActiveSlashIndex((index) => (index + 1) % slashSuggestions.length);
+        return;
+      }
+      if (event.key === "ArrowUp") {
+        event.preventDefault();
+        setActiveSlashIndex((index) => (index - 1 + slashSuggestions.length) % slashSuggestions.length);
+        return;
+      }
+      if (event.key === "Tab") {
+        event.preventDefault();
+        const selected = enabledSlashSuggestion(slashSuggestions[activeSlashIndex]) || slashSuggestions.find((suggestion) => !suggestion.disabled);
+        if (selected) {
+          if (slashMenuOpen) runSlashCommand(selected.value);
+          else selectTypedSlashCommand(selected.value);
+        }
+        return;
+      }
+      if (event.key === "Enter" && !event.shiftKey) {
+        const selected = enabledSlashSuggestion(slashSuggestions[activeSlashIndex]);
+        if (selected && slashMenuOpen) {
+          event.preventDefault();
+          runSlashCommand(selected.value);
+          return;
+        }
+        if (selected && draft.trim() !== selected.value.trim()) {
+          event.preventDefault();
+          selectTypedSlashCommand(selected.value);
+          return;
+        }
+        if (slashSuggestions[activeSlashIndex]?.disabled) {
+          event.preventDefault();
+          return;
+        }
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setSlashMenuOpen(false);
+        setSlashMenuSuppressed(true);
+        return;
+      }
+    }
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      void send();
+    }
+  }
+
+  async function handlePaste(event: ReactClipboardEvent<HTMLTextAreaElement>) {
+    const files = pastedImageFiles(event);
+    const pastedText = event.clipboardData.getData("text/plain");
+    const pastedMultilineText = /\r|\n/.test(pastedText);
+    if (files.length === 0 && !pastedMultilineText) return;
+    event.preventDefault();
+    if (pastedMultilineText) setComposerCollapsed(false);
+    if (pastedText) {
+      const selectionStart = event.currentTarget.selectionStart ?? draft.length;
+      const nextDraft = insertPastedText(event.currentTarget, draft, pastedText);
+      const nextCursor = selectionStart + pastedText.length;
+      setDraft(agent.id, nextDraft);
+      window.requestAnimationFrame(() => inputRef.current?.setSelectionRange(nextCursor, nextCursor));
+    }
+    if (files.length === 0) return;
+    try {
+      const uploaded = await uploadFiles(files);
+      setAttachments((current) => [...current, ...uploaded]);
+    } catch (error) {
+      addError(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  async function handleFileAttachment(files: FileList | null) {
+    const selectedFiles = Array.from(files || []);
+    if (selectedFiles.length === 0) return;
+    try {
+      const uploaded = await uploadFiles(selectedFiles);
+      setAttachments((current) => [...current, ...uploaded]);
+    } catch (error) {
+      addError(error instanceof Error ? error.message : String(error));
     }
   }
 
@@ -13336,11 +13551,6 @@ function MobileChatPane({ agent, addError }: { agent: RunningAgent; addError: (m
           </div>
         </div>
         <StatusPill status={agent.status} />
-        {isBusy && agentHasProcess(agent) && (
-          <Button type="button" variant="outline" size="icon" className="h-9 w-9" title="Stop response" onClick={() => void stopCurrentResponse()}>
-            <Square className="h-4 w-4" />
-          </Button>
-        )}
         <MobileAgentActionsMenu agent={agent} />
       </div>
 
@@ -13404,24 +13614,97 @@ function MobileChatPane({ agent, addError }: { agent: RunningAgent; addError: (m
           <QueuedMessageList agentId={agent.id} queue={queue} compact />
         </div>
       )}
-      <div className="flex min-w-0 shrink-0 items-end gap-2 border-t border-border bg-card p-2">
-        <Textarea
-          ref={inputRef}
-          value={draft}
-          onChange={(event) => setDraft(agent.id, event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" && !event.shiftKey) {
-              event.preventDefault();
-              void send();
-            }
-          }}
-          className="max-h-32 min-h-11 flex-1 resize-none"
-          placeholder={canType ? "Message" : "Chat unavailable"}
-          disabled={!canType}
+      <div className="min-w-0 shrink-0 border-t border-border bg-card p-2">
+        <AddContextDialog
+          agent={agent}
+          open={contextOpen}
+          onOpenChange={setContextOpen}
+          onSelect={(attachment) => setAttachments((current) => [...current, attachment])}
+          onDone={() => window.requestAnimationFrame(() => inputRef.current?.focus())}
         />
-        <Button type="button" size="icon" className="h-11 w-11" disabled={!canType || sending || !draft.trim()} onClick={() => void send()} title="Send">
-          <ArrowUp className="h-4 w-4" />
-        </Button>
+        <div className="relative rounded-md border border-border bg-background/80">
+          <div className="absolute bottom-full left-0 right-0 z-[220] mb-2 px-2">
+            <SlashCommandAutocomplete
+              suggestions={slashSuggestions}
+              activeIndex={activeSlashIndex}
+              compact
+              onSelect={slashMenuOpen ? runSlashCommand : selectTypedSlashCommand}
+              onActiveIndexChange={setActiveSlashIndex}
+            />
+          </div>
+          <div className="grid gap-2 px-2 pt-2">
+            <AttachmentChips
+              attachments={attachments}
+              onRemove={(id) => setAttachments((current) => current.filter((attachment) => attachment.id !== id))}
+            />
+          </div>
+          <div className="relative">
+            <Textarea
+              ref={inputRef}
+              value={draft}
+              onChange={(event) => {
+                setSlashMenuOpen(false);
+                setSlashMenuSuppressed(false);
+                setDraft(agent.id, event.target.value);
+                setComposerWrapped(composerNeedsExpansion(event.currentTarget, 44));
+              }}
+              onKeyDown={handleComposerKeyDown}
+              onPaste={handlePaste}
+              className={cn(
+                "min-h-11 resize-none border-0 bg-transparent py-2 pr-2 text-sm leading-5 focus-visible:ring-0",
+                hasMultilineDraft && "pr-10",
+                composerExpanded ? "h-28 max-h-36 overflow-y-auto" : "h-11 overflow-hidden"
+              )}
+              placeholder={canType ? (isBusy ? "Queue a message..." : "Message") : "Chat unavailable"}
+              disabled={!canType}
+            />
+            {hasMultilineDraft && (
+              <button
+                type="button"
+                className="absolute right-2 top-2 grid h-6 w-6 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+                title={composerExpanded ? "Collapse message" : `Expand ${draftLines}-line message`}
+                onClick={() => {
+                  setComposerCollapsed(!composerCollapsed);
+                  window.requestAnimationFrame(() => inputRef.current?.focus());
+                }}
+              >
+                {composerExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+              </button>
+            )}
+          </div>
+          <div className="flex items-center justify-between border-t border-border px-2 py-1.5">
+            <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                className="hidden"
+                onChange={(event) => {
+                  void handleFileAttachment(event.currentTarget.files);
+                  event.currentTarget.value = "";
+                }}
+              />
+              <ComposerAddMenu disabled={!canType || !canAttach} onUpload={() => fileInputRef.current?.click()} onAddContext={() => setContextOpen(true)} />
+              <Button variant="ghost" size="icon" className="h-8 w-8" title="Slash commands" onClick={toggleSlashMenu}>
+                <SquareSlash className="h-4 w-4" />
+              </Button>
+            </div>
+            <div className="flex shrink-0 items-center gap-1.5">
+              <ComposerModeMenu agent={agent} compact inline />
+              <Button
+                type="button"
+                size="icon"
+                className="h-9 w-9"
+                disabled={isBusy ? !agentHasProcess(agent) : !canType || sending || (!draft.trim() && attachments.length === 0)}
+                onClick={isBusy ? () => void stopCurrentResponse() : () => void send()}
+                title={isBusy ? "Stop response" : "Send"}
+                aria-label={isBusy ? "Stop response" : "Send message"}
+              >
+                {isBusy ? <Square className="h-4 w-4" /> : <ArrowUp className="h-4 w-4" />}
+              </Button>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
   );
