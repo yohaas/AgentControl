@@ -52,6 +52,8 @@ export interface DashboardConfig {
   tileHeight?: number;
   tileColumns?: number;
   tileScrolling?: TileScrollingMode;
+  chatFontFamily?: string;
+  chatFontSize?: number;
   menuDisplay?: MenuDisplayMode;
   sidebarWidth?: number;
   pinLastSentMessage?: boolean;
@@ -221,6 +223,14 @@ export function resolveTileColumns(config: DashboardConfig): number {
 
 export function resolveTileScrolling(config: DashboardConfig): TileScrollingMode {
   return config.tileScrolling === "horizontal" ? "horizontal" : "vertical";
+}
+
+export function resolveChatFontFamily(config: DashboardConfig): string {
+  return typeof config.chatFontFamily === "string" ? config.chatFontFamily.trim().slice(0, 160) : "";
+}
+
+export function resolveChatFontSize(config: DashboardConfig): number {
+  return clampNumber(config.chatFontSize, 14, 11, 24);
 }
 
 export function resolveSidebarWidth(config: DashboardConfig): number {

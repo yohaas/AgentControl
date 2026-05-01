@@ -598,6 +598,35 @@ const TERMINAL_DOCK_OPTIONS = [
 ] as const;
 const TILE_MIN_HEIGHT = 240;
 const TILE_MAX_HEIGHT = 2000;
+const DEFAULT_CHAT_FONT_SIZE = 14;
+const CHAT_FONT_SIZE_MIN = 11;
+const CHAT_FONT_SIZE_MAX = 24;
+
+type ChatDisplaySettings = SettingsState & {
+  chatFontFamily?: string;
+  chatFontSize?: number;
+};
+
+function normalizeChatFontFamily(value: unknown) {
+  return typeof value === "string" ? value.trim().slice(0, 160) : "";
+}
+
+function normalizeChatFontSize(value: unknown) {
+  const parsed = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(parsed)) return DEFAULT_CHAT_FONT_SIZE;
+  return Math.min(CHAT_FONT_SIZE_MAX, Math.max(CHAT_FONT_SIZE_MIN, Math.round(parsed)));
+}
+
+function chatTextStyle(settings: SettingsState, compact = false): CSSProperties {
+  const chatSettings = settings as ChatDisplaySettings;
+  const fontFamily = normalizeChatFontFamily(chatSettings.chatFontFamily);
+  const fontSize = normalizeChatFontSize(chatSettings.chatFontSize);
+  return {
+    fontFamily: fontFamily || undefined,
+    fontSize,
+    lineHeight: `${Math.round(fontSize * (compact ? 1.43 : 1.7))}px`
+  };
+}
 
 function applyThemeMode(themeMode: ThemeMode) {
   const root = document.documentElement;
@@ -3049,6 +3078,8 @@ function Header({
   const [layoutMenuOpen, setLayoutMenuOpen] = useState(false);
   const [layoutHeightDraft, setLayoutHeightDraft] = useState(String(settings.tileHeight));
   const [layoutColumnsDraft, setLayoutColumnsDraft] = useState(String(settings.tileColumns));
+  const [layoutChatFontDraft, setLayoutChatFontDraft] = useState(normalizeChatFontFamily((settings as ChatDisplaySettings).chatFontFamily));
+  const [layoutChatFontSizeDraft, setLayoutChatFontSizeDraft] = useState(String(normalizeChatFontSize((settings as ChatDisplaySettings).chatFontSize)));
   const selectedProject = projects.find((project) => project.id === selectedProjectId);
   const projectRows = useMemo(() => projectSelectorRows(projects), [projects]);
   const inputNeededProjectIds = useMemo(
@@ -3101,7 +3132,9 @@ function Header({
   useEffect(() => {
     setLayoutHeightDraft(String(settings.tileHeight));
     setLayoutColumnsDraft(String(settings.tileColumns));
-  }, [settings.tileColumns, settings.tileHeight]);
+    setLayoutChatFontDraft(normalizeChatFontFamily((settings as ChatDisplaySettings).chatFontFamily));
+    setLayoutChatFontSizeDraft(String(normalizeChatFontSize((settings as ChatDisplaySettings).chatFontSize)));
+  }, [settings.tileColumns, settings.tileHeight, settings]);
 
   async function refreshAdminStatus() {
     try {
@@ -3215,9 +3248,9 @@ function Header({
     setFileExplorerOpen(true);
   }
 
-  async function saveDisplaySettings(patch: Partial<Pick<typeof settings, "tileHeight" | "tileColumns">>) {
+  async function saveDisplaySettings(patch: Partial<Pick<ChatDisplaySettings, "tileHeight" | "tileColumns" | "chatFontFamily" | "chatFontSize">>) {
     try {
-      const next = await api.saveSettings({ ...settings, ...patch });
+      const next = await api.saveSettings({ ...settings, ...patch } as SettingsState);
       setSettings(next);
       setCurrentTileHeight(undefined);
       return true;
@@ -3230,8 +3263,19 @@ function Header({
   async function saveLayoutSettings() {
     const tileHeight = Number(layoutHeightDraft);
     const tileColumns = Number(layoutColumnsDraft);
+    const chatFontSize = Number(layoutChatFontSizeDraft);
     if (!Number.isFinite(tileHeight) || !Number.isFinite(tileColumns)) return;
-    if (await saveDisplaySettings({ tileHeight, tileColumns })) setLayoutMenuOpen(false);
+    if (!Number.isFinite(chatFontSize)) return;
+    if (
+      await saveDisplaySettings({
+        tileHeight,
+        tileColumns,
+        chatFontFamily: layoutChatFontDraft,
+        chatFontSize
+      })
+    ) {
+      setLayoutMenuOpen(false);
+    }
   }
 
   function useFullHeight() {
@@ -3244,10 +3288,17 @@ function Header({
 
   const layoutHeightValue = Number(layoutHeightDraft);
   const layoutColumnsValue = Number(layoutColumnsDraft);
+  const layoutChatFontSizeValue = Number(layoutChatFontSizeDraft);
+  const normalizedSettingsChatFont = normalizeChatFontFamily((settings as ChatDisplaySettings).chatFontFamily);
+  const normalizedSettingsChatFontSize = normalizeChatFontSize((settings as ChatDisplaySettings).chatFontSize);
   const layoutSettingsDirty =
     Number.isFinite(layoutHeightValue) &&
     Number.isFinite(layoutColumnsValue) &&
-    (Math.round(layoutHeightValue) !== settings.tileHeight || Math.round(layoutColumnsValue) !== settings.tileColumns);
+    Number.isFinite(layoutChatFontSizeValue) &&
+    (Math.round(layoutHeightValue) !== settings.tileHeight ||
+      Math.round(layoutColumnsValue) !== settings.tileColumns ||
+      normalizeChatFontFamily(layoutChatFontDraft) !== normalizedSettingsChatFont ||
+      normalizeChatFontSize(layoutChatFontSizeValue) !== normalizedSettingsChatFontSize);
   const showMenuText = settings.menuDisplay === "iconText";
   const menuButtonClass = showMenuText ? "gap-2 px-3" : undefined;
   const layoutMenu = (
@@ -3263,7 +3314,7 @@ function Header({
           )}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-64">
+      <DropdownMenuContent align="end" className="w-80">
         <DropdownMenuItem onClick={useFullHeight}>
           <Maximize2 className="mr-2 h-4 w-4" />
           Full Height
@@ -3307,6 +3358,28 @@ function Header({
             >
               <Save className="h-4 w-4" />
             </Button>
+          </div>
+          <div className="grid grid-cols-[1fr_0.45fr] gap-2">
+            <label className="grid gap-1 text-xs text-muted-foreground">
+              Chat font
+              <Input
+                value={layoutChatFontDraft}
+                placeholder="App default"
+                onKeyDown={(event) => event.stopPropagation()}
+                onChange={(event) => setLayoutChatFontDraft(event.target.value)}
+              />
+            </label>
+            <label className="grid gap-1 text-xs text-muted-foreground">
+              Size
+              <Input
+                type="number"
+                min={CHAT_FONT_SIZE_MIN}
+                max={CHAT_FONT_SIZE_MAX}
+                value={layoutChatFontSizeDraft}
+                onKeyDown={(event) => event.stopPropagation()}
+                onChange={(event) => setLayoutChatFontSizeDraft(event.target.value)}
+              />
+            </label>
           </div>
         </div>
       </DropdownMenuContent>
@@ -6553,6 +6626,8 @@ function SettingsDialog() {
   const [claudeRuntime, setClaudeRuntime] = useState<ClaudeRuntime>(settings.claudeRuntime || "cli");
   const [tileHeight, setTileHeight] = useState(settings.tileHeight);
   const [tileColumns, setTileColumns] = useState(settings.tileColumns);
+  const [chatFontFamily, setChatFontFamily] = useState(normalizeChatFontFamily((settings as ChatDisplaySettings).chatFontFamily));
+  const [chatFontSize, setChatFontSize] = useState(normalizeChatFontSize((settings as ChatDisplaySettings).chatFontSize));
   const [pinLastSentMessage, setPinLastSentMessage] = useState(settings.pinLastSentMessage);
   const [inputNotificationsEnabled, setInputNotificationsEnabled] = useState(settings.inputNotificationsEnabled === true);
   const [accessTokenEnabled, setAccessTokenEnabled] = useState(settings.accessTokenEnabled === true);
@@ -6599,6 +6674,8 @@ function SettingsDialog() {
     setClaudeRuntime(settings.claudeRuntime || "cli");
     setTileHeight(settings.tileHeight);
     setTileColumns(settings.tileColumns);
+    setChatFontFamily(normalizeChatFontFamily((settings as ChatDisplaySettings).chatFontFamily));
+    setChatFontSize(normalizeChatFontSize((settings as ChatDisplaySettings).chatFontSize));
     setPinLastSentMessage(settings.pinLastSentMessage);
     setInputNotificationsEnabled(settings.inputNotificationsEnabled === true);
     setAccessTokenEnabled(settings.accessTokenEnabled === true);
@@ -6643,6 +6720,8 @@ function SettingsDialog() {
         claudeRuntime,
         tileHeight,
         tileColumns,
+        chatFontFamily,
+        chatFontSize,
         pinLastSentMessage,
         inputNotificationsEnabled,
         accessTokenEnabled,
@@ -6651,7 +6730,7 @@ function SettingsDialog() {
         agentControlProjectPath,
         updateChecksEnabled,
         updateCommands: updateCommandsText.split(/\r?\n/).map((command) => command.trim()).filter(Boolean)
-      });
+      } as SettingsState);
       setSettings(next);
       setProjects(await api.refresh());
       setOpen(false);
@@ -6740,6 +6819,8 @@ function SettingsDialog() {
         claudeRuntime,
         tileHeight,
         tileColumns,
+        chatFontFamily,
+        chatFontSize,
         pinLastSentMessage,
         inputNotificationsEnabled,
         accessTokenEnabled,
@@ -6782,6 +6863,8 @@ function SettingsDialog() {
       setClaudeRuntime(next.claudeRuntime || "cli");
       setTileHeight(next.tileHeight);
       setTileColumns(next.tileColumns);
+      setChatFontFamily(normalizeChatFontFamily((next as ChatDisplaySettings).chatFontFamily));
+      setChatFontSize(normalizeChatFontSize((next as ChatDisplaySettings).chatFontSize));
       setPinLastSentMessage(next.pinLastSentMessage);
       setInputNotificationsEnabled(next.inputNotificationsEnabled === true);
       setAccessTokenEnabled(next.accessTokenEnabled === true);
@@ -6900,6 +6983,8 @@ function SettingsDialog() {
       claudeRuntime !== (settings.claudeRuntime || "cli") ||
       tileHeight !== settings.tileHeight ||
       tileColumns !== settings.tileColumns ||
+      normalizeChatFontFamily(chatFontFamily) !== normalizeChatFontFamily((settings as ChatDisplaySettings).chatFontFamily) ||
+      normalizeChatFontSize(chatFontSize) !== normalizeChatFontSize((settings as ChatDisplaySettings).chatFontSize) ||
       pinLastSentMessage !== settings.pinLastSentMessage ||
       inputNotificationsEnabled !== (settings.inputNotificationsEnabled === true) ||
       accessTokenEnabled !== (settings.accessTokenEnabled === true) ||
@@ -6917,6 +7002,8 @@ function SettingsDialog() {
       claudeModelsText,
       claudePath,
       claudeRuntime,
+      chatFontFamily,
+      chatFontSize,
       clearAnthropicApiKey,
       clearOpenaiApiKey,
       codexAgentDir,
@@ -7149,6 +7236,28 @@ function SettingsDialog() {
                   value={tileColumns}
                   className="px-2"
                   onChange={(event) => setTileColumns(Number(event.target.value))}
+                />
+              </label>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_10rem]">
+              <label className="grid min-w-0 gap-1.5 text-sm">
+                Chat font
+                <Input
+                  value={chatFontFamily}
+                  placeholder="App default"
+                  onChange={(event) => setChatFontFamily(event.target.value)}
+                />
+              </label>
+              <label className="grid min-w-0 gap-1.5 text-sm">
+                Chat font size
+                <Input
+                  type="number"
+                  min={CHAT_FONT_SIZE_MIN}
+                  max={CHAT_FONT_SIZE_MAX}
+                  step={1}
+                  value={chatFontSize}
+                  className="px-2"
+                  onChange={(event) => setChatFontSize(Number(event.target.value))}
                 />
               </label>
             </div>
@@ -9573,6 +9682,7 @@ function TranscriptPreview({
   latestUserMessageId?: string;
   defaultExpanded?: boolean;
 }) {
+  const settings = useAppStore((state) => state.settings);
   if (item.kind === "tool_pair") {
     return <ToolCard event={item.event} result={item.result} agent={agent} compact />;
   }
@@ -9616,7 +9726,10 @@ function TranscriptPreview({
         )}
         data-copy-block="true"
         data-copy-event-id={event.id}
-        style={!isUser ? { borderLeftColor: agentAccentColor(agent.color), borderLeftWidth: 4 } : undefined}
+        style={{
+          ...chatTextStyle(settings, true),
+          ...(!isUser ? { borderLeftColor: agentAccentColor(agent.color), borderLeftWidth: 4 } : {})
+        }}
       >
         {showPopout && <ChatBlockPopoutButton source={agent} text={event.text} compact />}
         <CollapsibleText text={event.text} agent={agent} compact inlineToggle={showPopout} defaultExpanded={defaultExpanded} />
@@ -9650,6 +9763,7 @@ function PinnedUserMessage({
   onJump?: () => void;
 }) {
   const minimizedMaxHeight = compact ? 16 : 20;
+  const settings = useAppStore((state) => state.settings);
 
   return (
     <div className="group sticky top-0 z-20 mb-3 flex justify-end">
@@ -9663,6 +9777,7 @@ function PinnedUserMessage({
         )}
         data-copy-block="true"
         data-copy-event-id={event.id}
+        style={chatTextStyle(settings, compact)}
         title="Jump to message"
         onClick={onJump}
         onKeyDown={(keyEvent) => {
@@ -11059,6 +11174,7 @@ function TranscriptItem({
   latestUserMessageId?: string;
   defaultExpanded?: boolean;
 }) {
+  const settings = useAppStore((state) => state.settings);
   if (item.kind === "tool_pair") {
     return <ToolCard event={item.event} result={item.result} agent={agent} />;
   }
@@ -11104,7 +11220,10 @@ function TranscriptItem({
         )}
         data-copy-block="true"
         data-copy-event-id={event.id}
-        style={!isUser ? { borderLeftColor: agentAccentColor(agent.color), borderLeftWidth: 4 } : undefined}
+        style={{
+          ...chatTextStyle(settings),
+          ...(!isUser ? { borderLeftColor: agentAccentColor(agent.color), borderLeftWidth: 4 } : {})
+        }}
       >
         {showPopout && <ChatBlockPopoutButton source={agent} text={event.text} />}
         {event.sourceAgent && (
@@ -11436,6 +11555,7 @@ function ChatBlockPopoutButton({
   const openLaunchModal = useAppStore((state) => state.openLaunchModal);
   const openSendDialog = useAppStore((state) => state.openSendDialog);
   const addError = useAppStore((state) => state.addError);
+  const settings = useAppStore((state) => state.settings);
   const [rawView, setRawView] = useState(false);
   const selectionRootId = useRef(`text-block-popout-${Math.random().toString(36).slice(2)}`).current;
   const {
@@ -11571,6 +11691,7 @@ function ChatBlockPopoutButton({
                 id={selectionRootId}
                 tabIndex={0}
                 className="max-h-[65vh] overflow-auto rounded-md border border-border bg-background/70 p-3 text-sm leading-6 outline-none [overflow-wrap:anywhere] focus-visible:ring-2 focus-visible:ring-ring"
+                style={chatTextStyle(settings)}
                 onPointerDown={(event) => {
                   if (event.button === 0) clearPopoutSelection();
                 }}
