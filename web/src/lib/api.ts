@@ -154,6 +154,8 @@ export const api = {
   closeProject: (id: string) => json<Project[]>(`/api/projects/${encodeURIComponent(id)}`, { method: "DELETE" }),
   gitStatus: (id: string) => json<GitStatus>(`/api/projects/${encodeURIComponent(id)}/git/status`),
   gitPush: (id: string) => json<GitStatus>(`/api/projects/${encodeURIComponent(id)}/git/push`, { method: "POST" }),
+  gitFetch: (id: string) => json<{ ok: boolean }>(`/api/projects/${encodeURIComponent(id)}/git/fetch`, { method: "POST" }),
+  gitPull: (id: string) => json<GitStatus>(`/api/projects/${encodeURIComponent(id)}/git/pull`, { method: "POST" }),
   gitWorktrees: (id: string) => json<GitWorktreeList>(`/api/projects/${encodeURIComponent(id)}/git/worktrees`),
   createGitWorktree: (id: string, payload: GitWorktreeCreateRequest) =>
     json<{ projects: Project[]; worktrees: GitWorktreeList }>(`/api/projects/${encodeURIComponent(id)}/git/worktrees`, {

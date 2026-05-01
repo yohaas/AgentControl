@@ -59,6 +59,7 @@ export interface SettingsState {
   accessTokenEnabled: boolean;
   accessTokenSaved?: boolean;
   accessToken?: string;
+  gitFetchIntervalMinutes: number;
 }
 
 export type TerminalDockPosition = "float" | "left" | "bottom" | "right";
@@ -416,7 +417,8 @@ const defaultSettings: SettingsState = {
   claudeAgentDir: ".claude/agents",
   codexAgentDir: ".codex/agents",
   openaiAgentDir: ".agent-hero/openai-agents",
-  builtInAgentDir: ".agent-hero/built-in-agents"
+  builtInAgentDir: ".agent-hero/built-in-agents",
+  gitFetchIntervalMinutes: 15
 };
 
 function initialFileExplorerOpen(): boolean {
@@ -512,6 +514,7 @@ function normalizeSettings(settings: SettingsState): SettingsState {
     inputNotificationsEnabled: settings.inputNotificationsEnabled === true,
     accessTokenEnabled: settings.accessTokenEnabled === true,
     accessTokenSaved: settings.accessTokenSaved === true,
+    gitFetchIntervalMinutes: clampNumber(settings.gitFetchIntervalMinutes, defaultSettings.gitFetchIntervalMinutes, 0, 1440),
     agentControlProjectPath: typeof settings.agentControlProjectPath === "string" ? settings.agentControlProjectPath : "",
     externalEditor,
     externalEditorUrlTemplate: typeof settings.externalEditorUrlTemplate === "string" ? settings.externalEditorUrlTemplate : "",

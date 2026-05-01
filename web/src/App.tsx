@@ -329,7 +329,7 @@ const THINKING_PHRASES: Record<AgentProvider, string[]> = {
 
 function isGitCredentialPromptError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
-  return /Git push needs credentials|terminal prompts (have been )?disabled|could not read Username|Authentication failed/i.test(message);
+  return /Git (?:push|pull) needs credentials|terminal prompts (have been )?disabled|could not read Username|Authentication failed/i.test(message);
 }
 
 function formatBytes(bytes: number): string {
@@ -3887,6 +3887,9 @@ function GitStatusMenu({
   const [loading, setLoading] = useState(false);
   const [pushing, setPushing] = useState(false);
   const [credentialPromptOpen, setCredentialPromptOpen] = useState(false);
+  const [pulling, setPulling] = useState(false);
+  const [credentialCommand, setCredentialCommand] = useState<"git push" | "git pull">("git push");
+  const gitFetchIntervalMinutes = useAppStore((state) => state.settings.gitFetchIntervalMinutes);
 
   useEffect(() => {
     if (!open || !projectId) return;
@@ -3898,8 +3901,15 @@ function GitStatusMenu({
       setStatus(undefined);
       return;
     }
-    void refresh();
+    void fetchAndRefresh();
   }, [projectId]);
+
+  useEffect(() => {
+    if (!projectId || gitFetchIntervalMinutes <= 0) return;
+    const intervalMs = gitFetchIntervalMinutes * 60 * 1000;
+    const timer = window.setInterval(() => void fetchAndRefresh(), intervalMs);
+    return () => window.clearInterval(timer);
+  }, [projectId, gitFetchIntervalMinutes]);
 
   async function refresh() {
     if (!projectId) return;
@@ -3913,6 +3923,43 @@ function GitStatusMenu({
     }
   }
 
+  async function fetchAndRefresh() {
+    if (!projectId) return;
+    setLoading(true);
+    try {
+      await api.gitFetch(projectId);
+    } catch {
+      // Keep the last known status if background fetch cannot reach the remote.
+    }
+    try {
+      setStatus(await api.gitStatus(projectId));
+    } catch (error) {
+      addError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function pull() {
+    if (!projectId || !status?.isRepo || (status?.behind ?? 0) <= 0) return;
+    setPulling(true);
+    try {
+      setStatus(await api.gitPull(projectId));
+      setOpen(false);
+    } catch (error) {
+      if (isGitCredentialPromptError(error)) {
+        setOpen(false);
+        setCredentialCommand("git pull");
+        setCredentialPromptOpen(true);
+      } else {
+        addError(error instanceof Error ? error.message : String(error));
+      }
+      void refresh();
+    } finally {
+      setPulling(false);
+    }
+  }
+
   async function push() {
     if (!projectId || !status?.isRepo || status.ahead <= 0) return;
     setPushing(true);
@@ -3922,6 +3969,7 @@ function GitStatusMenu({
     } catch (error) {
       if (isGitCredentialPromptError(error)) {
         setOpen(false);
+        setCredentialCommand("git push");
         setCredentialPromptOpen(true);
       } else {
         addError(error instanceof Error ? error.message : String(error));
@@ -3934,14 +3982,15 @@ function GitStatusMenu({
 
   function openPushTerminal() {
     if (!projectId) return;
-    sendCommand({ type: "terminalStart", projectId, command: "git push", title: "Git push" });
+    sendCommand({ type: "terminalStart", projectId, command: credentialCommand, title: credentialCommand === "git pull" ? "Git pull" : "Git push" });
     setCredentialPromptOpen(false);
   }
 
   const aheadCount = status?.ahead || 0;
+  const behindCount = status?.behind || 0;
   const unpushedCommits = status?.unpushedCommits || [];
 
-  if (hideWhenNoPendingPushes && (!status?.isRepo || aheadCount <= 0)) return null;
+  if (hideWhenNoPendingPushes && (!status?.isRepo || (aheadCount <= 0 && behindCount <= 0))) return null;
 
   return (
     <>
@@ -3954,6 +4003,16 @@ function GitStatusMenu({
             title="Git status"
             className={cn("relative", showButtonText && "gap-2 px-3")}
           >
+            {behindCount > 0 && (
+              <span
+                className={cn(
+                  "absolute grid min-h-4 min-w-4 place-items-center rounded-full border border-background bg-blue-500 px-1 text-[10px] font-semibold leading-none text-white",
+                  compact ? "left-0 top-0" : "-left-1.5 -top-1.5"
+                )}
+              >
+                {behindCount > 99 ? "99+" : behindCount}
+              </span>
+            )}
             <GitBranch className="h-4 w-4" />
             {showButtonText && <span>Git</span>}
             {aheadCount > 0 && (
@@ -3992,7 +4051,7 @@ function GitStatusMenu({
                   {status.behind > 0 && (
                     <div className="flex items-center justify-between">
                       <span className="text-muted-foreground">Behind upstream</span>
-                      <span>{status.behind} commit{status.behind === 1 ? "" : "s"}</span>
+                      <span>{behindCount} commit{behindCount === 1 ? "" : "s"}</span>
                     </div>
                   )}
                   {status.upstream && (
@@ -4051,6 +4110,12 @@ function GitStatusMenu({
                   )}
                 </div>
 
+                {behindCount > 0 && (
+                  <Button onClick={() => void pull()} disabled={pulling}>
+                    {pulling ? <Loader2 className="h-4 w-4 animate-spin" /> : <GitBranch className="h-4 w-4" />}
+                    {pulling ? "Pulling..." : `Pull ${behindCount} commit${behindCount === 1 ? "" : "s"}`}
+                  </Button>
+                )}
                 <Button onClick={() => void push()} disabled={pushing || aheadCount <= 0}>
                   <GitBranch className="h-4 w-4" />
                   {pushing ? "Pushing..." : "Push"}
@@ -4067,9 +4132,9 @@ function GitStatusMenu({
           </DialogHeader>
           <div className="grid gap-3 text-sm">
             <p className="text-muted-foreground">
-              Git needs an interactive credential prompt before AgentHero can push from this repo.
+              Git needs an interactive credential prompt before AgentHero can {credentialCommand === "git pull" ? "pull" : "push"} from this repo.
             </p>
-            <div className="rounded-md border border-border bg-muted p-3 font-mono text-xs">git push</div>
+            <div className="rounded-md border border-border bg-muted p-3 font-mono text-xs">{credentialCommand}</div>
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setCredentialPromptOpen(false)}>
                 Cancel
@@ -6708,6 +6773,7 @@ function SettingsDialog() {
   const [codexModelsText, setCodexModelsText] = useState(providerModelsText(settings, "codex"));
   const [openaiModelsText, setOpenaiModelsText] = useState(providerModelsText(settings, "openai"));
   const [gitPath, setGitPath] = useState(settings.gitPath || "");
+  const [gitFetchIntervalMinutes, setGitFetchIntervalMinutes] = useState(settings.gitFetchIntervalMinutes ?? 15);
   const [claudePath, setClaudePath] = useState(settings.claudePath || "");
   const [codexPath, setCodexPath] = useState(settings.codexPath || "");
   const [claudeAgentDir, setClaudeAgentDir] = useState(settings.claudeAgentDir || ".claude/agents");
@@ -6760,6 +6826,7 @@ function SettingsDialog() {
     setCodexModelsText(providerModelsText(settings, "codex"));
     setOpenaiModelsText(providerModelsText(settings, "openai"));
     setGitPath(settings.gitPath || "");
+    setGitFetchIntervalMinutes(settings.gitFetchIntervalMinutes ?? 15);
     setClaudePath(settings.claudePath || "");
     setCodexPath(settings.codexPath || "");
     setClaudeAgentDir(settings.claudeAgentDir || ".claude/agents");
@@ -6809,6 +6876,9 @@ function SettingsDialog() {
           ...parseProviderModels(openaiModelsText, "openai")
         ],
         gitPath,
+        gitFetchIntervalMinutes: Number.isFinite(Number(gitFetchIntervalMinutes))
+          ? Math.max(0, Math.round(Number(gitFetchIntervalMinutes)))
+          : 15,
         claudePath,
         codexPath,
         claudeAgentDir,
@@ -6919,6 +6989,7 @@ function SettingsDialog() {
           ...parseProviderModels(openaiModelsText, "openai")
         ],
         gitPath,
+        gitFetchIntervalMinutes,
         claudePath,
         codexPath,
         claudeAgentDir,
@@ -6964,6 +7035,7 @@ function SettingsDialog() {
       setCodexModelsText(providerModelsText(next, "codex"));
       setOpenaiModelsText(providerModelsText(next, "openai"));
       setGitPath(next.gitPath || "");
+      setGitFetchIntervalMinutes(next.gitFetchIntervalMinutes ?? 15);
       setClaudePath(next.claudePath || "");
       setCodexPath(next.codexPath || "");
       setClaudeAgentDir(next.claudeAgentDir || ".claude/agents");
@@ -7081,6 +7153,7 @@ function SettingsDialog() {
       codexModelsText !== providerModelsText(settings, "codex") ||
       openaiModelsText !== providerModelsText(settings, "openai") ||
       gitPath !== (settings.gitPath || "") ||
+      gitFetchIntervalMinutes !== (settings.gitFetchIntervalMinutes ?? 15) ||
       claudePath !== (settings.claudePath || "") ||
       codexPath !== (settings.codexPath || "") ||
       claudeAgentDir !== (settings.claudeAgentDir || ".claude/agents") ||
@@ -7132,6 +7205,7 @@ function SettingsDialog() {
       defaultAgentMode,
       externalEditor,
       externalEditorUrlTemplate,
+      gitFetchIntervalMinutes,
       gitPath,
       inputNotificationsEnabled,
       accessToken,
@@ -7220,6 +7294,8 @@ function SettingsDialog() {
               setProjectPaths={setProjectPaths}
               gitPath={gitPath}
               setGitPath={setGitPath}
+              gitFetchIntervalMinutes={gitFetchIntervalMinutes}
+              setGitFetchIntervalMinutes={setGitFetchIntervalMinutes}
               accessTokenEnabled={accessTokenEnabled}
               setAccessTokenEnabled={setAccessTokenEnabled}
               accessToken={accessToken}

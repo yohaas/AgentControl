@@ -16,6 +16,8 @@ interface SettingsGeneralTabProps {
   setProjectPaths: Dispatch<SetStateAction<string[]>>;
   gitPath: string;
   setGitPath: (value: string) => void;
+  gitFetchIntervalMinutes: number;
+  setGitFetchIntervalMinutes: (value: number) => void;
   accessTokenEnabled: boolean;
   setAccessTokenEnabled: (value: boolean) => void;
   accessToken: string;
@@ -32,6 +34,8 @@ export function SettingsGeneralTab({
   setProjectPaths,
   gitPath,
   setGitPath,
+  gitFetchIntervalMinutes,
+  setGitFetchIntervalMinutes,
   accessTokenEnabled,
   setAccessTokenEnabled,
   accessToken,
@@ -89,6 +93,20 @@ export function SettingsGeneralTab({
         <label className="grid gap-1.5 text-sm">
           Git path
           <Input value={gitPath} onChange={(event) => setGitPath(event.target.value)} placeholder="git" />
+        </label>
+        <label className="grid gap-1.5 text-sm">
+          Git fetch interval (minutes)
+          <div className="flex items-center gap-2">
+            <Input
+              type="number"
+              min={0}
+              max={1440}
+              className="w-24"
+              value={gitFetchIntervalMinutes}
+              onChange={(event) => setGitFetchIntervalMinutes(Number(event.target.value))}
+            />
+            <span className="text-xs text-muted-foreground">0 to disable background fetch</span>
+          </div>
         </label>
       </section>
       <section className="grid gap-3 rounded-md border border-border p-3">

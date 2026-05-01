@@ -51,6 +51,7 @@ import {
   resolveAgentDirs,
   resolveExternalEditor,
   resolveFileExplorerDock,
+  resolveGitFetchIntervalMinutes,
   resolveInputNotificationsEnabled,
   resolveModelProfiles,
   resolveModels,
@@ -968,6 +969,16 @@ function gitCredentialPromptMessage(error: unknown): string | undefined {
   ].join(" ");
 }
 
+function gitPullCredentialMessage(error: unknown): string | undefined {
+  const message = error instanceof Error ? error.message : String(error);
+  if (!/terminal prompts (have been )?disabled|could not read Username|Authentication failed/i.test(message)) return undefined;
+  return [
+    "Git pull needs credentials, but AgentHero cannot show interactive Git prompts.",
+    "Configure Git credentials in a terminal, then retry pull.",
+    "For HTTPS remotes on Windows, use Git Credential Manager or run `gh auth login`; SSH remotes also work once your key is configured."
+  ].join(" ");
+}
+
 function wslExec(project: Project, command: string, args: string[] = [], timeout = 15000): Promise<string> {
   return new Promise((resolve, reject) => {
     execFile("wsl.exe", wslCommandArgs(project, command, args), { cwd: project.path, timeout, windowsHide: true }, (error, stdout, stderr) => {
@@ -1741,6 +1752,40 @@ app.post("/api/projects/:id/git/push", async (request, response) => {
   }
 });
 
+app.post("/api/projects/:id/git/fetch", async (request, response) => {
+  const project = projectById(request.params.id);
+  if (!project) {
+    response.status(404).json({ error: "Project not found." });
+    return;
+  }
+  try {
+    await gitCommand(project, ["fetch"], 120000, {
+      env: { GIT_TERMINAL_PROMPT: "0" },
+      timeoutMessage: "Git fetch timed out."
+    });
+    response.json({ ok: true });
+  } catch (error) {
+    response.status(500).json({ error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+app.post("/api/projects/:id/git/pull", async (request, response) => {
+  const project = projectById(request.params.id);
+  if (!project) {
+    response.status(404).json({ error: "Project not found." });
+    return;
+  }
+  try {
+    await gitCommand(project, ["pull"], 120000, {
+      env: { GIT_TERMINAL_PROMPT: "0" },
+      timeoutMessage: "Git pull timed out. Git may be waiting for credentials or remote interaction that AgentHero cannot display."
+    });
+    response.json(await projectGitStatus(project));
+  } catch (error) {
+    response.status(500).json({ error: gitPullCredentialMessage(error) || (error instanceof Error ? error.message : String(error)) });
+  }
+});
+
 app.get("/api/projects/:id/git/worktrees", async (request, response) => {
   const project = projectById(request.params.id);
   if (!project) {
@@ -2087,6 +2132,7 @@ app.get("/api/settings", (_request, response) => {
     models: resolveModels(config),
     modelProfiles: resolveModelProfiles(config),
     gitPath: config.gitPath || process.env.GIT_PATH || "git",
+    gitFetchIntervalMinutes: resolveGitFetchIntervalMinutes(config),
     claudePath: config.claudePath || process.env.CLAUDE_CODE_CLI || process.env.AGENTHERO_CLAUDE_PATH || process.env.AGENTCONTROL_CLAUDE_PATH || "",
     claudeRuntime: resolveClaudeRuntime(config),
     codexPath: config.codexPath || process.env.CODEX_CLI || process.env.AGENTHERO_CODEX_PATH || process.env.AGENTCONTROL_CODEX_PATH || "",
@@ -2207,6 +2253,8 @@ app.put("/api/settings", async (request, response) => {
     models: Array.isArray(body.models) ? body.models : config.models,
     modelProfiles: Array.isArray(body.modelProfiles) ? body.modelProfiles : config.modelProfiles,
     gitPath: typeof body.gitPath === "string" ? body.gitPath.trim() : config.gitPath,
+    gitFetchIntervalMinutes:
+      typeof body.gitFetchIntervalMinutes === "number" ? resolveGitFetchIntervalMinutes(body) : resolveGitFetchIntervalMinutes(config),
     claudePath: typeof body.claudePath === "string" ? body.claudePath.trim() : config.claudePath,
     claudeRuntime: resolveClaudeRuntime(body.claudeRuntime ? body : config),
     codexPath: typeof body.codexPath === "string" ? body.codexPath.trim() : config.codexPath,
@@ -2263,6 +2311,7 @@ app.put("/api/settings", async (request, response) => {
     models: resolveModels(config),
     modelProfiles: resolveModelProfiles(config),
     gitPath: config.gitPath || process.env.GIT_PATH || "git",
+    gitFetchIntervalMinutes: resolveGitFetchIntervalMinutes(config),
     claudePath: config.claudePath || process.env.CLAUDE_CODE_CLI || process.env.AGENTHERO_CLAUDE_PATH || process.env.AGENTCONTROL_CLAUDE_PATH || "",
     claudeRuntime: resolveClaudeRuntime(config),
     codexPath: config.codexPath || process.env.CODEX_CLI || process.env.AGENTHERO_CODEX_PATH || process.env.AGENTCONTROL_CODEX_PATH || "",

@@ -39,6 +39,7 @@ export interface DashboardConfig {
   models?: string[];
   modelProfiles?: ModelProfile[];
   gitPath?: string;
+  gitFetchIntervalMinutes?: number;
   claudePath?: string;
   claudeRuntime?: ClaudeRuntime;
   codexPath?: string;
@@ -221,6 +222,10 @@ export function resolveTileHeight(config: DashboardConfig): number {
 
 export function resolveTileColumns(config: DashboardConfig): number {
   return clampNumber(config.tileColumns, 2, 1, 6);
+}
+
+export function resolveGitFetchIntervalMinutes(config: DashboardConfig): number {
+  return clampNumber(config.gitFetchIntervalMinutes, 15, 0, 1440);
 }
 
 export function resolveTileScrolling(config: DashboardConfig): TileScrollingMode {
