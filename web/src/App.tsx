@@ -3324,10 +3324,7 @@ function Header({
 
   return (
     <header
-      className={cn(
-        "relative flex h-14 shrink-0 items-center gap-3 border-b border-border pr-4",
-        sidebarCollapsed ? "pl-16" : "pl-4"
-      )}
+      className="relative flex h-14 shrink-0 items-center gap-3 border-b border-border pl-4 pr-4"
     >
       <div className="flex min-w-0 items-center gap-2">
         <AgentHeroLogo className="h-10 w-10" />
