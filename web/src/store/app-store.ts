@@ -99,6 +99,7 @@ const LEGACY_SELECTED_PROJECT_STORAGE_KEY = "agent-control-selected-project";
 const FILE_EXPLORER_OPEN_STORAGE_KEY = "agent-hero-file-explorer-open";
 const LEGACY_FILE_EXPLORER_OPEN_STORAGE_KEY = "agent-control-file-explorer-open";
 const FILE_EXPLORER_POPOUT_STORAGE_KEY = "agent-hero-file-explorer-popout";
+const FILE_EXPLORER_PREVIEW_STORAGE_KEY = "agent-hero-file-explorer-preview-request";
 const REMOVED_QUEUE_TOMBSTONE_TTL_MS = 5 * 60 * 1000;
 const removedQueueMessageIds = new Map<string, number>();
 const WINDOWS_UPDATE_COMMANDS = [
@@ -334,6 +335,7 @@ interface AppState {
   setFileExplorerOpen: (open: boolean) => void;
   setFileExplorerMaximized: (maximized: boolean) => void;
   openFilePreview: (projectId: string, path: string, line?: number) => void;
+  receiveFilePreview: (projectId: string, path: string, line?: number, id?: number) => void;
   setFileExplorerDock: (dock: FileExplorerDockPosition) => void;
   setTerminalInFileExplorer: (docked: boolean) => void;
   setActiveTerminal: (id?: string) => void;
@@ -978,9 +980,16 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   setFileExplorerMaximized: (maximized) => set({ fileExplorerMaximized: maximized, fileExplorerOpen: maximized ? true : get().fileExplorerOpen }),
   openFilePreview: (projectId, path, line) => {
+    const requestId = Date.now();
     if (typeof window !== "undefined") {
+      const popoutOpen = window.localStorage.getItem(FILE_EXPLORER_POPOUT_STORAGE_KEY) === "true";
+      if (popoutOpen && !get().fileExplorerOpen) {
+        window.localStorage.setItem(FILE_EXPLORER_PREVIEW_STORAGE_KEY, JSON.stringify({ id: requestId, projectId, path, line }));
+        writeStoredSelectedProjectId(projectId);
+        set({ selectedProjectId: projectId });
+        return;
+      }
       window.localStorage.setItem(FILE_EXPLORER_OPEN_STORAGE_KEY, "true");
-      window.localStorage.setItem(FILE_EXPLORER_POPOUT_STORAGE_KEY, "false");
     }
     set((state) => {
       writeStoredSelectedProjectId(projectId);
@@ -988,15 +997,29 @@ export const useAppStore = create<AppState>((set, get) => ({
       return {
         selectedProjectId: projectId,
         fileExplorerOpen: true,
-        fileExplorerMaximized: state.settings.fileExplorerDock === "tile",
+        fileExplorerMaximized: state.fileExplorerMaximized,
         tileOrder: writeStoredTileLayout({ order: tileOrder, widths: state.tileWidths, minimized: state.minimizedTiles }).order,
         filePreviewRequest: {
-          id: Date.now(),
+          id: requestId,
           projectId,
           path,
           line
         }
       };
+    });
+  },
+  receiveFilePreview: (projectId, path, line, id) => {
+    writeStoredSelectedProjectId(projectId);
+    set({
+      selectedProjectId: projectId,
+      fileExplorerOpen: true,
+      fileExplorerMaximized: false,
+      filePreviewRequest: {
+        id: id || Date.now(),
+        projectId,
+        path,
+        line
+      }
     });
   },
   setFileExplorerDock: (dock) => {

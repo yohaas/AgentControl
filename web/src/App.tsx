@@ -176,6 +176,7 @@ const TERMINAL_DOCK_STORAGE_KEY = "agent-hero-terminal-dock-request";
 const TERMINAL_POPOUT_STORAGE_KEY = "agent-hero-popped-out-terminals";
 const TERMINAL_POPOUT_EXPLICIT_HIDE_STORAGE_KEY = "agent-hero-terminal-popout-explicit-hide";
 const FILE_EXPLORER_POPOUT_STORAGE_KEY = "agent-hero-file-explorer-popout";
+const FILE_EXPLORER_PREVIEW_STORAGE_KEY = "agent-hero-file-explorer-preview-request";
 const FOCUS_AGENT_TILE_EVENT = "agent-hero:focus-agent-tile";
 const MOBILE_SELECTED_AGENT_STORAGE_KEY = "agent-hero-mobile-selected-agent";
 const DEFAULT_BUILT_IN_AGENT_DIR = ".agent-hero/built-in-agents";
@@ -353,21 +354,30 @@ function languageForPath(pathValue: string, mimeType?: string): string | undefin
   return undefined;
 }
 
+const MAX_HIGHLIGHT_CHARS = 200_000;
+const MAX_NUMBERED_PREVIEW_LINES = 5_000;
+
+function escapeHtml(text = ""): string {
+  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
 function highlightedHtml(text = "", pathValue = "", mimeType?: string): string {
+  if (text.length > MAX_HIGHLIGHT_CHARS) return escapeHtml(text);
   const language = languageForPath(pathValue, mimeType);
   try {
     if (language && hljs.getLanguage(language)) return hljs.highlight(text, { language, ignoreIllegals: true }).value;
     return hljs.highlightAuto(text).value;
   } catch {
-    return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    return escapeHtml(text);
   }
 }
 
 function HighlightedCodeBlock({ content = "", path, mimeType, targetLine }: { content?: string; path: string; mimeType?: string; targetLine?: number }) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const lines = content.split(/\r?\n/);
-  const highlightedLines = highlightedHtml(content, path, mimeType).split(/\r?\n/);
   const lineCount = Math.max(1, lines.length);
+  const usePlainBlock = content.length > MAX_HIGHLIGHT_CHARS || lineCount > MAX_NUMBERED_PREVIEW_LINES;
+  const highlightedLines = usePlainBlock ? [] : highlightedHtml(content, path, mimeType).split(/\r?\n/);
 
   useEffect(() => {
     if (!targetLine || targetLine < 1) return;
@@ -379,24 +389,28 @@ function HighlightedCodeBlock({ content = "", path, mimeType, targetLine }: { co
   }, [content, targetLine]);
 
   return (
-    <div ref={rootRef} className="overflow-auto rounded-md bg-muted/40 font-mono text-xs leading-5">
-      {Array.from({ length: lineCount }, (_, index) => {
-        const lineNumber = index + 1;
-        const selected = targetLine === lineNumber;
-        return (
-          <div
-            key={lineNumber}
-            data-preview-line={lineNumber}
-            className={cn("grid grid-cols-[auto_minmax(0,1fr)]", selected && "bg-primary/15 outline outline-1 outline-primary/40")}
-          >
-            <pre className="select-none border-r border-border/70 px-3 text-right text-muted-foreground">{lineNumber}</pre>
-            <pre
-              className="syntax-highlight min-w-0 whitespace-pre-wrap break-words px-3"
-              dangerouslySetInnerHTML={{ __html: highlightedLines[index] || "&nbsp;" }}
-            />
-          </div>
-        );
-      })}
+    <div ref={rootRef} className="max-h-full min-h-0 overflow-auto rounded-md bg-muted/40 font-mono text-xs leading-5">
+      {usePlainBlock ? (
+        <pre className="whitespace-pre-wrap break-words p-3">{content || " "}</pre>
+      ) : (
+        Array.from({ length: lineCount }, (_, index) => {
+          const lineNumber = index + 1;
+          const selected = targetLine === lineNumber;
+          return (
+            <div
+              key={lineNumber}
+              data-preview-line={lineNumber}
+              className={cn("grid grid-cols-[auto_minmax(0,1fr)]", selected && "bg-primary/15 outline outline-1 outline-primary/40")}
+            >
+              <pre className="select-none border-r border-border/70 px-3 text-right text-muted-foreground">{lineNumber}</pre>
+              <pre
+                className="syntax-highlight min-w-0 whitespace-pre-wrap break-words px-3"
+                dangerouslySetInnerHTML={{ __html: highlightedLines[index] || "&nbsp;" }}
+              />
+            </div>
+          );
+        })
+      )}
     </div>
   );
 }
@@ -7667,6 +7681,7 @@ function ProjectInspectorTile({
   const [diff, setDiff] = useState<ProjectDiffResponse | undefined>();
   const [status, setStatus] = useState<GitStatus | undefined>();
   const [loading, setLoading] = useState(false);
+  const previewRequestSeq = useRef(0);
   const previewRootId = `project-inspector-preview-${project.id}`;
   const explorerSelection = useTextSelection(`#${previewRootId}`);
   const normalizedFilter = filter.trim().toLowerCase();
@@ -7739,17 +7754,19 @@ function ProjectInspectorTile({
   }
 
   async function openPreview(pathValue: string, switchMode = true, line?: number) {
+    const requestSeq = ++previewRequestSeq.current;
     setSelectedPath(pathValue);
     setTargetLine(line && line > 0 ? Math.round(line) : undefined);
     if (switchMode) setMode("preview");
     setPreviewView("raw");
     setLoading(true);
     try {
-      setPreview(await api.projectFile(project.id, pathValue));
+      const nextPreview = await api.projectFile(project.id, pathValue);
+      if (requestSeq === previewRequestSeq.current) setPreview(nextPreview);
     } catch (error) {
-      addError(error instanceof Error ? error.message : String(error));
+      if (requestSeq === previewRequestSeq.current) addError(error instanceof Error ? error.message : String(error));
     } finally {
-      setLoading(false);
+      if (requestSeq === previewRequestSeq.current) setLoading(false);
     }
   }
 
@@ -8164,7 +8181,7 @@ function ProjectInspectorTile({
               />
             )}
           </aside>
-          <div className="flex min-w-0 flex-col">
+          <div className="flex min-h-0 min-w-0 flex-col">
             <div className="flex shrink-0 flex-wrap items-center gap-1 border-b border-border px-2 py-2">
               <Button variant={mode === "preview" ? "secondary" : "ghost"} size="sm" className="h-7 gap-1 px-2" title="Show file preview" onClick={() => selectedPath && void openPreview(selectedPath)}>
                 <Eye className="h-3.5 w-3.5" /> Preview
@@ -13315,6 +13332,7 @@ export function FileExplorerPopoutApp() {
   const setCapabilities = useAppStore((state) => state.setCapabilities);
   const setSettings = useAppStore((state) => state.setSettings);
   const setSelectedProject = useAppStore((state) => state.setSelectedProject);
+  const receiveFilePreview = useAppStore((state) => state.receiveFilePreview);
   const projects = useAppStore((state) => state.projects);
   const selectedProjectId = useAppStore((state) => state.selectedProjectId);
   const agentsById = useAppStore((state) => state.agents);
@@ -13340,6 +13358,23 @@ export function FileExplorerPopoutApp() {
     connectWebSocket();
     return () => disconnectWebSocket();
   }, [addError, requestedProjectId, setCapabilities, setProjects, setSelectedProject, setSettings]);
+
+  useEffect(() => {
+    function handleStorage(event: StorageEvent) {
+      if (event.key !== FILE_EXPLORER_PREVIEW_STORAGE_KEY || !event.newValue) return;
+      try {
+        const request = JSON.parse(event.newValue) as { id?: number; projectId?: string; path?: string; line?: number };
+        if (!request.projectId || !request.path) return;
+        receiveFilePreview(request.projectId, request.path, request.line, request.id);
+        window.focus();
+      } catch {
+        // Ignore malformed preview requests from storage.
+      }
+    }
+
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
+  }, [receiveFilePreview]);
 
   const project = projects.find((candidate) => candidate.id === selectedProjectId) || projects[0];
   const agents = useMemo(() => agentsForProject(agentsById, selectedProjectId), [agentsById, selectedProjectId]);
