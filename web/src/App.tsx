@@ -12669,8 +12669,8 @@ function MobileSidebar({
           />
         </div>
         <div className="flex min-h-0 flex-1 flex-col items-center gap-2 py-3" data-mobile-nav-empty-toggle>
-          <Button variant="ghost" size="icon" onClick={() => setCollapsed(false)} title="Expand sidebar">
-            <PanelLeftOpen className="h-4 w-4" />
+          <Button variant="ghost" size="icon" onClick={() => setCollapsed(false)} title="Expand sidebar" aria-label="Expand sidebar">
+            <PanelLeftOpen className="h-5 w-5" />
           </Button>
           <Button size="icon" className="h-9 w-9" disabled={!selectedProjectId} onClick={newChat} title="New chat">
             <Plus className="h-4 w-4" />
@@ -12728,8 +12728,8 @@ function MobileSidebar({
         <Button variant="ghost" size="icon" onClick={() => void logout()} title="Log out" aria-label="Log out">
           <LogOut className="h-4 w-4" />
         </Button>
-        <Button variant="ghost" size="icon" onClick={() => setCollapsed(true)} title="Collapse sidebar">
-          <PanelLeftClose className="h-4 w-4" />
+        <Button variant="ghost" size="icon" onClick={() => setCollapsed(true)} title="Collapse sidebar" aria-label="Collapse sidebar">
+          <PanelLeftClose className="h-5 w-5" />
         </Button>
       </header>
 
