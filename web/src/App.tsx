@@ -2505,6 +2505,7 @@ function defaultLaunchAgentOption(groups: { projectAgents: AgentDef[]; builtInAg
 
 const PLAN_NEXT_STEP_ROLES: Array<{
   role: PlanNextStepRole;
+  preferredAgentNames: string[];
   matches: RegExp[];
   title: string;
   description: string;
@@ -2512,6 +2513,7 @@ const PLAN_NEXT_STEP_ROLES: Array<{
 }> = [
   {
     role: "qa",
+    preferredAgentNames: ["qa"],
     matches: [/\bqa\b/i, /\bquality\b/i, /\btest/i],
     title: "Check with QA",
     description: "Look for test gaps, broken flows, and verification work.",
@@ -2519,6 +2521,7 @@ const PLAN_NEXT_STEP_ROLES: Array<{
   },
   {
     role: "security",
+    preferredAgentNames: ["security"],
     matches: [/\bsecurity\b/i, /\bsec\b/i, /\baudit\b/i, /\bauth\b/i],
     title: "Review security",
     description: "Check permissions, data handling, and risky edge cases.",
@@ -2526,6 +2529,7 @@ const PLAN_NEXT_STEP_ROLES: Array<{
   },
   {
     role: "docs",
+    preferredAgentNames: ["docs", "documentation"],
     matches: [/\bdocs?\b/i, /\bdocument/i, /\breadme\b/i],
     title: "Update docs",
     description: "Capture behavior changes in the right user-facing docs.",
@@ -2533,6 +2537,7 @@ const PLAN_NEXT_STEP_ROLES: Array<{
   },
   {
     role: "performance",
+    preferredAgentNames: ["performance", "perf"],
     matches: [/\bperformance\b/i, /\bperf\b/i, /\bspeed\b/i, /\blatency\b/i],
     title: "Check performance",
     description: "Look for slow paths, unnecessary work, and scaling risk.",
@@ -2540,6 +2545,7 @@ const PLAN_NEXT_STEP_ROLES: Array<{
   },
   {
     role: "product",
+    preferredAgentNames: ["product", "ux", "design"],
     matches: [/\bproduct\b/i, /\bux\b/i, /\bui\b/i, /\bdesign\b/i],
     title: "Product pass",
     description: "Check user flow, copy, and expected edge cases.",
@@ -2580,6 +2586,11 @@ function agentMatchesRole(def: AgentDef, role: typeof PLAN_NEXT_STEP_ROLES[numbe
   return role.matches.some((pattern) => pattern.test(text));
 }
 
+function agentNameMatchesRole(def: AgentDef, role: typeof PLAN_NEXT_STEP_ROLES[number]) {
+  const normalizedName = def.name.trim().toLowerCase();
+  return role.preferredAgentNames.some((name) => normalizedName === name);
+}
+
 function buildPlanNextSteps(groups: { projectAgents: AgentDef[]; builtInAgents: AgentDef[] }, currentAgent: RunningAgent): PlanNextStep[] {
   const orderedAgents = [
     ...groups.projectAgents.map((def) => ({ source: "project" as const, def })),
@@ -2589,10 +2600,13 @@ function buildPlanNextSteps(groups: { projectAgents: AgentDef[]; builtInAgents: 
   const steps: PlanNextStep[] = [];
   const usedAgents = new Set<string>();
   for (const role of PLAN_NEXT_STEP_ROLES) {
-    const match = orderedAgents.find((candidate) => {
+    const availableAgents = orderedAgents.filter((candidate) => {
       const key = `${candidate.source}:${candidate.def.name.toLowerCase()}`;
-      return !usedAgents.has(key) && agentMatchesRole(candidate.def, role);
+      return !usedAgents.has(key);
     });
+    const match =
+      availableAgents.find((candidate) => agentNameMatchesRole(candidate.def, role)) ||
+      availableAgents.find((candidate) => agentMatchesRole(candidate.def, role));
     if (!match) continue;
     usedAgents.add(`${match.source}:${match.def.name.toLowerCase()}`);
     steps.push({
