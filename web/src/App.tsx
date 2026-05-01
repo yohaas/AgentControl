@@ -76,7 +76,7 @@ import {
   Loader2,
   Maximize2,
   MessageSquare,
-  MessagesSquare,
+  MessageSquareLock,
   Minimize2,
   EllipsisVertical,
   PanelLeftClose,
@@ -5578,7 +5578,7 @@ function Sidebar({ topSlot }: { topSlot?: ReactNode }) {
               aria-expanded={savedOpen}
             >
               {savedOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-              <MessagesSquare className="h-4 w-4" />
+              <MessageSquareLock className="h-4 w-4" />
               <span className="truncate">Saved Chats</span>
               {projectSavedChats.length > 0 && <Badge>{projectSavedChats.length}</Badge>}
             </button>
@@ -13524,7 +13524,7 @@ function MobileSidebar({
       </section>
       <section className="shrink-0 border-t border-border p-3">
         <div className="mb-2 flex min-w-0 items-center gap-2">
-          <MessagesSquare className="h-4 w-4 text-muted-foreground" />
+          <MessageSquareLock className="h-4 w-4 text-muted-foreground" />
           <h2 className="truncate text-xs font-semibold uppercase tracking-wide text-muted-foreground">Saved Chats</h2>
           {projectSavedChats.length > 0 && <Badge>{projectSavedChats.length}</Badge>}
         </div>
