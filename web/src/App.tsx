@@ -2202,10 +2202,24 @@ function AgentActionsMenu({
   const addError = useAppStore((state) => state.addError);
   const settings = useAppStore((state) => state.settings);
   const hasSavedCopy = useAppStore((state) => state.savedChats.some((chat) => chat.id === agent.id));
+  const selectedAgentId = useAppStore((state) => state.selectedAgentId);
+  const setSelectedAgent = useAppStore((state) => state.setSelectedAgent);
+  const setFocusedAgent = useAppStore((state) => state.setFocusedAgent);
+  const setChatFocusedAgent = useAppStore((state) => state.setChatFocusedAgent);
+  const setSearchOpen = useAppStore((state) => state.setSearchOpen);
   const isBusy = isAgentBusy(agent);
 
   function duplicateAgent() {
     sendCommand({ type: "launch", request: duplicateAgentRequest(agent, settings) });
+  }
+
+  function openSearch() {
+    if (selectedAgentId !== agent.id) {
+      setSelectedAgent(undefined);
+      setFocusedAgent(agent.id);
+    }
+    setChatFocusedAgent(agent.id);
+    setSearchOpen(true);
   }
 
   return (
@@ -2230,6 +2244,10 @@ function AgentActionsMenu({
         )}
         {!agent.remoteControl && <ChatVisibilityMenu agent={agent} />}
         <ExportChatMenu agent={agent} transcripts={transcripts} addError={addError} />
+        <DropdownMenuItem onClick={openSearch}>
+          <Search className="mr-2 h-4 w-4" />
+          Search
+        </DropdownMenuItem>
         <DropdownMenuItem disabled={transcripts.length === 0} onClick={() => sendCommand({ type: "saveChat", id: agent.id })}>
           <Save className="mr-2 h-4 w-4" />
           Save Chat
@@ -2261,6 +2279,7 @@ function AgentActionsMenu({
 function MobileAgentActionsMenu({ agent }: { agent: RunningAgent }) {
   const settings = useAppStore((state) => state.settings);
   const hasSavedCopy = useAppStore((state) => state.savedChats.some((chat) => chat.id === agent.id));
+  const setSearchOpen = useAppStore((state) => state.setSearchOpen);
 
   function duplicateAgent() {
     sendCommand({ type: "launch", request: duplicateAgentRequest(agent, settings) });
@@ -2275,6 +2294,10 @@ function MobileAgentActionsMenu({ agent }: { agent: RunningAgent }) {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         {!agent.remoteControl && <ChatVisibilityMenu agent={agent} />}
+        <DropdownMenuItem onClick={() => setSearchOpen(true)}>
+          <Search className="mr-2 h-4 w-4" />
+          Search
+        </DropdownMenuItem>
         <DropdownMenuItem onClick={() => sendCommand({ type: "saveChat", id: agent.id })}>
           <Save className="mr-2 h-4 w-4" />
           Save Chat
@@ -13500,11 +13523,16 @@ function MobileChatPane({ agent, addError }: { agent: RunningAgent; addError: (m
   const enqueueMessage = useAppStore((state) => state.enqueueMessage);
   const hydrateSnapshot = useAppStore((state) => state.hydrateSnapshot);
   const wsConnected = useAppStore((state) => state.wsConnected);
+  const searchOpen = useAppStore((state) => state.searchOpen);
+  const searchQuery = useAppStore((state) => state.searchQuery);
+  const setSearchOpen = useAppStore((state) => state.setSearchOpen);
+  const setSearchQuery = useAppStore((state) => state.setSearchQuery);
   const transcriptItems = useMemo(() => pairedTranscriptItems(transcript), [transcript]);
   const displayedTranscriptItems = useMemo(() => filteredTranscriptItems(transcriptItems, chatTranscriptDetail), [chatTranscriptDetail, transcriptItems]);
   const requiredFeedbackItems = useMemo(() => requiredFeedbackTranscriptItems(transcriptItems), [transcriptItems]);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const didInitialTranscriptScrollRef = useRef(false);
   const [attachments, setAttachments] = useState<MessageAttachment[]>([]);
@@ -13517,6 +13545,10 @@ function MobileChatPane({ agent, addError }: { agent: RunningAgent; addError: (m
   const [showJumpToBottom, setShowJumpToBottom] = useState(false);
   const [autoScrollPaused, setAutoScrollPaused] = useState(false);
   const [composerWrapped, setComposerWrapped] = useState(false);
+  const [searchMatchCase, setSearchMatchCase] = useState(false);
+  const [searchWholeWord, setSearchWholeWord] = useState(false);
+  const [searchMatchCount, setSearchMatchCount] = useState(0);
+  const [activeSearchMatchIndex, setActiveSearchMatchIndex] = useState(-1);
   const isBusy = isAgentBusy(agent);
   const visibleTranscriptViewMode = chatTranscriptDetail === "raw" ? "raw" : "chat";
   const canType = agentHasProcess(agent);
@@ -13537,6 +13569,10 @@ function MobileChatPane({ agent, addError }: { agent: RunningAgent; addError: (m
   const draftLines = draftLineCount(draft);
   const hasMultilineDraft = draftLines > 1 || composerWrapped;
   const composerExpanded = hasMultilineDraft && !composerCollapsed;
+  const searchOptions = useMemo<ChatSearchOptions>(
+    () => ({ matchCase: searchMatchCase, wholeWord: searchWholeWord }),
+    [searchMatchCase, searchWholeWord]
+  );
   useQueuedMessageSender(agent, queue, canType);
 
   useEffect(() => {
@@ -13556,6 +13592,38 @@ function MobileChatPane({ agent, addError }: { agent: RunningAgent; addError: (m
   useEffect(() => {
     if (!hasMultilineDraft && composerCollapsed) setComposerCollapsed(false);
   }, [composerCollapsed, hasMultilineDraft]);
+
+  useEffect(() => {
+    if (!searchOpen) return;
+    window.requestAnimationFrame(() => searchInputRef.current?.focus());
+  }, [searchOpen]);
+
+  useEffect(() => {
+    if (!searchOpen || !searchQuery.trim()) {
+      setSearchMatchCount(0);
+      setActiveSearchMatchIndex(-1);
+      return;
+    }
+    const frame = window.requestAnimationFrame(() => {
+      const count = rootRef.current?.querySelectorAll("mark[data-chat-search-match]").length || 0;
+      setSearchMatchCount(count);
+      setActiveSearchMatchIndex((current) => {
+        if (count === 0) return -1;
+        if (current < 0) return 0;
+        return Math.min(current, count - 1);
+      });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [displayedTranscriptItems, searchOpen, searchOptions, searchQuery, visibleTranscriptViewMode]);
+
+  useEffect(() => {
+    const marks = Array.from(rootRef.current?.querySelectorAll<HTMLElement>("mark[data-chat-search-match]") || []);
+    marks.forEach((mark, index) => {
+      mark.dataset.active = index === activeSearchMatchIndex ? "true" : "false";
+    });
+    const activeMark = activeSearchMatchIndex >= 0 ? marks[activeSearchMatchIndex] : undefined;
+    activeMark?.scrollIntoView({ block: "center", inline: "nearest" });
+  }, [activeSearchMatchIndex, searchMatchCount, searchOptions, searchQuery]);
 
   useEffect(() => {
     const measure = () => setComposerWrapped(composerNeedsExpansion(inputRef.current, 44));
@@ -13587,6 +13655,18 @@ function MobileChatPane({ agent, addError }: { agent: RunningAgent; addError: (m
   function resumeAutoScroll() {
     setAutoScrollPaused(false);
     scrollTranscriptToBottom(rootRef.current);
+  }
+
+  function closeChatSearch() {
+    setSearchOpen(false);
+    setSearchMatchCount(0);
+    setActiveSearchMatchIndex(-1);
+    window.requestAnimationFrame(() => inputRef.current?.focus());
+  }
+
+  function moveSearchMatch(delta: number) {
+    if (searchMatchCount <= 0) return;
+    setActiveSearchMatchIndex((current) => (current < 0 ? 0 : (current + delta + searchMatchCount) % searchMatchCount));
   }
 
   async function refreshMobileSnapshot() {
@@ -13830,6 +13910,50 @@ function MobileChatPane({ agent, addError }: { agent: RunningAgent; addError: (m
         <StatusPill status={agent.status} />
         <MobileAgentActionsMenu agent={agent} />
       </div>
+      {searchOpen && (
+        <div className="flex flex-wrap items-center gap-2 border-b border-border bg-background/95 px-3 py-2">
+          <Search className="h-4 w-4 text-muted-foreground" />
+          <Input
+            ref={searchInputRef}
+            className="h-8 min-w-0 flex-1"
+            value={searchQuery}
+            onChange={(event) => {
+              setSearchQuery(event.target.value);
+              setActiveSearchMatchIndex(-1);
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                moveSearchMatch(event.shiftKey ? -1 : 1);
+              } else if (event.key === "Escape") {
+                event.preventDefault();
+                closeChatSearch();
+              }
+            }}
+            placeholder="Search chat"
+          />
+          <span className="w-14 text-center text-xs tabular-nums text-muted-foreground">
+            {searchQuery.trim() ? (searchMatchCount > 0 ? `${activeSearchMatchIndex + 1}/${searchMatchCount}` : "0/0") : "0/0"}
+          </span>
+          <Button type="button" variant="ghost" size="icon" className="h-8 w-8" title="Previous match" disabled={searchMatchCount === 0} onClick={() => moveSearchMatch(-1)}>
+            <ChevronUp className="h-4 w-4" />
+          </Button>
+          <Button type="button" variant="ghost" size="icon" className="h-8 w-8" title="Next match" disabled={searchMatchCount === 0} onClick={() => moveSearchMatch(1)}>
+            <ChevronDown className="h-4 w-4" />
+          </Button>
+          <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <input type="checkbox" checked={searchMatchCase} onChange={(event) => setSearchMatchCase(event.target.checked)} />
+            Match case
+          </label>
+          <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <input type="checkbox" checked={searchWholeWord} onChange={(event) => setSearchWholeWord(event.target.checked)} />
+            Whole word
+          </label>
+          <Button type="button" variant="ghost" size="icon" className="ml-auto h-8 w-8" title="Close search" onClick={closeChatSearch}>
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
 
       <div className="relative min-h-0 min-w-0 max-w-full flex-1">
         <div ref={rootRef} className="h-full overflow-y-auto overflow-x-hidden bg-background px-3 py-4" onScroll={handleTranscriptScroll}>
@@ -13854,6 +13978,8 @@ function MobileChatPane({ agent, addError }: { agent: RunningAgent; addError: (m
                   item={item}
                   agent={agent}
                   phaseLabel={phaseLabel}
+                  query={searchOpen ? searchQuery : ""}
+                  searchOptions={searchOptions}
                   latestUserMessageId={latestUser?.id}
                   defaultExpanded={shouldExpandTranscriptItemByDefault(item, index, displayedTranscriptItems)}
                 />
