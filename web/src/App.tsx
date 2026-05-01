@@ -520,6 +520,7 @@ type PlanNextStep = {
   def: AgentDef;
 };
 type PlanNextStepState = { dismissed: boolean; completed: string[] };
+type ChatSearchOptions = { matchCase: boolean; wholeWord: boolean };
 
 const COMMON_SLASH_COMMANDS: SlashCommandSuggestion[] = [
   { value: "/clear", label: "/clear", description: "Clear this chat history", source: "agenthero" },
@@ -10535,9 +10536,11 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
   const setChatFocusedAgent = useAppStore((state) => state.setChatFocusedAgent);
   const searchOpen = useAppStore((state) => state.searchOpen);
   const searchQuery = useAppStore((state) => state.searchQuery);
+  const setSearchOpen = useAppStore((state) => state.setSearchOpen);
   const setSearchQuery = useAppStore((state) => state.setSearchQuery);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const transcriptRootId = `transcript-root-${agent.id}`;
   const selection = useTextSelection(`#${transcriptRootId}`);
@@ -10552,6 +10555,10 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
   const [activeSlashIndex, setActiveSlashIndex] = useState(0);
   const [slashMenuOpen, setSlashMenuOpen] = useState(false);
   const [slashMenuSuppressed, setSlashMenuSuppressed] = useState(false);
+  const [searchMatchCase, setSearchMatchCase] = useState(false);
+  const [searchWholeWord, setSearchWholeWord] = useState(false);
+  const [searchMatchCount, setSearchMatchCount] = useState(0);
+  const [activeSearchMatchIndex, setActiveSearchMatchIndex] = useState(-1);
   const composerDragDepthRef = useRef(0);
   const isBusy = isAgentBusy(agent);
   const visibleTranscriptViewMode = chatTranscriptDetail === "raw" ? "raw" : "chat";
@@ -10576,6 +10583,10 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
   const [composerWrapped, setComposerWrapped] = useState(false);
   const hasMultilineDraft = draftLines > 1 || composerWrapped;
   const composerExpanded = hasMultilineDraft && !composerCollapsed;
+  const searchOptions = useMemo<ChatSearchOptions>(
+    () => ({ matchCase: searchMatchCase, wholeWord: searchWholeWord }),
+    [searchMatchCase, searchWholeWord]
+  );
   useQueuedMessageSender(agent, queue, canType);
 
   useEffect(() => {
@@ -10624,11 +10635,55 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
   }, [composerCollapsed, hasMultilineDraft]);
 
   useEffect(() => {
+    if (!searchOpen) return;
+    window.requestAnimationFrame(() => searchInputRef.current?.focus());
+  }, [searchOpen]);
+
+  useEffect(() => {
+    if (!searchOpen || !searchQuery.trim()) {
+      setSearchMatchCount(0);
+      setActiveSearchMatchIndex(-1);
+      return;
+    }
+    const frame = window.requestAnimationFrame(() => {
+      const count = rootRef.current?.querySelectorAll("mark[data-chat-search-match]").length || 0;
+      setSearchMatchCount(count);
+      setActiveSearchMatchIndex((current) => {
+        if (count === 0) return -1;
+        if (current < 0) return 0;
+        return Math.min(current, count - 1);
+      });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [displayedTranscriptItems, searchOpen, searchOptions, searchQuery, visibleTranscriptViewMode]);
+
+  useEffect(() => {
+    const marks = Array.from(rootRef.current?.querySelectorAll<HTMLElement>("mark[data-chat-search-match]") || []);
+    marks.forEach((mark, index) => {
+      mark.dataset.active = index === activeSearchMatchIndex ? "true" : "false";
+    });
+    const activeMark = activeSearchMatchIndex >= 0 ? marks[activeSearchMatchIndex] : undefined;
+    activeMark?.scrollIntoView({ block: "center", inline: "nearest" });
+  }, [activeSearchMatchIndex, searchMatchCount, searchOptions, searchQuery]);
+
+  useEffect(() => {
     const measure = () => setComposerWrapped(composerNeedsExpansion(inputRef.current, 76));
     measure();
     window.addEventListener("resize", measure);
     return () => window.removeEventListener("resize", measure);
   }, [draft]);
+
+  function closeChatSearch() {
+    setSearchOpen(false);
+    setSearchMatchCount(0);
+    setActiveSearchMatchIndex(-1);
+    window.requestAnimationFrame(() => inputRef.current?.focus());
+  }
+
+  function moveSearchMatch(delta: number) {
+    if (searchMatchCount <= 0) return;
+    setActiveSearchMatchIndex((current) => (current < 0 ? 0 : (current + delta + searchMatchCount) % searchMatchCount));
+  }
 
   function send() {
     if (!draft.trim() && attachments.length === 0) return;
@@ -10877,9 +10932,48 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
     <main className="flex min-w-0 flex-1 flex-col">
       <AgentPanelHeader agent={agent} />
       {searchOpen && (
-        <div className="flex items-center gap-2 border-b border-border px-4 py-2">
+        <div className="flex flex-wrap items-center gap-2 border-b border-border bg-background/95 px-4 py-2">
           <Search className="h-4 w-4 text-muted-foreground" />
-          <Input autoFocus value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search active transcript" />
+          <Input
+            ref={searchInputRef}
+            className="h-8 w-56"
+            value={searchQuery}
+            onChange={(event) => {
+              setSearchQuery(event.target.value);
+              setActiveSearchMatchIndex(-1);
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                moveSearchMatch(event.shiftKey ? -1 : 1);
+              } else if (event.key === "Escape") {
+                event.preventDefault();
+                closeChatSearch();
+              }
+            }}
+            placeholder="Search chat"
+          />
+          <span className="w-16 text-center text-xs tabular-nums text-muted-foreground">
+            {searchQuery.trim() ? (searchMatchCount > 0 ? `${activeSearchMatchIndex + 1}/${searchMatchCount}` : "0/0") : "0/0"}
+          </span>
+          <div className="h-5 border-l border-border" />
+          <Button type="button" variant="ghost" size="icon" className="h-8 w-8" title="Previous match" disabled={searchMatchCount === 0} onClick={() => moveSearchMatch(-1)}>
+            <ChevronUp className="h-4 w-4" />
+          </Button>
+          <Button type="button" variant="ghost" size="icon" className="h-8 w-8" title="Next match" disabled={searchMatchCount === 0} onClick={() => moveSearchMatch(1)}>
+            <ChevronDown className="h-4 w-4" />
+          </Button>
+          <label className="ml-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+            <input type="checkbox" checked={searchMatchCase} onChange={(event) => setSearchMatchCase(event.target.checked)} />
+            Match case
+          </label>
+          <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <input type="checkbox" checked={searchWholeWord} onChange={(event) => setSearchWholeWord(event.target.checked)} />
+            Whole word
+          </label>
+          <Button type="button" variant="ghost" size="icon" className="ml-auto h-8 w-8" title="Close search" onClick={closeChatSearch}>
+            <X className="h-4 w-4" />
+          </Button>
         </div>
       )}
       <ContextMenu>
@@ -10921,7 +11015,8 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
                       item={item}
                       agent={agent}
                       phaseLabel={phaseLabel}
-                      query={searchQuery}
+                      query={searchOpen ? searchQuery : ""}
+                      searchOptions={searchOptions}
                       latestUserMessageId={pinnedMessage?.id}
                       defaultExpanded={shouldExpandTranscriptItemByDefault(item, index, displayedTranscriptItems)}
                     />
@@ -11222,6 +11317,7 @@ function TranscriptItem({
   agent,
   phaseLabel,
   query,
+  searchOptions,
   latestUserMessageId,
   defaultExpanded = false
 }: {
@@ -11229,6 +11325,7 @@ function TranscriptItem({
   agent: RunningAgent;
   phaseLabel?: string;
   query: string;
+  searchOptions?: ChatSearchOptions;
   latestUserMessageId?: string;
   defaultExpanded?: boolean;
 }) {
@@ -11289,7 +11386,7 @@ function TranscriptItem({
             from {event.sourceAgent.displayName}
           </Badge>
         )}
-        <CollapsibleText text={event.text} agent={agent} query={query} inlineToggle={showPopout} defaultExpanded={defaultExpanded} />
+        <CollapsibleText text={event.text} agent={agent} query={query} searchOptions={searchOptions} inlineToggle={showPopout} defaultExpanded={defaultExpanded} />
         {event.kind === "assistant_text" && event.streaming && (
           <span className="mt-2 grid gap-1">
             {phaseLabel && <span className="text-[11px] font-medium uppercase tracking-normal text-muted-foreground">{phaseLabel}</span>}
@@ -11316,6 +11413,7 @@ function CollapsibleText({
   text,
   agent,
   query = "",
+  searchOptions = { matchCase: false, wholeWord: false },
   compact = false,
   inlineToggle = false,
   defaultExpanded = false
@@ -11323,6 +11421,7 @@ function CollapsibleText({
   text: string;
   agent?: RunningAgent;
   query?: string;
+  searchOptions?: ChatSearchOptions;
   compact?: boolean;
   inlineToggle?: boolean;
   defaultExpanded?: boolean;
@@ -11338,7 +11437,7 @@ function CollapsibleText({
     if (defaultExpanded) setExpanded(true);
   }, [defaultExpanded]);
 
-  if (!shouldCollapse) return <ChatMarkdown text={text} query={query} agent={agent} />;
+  if (!shouldCollapse) return <ChatMarkdown text={text} query={query} searchOptions={searchOptions} agent={agent} />;
 
   function toggleExpanded() {
     setExpanded((value) => !value);
@@ -11365,7 +11464,7 @@ function CollapsibleText({
           !expanded && (compact ? "max-h-32 overflow-hidden" : "max-h-48 overflow-hidden")
         )}
       >
-        <ChatMarkdown text={text} query={query} agent={agent} />
+        <ChatMarkdown text={text} query={query} searchOptions={searchOptions} agent={agent} />
       </div>
       {!inlineToggle && (
         <button
@@ -11535,12 +11634,22 @@ function MarkdownCodeBlock({ children, className, ...props }: ComponentProps<"pr
   );
 }
 
-function ChatMarkdown({ text, query, agent }: { text: string; query: string; agent?: RunningAgent }) {
+function ChatMarkdown({
+  text,
+  query,
+  searchOptions = { matchCase: false, wholeWord: false },
+  agent
+}: {
+  text: string;
+  query: string;
+  searchOptions?: ChatSearchOptions;
+  agent?: RunningAgent;
+}) {
   const openFilePreview = useAppStore((state) => state.openFilePreview);
   if (query.trim()) {
     return (
       <span className="block min-w-0 max-w-full whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
-        <HighlightedText text={text} query={query} />
+        <HighlightedText text={text} query={query} options={searchOptions} />
       </span>
     );
   }
@@ -11605,19 +11714,46 @@ function ChatMarkdown({ text, query, agent }: { text: string; query: string; age
   );
 }
 
-function HighlightedText({ text, query }: { text: string; query: string }) {
+function searchMatchRegex(query: string, options: ChatSearchOptions): RegExp | undefined {
+  const trimmed = query.trim();
+  if (!trimmed) return undefined;
+  const escaped = trimmed.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const source = options.wholeWord ? `\\b${escaped}\\b` : escaped;
+  try {
+    return new RegExp(source, options.matchCase ? "g" : "gi");
+  } catch {
+    return undefined;
+  }
+}
+
+function searchHighlightedSegments(text: string, query: string, options: ChatSearchOptions): Array<{ text: string; match: boolean }> {
+  const pattern = searchMatchRegex(query, options);
+  if (!pattern) return [{ text, match: false }];
+  const segments: Array<{ text: string; match: boolean }> = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(text))) {
+    if (match.index > lastIndex) segments.push({ text: text.slice(lastIndex, match.index), match: false });
+    segments.push({ text: match[0], match: true });
+    lastIndex = match.index + match[0].length;
+    if (match[0].length === 0) pattern.lastIndex += 1;
+  }
+  if (lastIndex < text.length) segments.push({ text: text.slice(lastIndex), match: false });
+  return segments.length ? segments : [{ text, match: false }];
+}
+
+function HighlightedText({ text, query, options }: { text: string; query: string; options: ChatSearchOptions }) {
   if (!query.trim()) return <>{text}</>;
-  const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const parts = text.split(new RegExp(`(${escaped})`, "ig"));
+  const parts = searchHighlightedSegments(text, query, options);
   return (
     <>
       {parts.map((part, index) =>
-        part.toLowerCase() === query.toLowerCase() ? (
-          <mark key={index} className="rounded bg-primary/40 text-foreground">
-            {part}
+        part.match ? (
+          <mark key={index} data-chat-search-match="true" className="chat-search-match">
+            {part.text}
           </mark>
         ) : (
-          <span key={index}>{part}</span>
+          <span key={index}>{part.text}</span>
         )
       )}
     </>
@@ -13805,6 +13941,9 @@ export function App() {
       if (event.key.toLowerCase() === "n") {
         event.preventDefault();
         openLaunchModal({ projectId: selectedProjectId });
+      } else if (event.key.toLowerCase() === "f" && selectedAgentId) {
+        event.preventDefault();
+        setSearchOpen(true);
       } else if (event.key.toLowerCase() === "k") {
         event.preventDefault();
         setSearchOpen(true);
