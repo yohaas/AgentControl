@@ -298,6 +298,7 @@ interface AppState {
   errors: string[];
   drafts: Record<string, string>;
   messageQueues: Record<string, QueuedMessage[]>;
+  chatTranscriptDetails: Record<string, ChatTranscriptDetailMode>;
   scrollPositions: Record<string, number>;
   flashModels: Record<string, boolean>;
   tileOrder: string[];
@@ -331,6 +332,7 @@ interface AppState {
   hydrateSnapshot: (snapshot: AgentSnapshot) => void;
   handleServerEvent: (event: WsServerEvent) => void;
   setDraft: (id: string, text: string) => void;
+  setChatTranscriptDetail: (id: string, detail?: ChatTranscriptDetailMode) => void;
   enqueueMessage: (id: string, message: Omit<QueuedMessage, "id">) => void;
   updateQueuedMessage: (id: string, messageId: string, patch: Partial<Omit<QueuedMessage, "id">>) => void;
   removeQueuedMessage: (id: string, messageId: string) => void;
@@ -581,6 +583,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   errors: [],
   drafts: {},
   messageQueues: readStoredMessageQueues(),
+  chatTranscriptDetails: {},
   scrollPositions: {},
   flashModels: {},
   tileOrder: initialTileLayout.order,
@@ -687,6 +690,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         messageQueues: snapshot.messageQueues
           ? mergeMessageQueues(snapshot.messageQueues, state.messageQueues, agentIds)
           : pruneMessageQueues(state.messageQueues, agentIds),
+        chatTranscriptDetails: Object.fromEntries(Object.entries(state.chatTranscriptDetails).filter(([id]) => agentIds.has(id))),
         selectedAgentId: state.selectedAgentId && agentIds.has(state.selectedAgentId) ? state.selectedAgentId : undefined,
         focusedAgentId: state.focusedAgentId && agentIds.has(state.focusedAgentId) ? state.focusedAgentId : undefined,
         chatFocusedAgentId: state.chatFocusedAgentId && agentIds.has(state.chatFocusedAgentId) ? state.chatFocusedAgentId : undefined,
@@ -991,6 +995,13 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
   setDraft: (id, text) => set((state) => ({ drafts: { ...state.drafts, [id]: text } })),
+  setChatTranscriptDetail: (id, detail) =>
+    set((state) => {
+      const chatTranscriptDetails = { ...state.chatTranscriptDetails };
+      if (detail) chatTranscriptDetails[id] = detail;
+      else delete chatTranscriptDetails[id];
+      return { chatTranscriptDetails };
+    }),
   enqueueMessage: (id, message) =>
     set((state) => {
       const messageQueues = writeStoredMessageQueues({

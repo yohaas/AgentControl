@@ -74,7 +74,6 @@ import {
   LogOut,
   Loader2,
   Maximize2,
-  MessageCircle,
   MessageSquare,
   Minimize2,
   EllipsisVertical,
@@ -505,7 +504,6 @@ type ToolTranscriptItem =
   | { kind: "single"; event: TranscriptEvent }
   | { kind: "tool_pair"; event: ToolUseEvent; result?: ToolResultEvent };
 type ContextCopyTarget = { scope: "block" | "chat"; text: string };
-type TranscriptViewMode = "chat" | "raw";
 type PlanNextStepRole = "qa" | "security" | "docs" | "performance" | "product";
 type PlanNextStep = {
   id: string;
@@ -630,6 +628,10 @@ type ChatDisplaySettings = SettingsState & {
 
 function normalizeChatTranscriptDetail(value: unknown): ChatTranscriptDetailMode {
   return value === "responses" || value === "detailed" || value === "raw" ? value : "actions";
+}
+
+function chatTranscriptDetailLabel(value: ChatTranscriptDetailMode): string {
+  return CHAT_TRANSCRIPT_DETAIL_OPTIONS.find((option) => option.value === value)?.label || "Actions";
 }
 
 function normalizeChatFontFamily(value: unknown) {
@@ -2147,16 +2149,41 @@ function duplicateAgentRequest(agent: RunningAgent, settings: SettingsState): La
   };
 }
 
+function ChatVisibilityMenu({ agent }: { agent: RunningAgent }) {
+  const settings = useAppStore((state) => state.settings);
+  const override = useAppStore((state) => state.chatTranscriptDetails[agent.id]);
+  const setChatTranscriptDetail = useAppStore((state) => state.setChatTranscriptDetail);
+  const defaultDetail = normalizeChatTranscriptDetail(settings.chatTranscriptDetail);
+  const activeDetail = override || defaultDetail;
+
+  return (
+    <DropdownMenuSub>
+      <DropdownMenuSubTrigger>
+        <Eye className="mr-2 h-4 w-4" />
+        Chat visibility
+      </DropdownMenuSubTrigger>
+      <DropdownMenuSubContent>
+        <DropdownMenuItem onClick={() => setChatTranscriptDetail(agent.id, undefined)}>
+          <Check className={cn("mr-2 h-4 w-4", override ? "opacity-0" : "opacity-100")} />
+          Default ({chatTranscriptDetailLabel(defaultDetail)})
+        </DropdownMenuItem>
+        {CHAT_TRANSCRIPT_DETAIL_OPTIONS.map((option) => (
+          <DropdownMenuItem key={option.value} onClick={() => setChatTranscriptDetail(agent.id, option.value)}>
+            <Check className={cn("mr-2 h-4 w-4", override && activeDetail === option.value ? "opacity-100" : "opacity-0")} />
+            {option.label}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuSubContent>
+    </DropdownMenuSub>
+  );
+}
+
 function AgentActionsMenu({
   agent,
-  transcripts,
-  viewMode,
-  onToggleViewMode
+  transcripts
 }: {
   agent: RunningAgent;
   transcripts: TranscriptEvent[];
-  viewMode: TranscriptViewMode;
-  onToggleViewMode: () => void;
 }) {
   const addError = useAppStore((state) => state.addError);
   const settings = useAppStore((state) => state.settings);
@@ -2186,12 +2213,7 @@ function AgentActionsMenu({
             Stop response
           </DropdownMenuItem>
         )}
-        {!agent.remoteControl && (
-          <DropdownMenuItem onClick={onToggleViewMode}>
-            {viewMode === "chat" ? <CodeXml className="mr-2 h-4 w-4" /> : <MessageCircle className="mr-2 h-4 w-4" />}
-            {viewMode === "chat" ? "View Raw Stream" : "View Chat"}
-          </DropdownMenuItem>
-        )}
+        {!agent.remoteControl && <ChatVisibilityMenu agent={agent} />}
         <ExportChatMenu agent={agent} transcripts={transcripts} addError={addError} />
         <DropdownMenuItem onClick={duplicateAgent}>
           <Copy className="mr-2 h-4 w-4" />
@@ -2225,6 +2247,7 @@ function MobileAgentActionsMenu({ agent }: { agent: RunningAgent }) {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
+        {!agent.remoteControl && <ChatVisibilityMenu agent={agent} />}
         <DropdownMenuItem onClick={duplicateAgent}>
           <Copy className="mr-2 h-4 w-4" />
           Duplicate
@@ -8993,7 +9016,8 @@ function AgentTile({
 }) {
   const transcript = useAppStore((state) => state.transcripts[agent.id] || EMPTY_TRANSCRIPT);
   const settings = useAppStore((state) => state.settings);
-  const chatTranscriptDetail = normalizeChatTranscriptDetail(settings.chatTranscriptDetail);
+  const chatTranscriptDetailOverride = useAppStore((state) => state.chatTranscriptDetails[agent.id]);
+  const chatTranscriptDetail = chatTranscriptDetailOverride || normalizeChatTranscriptDetail(settings.chatTranscriptDetail);
   const transcriptItems = useMemo(() => pairedTranscriptItems(transcript), [transcript]);
   const displayedTranscriptItems = useMemo(() => filteredTranscriptItems(transcriptItems, chatTranscriptDetail), [chatTranscriptDetail, transcriptItems]);
   const requiredFeedbackItems = useMemo(() => requiredFeedbackTranscriptItems(transcriptItems), [transcriptItems]);
@@ -9026,14 +9050,13 @@ function AgentTile({
   const [contextCopyTarget, setContextCopyTarget] = useState<ContextCopyTarget | undefined>();
   const [composerDropActive, setComposerDropActive] = useState(false);
   const [composerCollapsed, setComposerCollapsed] = useState(false);
-  const [transcriptViewMode, setTranscriptViewMode] = useState<TranscriptViewMode>("chat");
   const [showJumpToBottom, setShowJumpToBottom] = useState(false);
   const [autoScrollPaused, setAutoScrollPaused] = useState(false);
   const [slashMenuOpen, setSlashMenuOpen] = useState(false);
   const [slashMenuSuppressed, setSlashMenuSuppressed] = useState(false);
   const composerDragDepthRef = useRef(0);
   const isBusy = isAgentBusy(agent);
-  const visibleTranscriptViewMode = chatTranscriptDetail === "raw" ? "raw" : transcriptViewMode;
+  const visibleTranscriptViewMode = chatTranscriptDetail === "raw" ? "raw" : "chat";
   const canType = agentHasProcess(agent);
   const canAttach = !agent.remoteControl;
   const showAutoScrollControl = visibleTranscriptViewMode === "chat" && hasActiveAutoScrollStatus(agent);
@@ -9499,12 +9522,7 @@ function AgentTile({
             onRestart={() => sendCommand({ type: "restart", id: agent.id })}
           />
         </span>
-        <AgentActionsMenu
-          agent={agent}
-          transcripts={transcript}
-          viewMode={transcriptViewMode}
-          onToggleViewMode={() => setTranscriptViewMode((mode) => (mode === "chat" ? "raw" : "chat"))}
-        />
+        <AgentActionsMenu agent={agent} transcripts={transcript} />
         <Button
           variant="ghost"
           size="icon"
@@ -10538,7 +10556,7 @@ function RemoteControlPanel({ agent }: { agent: RunningAgent }) {
 
   return (
     <main className="flex flex-1 flex-col">
-      <AgentPanelHeader agent={agent} viewMode="chat" onToggleViewMode={() => undefined} />
+      <AgentPanelHeader agent={agent} />
       <div className="grid flex-1 place-items-center p-6">
         <div className="grid max-w-xl gap-4 text-center">
           <div className="mx-auto flex items-center gap-2 text-lg font-semibold">
@@ -10579,15 +10597,7 @@ function RemoteControlPanel({ agent }: { agent: RunningAgent }) {
   );
 }
 
-function AgentPanelHeader({
-  agent,
-  viewMode,
-  onToggleViewMode
-}: {
-  agent: RunningAgent;
-  viewMode: TranscriptViewMode;
-  onToggleViewMode: () => void;
-}) {
+function AgentPanelHeader({ agent }: { agent: RunningAgent }) {
   const transcripts = useAppStore((state) => state.transcripts[agent.id] || EMPTY_TRANSCRIPT);
   const done = useAppStore((state) => Boolean(state.doneAgentIds[agent.id]));
   const setSelectedAgent = useAppStore((state) => state.setSelectedAgent);
@@ -10614,7 +10624,7 @@ function AgentPanelHeader({
           onRestart={() => sendCommand({ type: "restart", id: agent.id })}
         />
       </span>
-      <AgentActionsMenu agent={agent} transcripts={transcripts} viewMode={viewMode} onToggleViewMode={onToggleViewMode} />
+      <AgentActionsMenu agent={agent} transcripts={transcripts} />
       <Button variant="ghost" size="icon" onClick={() => setSelectedAgent(undefined)} title="Show tiles">
         <Minimize2 className="h-4 w-4" />
       </Button>
@@ -10625,7 +10635,8 @@ function AgentPanelHeader({
 function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
   const transcript = useAppStore((state) => state.transcripts[agent.id] || EMPTY_TRANSCRIPT);
   const settings = useAppStore((state) => state.settings);
-  const chatTranscriptDetail = normalizeChatTranscriptDetail(settings.chatTranscriptDetail);
+  const chatTranscriptDetailOverride = useAppStore((state) => state.chatTranscriptDetails[agent.id]);
+  const chatTranscriptDetail = chatTranscriptDetailOverride || normalizeChatTranscriptDetail(settings.chatTranscriptDetail);
   const transcriptItems = useMemo(() => pairedTranscriptItems(transcript), [transcript]);
   const displayedTranscriptItems = useMemo(() => filteredTranscriptItems(transcriptItems, chatTranscriptDetail), [chatTranscriptDetail, transcriptItems]);
   const requiredFeedbackItems = useMemo(() => requiredFeedbackTranscriptItems(transcriptItems), [transcriptItems]);
@@ -10651,7 +10662,6 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
   const [contextCopyTarget, setContextCopyTarget] = useState<ContextCopyTarget | undefined>();
   const [composerDropActive, setComposerDropActive] = useState(false);
   const [composerCollapsed, setComposerCollapsed] = useState(false);
-  const [transcriptViewMode, setTranscriptViewMode] = useState<TranscriptViewMode>("chat");
   const [showJumpToBottom, setShowJumpToBottom] = useState(false);
   const [autoScrollPaused, setAutoScrollPaused] = useState(false);
   const [activeSlashIndex, setActiveSlashIndex] = useState(0);
@@ -10659,7 +10669,7 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
   const [slashMenuSuppressed, setSlashMenuSuppressed] = useState(false);
   const composerDragDepthRef = useRef(0);
   const isBusy = isAgentBusy(agent);
-  const visibleTranscriptViewMode = chatTranscriptDetail === "raw" ? "raw" : transcriptViewMode;
+  const visibleTranscriptViewMode = chatTranscriptDetail === "raw" ? "raw" : "chat";
   const canType = agentHasProcess(agent);
   const canAttach = !agent.remoteControl;
   const showAutoScrollControl = visibleTranscriptViewMode === "chat" && hasActiveAutoScrollStatus(agent);
@@ -10980,11 +10990,7 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
 
   return (
     <main className="flex min-w-0 flex-1 flex-col">
-      <AgentPanelHeader
-        agent={agent}
-        viewMode={transcriptViewMode}
-        onToggleViewMode={() => setTranscriptViewMode((mode) => (mode === "chat" ? "raw" : "chat"))}
-      />
+      <AgentPanelHeader agent={agent} />
       {searchOpen && (
         <div className="flex items-center gap-2 border-b border-border px-4 py-2">
           <Search className="h-4 w-4 text-muted-foreground" />
@@ -13206,7 +13212,8 @@ function MobileSidebar({
 function MobileChatPane({ agent, addError }: { agent: RunningAgent; addError: (message: string) => void }) {
   const transcript = useAppStore((state) => state.transcripts[agent.id] || EMPTY_TRANSCRIPT);
   const settings = useAppStore((state) => state.settings);
-  const chatTranscriptDetail = normalizeChatTranscriptDetail(settings.chatTranscriptDetail);
+  const chatTranscriptDetailOverride = useAppStore((state) => state.chatTranscriptDetails[agent.id]);
+  const chatTranscriptDetail = chatTranscriptDetailOverride || normalizeChatTranscriptDetail(settings.chatTranscriptDetail);
   const draft = useAppStore((state) => state.drafts[agent.id] || "");
   const setDraft = useAppStore((state) => state.setDraft);
   const queue = useAppStore((state) => state.messageQueues[agent.id] || EMPTY_QUEUE);
