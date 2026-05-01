@@ -12723,13 +12723,13 @@ function TerminalPanel({
             variant="ghost"
             size="icon"
             onClick={hideTerminalPanel}
-            title="Hide terminal"
+            title="Collapse terminal"
           >
-            <X className="h-4 w-4" />
+            <ChevronDown className="h-4 w-4" />
           </Button>
         ) : (
-          <Button variant="ghost" size="icon" onClick={hideTerminalPanel} title="Hide terminal">
-            <X className="h-4 w-4" />
+          <Button variant="ghost" size="icon" onClick={hideTerminalPanel} title="Collapse terminal">
+            <ChevronDown className="h-4 w-4" />
           </Button>
         )}
       </div>
@@ -12795,7 +12795,6 @@ function TerminalMinimizedDock({ poppedOutTerminalIds }: { poppedOutTerminalIds:
       onClick={restore}
       title="Restore terminal"
     >
-      <ChevronUp className="h-4 w-4 text-emerald-300" />
       <SquareTerminal className="h-4 w-4 text-emerald-300" />
       <span className="text-sm font-medium">Terminal</span>
       <Badge className="border-emerald-400/40 bg-emerald-500/15 text-emerald-100">{sessions.length}</Badge>
@@ -12813,6 +12812,7 @@ function TerminalMinimizedDock({ poppedOutTerminalIds }: { poppedOutTerminalIds:
           lastActive.cwd
         )}
       </span>
+      <ChevronUp className="ml-auto h-4 w-4 shrink-0 text-emerald-300" />
     </button>
   );
 }
