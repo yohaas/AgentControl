@@ -795,14 +795,13 @@ function AutoScrollToggleButton({
     <Button
       type="button"
       size="icon"
-      variant="secondary"
       className={cn("h-9 w-9 rounded-full shadow-lg", className)}
       title={label}
       aria-label={label}
       aria-pressed={paused}
       onClick={onToggle}
     >
-      {paused ? <Play className="h-5 w-5" /> : <Pause className="h-5 w-5" />}
+      {paused ? <Play className="h-6 w-6" /> : <Pause className="h-6 w-6" />}
     </Button>
   );
 }
@@ -9386,7 +9385,7 @@ function AgentTile({
                     {showActivityIndicator && <AgentActivityIndicator agent={agent} compact phaseLabel={phaseLabel} />}
                   </div>
                 )}
-                {transcriptViewMode === "chat" && (showAutoScrollControl || showJumpToBottom) && (
+                {transcriptViewMode === "chat" && showJumpToBottom && (
                   <div className="pointer-events-none sticky bottom-2 z-30 flex flex-col items-end gap-2">
                     {showAutoScrollControl && (
                       <AutoScrollToggleButton
@@ -10758,7 +10757,7 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
                 </>
               )}
             </div>
-            {transcriptViewMode === "chat" && (showAutoScrollControl || showJumpToBottom) && (
+            {transcriptViewMode === "chat" && showJumpToBottom && (
               <div className="pointer-events-none sticky bottom-3 z-30 mx-auto flex w-full max-w-4xl flex-col items-end gap-2">
                 {showAutoScrollControl && (
                   <AutoScrollToggleButton
@@ -13062,7 +13061,7 @@ function MobileChatPane({ agent, addError }: { agent: RunningAgent; addError: (m
             </div>
           )}
         </div>
-        {(showAutoScrollControl || showJumpToBottom) && (
+        {showJumpToBottom && (
           <div className="absolute bottom-4 right-4 z-20 flex flex-col items-end gap-2">
             {showAutoScrollControl && (
               <AutoScrollToggleButton
