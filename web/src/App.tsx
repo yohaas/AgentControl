@@ -83,6 +83,7 @@ import {
   PanelBottom,
   PanelLeft,
   PanelRight,
+  Pause,
   Pencil,
   PictureInPicture2,
   Play,
@@ -773,6 +774,36 @@ function isAgentBusy(agent: RunningAgent) {
     agent.status === "switching-model" ||
     agent.status === "awaiting-permission" ||
     agent.status === "awaiting-input"
+  );
+}
+
+function hasActiveAutoScrollStatus(agent: RunningAgent) {
+  return agent.status === "running";
+}
+
+function AutoScrollToggleButton({
+  paused,
+  onToggle,
+  className
+}: {
+  paused: boolean;
+  onToggle: () => void;
+  className?: string;
+}) {
+  const label = paused ? "Resume auto-scroll" : "Pause auto-scroll";
+  return (
+    <Button
+      type="button"
+      size="icon"
+      variant="secondary"
+      className={cn("h-9 w-9 rounded-full shadow-lg", className)}
+      title={label}
+      aria-label={label}
+      aria-pressed={paused}
+      onClick={onToggle}
+    >
+      {paused ? <Play className="h-5 w-5" /> : <Pause className="h-5 w-5" />}
+    </Button>
   );
 }
 
@@ -8766,12 +8797,14 @@ function AgentTile({
   const [composerCollapsed, setComposerCollapsed] = useState(false);
   const [transcriptViewMode, setTranscriptViewMode] = useState<TranscriptViewMode>("chat");
   const [showJumpToBottom, setShowJumpToBottom] = useState(false);
+  const [autoScrollPaused, setAutoScrollPaused] = useState(false);
   const [slashMenuOpen, setSlashMenuOpen] = useState(false);
   const [slashMenuSuppressed, setSlashMenuSuppressed] = useState(false);
   const composerDragDepthRef = useRef(0);
   const isBusy = isAgentBusy(agent);
   const canType = agentHasProcess(agent);
   const canAttach = !agent.remoteControl;
+  const showAutoScrollControl = transcriptViewMode === "chat" && hasActiveAutoScrollStatus(agent);
   const showActivityIndicator = isBusy && agent.status !== "awaiting-input" && !hasStreamingAssistantText(transcript);
   const phaseLabel = isBusy ? executingPlanPhase(transcript) : undefined;
   const pinnedMessage = latestUserMessage(transcript);
@@ -8795,7 +8828,12 @@ function AgentTile({
 
   useEffect(() => {
     didInitialTranscriptScrollRef.current = false;
+    setAutoScrollPaused(false);
   }, [agent.id]);
+
+  useEffect(() => {
+    if (!hasActiveAutoScrollStatus(agent)) setAutoScrollPaused(false);
+  }, [agent.status]);
 
   useEffect(() => {
     const root = rootRef.current;
@@ -8812,15 +8850,20 @@ function AgentTile({
     const root = rootRef.current;
     if (!root) return;
     const nearBottom = root.scrollHeight - root.scrollTop - root.clientHeight < 180;
-    if (isBusy || nearBottom) root.scrollTop = root.scrollHeight;
+    if (!autoScrollPaused && (isBusy || nearBottom)) root.scrollTop = root.scrollHeight;
     setShowPinnedMessage(shouldShowPinnedUserMessage(root, pinnedMessage?.id));
     setShowJumpToBottom(!isNearScrollBottom(root));
-  }, [transcript, agent.id, isBusy, pinnedMessage?.id]);
+  }, [transcript, agent.id, autoScrollPaused, isBusy, pinnedMessage?.id]);
 
   function handleTranscriptScroll(event: ReactUIEvent<HTMLDivElement>) {
     const nextVisible = shouldShowPinnedUserMessage(event.currentTarget, pinnedMessage?.id);
     setShowPinnedMessage((current) => (current === nextVisible ? current : nextVisible));
     setShowJumpToBottom(!isNearScrollBottom(event.currentTarget));
+  }
+
+  function resumeAutoScroll() {
+    setAutoScrollPaused(false);
+    scrollTranscriptToBottom(rootRef.current);
   }
 
   useEffect(() => {
@@ -9343,18 +9386,27 @@ function AgentTile({
                     {showActivityIndicator && <AgentActivityIndicator agent={agent} compact phaseLabel={phaseLabel} />}
                   </div>
                 )}
-                {transcriptViewMode === "chat" && showJumpToBottom && (
-                  <div className="pointer-events-none sticky bottom-2 z-30 flex justify-end">
-                    <Button
-                      type="button"
-                      size="icon"
-                      className="pointer-events-auto h-9 w-9 rounded-full shadow-lg"
-                      title="Jump to bottom"
-                      aria-label="Jump to bottom"
-                      onClick={() => scrollTranscriptToBottom(rootRef.current)}
-                    >
-                      <CircleArrowDown className="h-6 w-6" />
-                    </Button>
+                {transcriptViewMode === "chat" && (showAutoScrollControl || showJumpToBottom) && (
+                  <div className="pointer-events-none sticky bottom-2 z-30 flex flex-col items-end gap-2">
+                    {showAutoScrollControl && (
+                      <AutoScrollToggleButton
+                        paused={autoScrollPaused}
+                        className="pointer-events-auto"
+                        onToggle={() => (autoScrollPaused ? resumeAutoScroll() : setAutoScrollPaused(true))}
+                      />
+                    )}
+                    {showJumpToBottom && (
+                      <Button
+                        type="button"
+                        size="icon"
+                        className="pointer-events-auto h-9 w-9 rounded-full shadow-lg"
+                        title="Jump to bottom"
+                        aria-label="Jump to bottom"
+                        onClick={() => scrollTranscriptToBottom(rootRef.current)}
+                      >
+                        <CircleArrowDown className="h-6 w-6" />
+                      </Button>
+                    )}
                   </div>
                 )}
               </div>
@@ -10324,6 +10376,7 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
   const [composerCollapsed, setComposerCollapsed] = useState(false);
   const [transcriptViewMode, setTranscriptViewMode] = useState<TranscriptViewMode>("chat");
   const [showJumpToBottom, setShowJumpToBottom] = useState(false);
+  const [autoScrollPaused, setAutoScrollPaused] = useState(false);
   const [activeSlashIndex, setActiveSlashIndex] = useState(0);
   const [slashMenuOpen, setSlashMenuOpen] = useState(false);
   const [slashMenuSuppressed, setSlashMenuSuppressed] = useState(false);
@@ -10331,6 +10384,7 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
   const isBusy = isAgentBusy(agent);
   const canType = agentHasProcess(agent);
   const canAttach = !agent.remoteControl;
+  const showAutoScrollControl = transcriptViewMode === "chat" && hasActiveAutoScrollStatus(agent);
   const showActivityIndicator = isBusy && !hasStreamingAssistantText(transcript);
   const phaseLabel = isBusy ? executingPlanPhase(transcript) : undefined;
   const pinnedMessage = latestUserMessage(transcript);
@@ -10350,6 +10404,14 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
   const hasMultilineDraft = draftLines > 1 || composerWrapped;
   const composerExpanded = hasMultilineDraft && !composerCollapsed;
   useQueuedMessageSender(agent, queue, canType);
+
+  useEffect(() => {
+    setAutoScrollPaused(false);
+  }, [agent.id]);
+
+  useEffect(() => {
+    if (!hasActiveAutoScrollStatus(agent)) setAutoScrollPaused(false);
+  }, [agent.status]);
 
   useEffect(() => {
     const root = rootRef.current;
@@ -10372,13 +10434,13 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
     const root = rootRef.current;
     if (!root) return;
     const nearBottom = root.scrollHeight - root.scrollTop - root.clientHeight < 140;
-    if (isBusy || nearBottom) {
+    if (!autoScrollPaused && (isBusy || nearBottom)) {
       root.scrollTop = root.scrollHeight;
       setScrollPosition(agent.id, root.scrollTop);
     }
     setShowPinnedMessage(shouldShowPinnedUserMessage(root, pinnedMessage?.id));
     setShowJumpToBottom(!isNearScrollBottom(root));
-  }, [transcript, agent.id, isBusy, pinnedMessage?.id, setScrollPosition]);
+  }, [transcript, agent.id, autoScrollPaused, isBusy, pinnedMessage?.id, setScrollPosition]);
 
   useEffect(() => {
     setActiveSlashIndex(0);
@@ -10546,6 +10608,11 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
     setShowJumpToBottom(!isNearScrollBottom(event.currentTarget));
   }
 
+  function resumeAutoScroll() {
+    setAutoScrollPaused(false);
+    scrollTranscriptToBottom(rootRef.current);
+  }
+
   function prepareContextMenu(event: ReactMouseEvent<HTMLDivElement>) {
     if (getSelectionInRoot(`#${transcriptRootId}`)) {
       selection.captureSelection();
@@ -10691,18 +10758,27 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
                 </>
               )}
             </div>
-            {transcriptViewMode === "chat" && showJumpToBottom && (
-              <div className="pointer-events-none sticky bottom-3 z-30 mx-auto flex w-full max-w-4xl justify-end">
-                <Button
-                  type="button"
-                  size="icon"
-                  className="pointer-events-auto h-9 w-9 rounded-full shadow-lg"
-                  title="Jump to bottom"
-                  aria-label="Jump to bottom"
-                  onClick={() => scrollTranscriptToBottom(rootRef.current)}
-                >
-                  <CircleArrowDown className="h-6 w-6" />
-                </Button>
+            {transcriptViewMode === "chat" && (showAutoScrollControl || showJumpToBottom) && (
+              <div className="pointer-events-none sticky bottom-3 z-30 mx-auto flex w-full max-w-4xl flex-col items-end gap-2">
+                {showAutoScrollControl && (
+                  <AutoScrollToggleButton
+                    paused={autoScrollPaused}
+                    className="pointer-events-auto"
+                    onToggle={() => (autoScrollPaused ? resumeAutoScroll() : setAutoScrollPaused(true))}
+                  />
+                )}
+                {showJumpToBottom && (
+                  <Button
+                    type="button"
+                    size="icon"
+                    className="pointer-events-auto h-9 w-9 rounded-full shadow-lg"
+                    title="Jump to bottom"
+                    aria-label="Jump to bottom"
+                    onClick={() => scrollTranscriptToBottom(rootRef.current)}
+                  >
+                    <CircleArrowDown className="h-6 w-6" />
+                  </Button>
+                )}
               </div>
             )}
           </div>
@@ -12850,8 +12926,10 @@ function MobileChatPane({ agent, addError }: { agent: RunningAgent; addError: (m
   const didInitialTranscriptScrollRef = useRef(false);
   const [sending, setSending] = useState(false);
   const [showJumpToBottom, setShowJumpToBottom] = useState(false);
+  const [autoScrollPaused, setAutoScrollPaused] = useState(false);
   const isBusy = isAgentBusy(agent);
   const canType = agentHasProcess(agent);
+  const showAutoScrollControl = hasActiveAutoScrollStatus(agent);
   const showActivityIndicator = isBusy && agent.status !== "awaiting-input" && !hasStreamingAssistantText(transcript);
   const latestUser = latestUserMessage(transcript);
   const phaseLabel = isBusy ? executingPlanPhase(transcript) : undefined;
@@ -12860,7 +12938,12 @@ function MobileChatPane({ agent, addError }: { agent: RunningAgent; addError: (m
   useEffect(() => {
     didInitialTranscriptScrollRef.current = false;
     setShowJumpToBottom(false);
+    setAutoScrollPaused(false);
   }, [agent.id]);
+
+  useEffect(() => {
+    if (!hasActiveAutoScrollStatus(agent)) setAutoScrollPaused(false);
+  }, [agent.status]);
 
   useEffect(() => {
     const root = rootRef.current;
@@ -12874,12 +12957,17 @@ function MobileChatPane({ agent, addError }: { agent: RunningAgent; addError: (m
       return;
     }
     const nearBottom = root.scrollHeight - root.scrollTop - root.clientHeight < 180;
-    if (nearBottom || isBusy) root.scrollTop = root.scrollHeight;
+    if (!autoScrollPaused && (nearBottom || isBusy)) root.scrollTop = root.scrollHeight;
     setShowJumpToBottom(!isNearScrollBottom(root));
-  }, [agent.id, transcript, isBusy]);
+  }, [agent.id, transcript, autoScrollPaused, isBusy]);
 
   function handleTranscriptScroll(event: ReactUIEvent<HTMLDivElement>) {
     setShowJumpToBottom(!isNearScrollBottom(event.currentTarget));
+  }
+
+  function resumeAutoScroll() {
+    setAutoScrollPaused(false);
+    scrollTranscriptToBottom(rootRef.current);
   }
 
   async function refreshMobileSnapshot() {
@@ -12974,16 +13062,27 @@ function MobileChatPane({ agent, addError }: { agent: RunningAgent; addError: (m
             </div>
           )}
         </div>
-        {showJumpToBottom && (
-          <Button
-            type="button"
-            size="icon"
-            className="absolute bottom-4 right-4 z-20 h-9 w-9 rounded-full shadow-lg"
-            title="Jump to bottom"
-            onClick={() => scrollTranscriptToBottom(rootRef.current)}
-          >
-            <CircleArrowDown className="h-6 w-6" />
-          </Button>
+        {(showAutoScrollControl || showJumpToBottom) && (
+          <div className="absolute bottom-4 right-4 z-20 flex flex-col items-end gap-2">
+            {showAutoScrollControl && (
+              <AutoScrollToggleButton
+                paused={autoScrollPaused}
+                onToggle={() => (autoScrollPaused ? resumeAutoScroll() : setAutoScrollPaused(true))}
+              />
+            )}
+            {showJumpToBottom && (
+              <Button
+                type="button"
+                size="icon"
+                className="h-9 w-9 rounded-full shadow-lg"
+                title="Jump to bottom"
+                aria-label="Jump to bottom"
+                onClick={() => scrollTranscriptToBottom(rootRef.current)}
+              >
+                <CircleArrowDown className="h-6 w-6" />
+              </Button>
+            )}
+          </div>
         )}
       </div>
 
