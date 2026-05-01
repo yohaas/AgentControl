@@ -14,6 +14,7 @@ import type {
   TranscriptEvent,
   WsServerEvent
 } from "@agent-hero/shared";
+import * as terminalBus from "./terminal-bus";
 
 export interface SettingsState {
   projectsRoot: string;
@@ -321,7 +322,6 @@ interface AppState {
   filePreviewRequest?: FilePreviewRequest;
   terminalInFileExplorer: boolean;
   terminalSessions: Record<string, TerminalSession>;
-  terminalOutput: Record<string, string[]>;
   activeTerminalId?: string;
   launchModal: LaunchModalState;
   sendDialog: SendDialogState;
@@ -669,7 +669,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   filePreviewRequest: undefined,
   terminalInFileExplorer: false,
   terminalSessions: {},
-  terminalOutput: {},
   activeTerminalId: undefined,
   launchModal: { open: false },
   sendDialog: { open: false },
@@ -970,15 +969,18 @@ export const useAppStore = create<AppState>((set, get) => ({
       case "terminal.snapshot":
         set((state) => {
           const terminalSessions = Object.fromEntries(event.snapshot.sessions.map((session) => [session.id, session]));
+          for (const [id, chunks] of Object.entries(event.snapshot.output)) {
+            terminalBus.setBuffer(id, chunks);
+          }
           const terminalUi = terminalUiForProject({ ...state, terminalSessions }, state.selectedProjectId);
           return {
             terminalSessions,
-            terminalOutput: event.snapshot.output,
             ...terminalUi
           };
         });
         break;
       case "terminal.started":
+        terminalBus.setBuffer(event.session.id, event.output);
         set((state) => {
           const terminalSessions = { ...state.terminalSessions, [event.session.id]: event.session };
           const sessionProjectId = event.session.projectId;
@@ -998,22 +1000,13 @@ export const useAppStore = create<AppState>((set, get) => ({
             terminalOpen: !event.session.hidden && selectedSession ? true : state.terminalOpen,
             terminalProjectUi,
             terminalSessions,
-            terminalOutput: { ...state.terminalOutput, [event.session.id]: event.output },
             activeTerminalId: !event.session.hidden && selectedSession ? event.session.id : state.activeTerminalId
           };
         });
         break;
       case "terminal.output":
-        set((state) => ({
-          terminalSessions: withTerminal(state.terminalSessions, event.id, (terminal) => ({
-            ...terminal,
-            updatedAt: event.updatedAt
-          })),
-          terminalOutput: {
-            ...state.terminalOutput,
-            [event.id]: [...(state.terminalOutput[event.id] || []), event.chunk].slice(-1200)
-          }
-        }));
+        terminalBus.appendChunk(event.id, event.chunk);
+        // updatedAt is bumped via throttled activity subscription (see initActivityBridge)
         break;
       case "terminal.exited":
         set((state) => ({
@@ -1027,14 +1020,12 @@ export const useAppStore = create<AppState>((set, get) => ({
         }));
         break;
       case "terminal.cleared":
-        set((state) => ({
-          terminalOutput: { ...state.terminalOutput, [event.id]: [] }
-        }));
+        terminalBus.clearBuffer(event.id);
         break;
       case "terminal.closed":
+        terminalBus.removeBuffer(event.id);
         set((state) => {
           const { [event.id]: _closedSession, ...terminalSessions } = state.terminalSessions;
-          const { [event.id]: _closedOutput, ...terminalOutput } = state.terminalOutput;
           const closedProjectId = _closedSession?.projectId;
           const selectedVisibleRemainingIds = visibleTerminalsForProject(terminalSessions, state.selectedProjectId).map((terminal) => terminal.id);
           const closedProjectVisibleRemainingIds = visibleTerminalsForProject(terminalSessions, closedProjectId).map((terminal) => terminal.id);
@@ -1056,7 +1047,6 @@ export const useAppStore = create<AppState>((set, get) => ({
               : state.terminalProjectUi;
           return {
             terminalSessions,
-            terminalOutput,
             terminalProjectUi,
             activeTerminalId,
             terminalOpen: selectedVisibleRemainingIds.length > 0 ? state.terminalOpen : false
@@ -1333,3 +1323,19 @@ export const useAppStore = create<AppState>((set, get) => ({
   setSearchOpen: (open) => set({ searchOpen: open }),
   setSearchQuery: (query) => set({ searchQuery: query })
 }));
+
+// Bridge throttled bus activity into the session store so updatedAt stays fresh
+// (~750ms cadence) without forcing a re-render on every PTY chunk.
+terminalBus.subscribeActivity((id, at) => {
+  const iso = new Date(at).toISOString();
+  useAppStore.setState((state) => {
+    const current = state.terminalSessions[id];
+    if (!current) return state;
+    return {
+      terminalSessions: {
+        ...state.terminalSessions,
+        [id]: { ...current, updatedAt: iso }
+      }
+    };
+  });
+});

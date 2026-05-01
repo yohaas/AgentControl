@@ -157,6 +157,7 @@ import { getSelectionInRoot, useTextSelection } from "./hooks/use-text-selection
 import { api, setAgentHeroToken } from "./lib/api";
 import { cn, downloadText, formatDuration, prettyJson } from "./lib/utils";
 import { connectWebSocket, disconnectWebSocket, sendCommand } from "./lib/ws-client";
+import * as terminalBus from "./store/terminal-bus";
 import {
   useAppStore,
   type ClaudeRuntime,
@@ -12152,13 +12153,11 @@ function SendDialog() {
 
 function TerminalPane({
   session,
-  output,
   active,
   onActivate,
   onClosePane
 }: {
   session: TerminalSession;
-  output: string[];
   active: boolean;
   onActivate: () => void;
   onClosePane?: () => void;
@@ -12166,7 +12165,6 @@ function TerminalPane({
   const hostRef = useRef<HTMLDivElement | null>(null);
   const terminalRef = useRef<XTerm | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
-  const writtenRef = useRef(0);
   const sizeRef = useRef({ cols: session.cols, rows: session.rows });
   const themeMode = useAppStore((state) => state.settings.themeMode);
 
@@ -12188,6 +12186,21 @@ function TerminalPane({
     terminal.open(host);
     terminalRef.current = terminal;
     fitRef.current = fit;
+
+    // Replay any chunks already buffered before mount, then subscribe to the
+    // bus for new ones. Writing straight to xterm avoids round-tripping
+    // output through Zustand on every PTY chunk.
+    for (const chunk of terminalBus.getBuffer(session.id)) terminal.write(chunk);
+    const unsubscribeBus = terminalBus.subscribe(session.id, (event) => {
+      if (event.type === "chunk") {
+        terminal.write(event.chunk);
+      } else if (event.type === "clear") {
+        terminal.clear();
+      } else if (event.type === "replace") {
+        terminal.clear();
+        for (const chunk of event.chunks) terminal.write(chunk);
+      }
+    });
 
     const resize = () => {
       try {
@@ -12250,30 +12263,19 @@ function TerminalPane({
     return () => {
       window.cancelAnimationFrame(frame);
       dataDisposable.dispose();
+      unsubscribeBus();
       host.removeEventListener("mouseup", handleMouseUp);
       host.removeEventListener("contextmenu", handleContextMenu);
       resizeObserver.disconnect();
       terminal.dispose();
       terminalRef.current = null;
       fitRef.current = null;
-      writtenRef.current = 0;
     };
   }, [session.id]);
 
   useEffect(() => {
     terminalRef.current?.options && (terminalRef.current.options.theme = terminalThemeFromCss());
   }, [themeMode]);
-
-  useEffect(() => {
-    const terminal = terminalRef.current;
-    if (!terminal) return;
-    if (output.length < writtenRef.current) {
-      terminal.clear();
-      writtenRef.current = 0;
-    }
-    output.slice(writtenRef.current).forEach((chunk) => terminal.write(chunk));
-    writtenRef.current = output.length;
-  }, [output]);
 
   useEffect(() => {
     if (!active) return;
@@ -12318,7 +12320,6 @@ function TerminalPanel({
   const projects = useAppStore((state) => state.projects);
   const selectedProjectId = useAppStore((state) => state.selectedProjectId);
   const sessionsById = useAppStore((state) => state.terminalSessions);
-  const outputById = useAppStore((state) => state.terminalOutput);
   const activeTerminalId = useAppStore((state) => state.activeTerminalId);
   const setActiveTerminal = useAppStore((state) => state.setActiveTerminal);
   const setTerminalOpen = useAppStore((state) => state.setTerminalOpen);
@@ -12746,7 +12747,6 @@ function TerminalPanel({
             <TerminalPane
               key={item.id}
               session={item}
-              output={outputById[item.id] || []}
               active={item.id === session?.id}
               onActivate={() => setActiveTerminal(item.id)}
               onClosePane={
@@ -12765,7 +12765,6 @@ function TerminalPanel({
 function TerminalMinimizedDock({ poppedOutTerminalIds }: { poppedOutTerminalIds: Set<string> }) {
   const selectedProjectId = useAppStore((state) => state.selectedProjectId);
   const sessionsById = useAppStore((state) => state.terminalSessions);
-  const outputById = useAppStore((state) => state.terminalOutput);
   const setTerminalOpen = useAppStore((state) => state.setTerminalOpen);
   const setActiveTerminal = useAppStore((state) => state.setActiveTerminal);
   const sessions = useMemo(
@@ -12780,7 +12779,16 @@ function TerminalMinimizedDock({ poppedOutTerminalIds }: { poppedOutTerminalIds:
     [poppedOutTerminalIds, sessionsById, selectedProjectId]
   );
   const lastActive = sessions[sessions.length - 1];
-  const line = lastActive ? latestTerminalLine(outputById[lastActive.id] || []) : undefined;
+  const lastActiveId = lastActive?.id;
+  const [lineTick, setLineTick] = useState(0);
+  useEffect(() => {
+    if (!lastActiveId) return;
+    return terminalBus.subscribeLastLine(lastActiveId, () => setLineTick((tick) => tick + 1));
+  }, [lastActiveId]);
+  const line = useMemo(
+    () => (lastActiveId ? latestTerminalLine(terminalBus.getBuffer(lastActiveId)) : undefined),
+    [lastActiveId, lineTick]
+  );
   if (!lastActive) return null;
   const terminalLabel = lastActive.title || lastActive.projectName || "Shell";
 

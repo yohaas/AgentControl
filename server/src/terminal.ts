@@ -10,6 +10,8 @@ import { isWslProject, wslProjectPath } from "./wsl.js";
 const MAX_OUTPUT_CHUNKS = 2000;
 const DEFAULT_COLS = 100;
 const DEFAULT_ROWS = 30;
+const OUTPUT_FLUSH_MS = 16;
+const OUTPUT_FLUSH_BYTES = 64 * 1024;
 const terminalHistoryDir = statePath("terminal-history");
 
 interface ShellSpec {
@@ -22,6 +24,10 @@ interface TerminalState {
   session: TerminalSession;
   process: IPty;
   output: string[];
+  pending: string;
+  pendingBytes: number;
+  flushTimer: NodeJS.Timeout | null;
+  flush: () => void;
 }
 
 interface TerminalStartOptions {
@@ -219,20 +225,44 @@ export class TerminalManager {
     const state: TerminalState = {
       session,
       process: pty,
-      output: [`\x1b[36m${shell.command} started in ${session.cwd}${os.EOL}\x1b[0m`]
+      output: [`\x1b[36m${shell.command} started in ${session.cwd}${os.EOL}\x1b[0m`],
+      pending: "",
+      pendingBytes: 0,
+      flushTimer: null,
+      flush: () => {}
     };
-    this.terminals.set(session.id, state);
-
-    pty.onData((chunk) => {
+    state.flush = () => {
+      if (state.flushTimer) {
+        clearTimeout(state.flushTimer);
+        state.flushTimer = null;
+      }
+      if (!state.pending) return;
+      const chunk = state.pending;
+      state.pending = "";
+      state.pendingBytes = 0;
       state.output.push(chunk);
       if (state.output.length > MAX_OUTPUT_CHUNKS) {
         state.output.splice(0, state.output.length - MAX_OUTPUT_CHUNKS);
       }
       state.session.updatedAt = now();
       this.broadcast({ type: "terminal.output", id: session.id, chunk, updatedAt: state.session.updatedAt });
+    };
+    this.terminals.set(session.id, state);
+
+    pty.onData((chunk) => {
+      state.pending += chunk;
+      state.pendingBytes += chunk.length;
+      if (state.pendingBytes >= OUTPUT_FLUSH_BYTES) {
+        state.flush();
+        return;
+      }
+      if (!state.flushTimer) {
+        state.flushTimer = setTimeout(state.flush, OUTPUT_FLUSH_MS);
+      }
     });
 
     pty.onExit(({ exitCode, signal }) => {
+      state.flush();
       state.session = {
         ...state.session,
         status: "exited",
@@ -279,6 +309,12 @@ export class TerminalManager {
   clear(id: string): void {
     const state = this.terminals.get(id);
     if (!state) return;
+    if (state.flushTimer) {
+      clearTimeout(state.flushTimer);
+      state.flushTimer = null;
+    }
+    state.pending = "";
+    state.pendingBytes = 0;
     state.output = [];
     state.session.updatedAt = now();
     this.broadcast({ type: "terminal.cleared", id });
@@ -287,6 +323,12 @@ export class TerminalManager {
   close(id: string): void {
     const state = this.terminals.get(id);
     if (!state) return;
+    if (state.flushTimer) {
+      clearTimeout(state.flushTimer);
+      state.flushTimer = null;
+    }
+    state.pending = "";
+    state.pendingBytes = 0;
     this.terminals.delete(id);
     if (state.session.status === "running") {
       state.process.kill();
