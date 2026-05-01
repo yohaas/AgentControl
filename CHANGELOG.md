@@ -2,6 +2,10 @@
 
 All notable repository changes are listed newest-first and grouped by commit date.
 
+## 2026-05-01
+
+- [ef75280](https://github.com/yohaas/AgentHero/commit/ef75280) Add git pull support to GitStatusMenu.
+
 ## 2026-04-30
 
 - [e4e8b46](https://github.com/yohaas/AgentHero/commit/e4e8b46) Add common system font presets for chat display settings.
