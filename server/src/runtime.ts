@@ -81,6 +81,11 @@ const PERMISSION_MCP_TOOL_NAME = `mcp__${PERMISSION_MCP_SERVER_NAME}__approval_p
 const PERMISSION_REQUEST_TIMEOUT_MS = 10 * 60 * 1000;
 const TURN_TIMER_STATUSES = new Set<AgentStatus>(["starting", "running", "switching-model", "awaiting-permission", "awaiting-input"]);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const PROJECT_BOUNDARY_SYSTEM_PROMPT = [
+  "Behind-the-scenes AgentHero instruction:",
+  "You may never switch projects or go outside the active project directory under any circumstances without explicit permission via a prompt. No exceptions ever.",
+  "Active project directory:"
+].join("\n");
 interface PendingPermissionRequest {
   toolUseId: string;
   toolName: string;
@@ -891,6 +896,18 @@ export class AgentRuntimeManager {
     this.userMessage(id, this.formatPlanAnswer(decision, normalizedResponse));
   }
 
+  private projectBoundaryInstruction(state: AgentProcessState): string {
+    return `${PROJECT_BOUNDARY_SYSTEM_PROMPT}\n${state.agent.projectPath}`;
+  }
+
+  private systemPromptForState(state: AgentProcessState): string {
+    return [state.def?.systemPrompt?.trim() || "", this.projectBoundaryInstruction(state)].filter(Boolean).join("\n\n");
+  }
+
+  private codexPromptWithSystemInstructions(state: AgentProcessState, prompt: string): string {
+    return [`System instructions:\n${this.systemPromptForState(state)}`, "User request:", prompt].join("\n\n");
+  }
+
   private async providerUserMessage(
     state: AgentProcessState,
     text: string,
@@ -1016,7 +1033,7 @@ export class AgentRuntimeManager {
         this.sendPendingInjectedMessage(state);
         resolve();
       });
-      child.stdin.end(prompt);
+      child.stdin.end(this.codexPromptWithSystemInstructions(state, prompt));
     });
   }
 
@@ -1218,7 +1235,7 @@ export class AgentRuntimeManager {
         },
         body: JSON.stringify({
           model: state.agent.currentModel,
-          system: state.def?.systemPrompt || undefined,
+          system: this.systemPromptForState(state),
           messages: [{ role: "user", content }],
           max_tokens: 8192,
           stream: true
@@ -1299,7 +1316,7 @@ export class AgentRuntimeManager {
     try {
       const body: Record<string, unknown> = {
         model: state.agent.currentModel,
-        instructions: state.def?.systemPrompt || undefined,
+        instructions: this.systemPromptForState(state),
         input: [{ role: "user", content }],
         reasoning: { effort: this.providerReasoningEffort(state) },
         stream: true
@@ -1582,7 +1599,7 @@ export class AgentRuntimeManager {
           "--model",
           model,
           "--append-system-prompt",
-          state.def?.systemPrompt || ""
+          this.systemPromptForState(state)
         ]
       : [
           "--print",
@@ -1592,7 +1609,7 @@ export class AgentRuntimeManager {
           "--input-format",
           "stream-json",
           "--append-system-prompt",
-          state.def?.systemPrompt || "",
+          this.systemPromptForState(state),
           "--model",
           model
         ];
