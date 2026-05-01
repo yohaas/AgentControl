@@ -4,7 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-04-30
 
-- [3fc4261](https://github.com/yohaas/AgentHero/commit/3fc4261) Add a mobile logout button that clears the saved access token and auth cookie.
+- [6989bc9](https://github.com/yohaas/AgentHero/commit/6989bc9) Add a mobile logout button that clears the saved access token and auth cookie.
 - [9b711af](https://github.com/yohaas/AgentHero/commit/9b711af) Rename the app to AgentHero with legacy storage, browser key, and update script compatibility.
 - [60597e7](https://github.com/yohaas/AgentHero/commit/60597e7) Make generated access tokens visible
 - [3fb0b92](https://github.com/yohaas/AgentHero/commit/3fb0b92) Add optional access token protection
