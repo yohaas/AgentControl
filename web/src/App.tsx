@@ -3738,7 +3738,7 @@ function GitStatusMenu({
               <span
                 className={cn(
                   "absolute grid min-h-4 min-w-4 place-items-center rounded-full border border-background bg-red-500 px-1 text-[10px] font-semibold leading-none text-white",
-                  compact ? "-right-0.5 -top-0.5" : "-right-1.5 -top-1.5"
+                  compact ? "right-1 top-1" : "-right-1.5 -top-1.5"
                 )}
               >
                 {aheadCount > 99 ? "99+" : aheadCount}
