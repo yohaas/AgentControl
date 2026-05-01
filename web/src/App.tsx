@@ -161,6 +161,7 @@ import { connectWebSocket, disconnectWebSocket, sendCommand } from "./lib/ws-cli
 import {
   useAppStore,
   type ClaudeRuntime,
+  type ChatTranscriptDetailMode,
   type ExternalEditor,
   type FileExplorerDockPosition,
   type MenuDisplayMode,
@@ -615,11 +616,21 @@ const CHAT_FONT_OPTIONS = [
   { label: "Consolas", value: "Consolas, \"Cascadia Mono\", monospace" },
   { label: "Courier New", value: "\"Courier New\", Courier, monospace" }
 ] as const;
+const CHAT_TRANSCRIPT_DETAIL_OPTIONS = [
+  { value: "responses", label: "Responses only" },
+  { value: "actions", label: "Actions" },
+  { value: "detailed", label: "Detailed" },
+  { value: "raw", label: "Raw" }
+] as const;
 
 type ChatDisplaySettings = SettingsState & {
   chatFontFamily?: string;
   chatFontSize?: number;
 };
+
+function normalizeChatTranscriptDetail(value: unknown): ChatTranscriptDetailMode {
+  return value === "responses" || value === "detailed" || value === "raw" ? value : "actions";
+}
 
 function normalizeChatFontFamily(value: unknown) {
   return typeof value === "string" ? value.trim().slice(0, 160) : "";
@@ -1370,6 +1381,16 @@ function pairedTranscriptItems(transcript: TranscriptEvent[]): ToolTranscriptIte
       return { kind: "single", event };
     })
     .filter((item): item is ToolTranscriptItem => Boolean(item));
+}
+
+function filteredTranscriptItems(items: ToolTranscriptItem[], detail: ChatTranscriptDetailMode): ToolTranscriptItem[] {
+  if (detail === "detailed" || detail === "raw") return items;
+  return items.filter((item) => {
+    const event = item.kind === "tool_pair" ? item.event : item.event;
+    if (event.kind === "user" || event.kind === "assistant_text" || event.kind === "questions" || event.kind === "plan") return true;
+    if (detail === "actions") return event.kind === "tool_use" || event.kind === "tool_result";
+    return false;
+  });
 }
 
 function shouldExpandTranscriptItemByDefault(item: ToolTranscriptItem, index: number, items: ToolTranscriptItem[]) {
@@ -6674,6 +6695,7 @@ function SettingsDialog() {
   const [tileColumns, setTileColumns] = useState(settings.tileColumns);
   const [chatFontFamily, setChatFontFamily] = useState(normalizeChatFontFamily((settings as ChatDisplaySettings).chatFontFamily));
   const [chatFontSize, setChatFontSize] = useState(normalizeChatFontSize((settings as ChatDisplaySettings).chatFontSize));
+  const [chatTranscriptDetail, setChatTranscriptDetail] = useState<ChatTranscriptDetailMode>(normalizeChatTranscriptDetail(settings.chatTranscriptDetail));
   const [pinLastSentMessage, setPinLastSentMessage] = useState(settings.pinLastSentMessage);
   const [inputNotificationsEnabled, setInputNotificationsEnabled] = useState(settings.inputNotificationsEnabled === true);
   const [accessTokenEnabled, setAccessTokenEnabled] = useState(settings.accessTokenEnabled === true);
@@ -6722,6 +6744,7 @@ function SettingsDialog() {
     setTileColumns(settings.tileColumns);
     setChatFontFamily(normalizeChatFontFamily((settings as ChatDisplaySettings).chatFontFamily));
     setChatFontSize(normalizeChatFontSize((settings as ChatDisplaySettings).chatFontSize));
+    setChatTranscriptDetail(normalizeChatTranscriptDetail(settings.chatTranscriptDetail));
     setPinLastSentMessage(settings.pinLastSentMessage);
     setInputNotificationsEnabled(settings.inputNotificationsEnabled === true);
     setAccessTokenEnabled(settings.accessTokenEnabled === true);
@@ -6768,6 +6791,7 @@ function SettingsDialog() {
         tileColumns,
         chatFontFamily,
         chatFontSize,
+        chatTranscriptDetail,
         pinLastSentMessage,
         inputNotificationsEnabled,
         accessTokenEnabled,
@@ -6781,7 +6805,8 @@ function SettingsDialog() {
       setSettings({
         ...next,
         chatFontFamily,
-        chatFontSize
+        chatFontSize,
+        chatTranscriptDetail
       } as SettingsState);
       setProjects(await api.refresh());
       setOpen(false);
@@ -6872,6 +6897,7 @@ function SettingsDialog() {
         tileColumns,
         chatFontFamily,
         chatFontSize,
+        chatTranscriptDetail,
         pinLastSentMessage,
         inputNotificationsEnabled,
         accessTokenEnabled,
@@ -6916,6 +6942,7 @@ function SettingsDialog() {
       setTileColumns(next.tileColumns);
       setChatFontFamily(normalizeChatFontFamily((next as ChatDisplaySettings).chatFontFamily));
       setChatFontSize(normalizeChatFontSize((next as ChatDisplaySettings).chatFontSize));
+      setChatTranscriptDetail(normalizeChatTranscriptDetail(next.chatTranscriptDetail));
       setPinLastSentMessage(next.pinLastSentMessage);
       setInputNotificationsEnabled(next.inputNotificationsEnabled === true);
       setAccessTokenEnabled(next.accessTokenEnabled === true);
@@ -7036,6 +7063,7 @@ function SettingsDialog() {
       tileColumns !== settings.tileColumns ||
       normalizeChatFontFamily(chatFontFamily) !== normalizeChatFontFamily((settings as ChatDisplaySettings).chatFontFamily) ||
       normalizeChatFontSize(chatFontSize) !== normalizeChatFontSize((settings as ChatDisplaySettings).chatFontSize) ||
+      chatTranscriptDetail !== normalizeChatTranscriptDetail(settings.chatTranscriptDetail) ||
       pinLastSentMessage !== settings.pinLastSentMessage ||
       inputNotificationsEnabled !== (settings.inputNotificationsEnabled === true) ||
       accessTokenEnabled !== (settings.accessTokenEnabled === true) ||
@@ -7055,6 +7083,7 @@ function SettingsDialog() {
       claudeRuntime,
       chatFontFamily,
       chatFontSize,
+      chatTranscriptDetail,
       clearAnthropicApiKey,
       clearOpenaiApiKey,
       codexAgentDir,
@@ -7290,7 +7319,7 @@ function SettingsDialog() {
                 />
               </label>
             </div>
-            <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_10rem]">
+            <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_12rem_10rem]">
               <label className="grid min-w-0 gap-1.5 text-sm">
                 Chat font
                 <Select value={chatFontSelectValue(chatFontFamily)} onValueChange={(value) => setChatFontFamily(chatFontValueFromSelect(value))}>
@@ -7309,6 +7338,21 @@ function SettingsDialog() {
                           Custom: {normalizeChatFontFamily(chatFontFamily)}
                         </SelectItem>
                       )}
+                  </SelectContent>
+                </Select>
+              </label>
+              <label className="grid min-w-0 gap-1.5 text-sm">
+                Chat detail
+                <Select value={chatTranscriptDetail} onValueChange={(value) => setChatTranscriptDetail(value as ChatTranscriptDetailMode)}>
+                  <SelectTrigger className="px-2">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CHAT_TRANSCRIPT_DETAIL_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </label>
@@ -8936,7 +8980,10 @@ function AgentTile({
   onHeightChangeFromTop?: (height: number, totalHeight: number) => void;
 }) {
   const transcript = useAppStore((state) => state.transcripts[agent.id] || EMPTY_TRANSCRIPT);
+  const settings = useAppStore((state) => state.settings);
+  const chatTranscriptDetail = normalizeChatTranscriptDetail(settings.chatTranscriptDetail);
   const transcriptItems = useMemo(() => pairedTranscriptItems(transcript), [transcript]);
+  const displayedTranscriptItems = useMemo(() => filteredTranscriptItems(transcriptItems, chatTranscriptDetail), [chatTranscriptDetail, transcriptItems]);
   const draft = useAppStore((state) => state.drafts[agent.id] || "");
   const setDraft = useAppStore((state) => state.setDraft);
   const queue = useAppStore((state) => state.messageQueues[agent.id] || EMPTY_QUEUE);
@@ -8950,7 +8997,6 @@ function AgentTile({
   const setTileMinimized = useAppStore((state) => state.setTileMinimized);
   const focusedAgentId = useAppStore((state) => state.focusedAgentId);
   const done = useAppStore((state) => Boolean(state.doneAgentIds[agent.id]));
-  const settings = useAppStore((state) => state.settings);
   const [attachments, setAttachments] = useState<MessageAttachment[]>([]);
   const [activeSlashIndex, setActiveSlashIndex] = useState(0);
   const transcriptRootId = `tile-transcript-${agent.id}`;
@@ -8974,9 +9020,10 @@ function AgentTile({
   const [slashMenuSuppressed, setSlashMenuSuppressed] = useState(false);
   const composerDragDepthRef = useRef(0);
   const isBusy = isAgentBusy(agent);
+  const visibleTranscriptViewMode = chatTranscriptDetail === "raw" ? "raw" : transcriptViewMode;
   const canType = agentHasProcess(agent);
   const canAttach = !agent.remoteControl;
-  const showAutoScrollControl = transcriptViewMode === "chat" && hasActiveAutoScrollStatus(agent);
+  const showAutoScrollControl = visibleTranscriptViewMode === "chat" && hasActiveAutoScrollStatus(agent);
   const showActivityIndicator = isBusy && agent.status !== "awaiting-input" && !hasStreamingAssistantText(transcript);
   const phaseLabel = isBusy ? executingPlanPhase(transcript) : undefined;
   const pinnedMessage = latestUserMessage(transcript);
@@ -9477,7 +9524,7 @@ function AgentTile({
                 onKeyUp={() => selection.captureSelection()}
                 onContextMenuCapture={prepareContextMenu}
               >
-                {transcriptViewMode === "chat" && pinLastSentMessage && pinnedMessage && showPinnedMessage && (
+                {visibleTranscriptViewMode === "chat" && pinLastSentMessage && pinnedMessage && showPinnedMessage && (
                   <PinnedUserMessage event={pinnedMessage} compact onJump={() => scrollToLatestUserMessage(rootRef.current)} />
                 )}
                 {agent.statusMessage && (
@@ -9520,45 +9567,45 @@ function AgentTile({
                       </p>
                     ) : (
                       <div className="grid gap-2">
-                        {transcriptItems.map((item, index) => (
+                        {displayedTranscriptItems.map((item, index) => (
                           <TranscriptPreview
                             key={item.kind === "tool_pair" ? item.event.id : item.event.id}
                             item={item}
                             agent={agent}
                             phaseLabel={phaseLabel}
                             latestUserMessageId={pinnedMessage?.id}
-                            defaultExpanded={shouldExpandTranscriptItemByDefault(item, index, transcriptItems)}
+                            defaultExpanded={shouldExpandTranscriptItemByDefault(item, index, displayedTranscriptItems)}
                           />
                         ))}
                       </div>
                     )}
                   </div>
-                ) : transcriptViewMode === "raw" ? (
+                ) : visibleTranscriptViewMode === "raw" ? (
                   <RawStreamView agent={agent} transcript={transcript} compact />
-                ) : transcript.length === 0 ? (
+                ) : transcript.length === 0 || displayedTranscriptItems.length === 0 ? (
                   showActivityIndicator ? (
                     <AgentActivityIndicator agent={agent} compact phaseLabel={phaseLabel} />
                   ) : (
                     <p className="rounded-md border border-dashed border-border px-3 py-10 text-center text-sm text-muted-foreground">
-                      No transcript yet.
+                      {transcript.length === 0 ? "No transcript yet." : "No messages visible at this transcript detail."}
                     </p>
                   )
                 ) : (
                   <div className="grid gap-2">
-                    {transcriptItems.map((item, index) => (
+                    {displayedTranscriptItems.map((item, index) => (
                       <TranscriptPreview
                         key={item.kind === "tool_pair" ? item.event.id : item.event.id}
                         item={item}
                         agent={agent}
                         phaseLabel={phaseLabel}
                         latestUserMessageId={pinnedMessage?.id}
-                        defaultExpanded={shouldExpandTranscriptItemByDefault(item, index, transcriptItems)}
+                        defaultExpanded={shouldExpandTranscriptItemByDefault(item, index, displayedTranscriptItems)}
                       />
                     ))}
                     {showActivityIndicator && <AgentActivityIndicator agent={agent} compact phaseLabel={phaseLabel} />}
                   </div>
                 )}
-                {transcriptViewMode === "chat" && showJumpToBottom && (
+                {visibleTranscriptViewMode === "chat" && showJumpToBottom && (
                   <div className="pointer-events-none sticky bottom-2 z-30 flex flex-col items-end gap-2">
                     {showAutoScrollControl && (
                       <AutoScrollToggleButton
@@ -10528,13 +10575,15 @@ function AgentPanelHeader({
 
 function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
   const transcript = useAppStore((state) => state.transcripts[agent.id] || EMPTY_TRANSCRIPT);
+  const settings = useAppStore((state) => state.settings);
+  const chatTranscriptDetail = normalizeChatTranscriptDetail(settings.chatTranscriptDetail);
   const transcriptItems = useMemo(() => pairedTranscriptItems(transcript), [transcript]);
+  const displayedTranscriptItems = useMemo(() => filteredTranscriptItems(transcriptItems, chatTranscriptDetail), [chatTranscriptDetail, transcriptItems]);
   const draft = useAppStore((state) => state.drafts[agent.id] || "");
   const setDraft = useAppStore((state) => state.setDraft);
   const queue = useAppStore((state) => state.messageQueues[agent.id] || EMPTY_QUEUE);
   const enqueueMessage = useAppStore((state) => state.enqueueMessage);
   const addError = useAppStore((state) => state.addError);
-  const settings = useAppStore((state) => state.settings);
   const savedScrollTop = useAppStore((state) => state.scrollPositions[agent.id]);
   const setScrollPosition = useAppStore((state) => state.setScrollPosition);
   const setChatFocusedAgent = useAppStore((state) => state.setChatFocusedAgent);
@@ -10560,9 +10609,10 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
   const [slashMenuSuppressed, setSlashMenuSuppressed] = useState(false);
   const composerDragDepthRef = useRef(0);
   const isBusy = isAgentBusy(agent);
+  const visibleTranscriptViewMode = chatTranscriptDetail === "raw" ? "raw" : transcriptViewMode;
   const canType = agentHasProcess(agent);
   const canAttach = !agent.remoteControl;
-  const showAutoScrollControl = transcriptViewMode === "chat" && hasActiveAutoScrollStatus(agent);
+  const showAutoScrollControl = visibleTranscriptViewMode === "chat" && hasActiveAutoScrollStatus(agent);
   const showActivityIndicator = isBusy && !hasStreamingAssistantText(transcript);
   const phaseLabel = isBusy ? executingPlanPhase(transcript) : undefined;
   const pinnedMessage = latestUserMessage(transcript);
@@ -10906,22 +10956,22 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
             onContextMenuCapture={prepareContextMenu}
           >
             <div className="mx-auto grid w-full min-w-0 max-w-4xl gap-3">
-              {transcriptViewMode === "chat" && pinLastSentMessage && pinnedMessage && showPinnedMessage && (
+              {visibleTranscriptViewMode === "chat" && pinLastSentMessage && pinnedMessage && showPinnedMessage && (
                 <PinnedUserMessage event={pinnedMessage} onJump={() => scrollToLatestUserMessage(rootRef.current)} />
               )}
-              {transcriptViewMode === "raw" ? (
+              {visibleTranscriptViewMode === "raw" ? (
                 <RawStreamView agent={agent} transcript={transcript} />
-              ) : transcript.length === 0 ? (
+              ) : transcript.length === 0 || displayedTranscriptItems.length === 0 ? (
                 showActivityIndicator ? (
                   <AgentActivityIndicator agent={agent} phaseLabel={phaseLabel} />
                 ) : (
                   <p className="rounded-md border border-dashed border-border px-3 py-12 text-center text-sm text-muted-foreground">
-                    No transcript yet.
+                    {transcript.length === 0 ? "No transcript yet." : "No messages visible at this transcript detail."}
                   </p>
                 )
               ) : (
                 <>
-                  {transcriptItems.map((item, index) => (
+                  {displayedTranscriptItems.map((item, index) => (
                     <TranscriptItem
                       key={item.kind === "tool_pair" ? item.event.id : item.event.id}
                       item={item}
@@ -10929,14 +10979,14 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
                       phaseLabel={phaseLabel}
                       query={searchQuery}
                       latestUserMessageId={pinnedMessage?.id}
-                      defaultExpanded={shouldExpandTranscriptItemByDefault(item, index, transcriptItems)}
+                      defaultExpanded={shouldExpandTranscriptItemByDefault(item, index, displayedTranscriptItems)}
                     />
                   ))}
                   {showActivityIndicator && <AgentActivityIndicator agent={agent} phaseLabel={phaseLabel} />}
                 </>
               )}
             </div>
-            {transcriptViewMode === "chat" && showJumpToBottom && (
+            {visibleTranscriptViewMode === "chat" && showJumpToBottom && (
               <div className="pointer-events-none sticky bottom-3 z-30 mx-auto flex w-full max-w-4xl flex-col items-end gap-2">
                 {showAutoScrollControl && (
                   <AutoScrollToggleButton
@@ -13098,6 +13148,8 @@ function MobileSidebar({
 
 function MobileChatPane({ agent, addError }: { agent: RunningAgent; addError: (message: string) => void }) {
   const transcript = useAppStore((state) => state.transcripts[agent.id] || EMPTY_TRANSCRIPT);
+  const settings = useAppStore((state) => state.settings);
+  const chatTranscriptDetail = normalizeChatTranscriptDetail(settings.chatTranscriptDetail);
   const draft = useAppStore((state) => state.drafts[agent.id] || "");
   const setDraft = useAppStore((state) => state.setDraft);
   const queue = useAppStore((state) => state.messageQueues[agent.id] || EMPTY_QUEUE);
@@ -13105,6 +13157,7 @@ function MobileChatPane({ agent, addError }: { agent: RunningAgent; addError: (m
   const hydrateSnapshot = useAppStore((state) => state.hydrateSnapshot);
   const wsConnected = useAppStore((state) => state.wsConnected);
   const transcriptItems = useMemo(() => pairedTranscriptItems(transcript), [transcript]);
+  const displayedTranscriptItems = useMemo(() => filteredTranscriptItems(transcriptItems, chatTranscriptDetail), [chatTranscriptDetail, transcriptItems]);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const didInitialTranscriptScrollRef = useRef(false);
@@ -13112,8 +13165,9 @@ function MobileChatPane({ agent, addError }: { agent: RunningAgent; addError: (m
   const [showJumpToBottom, setShowJumpToBottom] = useState(false);
   const [autoScrollPaused, setAutoScrollPaused] = useState(false);
   const isBusy = isAgentBusy(agent);
+  const visibleTranscriptViewMode = chatTranscriptDetail === "raw" ? "raw" : "chat";
   const canType = agentHasProcess(agent);
-  const showAutoScrollControl = hasActiveAutoScrollStatus(agent);
+  const showAutoScrollControl = visibleTranscriptViewMode === "chat" && hasActiveAutoScrollStatus(agent);
   const showActivityIndicator = isBusy && agent.status !== "awaiting-input" && !hasStreamingAssistantText(transcript);
   const latestUser = latestUserMessage(transcript);
   const phaseLabel = isBusy ? executingPlanPhase(transcript) : undefined;
@@ -13224,29 +13278,33 @@ function MobileChatPane({ agent, addError }: { agent: RunningAgent; addError: (m
 
       <div className="relative min-h-0 min-w-0 max-w-full flex-1">
         <div ref={rootRef} className="h-full overflow-y-auto overflow-x-hidden bg-background px-3 py-4" onScroll={handleTranscriptScroll}>
-          {transcriptItems.length === 0 ? (
+          {visibleTranscriptViewMode === "raw" ? (
+            <RawStreamView agent={agent} transcript={transcript} compact />
+          ) : displayedTranscriptItems.length === 0 ? (
             showActivityIndicator ? (
               <AgentActivityIndicator agent={agent} compact phaseLabel={phaseLabel} />
             ) : (
-              <div className="grid min-h-full place-items-center text-center text-sm text-muted-foreground">No transcript yet.</div>
+              <div className="grid min-h-full place-items-center text-center text-sm text-muted-foreground">
+                {transcript.length === 0 ? "No transcript yet." : "No messages visible at this transcript detail."}
+              </div>
             )
           ) : (
             <div className="grid w-full min-w-0 max-w-full gap-3 overflow-hidden">
-              {transcriptItems.map((item, index) => (
+              {displayedTranscriptItems.map((item, index) => (
                 <TranscriptPreview
                   key={item.kind === "tool_pair" ? item.event.id : item.event.id}
                   item={item}
                   agent={agent}
                   phaseLabel={phaseLabel}
                   latestUserMessageId={latestUser?.id}
-                  defaultExpanded={shouldExpandTranscriptItemByDefault(item, index, transcriptItems)}
+                  defaultExpanded={shouldExpandTranscriptItemByDefault(item, index, displayedTranscriptItems)}
                 />
               ))}
               {showActivityIndicator && <AgentActivityIndicator agent={agent} compact phaseLabel={phaseLabel} />}
             </div>
           )}
         </div>
-        {showJumpToBottom && (
+        {visibleTranscriptViewMode === "chat" && showJumpToBottom && (
           <div className="absolute bottom-4 right-4 z-20 flex flex-col items-end gap-2">
             {showAutoScrollControl && (
               <AutoScrollToggleButton

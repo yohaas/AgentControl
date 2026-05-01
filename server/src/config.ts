@@ -52,6 +52,7 @@ export interface DashboardConfig {
   tileHeight?: number;
   tileColumns?: number;
   tileScrolling?: TileScrollingMode;
+  chatTranscriptDetail?: ChatTranscriptDetailMode;
   chatFontFamily?: string;
   chatFontSize?: number;
   menuDisplay?: MenuDisplayMode;
@@ -75,6 +76,7 @@ export type ThemeMode = "auto" | "light" | "dark";
 export type ClaudeRuntime = "cli" | "api";
 export type MenuDisplayMode = "iconOnly" | "iconText";
 export type TileScrollingMode = "vertical" | "horizontal";
+export type ChatTranscriptDetailMode = "responses" | "actions" | "detailed" | "raw";
 export type ExternalEditor = "none" | "vscode" | "cursor" | "custom";
 
 const configDir = statePath();
@@ -223,6 +225,14 @@ export function resolveTileColumns(config: DashboardConfig): number {
 
 export function resolveTileScrolling(config: DashboardConfig): TileScrollingMode {
   return config.tileScrolling === "horizontal" ? "horizontal" : "vertical";
+}
+
+export function resolveChatTranscriptDetail(config: DashboardConfig): ChatTranscriptDetailMode {
+  return config.chatTranscriptDetail === "responses" ||
+    config.chatTranscriptDetail === "detailed" ||
+    config.chatTranscriptDetail === "raw"
+    ? config.chatTranscriptDetail
+    : "actions";
 }
 
 export function resolveChatFontFamily(config: DashboardConfig): string {

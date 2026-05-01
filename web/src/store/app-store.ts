@@ -42,6 +42,7 @@ export interface SettingsState {
   tileHeight: number;
   tileColumns: number;
   tileScrolling: TileScrollingMode;
+  chatTranscriptDetail: ChatTranscriptDetailMode;
   menuDisplay: MenuDisplayMode;
   sidebarWidth: number;
   pinLastSentMessage: boolean;
@@ -65,6 +66,7 @@ export type ThemeMode = "auto" | "light" | "dark";
 export type ClaudeRuntime = "cli" | "api";
 export type MenuDisplayMode = "iconOnly" | "iconText";
 export type TileScrollingMode = "vertical" | "horizontal";
+export type ChatTranscriptDetailMode = "responses" | "actions" | "detailed" | "raw";
 export type ExternalEditor = "none" | "vscode" | "cursor" | "custom";
 
 interface SendDialogState {
@@ -386,6 +388,7 @@ const defaultSettings: SettingsState = {
   tileHeight: 460,
   tileColumns: 2,
   tileScrolling: "vertical",
+  chatTranscriptDetail: "actions",
   menuDisplay: "iconOnly",
   sidebarWidth: 280,
   pinLastSentMessage: true,
@@ -446,6 +449,9 @@ function normalizeSettings(settings: SettingsState): SettingsState {
   const claudeRuntime = settings.claudeRuntime === "api" ? "api" : "cli";
   const menuDisplay = settings.menuDisplay === "iconText" ? "iconText" : "iconOnly";
   const tileScrolling = settings.tileScrolling === "horizontal" ? "horizontal" : "vertical";
+  const chatTranscriptDetail = ["responses", "actions", "detailed", "raw"].includes(settings.chatTranscriptDetail)
+    ? settings.chatTranscriptDetail
+    : defaultSettings.chatTranscriptDetail;
   const externalEditor = ["none", "vscode", "cursor", "custom"].includes(settings.externalEditor)
     ? settings.externalEditor
     : defaultSettings.externalEditor;
@@ -483,7 +489,8 @@ function normalizeSettings(settings: SettingsState): SettingsState {
     themeMode,
     claudeRuntime,
     menuDisplay,
-    tileScrolling
+    tileScrolling,
+    chatTranscriptDetail
   };
 }
 
