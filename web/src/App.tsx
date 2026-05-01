@@ -12766,7 +12766,7 @@ function MobileSidebar({
                 >
                   <button
                     type="button"
-                    className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-2 rounded-sm px-1 py-1 text-left"
+                    className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 rounded-sm px-1 py-1 text-left"
                     onClick={() => selectChat(agent.id)}
                   >
                     <ActiveAgentDot agent={agent} />
@@ -12778,11 +12778,14 @@ function MobileSidebar({
                         )}
                       </span>
                       <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-                        <StatusPill status={agent.status} done={Boolean(doneAgentIds[agent.id])} className="shrink-0 px-1.5 py-0 text-[10px] leading-4" />
                         <span className="shrink-0">{providerLabel(agent.provider)}</span>
                         <span aria-hidden="true">·</span>
                         <span className="truncate">{agent.currentModel}</span>
                       </span>
+                    </span>
+                    <span className="flex shrink-0 flex-col items-end gap-1">
+                      <StatusPill status={agent.status} done={Boolean(doneAgentIds[agent.id])} className="px-1.5 py-0 text-[10px] leading-4" />
+                      <LastActivityText agent={agent} compact timeOnly />
                     </span>
                   </button>
                   <Button
