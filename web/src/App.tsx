@@ -7319,7 +7319,7 @@ function SettingsDialog() {
                 />
               </label>
             </div>
-            <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_12rem_10rem]">
+            <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_10rem_12rem]">
               <label className="grid min-w-0 gap-1.5 text-sm">
                 Chat font
                 <Select value={chatFontSelectValue(chatFontFamily)} onValueChange={(value) => setChatFontFamily(chatFontValueFromSelect(value))}>
@@ -7342,6 +7342,18 @@ function SettingsDialog() {
                 </Select>
               </label>
               <label className="grid min-w-0 gap-1.5 text-sm">
+                Chat font size
+                <Input
+                  type="number"
+                  min={CHAT_FONT_SIZE_MIN}
+                  max={CHAT_FONT_SIZE_MAX}
+                  step={1}
+                  value={chatFontSize}
+                  className="px-2"
+                  onChange={(event) => setChatFontSize(Number(event.target.value))}
+                />
+              </label>
+              <label className="grid min-w-0 gap-1.5 text-sm">
                 Chat detail
                 <Select value={chatTranscriptDetail} onValueChange={(value) => setChatTranscriptDetail(value as ChatTranscriptDetailMode)}>
                   <SelectTrigger className="px-2">
@@ -7355,18 +7367,6 @@ function SettingsDialog() {
                     ))}
                   </SelectContent>
                 </Select>
-              </label>
-              <label className="grid min-w-0 gap-1.5 text-sm">
-                Chat font size
-                <Input
-                  type="number"
-                  min={CHAT_FONT_SIZE_MIN}
-                  max={CHAT_FONT_SIZE_MAX}
-                  step={1}
-                  value={chatFontSize}
-                  className="px-2"
-                  onChange={(event) => setChatFontSize(Number(event.target.value))}
-                />
               </label>
             </div>
             <label className="flex items-start gap-2 rounded-md border border-border bg-background/50 p-3 text-sm">
