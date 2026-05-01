@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-05-01
 
+- [b518335](https://github.com/yohaas/AgentHero/commit/b518335) Add Fork Chat and make Clear Chat remove saved copies.
 - [669066c](https://github.com/yohaas/AgentHero/commit/669066c) Add saved chat persistence, restore, sorting, and deletion.
 - [ef75280](https://github.com/yohaas/AgentHero/commit/ef75280) Add git pull support to GitStatusMenu.
 
