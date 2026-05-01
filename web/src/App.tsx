@@ -13320,7 +13320,15 @@ function MobileSidebar({
   const setCollapsed = useAppStore((state) => state.setSidebarCollapsed);
   const openLaunchModal = useAppStore((state) => state.openLaunchModal);
   const doneAgentIds = useAppStore((state) => state.doneAgentIds);
+  const savedChats = useAppStore((state) => state.savedChats);
   const selectedProjectId = selectedProject?.id;
+  const projectSavedChats = useMemo(
+    () =>
+      savedChats
+        .filter((chat) => chat.projectId === selectedProjectId)
+        .sort((left, right) => timestampValue(right.updatedAt) - timestampValue(left.updatedAt)),
+    [savedChats, selectedProjectId]
+  );
 
   function newChat() {
     if (!selectedProjectId) return;
@@ -13332,6 +13340,12 @@ function MobileSidebar({
   }
 
   function selectChat(agentId: string) {
+    onSelectAgent(agentId);
+    setCollapsed(true);
+  }
+
+  function restoreSavedChat(savedChatId: string, agentId: string) {
+    if (!sendCommand({ type: "restoreSavedChat", savedChatId })) return;
     onSelectAgent(agentId);
     setCollapsed(true);
   }
@@ -13505,6 +13519,53 @@ function MobileSidebar({
                 </div>
               );
             })}
+          </div>
+        )}
+      </section>
+      <section className="shrink-0 border-t border-border p-3">
+        <div className="mb-2 flex min-w-0 items-center gap-2">
+          <MessagesSquare className="h-4 w-4 text-muted-foreground" />
+          <h2 className="truncate text-xs font-semibold uppercase tracking-wide text-muted-foreground">Saved Chats</h2>
+          {projectSavedChats.length > 0 && <Badge>{projectSavedChats.length}</Badge>}
+        </div>
+        {projectSavedChats.length === 0 ? (
+          <div className="rounded-md border border-dashed border-border px-3 py-4 text-center text-xs text-muted-foreground">
+            No saved chats.
+          </div>
+        ) : (
+          <div className="max-h-44 space-y-1 overflow-y-auto overflow-x-hidden pr-1">
+            {projectSavedChats.map((chat) => (
+              <div key={chat.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-1 rounded-md px-1 py-1 hover:bg-accent">
+                <button
+                  type="button"
+                  className="flex min-w-0 items-center gap-2 rounded-sm px-1 py-1 text-left"
+                  title={`${chat.agent.displayName}\nSaved ${new Date(chat.updatedAt).toLocaleString()}`}
+                  onClick={() => restoreSavedChat(chat.id, chat.agent.id)}
+                >
+                  <AgentDot color={chat.agent.color} />
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-medium">{chat.agent.displayName}</span>
+                    <span className="block truncate text-xs text-muted-foreground">
+                      {chat.agent.defName} · {new Date(chat.updatedAt).toLocaleDateString([], { month: "short", day: "numeric" })}
+                    </span>
+                  </span>
+                </button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
+                  title={`Delete saved chat ${chat.agent.displayName}`}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    if (window.confirm(`Delete saved chat "${chat.agent.displayName}"?`)) {
+                      sendCommand({ type: "deleteSavedChat", savedChatId: chat.id });
+                    }
+                  }}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            ))}
           </div>
         )}
       </section>
