@@ -118,7 +118,15 @@
 
 @layer components {
   .markdown-content {
-    @apply min-w-0 whitespace-normal break-words leading-6 [overflow-wrap:anywhere];
+    @apply min-w-0 max-w-full overflow-hidden whitespace-normal break-words leading-6 [overflow-wrap:anywhere];
+    word-break: break-word;
+  }
+
+  .markdown-content * {
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    word-break: break-word;
   }
 
   .markdown-content > :first-child {
@@ -164,11 +172,11 @@
   }
 
   .markdown-content pre {
-    @apply max-w-full overflow-x-auto rounded-md border border-border bg-muted/70 p-3 text-xs leading-5;
+    @apply max-w-full overflow-x-hidden whitespace-pre-wrap break-words rounded-md border border-border bg-muted/70 p-3 text-xs leading-5 [overflow-wrap:anywhere];
   }
 
   .markdown-content pre code {
-    @apply whitespace-pre bg-transparent p-0 font-mono text-inherit;
+    @apply whitespace-pre-wrap break-words bg-transparent p-0 font-mono text-inherit [overflow-wrap:anywhere];
   }
 
   .markdown-inline-code {
@@ -176,12 +184,12 @@
   }
 
   .markdown-content table {
-    @apply block max-w-full overflow-x-auto border-collapse text-left text-xs;
+    @apply block max-w-full table-fixed overflow-x-hidden border-collapse text-left text-xs;
   }
 
   .markdown-content th,
   .markdown-content td {
-    @apply border border-border px-2 py-1 align-top;
+    @apply break-words border border-border px-2 py-1 align-top [overflow-wrap:anywhere];
   }
 
   .markdown-content th {

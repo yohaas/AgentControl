@@ -9371,12 +9371,15 @@ function AgentTile({
     event.preventDefault();
     event.stopPropagation();
     const startX = event.clientX;
-    const startWidth = tileRef.current?.getBoundingClientRect().width || width || 420;
+    const startRect = tileRef.current?.getBoundingClientRect();
+    const startWidth = startRect?.width || width || 420;
+    const maxViewportWidth = Math.max(1, window.innerWidth - (startRect?.left || 0) - 16);
+    const minViewportWidth = Math.min(320, maxViewportWidth);
     const pointerId = event.pointerId;
     event.currentTarget.setPointerCapture(pointerId);
 
     const onMove = (moveEvent: PointerEvent) => {
-      const nextWidth = Math.min(1200, Math.max(320, startWidth + moveEvent.clientX - startX));
+      const nextWidth = Math.min(maxViewportWidth, Math.max(minViewportWidth, startWidth + moveEvent.clientX - startX));
       setTileWidth(agent.id, Math.round(nextWidth));
     };
     const onUp = () => {
@@ -9437,7 +9440,7 @@ function AgentTile({
     <section
       ref={tileRef}
       className={cn(
-        "relative flex min-h-0 min-w-80 max-w-full flex-col rounded-md border border-border bg-card/70",
+        "relative flex min-h-0 min-w-0 max-w-full flex-col overflow-hidden rounded-md border border-border bg-card/70",
         focusedAgentId === agent.id && "ring-2 ring-primary/60"
       )}
       style={{ height: tileMinimized ? undefined : height, flex: `0 0 ${width ? `${width}px` : defaultWidth}` }}
@@ -11323,12 +11326,12 @@ function TranscriptItem({
   const showPopout = isLongTextBlock(event.text);
   return (
     <div
-      className={cn("flex", isUser && "justify-end")}
+      className={cn("flex w-full min-w-0 max-w-full overflow-hidden", isUser && "justify-end")}
       data-latest-user-message={event.id === latestUserMessageId ? "true" : undefined}
     >
       <div
         className={cn(
-          "relative min-w-0 max-w-[78%] whitespace-pre-wrap break-words [overflow-wrap:anywhere] rounded-lg border border-border px-3 py-2 text-sm leading-6",
+          "relative box-border min-w-0 max-w-[78%] overflow-hidden whitespace-pre-wrap break-words [overflow-wrap:anywhere] rounded-lg border border-border px-3 py-2 text-sm leading-6",
           isUser ? "user-question bg-primary text-primary-foreground" : "bg-card",
           showPopout && "pr-16"
         )}
@@ -11570,7 +11573,7 @@ function ChatMarkdown({ text, query, agent }: { text: string; query: string; age
   const openFilePreview = useAppStore((state) => state.openFilePreview);
   if (query.trim()) {
     return (
-      <span className="whitespace-pre-wrap">
+      <span className="block min-w-0 max-w-full whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
         <HighlightedText text={text} query={query} />
       </span>
     );
@@ -11813,7 +11816,11 @@ function ChatBlockPopoutButton({
                 onKeyUp={() => capturePopoutSelection()}
                 onContextMenuCapture={preparePopoutContextMenu}
               >
-                {rawView ? <pre className="whitespace-pre-wrap break-words font-mono text-xs leading-5">{text}</pre> : <ChatMarkdown text={text} query="" agent={source} />}
+                {rawView ? (
+                  <pre className="max-w-full whitespace-pre-wrap break-words font-mono text-xs leading-5 [overflow-wrap:anywhere]">{text}</pre>
+                ) : (
+                  <ChatMarkdown text={text} query="" agent={source} />
+                )}
               </div>
             </ContextMenuTrigger>
             <ContextMenuContent>
