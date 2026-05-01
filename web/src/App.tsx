@@ -3288,7 +3288,7 @@ function Header({
       >
         {!sidebarCollapsed && (
           <>
-            <AgentHeroLogo className="h-5 w-5" />
+            <AgentHeroLogo className="h-[35px] w-[35px]" />
             <h1 className="min-w-0 flex-1 truncate text-base font-semibold">AgentHero</h1>
           </>
         )}
@@ -3330,7 +3330,7 @@ function Header({
       )}
     >
       <div className="flex min-w-0 items-center gap-2">
-        <AgentHeroLogo className="h-5 w-5" />
+        <AgentHeroLogo className="h-[35px] w-[35px]" />
         <h1 className="truncate text-base font-semibold">AgentHero</h1>
         {supervised ? (
           <DropdownMenu open={connectionMenuOpen} onOpenChange={setConnectionMenuOpen}>
@@ -12675,7 +12675,7 @@ function MobileSidebar({
   return (
     <aside className="flex w-72 shrink-0 flex-col overflow-x-hidden border-r border-border bg-card/45" onClick={toggleOnEmptyNavTap}>
       <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-3">
-        <AgentHeroLogo className="h-5 w-5" />
+        <AgentHeroLogo className="h-[35px] w-[35px]" />
         <div className="min-w-0 flex-1">
           <div className="truncate text-sm font-semibold">AgentHero</div>
           <div className="truncate text-xs text-muted-foreground">Mobile</div>
