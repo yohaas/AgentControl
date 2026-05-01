@@ -1413,6 +1413,11 @@ app.post("/api/auth/login", (request, response) => {
   response.json({ ...authStatus(request), authenticated: true });
 });
 
+app.post("/api/auth/logout", (_request, response) => {
+  clearAuthCookie(response);
+  response.json({ ok: true });
+});
+
 app.post("/api/auth/setup", async (request, response) => {
   if (!canIssueToken(request)) {
     response.status(403).json({ error: "Origin is not allowed." });
@@ -1437,7 +1442,13 @@ app.post("/api/auth/setup", async (request, response) => {
 });
 
 app.use((request, response, next) => {
-  if (request.path === "/api/health" || request.path === "/api/auth/status" || request.path === "/api/auth/login" || request.path === "/api/auth/setup") {
+  if (
+    request.path === "/api/health" ||
+    request.path === "/api/auth/status" ||
+    request.path === "/api/auth/login" ||
+    request.path === "/api/auth/logout" ||
+    request.path === "/api/auth/setup"
+  ) {
     next();
     return;
   }

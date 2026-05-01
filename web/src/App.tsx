@@ -71,6 +71,7 @@ import {
   Image as ImageIcon,
   KeyRound,
   LayoutGrid,
+  LogOut,
   Loader2,
   Maximize2,
   MessageCircle,
@@ -155,7 +156,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "./components/ui/popover
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "./components/ui/select";
 import { Textarea } from "./components/ui/textarea";
 import { getSelectionInRoot, useTextSelection } from "./hooks/use-text-selection";
-import { api } from "./lib/api";
+import { api, setAgentHeroToken } from "./lib/api";
 import { cn, downloadText, formatDuration, prettyJson } from "./lib/utils";
 import { connectWebSocket, disconnectWebSocket, sendCommand } from "./lib/ws-client";
 import {
@@ -12626,6 +12627,12 @@ function MobileSidebar({
     setCollapsed(true);
   }
 
+  async function logout() {
+    disconnectWebSocket();
+    await api.logout().catch(() => setAgentHeroToken(undefined));
+    window.location.reload();
+  }
+
   function toggleOnEmptyNavTap(event: ReactMouseEvent<HTMLElement>) {
     const target = event.target as HTMLElement;
     if (target.closest("button,a,input,textarea,select,[role='button'],[role='combobox'],[data-radix-select-trigger]")) return;
@@ -12657,6 +12664,9 @@ function MobileSidebar({
             contentClassName="w-[min(calc(100vw-1rem),20rem)]"
             hideWhenNoPendingPushes
           />
+          <Button variant="ghost" size="icon" onClick={() => void logout()} title="Log out" aria-label="Log out">
+            <LogOut className="h-4 w-4" />
+          </Button>
           <div className="h-px w-8 bg-border" />
           <div className="flex min-h-0 flex-1 flex-col items-center gap-2 overflow-y-auto overflow-x-hidden px-1" data-mobile-nav-empty-toggle>
             {openChats.map((agent) => (
@@ -12700,6 +12710,9 @@ function MobileSidebar({
           contentClassName="w-[min(calc(100vw-1rem),20rem)]"
           hideWhenNoPendingPushes
         />
+        <Button variant="ghost" size="icon" onClick={() => void logout()} title="Log out" aria-label="Log out">
+          <LogOut className="h-4 w-4" />
+        </Button>
         <Button variant="ghost" size="icon" onClick={() => setCollapsed(true)} title="Collapse sidebar">
           <PanelLeftClose className="h-4 w-4" />
         </Button>

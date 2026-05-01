@@ -58,8 +58,12 @@ export function storedAgentHeroToken(): string | undefined {
 
 export function setAgentHeroToken(token?: string) {
   authToken = token?.trim() || undefined;
-  if (!authToken) window.localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
-  else window.localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, authToken);
+  if (!authToken) {
+    window.localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
+    window.localStorage.removeItem(LEGACY_AUTH_TOKEN_STORAGE_KEY);
+  } else {
+    window.localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, authToken);
+  }
 }
 
 async function withAuth(input: RequestInfo, init?: RequestInit): Promise<RequestInit | undefined> {
@@ -105,6 +109,16 @@ export const api = {
     });
     setAgentHeroToken(token);
     return status;
+  },
+  logout: async () => {
+    try {
+      await json<{ ok: boolean }>("/api/auth/logout", {
+        method: "POST",
+        credentials: "same-origin"
+      });
+    } finally {
+      setAgentHeroToken(undefined);
+    }
   },
   setupAccessToken: async (token: string) => {
     const status = await json<AuthStatus>("/api/auth/setup", {
