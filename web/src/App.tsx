@@ -3349,7 +3349,7 @@ function Header({
           {currentTileHeight === undefined && <Check className="ml-auto h-4 w-4" />}
         </DropdownMenuItem>
         <div className="mt-1 grid gap-2 border-t border-border px-2 py-2" onClick={(event) => event.stopPropagation()}>
-          <div className="grid grid-cols-[1fr_0.8fr_auto] items-end gap-2">
+          <div className="grid grid-cols-[1fr_0.8fr] gap-2">
             <label className="grid gap-1 text-xs text-muted-foreground">
               Height (0 = full)
               <Input
@@ -3372,15 +3372,6 @@ function Header({
                 onChange={(event) => setLayoutColumnsDraft(event.target.value)}
               />
             </label>
-            <Button
-              type="button"
-              size="icon"
-              disabled={!layoutSettingsDirty}
-              title="Save layout settings"
-              onClick={() => void saveLayoutSettings()}
-            >
-              <Save className="h-4 w-4" />
-            </Button>
           </div>
           <div className="grid grid-cols-[1fr_0.45fr] gap-2">
             <label className="grid gap-1 text-xs text-muted-foreground">
@@ -3415,6 +3406,18 @@ function Header({
                 onChange={(event) => setLayoutChatFontSizeDraft(event.target.value)}
               />
             </label>
+          </div>
+          <div className="flex justify-end">
+            <Button
+              type="button"
+              size="sm"
+              disabled={!layoutSettingsDirty}
+              title="Save layout settings"
+              onClick={() => void saveLayoutSettings()}
+            >
+              <Save className="h-4 w-4" />
+              Save
+            </Button>
           </div>
         </div>
       </DropdownMenuContent>
