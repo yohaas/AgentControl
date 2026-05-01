@@ -3734,7 +3734,12 @@ function GitStatusMenu({
             <GitBranch className="h-4 w-4" />
             {showButtonText && <span>Git</span>}
             {aheadCount > 0 && (
-              <span className="absolute -right-1.5 -top-1.5 grid min-h-4 min-w-4 place-items-center rounded-full border border-background bg-red-500 px-1 text-[10px] font-semibold leading-none text-white">
+              <span
+                className={cn(
+                  "absolute grid min-h-4 min-w-4 place-items-center rounded-full border border-background bg-red-500 px-1 text-[10px] font-semibold leading-none text-white",
+                  compact ? "-right-0.5 -top-0.5" : "-right-1.5 -top-1.5"
+                )}
+              >
                 {aheadCount > 99 ? "99+" : aheadCount}
               </span>
             )}
