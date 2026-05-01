@@ -601,6 +601,20 @@ const TILE_MAX_HEIGHT = 2000;
 const DEFAULT_CHAT_FONT_SIZE = 14;
 const CHAT_FONT_SIZE_MIN = 11;
 const CHAT_FONT_SIZE_MAX = 24;
+const CHAT_FONT_DEFAULT_VALUE = "__agent-hero-default-font";
+const CHAT_FONT_OPTIONS = [
+  { label: "App default", value: "" },
+  { label: "System UI", value: "system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif" },
+  { label: "Arial", value: "Arial, Helvetica, sans-serif" },
+  { label: "Verdana", value: "Verdana, Geneva, sans-serif" },
+  { label: "Tahoma", value: "Tahoma, Geneva, sans-serif" },
+  { label: "Trebuchet MS", value: "\"Trebuchet MS\", Arial, sans-serif" },
+  { label: "Georgia", value: "Georgia, serif" },
+  { label: "Times New Roman", value: "\"Times New Roman\", Times, serif" },
+  { label: "Garamond", value: "Garamond, Georgia, serif" },
+  { label: "Consolas", value: "Consolas, \"Cascadia Mono\", monospace" },
+  { label: "Courier New", value: "\"Courier New\", Courier, monospace" }
+] as const;
 
 type ChatDisplaySettings = SettingsState & {
   chatFontFamily?: string;
@@ -609,6 +623,15 @@ type ChatDisplaySettings = SettingsState & {
 
 function normalizeChatFontFamily(value: unknown) {
   return typeof value === "string" ? value.trim().slice(0, 160) : "";
+}
+
+function chatFontSelectValue(value: unknown) {
+  const normalized = normalizeChatFontFamily(value);
+  return normalized || CHAT_FONT_DEFAULT_VALUE;
+}
+
+function chatFontValueFromSelect(value: string) {
+  return value === CHAT_FONT_DEFAULT_VALUE ? "" : value;
 }
 
 function normalizeChatFontSize(value: unknown) {
@@ -3362,12 +3385,24 @@ function Header({
           <div className="grid grid-cols-[1fr_0.45fr] gap-2">
             <label className="grid gap-1 text-xs text-muted-foreground">
               Chat font
-              <Input
-                value={layoutChatFontDraft}
-                placeholder="App default"
-                onKeyDown={(event) => event.stopPropagation()}
-                onChange={(event) => setLayoutChatFontDraft(event.target.value)}
-              />
+              <Select value={chatFontSelectValue(layoutChatFontDraft)} onValueChange={(value) => setLayoutChatFontDraft(chatFontValueFromSelect(value))}>
+                <SelectTrigger onKeyDown={(event) => event.stopPropagation()}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {CHAT_FONT_OPTIONS.map((option) => (
+                    <SelectItem key={option.label} value={option.value || CHAT_FONT_DEFAULT_VALUE}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                  {normalizeChatFontFamily(layoutChatFontDraft) &&
+                    !CHAT_FONT_OPTIONS.some((option) => option.value === normalizeChatFontFamily(layoutChatFontDraft)) && (
+                      <SelectItem value={normalizeChatFontFamily(layoutChatFontDraft)}>
+                        Custom: {normalizeChatFontFamily(layoutChatFontDraft)}
+                      </SelectItem>
+                    )}
+                </SelectContent>
+              </Select>
             </label>
             <label className="grid gap-1 text-xs text-muted-foreground">
               Size
@@ -7242,11 +7277,24 @@ function SettingsDialog() {
             <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_10rem]">
               <label className="grid min-w-0 gap-1.5 text-sm">
                 Chat font
-                <Input
-                  value={chatFontFamily}
-                  placeholder="App default"
-                  onChange={(event) => setChatFontFamily(event.target.value)}
-                />
+                <Select value={chatFontSelectValue(chatFontFamily)} onValueChange={(value) => setChatFontFamily(chatFontValueFromSelect(value))}>
+                  <SelectTrigger className="px-2">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CHAT_FONT_OPTIONS.map((option) => (
+                      <SelectItem key={option.label} value={option.value || CHAT_FONT_DEFAULT_VALUE}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                    {normalizeChatFontFamily(chatFontFamily) &&
+                      !CHAT_FONT_OPTIONS.some((option) => option.value === normalizeChatFontFamily(chatFontFamily)) && (
+                        <SelectItem value={normalizeChatFontFamily(chatFontFamily)}>
+                          Custom: {normalizeChatFontFamily(chatFontFamily)}
+                        </SelectItem>
+                      )}
+                  </SelectContent>
+                </Select>
               </label>
               <label className="grid min-w-0 gap-1.5 text-sm">
                 Chat font size
