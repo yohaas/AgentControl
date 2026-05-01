@@ -98,6 +98,11 @@ interface TerminalProjectUiState {
   activeTerminalId?: string;
 }
 
+interface FileExplorerProjectUiState {
+  open: boolean;
+  maximized: boolean;
+}
+
 const MESSAGE_QUEUES_STORAGE_KEY = "agent-hero-message-queues";
 const TILE_LAYOUT_STORAGE_KEY = "agent-hero-tile-layout";
 const SELECTED_PROJECT_STORAGE_KEY = "agent-hero-selected-project";
@@ -108,6 +113,8 @@ const SIDEBAR_COLLAPSED_STORAGE_KEY = "agent-hero-sidebar-collapsed";
 const LEGACY_SIDEBAR_COLLAPSED_STORAGE_KEY = "agent-control-sidebar-collapsed";
 const FILE_EXPLORER_OPEN_STORAGE_KEY = "agent-hero-file-explorer-open";
 const LEGACY_FILE_EXPLORER_OPEN_STORAGE_KEY = "agent-control-file-explorer-open";
+const FILE_EXPLORER_PROJECT_UI_STORAGE_KEY = "agent-hero-file-explorer-project-ui";
+const LEGACY_FILE_EXPLORER_PROJECT_UI_STORAGE_KEY = "agent-control-file-explorer-project-ui";
 const FILE_EXPLORER_POPOUT_STORAGE_KEY = "agent-hero-file-explorer-popout";
 const FILE_EXPLORER_PREVIEW_STORAGE_KEY = "agent-hero-file-explorer-preview-request";
 const REMOVED_QUEUE_TOMBSTONE_TTL_MS = 5 * 60 * 1000;
@@ -308,6 +315,7 @@ interface AppState {
   sidebarCollapsed: boolean;
   terminalOpen: boolean;
   terminalProjectUi: Record<string, TerminalProjectUiState>;
+  fileExplorerProjectUi: Record<string, FileExplorerProjectUiState>;
   fileExplorerOpen: boolean;
   fileExplorerMaximized: boolean;
   filePreviewRequest?: FilePreviewRequest;
@@ -414,6 +422,44 @@ const defaultSettings: SettingsState = {
 function initialFileExplorerOpen(): boolean {
   if (typeof window === "undefined") return true;
   return readLocalStorageWithLegacy(FILE_EXPLORER_OPEN_STORAGE_KEY, LEGACY_FILE_EXPLORER_OPEN_STORAGE_KEY) !== "false";
+}
+
+function normalizeFileExplorerProjectUi(value: unknown): Record<string, FileExplorerProjectUiState> {
+  if (!value || typeof value !== "object") return {};
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .map(([projectId, state]) => {
+        const record = state && typeof state === "object" ? (state as Partial<FileExplorerProjectUiState>) : {};
+        return [
+          projectId,
+          {
+            open: record.open === true,
+            maximized: record.maximized === true
+          }
+        ] as const;
+      })
+      .filter(([projectId]) => Boolean(projectId))
+  );
+}
+
+function readStoredFileExplorerProjectUi(): Record<string, FileExplorerProjectUiState> {
+  if (typeof window === "undefined") return {};
+  try {
+    return normalizeFileExplorerProjectUi(
+      JSON.parse(readLocalStorageWithLegacy(FILE_EXPLORER_PROJECT_UI_STORAGE_KEY, LEGACY_FILE_EXPLORER_PROJECT_UI_STORAGE_KEY) || "{}")
+    );
+  } catch {
+    return {};
+  }
+}
+
+function writeStoredFileExplorerProjectUi(ui: Record<string, FileExplorerProjectUiState>): Record<string, FileExplorerProjectUiState> {
+  const normalized = normalizeFileExplorerProjectUi(ui);
+  if (typeof window !== "undefined") {
+    if (Object.keys(normalized).length === 0) window.localStorage.removeItem(FILE_EXPLORER_PROJECT_UI_STORAGE_KEY);
+    else window.localStorage.setItem(FILE_EXPLORER_PROJECT_UI_STORAGE_KEY, JSON.stringify(normalized));
+  }
+  return normalized;
 }
 
 function readStoredSidebarCollapsed(): boolean {
@@ -567,8 +613,32 @@ function terminalUiForProject(state: AppState, projectId: string | undefined, te
   };
 }
 
+function saveCurrentProjectFileExplorerUi(state: AppState): Record<string, FileExplorerProjectUiState> {
+  if (!state.selectedProjectId) return state.fileExplorerProjectUi;
+  return writeStoredFileExplorerProjectUi({
+    ...state.fileExplorerProjectUi,
+    [state.selectedProjectId]: {
+      open: state.fileExplorerOpen,
+      maximized: state.fileExplorerMaximized
+    }
+  });
+}
+
+function fileExplorerUiForProject(
+  projectId: string | undefined,
+  fileExplorerProjectUi: Record<string, FileExplorerProjectUiState>
+) {
+  const stored = projectId ? fileExplorerProjectUi[projectId] : undefined;
+  return {
+    fileExplorerOpen: stored ? stored.open : initialFileExplorerOpen(),
+    fileExplorerMaximized: stored ? stored.maximized : false
+  };
+}
+
 const TRANSIENT_WS_NOT_CONNECTED_ERROR = "Backend server not running.";
 const initialTileLayout = readStoredTileLayout();
+const initialFileExplorerProjectUi = readStoredFileExplorerProjectUi();
+const initialFileExplorerUi = fileExplorerUiForProject(readStoredSelectedProjectId(), initialFileExplorerProjectUi);
 
 export const useAppStore = create<AppState>((set, get) => ({
   projects: [],
@@ -593,8 +663,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   sidebarCollapsed: readStoredSidebarCollapsed(),
   terminalOpen: false,
   terminalProjectUi: {},
-  fileExplorerOpen: initialFileExplorerOpen(),
-  fileExplorerMaximized: false,
+  fileExplorerProjectUi: initialFileExplorerProjectUi,
+  fileExplorerOpen: initialFileExplorerUi.fileExplorerOpen,
+  fileExplorerMaximized: initialFileExplorerUi.fileExplorerMaximized,
   filePreviewRequest: undefined,
   terminalInFileExplorer: false,
   terminalSessions: {},
@@ -622,6 +693,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       const terminalProjectUi =
         state.selectedProjectId && state.selectedProjectId !== selectedProjectId ? saveCurrentProjectTerminalUi(state) : state.terminalProjectUi;
       const terminalUi = terminalUiForProject(state, selectedProjectId, terminalProjectUi);
+      const fileExplorerProjectUi =
+        state.selectedProjectId && state.selectedProjectId !== selectedProjectId ? saveCurrentProjectFileExplorerUi(state) : state.fileExplorerProjectUi;
+      const fileExplorerUi = fileExplorerUiForProject(selectedProjectId, fileExplorerProjectUi);
       return {
         projects,
         selectedProjectId,
@@ -631,8 +705,10 @@ export const useAppStore = create<AppState>((set, get) => ({
           state.chatFocusedAgentId && state.agents[state.chatFocusedAgentId]?.projectId === selectedProjectId
             ? state.chatFocusedAgentId
             : undefined,
+        fileExplorerProjectUi,
         terminalProjectUi,
-        ...terminalUi
+        ...terminalUi,
+        ...fileExplorerUi
       };
     }),
   setSelectedProject: (id) =>
@@ -640,13 +716,17 @@ export const useAppStore = create<AppState>((set, get) => ({
       writeStoredSelectedProjectId(id);
       const terminalProjectUi = saveCurrentProjectTerminalUi(state);
       const terminalUi = terminalUiForProject(state, id, terminalProjectUi);
+      const fileExplorerProjectUi = saveCurrentProjectFileExplorerUi(state);
+      const fileExplorerUi = fileExplorerUiForProject(id, fileExplorerProjectUi);
       return {
         selectedProjectId: id,
         selectedAgentId: undefined,
         focusedAgentId: undefined,
         chatFocusedAgentId: undefined,
+        fileExplorerProjectUi,
         terminalProjectUi,
-        ...terminalUi
+        ...terminalUi,
+        ...fileExplorerUi
       };
     }),
   setSelectedAgent: (id) => set({ selectedAgentId: id }),
@@ -1095,10 +1175,19 @@ export const useAppStore = create<AppState>((set, get) => ({
         : state.terminalProjectUi
     })),
   setFileExplorerOpen: (open) => {
-    if (typeof window !== "undefined") window.localStorage.setItem(FILE_EXPLORER_OPEN_STORAGE_KEY, String(open));
     set((state) => {
       const terminalInFileExplorer = open ? state.terminalInFileExplorer : false;
+      const fileExplorerProjectUi = state.selectedProjectId
+        ? writeStoredFileExplorerProjectUi({
+            ...state.fileExplorerProjectUi,
+            [state.selectedProjectId]: {
+              open,
+              maximized: open ? state.fileExplorerMaximized : false
+            }
+          })
+        : state.fileExplorerProjectUi;
       return {
+        fileExplorerProjectUi,
         fileExplorerOpen: open,
         fileExplorerMaximized: open ? state.fileExplorerMaximized : false,
         terminalInFileExplorer,
@@ -1115,7 +1204,20 @@ export const useAppStore = create<AppState>((set, get) => ({
       };
     });
   },
-  setFileExplorerMaximized: (maximized) => set({ fileExplorerMaximized: maximized, fileExplorerOpen: maximized ? true : get().fileExplorerOpen }),
+  setFileExplorerMaximized: (maximized) =>
+    set((state) => {
+      const fileExplorerOpen = maximized ? true : state.fileExplorerOpen;
+      const fileExplorerProjectUi = state.selectedProjectId
+        ? writeStoredFileExplorerProjectUi({
+            ...state.fileExplorerProjectUi,
+            [state.selectedProjectId]: {
+              open: fileExplorerOpen,
+              maximized
+            }
+          })
+        : state.fileExplorerProjectUi;
+      return { fileExplorerProjectUi, fileExplorerMaximized: maximized, fileExplorerOpen };
+    }),
   openFilePreview: (projectId, path, line) => {
     const requestId = Date.now();
     if (typeof window !== "undefined") {
@@ -1131,10 +1233,19 @@ export const useAppStore = create<AppState>((set, get) => ({
     set((state) => {
       writeStoredSelectedProjectId(projectId);
       const tileOrder = state.tileOrder.includes("file-explorer") ? state.tileOrder : ["file-explorer", ...state.tileOrder];
+      const currentTargetUi = state.fileExplorerProjectUi[projectId];
+      const fileExplorerProjectUi = writeStoredFileExplorerProjectUi({
+        ...saveCurrentProjectFileExplorerUi(state),
+        [projectId]: {
+          open: true,
+          maximized: currentTargetUi?.maximized || false
+        }
+      });
       return {
         selectedProjectId: projectId,
+        fileExplorerProjectUi,
         fileExplorerOpen: true,
-        fileExplorerMaximized: state.fileExplorerMaximized,
+        fileExplorerMaximized: currentTargetUi?.maximized || false,
         tileOrder: writeStoredTileLayout({ order: tileOrder, widths: state.tileWidths, minimized: state.minimizedTiles }).order,
         filePreviewRequest: {
           id: requestId,
@@ -1147,8 +1258,15 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   receiveFilePreview: (projectId, path, line, id) => {
     writeStoredSelectedProjectId(projectId);
-    set({
+    set((state) => ({
       selectedProjectId: projectId,
+      fileExplorerProjectUi: writeStoredFileExplorerProjectUi({
+        ...saveCurrentProjectFileExplorerUi(state),
+        [projectId]: {
+          open: true,
+          maximized: false
+        }
+      }),
       fileExplorerOpen: true,
       fileExplorerMaximized: false,
       filePreviewRequest: {
@@ -1157,11 +1275,23 @@ export const useAppStore = create<AppState>((set, get) => ({
         path,
         line
       }
-    });
+    }));
   },
   setFileExplorerDock: (dock) => {
-    if (typeof window !== "undefined") window.localStorage.setItem(FILE_EXPLORER_OPEN_STORAGE_KEY, "true");
-    set({ settings: { ...get().settings, fileExplorerDock: dock }, fileExplorerOpen: true, fileExplorerMaximized: false });
+    set((state) => ({
+      settings: { ...state.settings, fileExplorerDock: dock },
+      fileExplorerProjectUi: state.selectedProjectId
+        ? writeStoredFileExplorerProjectUi({
+            ...state.fileExplorerProjectUi,
+            [state.selectedProjectId]: {
+              open: true,
+              maximized: false
+            }
+          })
+        : state.fileExplorerProjectUi,
+      fileExplorerOpen: true,
+      fileExplorerMaximized: false
+    }));
   },
   setTerminalInFileExplorer: (docked) =>
     set((state) => ({

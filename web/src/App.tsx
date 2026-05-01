@@ -7999,6 +7999,19 @@ function ProjectInspectorTile({
   }
 
   useEffect(() => {
+    setCollapsed(false);
+    setTree({});
+    setExpanded({ "": true });
+    setFilter("");
+    setSearchResults([]);
+    setMode("preview");
+    setPreviewView("raw");
+    setDiffView("sideBySide");
+    setSelectedPath("");
+    setTargetLine(undefined);
+    setPreview(undefined);
+    setDiff(undefined);
+    setStatus(undefined);
     void refresh();
   }, [project.id]);
 
