@@ -179,6 +179,7 @@ const TERMINAL_POPOUT_STORAGE_KEY = "agent-hero-popped-out-terminals";
 const TERMINAL_POPOUT_EXPLICIT_HIDE_STORAGE_KEY = "agent-hero-terminal-popout-explicit-hide";
 const FILE_EXPLORER_POPOUT_STORAGE_KEY = "agent-hero-file-explorer-popout";
 const FOCUS_AGENT_TILE_EVENT = "agent-hero:focus-agent-tile";
+const MOBILE_SELECTED_AGENT_STORAGE_KEY = "agent-hero-mobile-selected-agent";
 const DEFAULT_BUILT_IN_AGENT_DIR = ".agent-hero/built-in-agents";
 const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const INPUT_NOTIFICATION_DEDUPE_MS = 30_000;
@@ -12523,10 +12524,18 @@ export function MobileApp() {
   const wsConnected = useAppStore((state) => state.wsConnected);
   const themeMode = useAppStore((state) => state.settings.themeMode);
   const addError = useAppStore((state) => state.addError);
-  const [selectedAgentId, setSelectedAgentId] = useState<string | undefined>();
+  const [selectedAgentId, setSelectedAgentIdState] = useState<string | undefined>(() =>
+    readLocalStorageWithLegacy(MOBILE_SELECTED_AGENT_STORAGE_KEY)
+  );
   const [serverStartupError, setServerStartupError] = useState<string | undefined>();
   const [serverRetryCount, setServerRetryCount] = useState(0);
   useThemeMode(themeMode);
+
+  const setSelectedAgentId = useCallback((id?: string) => {
+    setSelectedAgentIdState(id);
+    if (id) window.localStorage.setItem(MOBILE_SELECTED_AGENT_STORAGE_KEY, id);
+    else window.localStorage.removeItem(MOBILE_SELECTED_AGENT_STORAGE_KEY);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -12929,40 +12938,42 @@ function MobileChatPane({ agent, addError }: { agent: RunningAgent; addError: (m
         <MobileAgentActionsMenu agent={agent} />
       </div>
 
-      <div ref={rootRef} className="min-h-0 min-w-0 max-w-full flex-1 overflow-y-auto overflow-x-hidden bg-background px-3 py-4" onScroll={handleTranscriptScroll}>
-        {transcriptItems.length === 0 ? (
-          showActivityIndicator ? (
-            <AgentActivityIndicator agent={agent} compact phaseLabel={phaseLabel} />
+      <div className="relative min-h-0 min-w-0 max-w-full flex-1">
+        <div ref={rootRef} className="h-full overflow-y-auto overflow-x-hidden bg-background px-3 py-4" onScroll={handleTranscriptScroll}>
+          {transcriptItems.length === 0 ? (
+            showActivityIndicator ? (
+              <AgentActivityIndicator agent={agent} compact phaseLabel={phaseLabel} />
+            ) : (
+              <div className="grid min-h-full place-items-center text-center text-sm text-muted-foreground">No transcript yet.</div>
+            )
           ) : (
-            <div className="grid min-h-full place-items-center text-center text-sm text-muted-foreground">No transcript yet.</div>
-          )
-        ) : (
-          <div className="grid min-w-0 max-w-full gap-3">
-            {transcriptItems.map((item, index) => (
-              <TranscriptPreview
-                key={item.kind === "tool_pair" ? item.event.id : item.event.id}
-                item={item}
-                agent={agent}
-                phaseLabel={phaseLabel}
-                latestUserMessageId={latestUser?.id}
-                defaultExpanded={shouldExpandTranscriptItemByDefault(item, index, transcriptItems)}
-              />
-            ))}
-            {showActivityIndicator && <AgentActivityIndicator agent={agent} compact phaseLabel={phaseLabel} />}
-          </div>
+            <div className="grid min-w-0 max-w-full gap-3">
+              {transcriptItems.map((item, index) => (
+                <TranscriptPreview
+                  key={item.kind === "tool_pair" ? item.event.id : item.event.id}
+                  item={item}
+                  agent={agent}
+                  phaseLabel={phaseLabel}
+                  latestUserMessageId={latestUser?.id}
+                  defaultExpanded={shouldExpandTranscriptItemByDefault(item, index, transcriptItems)}
+                />
+              ))}
+              {showActivityIndicator && <AgentActivityIndicator agent={agent} compact phaseLabel={phaseLabel} />}
+            </div>
+          )}
+        </div>
+        {showJumpToBottom && (
+          <Button
+            type="button"
+            size="icon"
+            className="absolute bottom-4 right-4 z-20 h-9 w-9 rounded-full shadow-lg"
+            title="Jump to bottom"
+            onClick={() => scrollTranscriptToBottom(rootRef.current)}
+          >
+            <CircleArrowDown className="h-6 w-6" />
+          </Button>
         )}
       </div>
-      {showJumpToBottom && (
-        <Button
-          type="button"
-          size="icon"
-          className="absolute bottom-20 right-4 z-20 h-9 w-9 rounded-full shadow-lg"
-          title="Jump to bottom"
-          onClick={() => scrollTranscriptToBottom(rootRef.current)}
-        >
-          <CircleArrowDown className="h-6 w-6" />
-        </Button>
-      )}
 
       {queue.length > 0 && (
         <div className="min-w-0 shrink-0 overflow-x-hidden border-t border-border bg-card p-2">

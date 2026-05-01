@@ -620,7 +620,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       case "agent.message_queues":
         set((state) => {
           const agentIds = new Set(Object.keys(state.agents));
-          return { messageQueues: pruneMessageQueues(event.messageQueues, agentIds) };
+          return { messageQueues: mergeMessageQueues(event.messageQueues, state.messageQueues, agentIds) };
         });
         break;
       case "agent.launched":
