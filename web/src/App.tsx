@@ -1666,19 +1666,19 @@ function QueuedMessageList({
   }
 
   return (
-    <div className="mb-2 rounded-md border border-border bg-background/60">
+    <div className="mb-2 min-w-0 max-w-full overflow-hidden rounded-md border border-border bg-background/60">
       <button
         type="button"
-        className="flex w-full items-center justify-between gap-2 px-2 py-1.5 text-left text-xs text-muted-foreground hover:bg-accent/50"
+        className="flex w-full min-w-0 items-center justify-between gap-2 px-2 py-1.5 text-left text-xs text-muted-foreground hover:bg-accent/50"
         onClick={() => setExpanded((value) => !value)}
       >
-        <span className="font-medium text-foreground">
+        <span className="min-w-0 truncate font-medium text-foreground">
           Queued messages ({queue.length})
         </span>
-        {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+        {expanded ? <ChevronDown className="h-4 w-4 shrink-0" /> : <ChevronRight className="h-4 w-4 shrink-0" />}
       </button>
       {expanded && (
-        <div className="grid gap-1 border-t border-border p-1.5">
+        <div className="grid min-w-0 max-w-full gap-1 overflow-hidden border-t border-border p-1.5">
           {queue.map((message, index) => {
             const editing = editingId === message.id;
             const label = message.text.trim() || `${message.attachments.length} attachment(s)`;
@@ -1686,7 +1686,7 @@ function QueuedMessageList({
               <div
                 key={message.id}
                 className={cn(
-                  "grid gap-1 rounded-md border border-border bg-card/70 p-1.5",
+                  "grid min-w-0 max-w-full gap-1 overflow-hidden rounded-md border border-border bg-card/70 p-1.5",
                   draggingId === message.id && "opacity-50"
                 )}
                 onDragOver={(event) => {
@@ -1703,10 +1703,10 @@ function QueuedMessageList({
                   setDraggingId(undefined);
                 }}
               >
-                <div className="flex min-w-0 items-center gap-1.5">
+                <div className={cn("flex min-w-0 max-w-full items-center overflow-hidden", compact ? "gap-1" : "gap-1.5")}>
                   <button
                     type="button"
-                    className="cursor-grab rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+                    className="shrink-0 cursor-grab rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
                     draggable
                     title="Drag to reorder"
                     onDragStart={(event) => {
@@ -1723,12 +1723,12 @@ function QueuedMessageList({
                   <span className={cn("min-w-0 flex-1 truncate text-xs", compact && "text-[11px]")} title={label}>
                     {label}
                   </span>
-                  {message.attachments.length > 0 && <Badge className="shrink-0">{message.attachments.length}</Badge>}
+                  {message.attachments.length > 0 && <Badge className={cn("shrink-0", compact && "px-1 py-0 text-[10px]")}>{message.attachments.length}</Badge>}
                   <Button
                     type="button"
                     variant="ghost"
                     size="icon"
-                    className="h-7 w-7"
+                    className={cn("shrink-0", compact ? "h-6 w-6" : "h-7 w-7")}
                     aria-label="Steer"
                     title="Steer this queued message into the active response"
                     onClick={() => {
@@ -1743,7 +1743,7 @@ function QueuedMessageList({
                     type="button"
                     variant="ghost"
                     size="icon"
-                    className="h-7 w-7"
+                    className={cn("shrink-0", compact ? "h-6 w-6" : "h-7 w-7")}
                     title={editing ? "Done editing" : "Edit queued message"}
                     onClick={() => setEditingId((current) => (current === message.id ? undefined : message.id))}
                   >
@@ -1753,7 +1753,7 @@ function QueuedMessageList({
                     type="button"
                     variant="ghost"
                     size="icon"
-                    className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                    className={cn("shrink-0 text-muted-foreground hover:text-destructive", compact ? "h-6 w-6" : "h-7 w-7")}
                     title="Delete queued message"
                     onClick={() => removeQueuedMessage(agentId, message.id)}
                   >
@@ -1762,7 +1762,7 @@ function QueuedMessageList({
                 </div>
                 {editing && (
                   <Textarea
-                    className={cn("min-h-20 resize-y text-xs", compact && "min-h-16")}
+                    className={cn("min-h-20 min-w-0 resize-y text-xs", compact && "min-h-16")}
                     value={message.text}
                     onChange={(event) => updateQueuedMessage(agentId, message.id, { text: event.target.value })}
                     placeholder={message.attachments.length > 0 ? "Optional message for attachments" : "Queued message"}
