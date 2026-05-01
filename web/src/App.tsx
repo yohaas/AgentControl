@@ -630,10 +630,6 @@ function normalizeChatTranscriptDetail(value: unknown): ChatTranscriptDetailMode
   return value === "responses" || value === "detailed" || value === "raw" ? value : "actions";
 }
 
-function chatTranscriptDetailLabel(value: ChatTranscriptDetailMode): string {
-  return CHAT_TRANSCRIPT_DETAIL_OPTIONS.find((option) => option.value === value)?.label || "Actions";
-}
-
 function normalizeChatFontFamily(value: unknown) {
   return typeof value === "string" ? value.trim().slice(0, 160) : "";
 }
@@ -2166,14 +2162,14 @@ function ChatVisibilityMenu({ agent }: { agent: RunningAgent }) {
         <ChevronRight className="h-4 w-4" />
       </DropdownMenuSubTrigger>
       <DropdownMenuSubContent>
-        <DropdownMenuItem onClick={() => setChatTranscriptDetail(agent.id, undefined)}>
-          <Check className={cn("mr-2 h-4 w-4", override ? "opacity-0" : "opacity-100")} />
-          Default ({chatTranscriptDetailLabel(defaultDetail)})
-        </DropdownMenuItem>
         {CHAT_TRANSCRIPT_DETAIL_OPTIONS.map((option) => (
-          <DropdownMenuItem key={option.value} onClick={() => setChatTranscriptDetail(agent.id, option.value)}>
-            <Check className={cn("mr-2 h-4 w-4", override && activeDetail === option.value ? "opacity-100" : "opacity-0")} />
+          <DropdownMenuItem
+            key={option.value}
+            onClick={() => setChatTranscriptDetail(agent.id, option.value === defaultDetail ? undefined : option.value)}
+          >
+            <Check className={cn("mr-2 h-4 w-4", activeDetail === option.value ? "opacity-100" : "opacity-0")} />
             {option.label}
+            {option.value === defaultDetail && <span className="ml-1 text-muted-foreground">(Default)</span>}
           </DropdownMenuItem>
         ))}
       </DropdownMenuSubContent>
