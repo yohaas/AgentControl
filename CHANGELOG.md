@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-04-30
 
+- [e960d87](https://github.com/yohaas/AgentHero/commit/e960d87) Add chat status pills to the expanded mobile left menu.
 - [6989bc9](https://github.com/yohaas/AgentHero/commit/6989bc9) Add a mobile logout button that clears the saved access token and auth cookie.
 - [9b711af](https://github.com/yohaas/AgentHero/commit/9b711af) Rename the app to AgentHero with legacy storage, browser key, and update script compatibility.
 - [60597e7](https://github.com/yohaas/AgentHero/commit/60597e7) Make generated access tokens visible
