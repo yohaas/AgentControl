@@ -3283,7 +3283,7 @@ function Header({
       <header
         className={cn(
           "flex h-14 shrink-0 items-center border-b border-border bg-background",
-          sidebarCollapsed ? "flex-col justify-end gap-1 px-1 py-1" : "gap-2 px-3"
+          sidebarCollapsed ? "flex-col justify-center gap-1 px-1" : "gap-2 px-3"
         )}
       >
         {!sidebarCollapsed && (
@@ -3310,7 +3310,7 @@ function Header({
           type="button"
           className={cn(
             "grid shrink-0 place-items-center rounded-md border border-border bg-background text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-            sidebarCollapsed ? "h-7 w-7" : "h-8 w-8"
+            "h-8 w-8"
           )}
           onClick={onUndock}
           title="Expand top bar"
