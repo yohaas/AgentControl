@@ -99,6 +99,8 @@ const LEGACY_SELECTED_PROJECT_STORAGE_KEY = "agent-control-selected-project";
 const FILE_EXPLORER_OPEN_STORAGE_KEY = "agent-hero-file-explorer-open";
 const LEGACY_FILE_EXPLORER_OPEN_STORAGE_KEY = "agent-control-file-explorer-open";
 const FILE_EXPLORER_POPOUT_STORAGE_KEY = "agent-hero-file-explorer-popout";
+const REMOVED_QUEUE_TOMBSTONE_TTL_MS = 5 * 60 * 1000;
+const removedQueueMessageIds = new Map<string, number>();
 const WINDOWS_UPDATE_COMMANDS = [
   "powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\windows\\start-update.ps1"
 ];
@@ -179,6 +181,22 @@ function writeStoredMessageQueues(queues: Record<string, QueuedMessage[]>): Reco
   return normalized;
 }
 
+function rememberRemovedQueuedMessage(id: string) {
+  const now = Date.now();
+  removedQueueMessageIds.set(id, now);
+  for (const [messageId, removedAt] of removedQueueMessageIds) {
+    if (now - removedAt > REMOVED_QUEUE_TOMBSTONE_TTL_MS) removedQueueMessageIds.delete(messageId);
+  }
+}
+
+function wasRecentlyRemovedQueuedMessage(id: string): boolean {
+  const removedAt = removedQueueMessageIds.get(id);
+  if (!removedAt) return false;
+  if (Date.now() - removedAt <= REMOVED_QUEUE_TOMBSTONE_TTL_MS) return true;
+  removedQueueMessageIds.delete(id);
+  return false;
+}
+
 function pruneMessageQueues(queues: Record<string, QueuedMessage[]>, agentIds: Set<string>): Record<string, QueuedMessage[]> {
   return writeStoredMessageQueues(Object.fromEntries(Object.entries(queues).filter(([agentId]) => agentIds.has(agentId))));
 }
@@ -192,6 +210,7 @@ function mergeMessageQueues(
   for (const agentId of agentIds) {
     const seen = new Set<string>();
     const queue = [...(primaryQueues?.[agentId] || []), ...(fallbackQueues[agentId] || [])].filter((message) => {
+      if (wasRecentlyRemovedQueuedMessage(message.id)) return false;
       if (seen.has(message.id)) return false;
       seen.add(message.id);
       return true;
@@ -892,6 +911,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     }),
   removeQueuedMessage: (id, messageId) =>
     set((state) => {
+      rememberRemovedQueuedMessage(messageId);
       const messageQueues = writeStoredMessageQueues({
         ...state.messageQueues,
         [id]: (state.messageQueues[id] || []).filter((message) => message.id !== messageId)
@@ -915,6 +935,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   popNextQueuedMessage: (id) => {
     const queue = get().messageQueues[id] || [];
     const [next, ...rest] = queue;
+    if (next) rememberRemovedQueuedMessage(next.id);
     set((state) => ({
       messageQueues: writeStoredMessageQueues({
         ...state.messageQueues,
