@@ -3174,10 +3174,18 @@ function Header({
   const [layoutChatFontSizeDraft, setLayoutChatFontSizeDraft] = useState(String(normalizeChatFontSize((settings as ChatDisplaySettings).chatFontSize)));
   const selectedProject = projects.find((project) => project.id === selectedProjectId);
   const projectRows = useMemo(() => projectSelectorRows(projects), [projects]);
-  const inputNeededProjectIds = useMemo(
-    () => new Set(Object.values(agentsById).filter(agentNeedsInput).map((agent) => agent.projectId)),
-    [agentsById]
-  );
+  const inputNeededProjectAlertLabels = useMemo(() => {
+    const labelsByProjectId = new Map<string, string[]>();
+    for (const agent of Object.values(agentsById)) {
+      if (!agentNeedsInput(agent)) continue;
+      const projectName = projects.find((candidate) => candidate.id === agent.projectId)?.name || agent.projectName;
+      const need = agent.status === "awaiting-permission" ? "needs approval" : "needs an answer";
+      const current = labelsByProjectId.get(agent.projectId) || [];
+      labelsByProjectId.set(agent.projectId, [...current, `${projectName}: ${agent.displayName} ${need}`]);
+    }
+    return labelsByProjectId;
+  }, [agentsById, projects]);
+  const inputNeededProjectIds = useMemo(() => new Set(inputNeededProjectAlertLabels.keys()), [inputNeededProjectAlertLabels]);
   const offProjectInputAlerts = useMemo(
     () =>
       Object.values(agentsById)
@@ -3650,29 +3658,40 @@ function Header({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-72">
-            {projectRows.map(({ project, parent, depth }) => (
-              <DropdownMenuItem
-                key={project.id}
-                onClick={() => setSelectedProject(project.id)}
-                className={cn(
-                  "justify-between gap-2",
-                  depth > 0 && "pl-7",
-                  inputNeededProjectIds.has(project.id) && "bg-amber-500/10 text-amber-900 focus:bg-amber-500/15 dark:text-amber-100"
-                )}
-              >
-                <span className="flex min-w-0 items-center gap-2">
-                  {depth > 0 && <FolderTree className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
-                  <span className="min-w-0">
-                    <span className="flex min-w-0 items-center gap-2">
-                      <span className="truncate">{project.name}</span>
-                      <ProjectRuntimeBadge project={project} />
+            {projectRows.map(({ project, parent, depth }) => {
+              const inputAlertLabels = inputNeededProjectAlertLabels.get(project.id) || [];
+              const inputAlertLabel = inputAlertLabels.join("; ");
+              return (
+                <DropdownMenuItem
+                  key={project.id}
+                  onClick={() => setSelectedProject(project.id)}
+                  className={cn(
+                    "justify-between gap-2",
+                    depth > 0 && "pl-7",
+                    inputAlertLabels.length > 0 && "bg-amber-500/10 text-amber-900 focus:bg-amber-500/15 dark:text-amber-100"
+                  )}
+                >
+                  <span className="flex min-w-0 items-center gap-2">
+                    {depth > 0 && <FolderTree className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
+                    <span className="min-w-0">
+                      <span className="flex min-w-0 items-center gap-2">
+                        <span className="truncate">{project.name}</span>
+                        <ProjectRuntimeBadge project={project} />
+                      </span>
+                      {parent && <span className="block truncate text-xs text-muted-foreground">{projectRelativePath(project, parent)}</span>}
                     </span>
-                    {parent && <span className="block truncate text-xs text-muted-foreground">{projectRelativePath(project, parent)}</span>}
                   </span>
-                </span>
-                {project.id === selectedProjectId && <Check className="h-4 w-4 shrink-0" />}
-              </DropdownMenuItem>
-            ))}
+                  <span className="ml-auto flex shrink-0 items-center gap-2">
+                    {inputAlertLabels.length > 0 && (
+                      <span role="img" aria-label={inputAlertLabel} title={inputAlertLabel}>
+                        <TriangleAlert className="h-4 w-4 text-amber-500" aria-hidden="true" />
+                      </span>
+                    )}
+                    {project.id === selectedProjectId && <Check className="h-4 w-4" />}
+                  </span>
+                </DropdownMenuItem>
+              );
+            })}
             <DropdownMenuItem className="gap-2 border-t border-border" onClick={() => setAddProjectOpen(true)}>
               <FolderPlus className="h-4 w-4" />
               Add Project
