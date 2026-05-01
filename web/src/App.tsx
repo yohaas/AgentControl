@@ -3914,7 +3914,7 @@ function GitStatusMenu({
 
   useEffect(() => {
     if (!open || !projectId) return;
-    void refresh();
+    void fetchAndRefresh();
   }, [open, projectId]);
 
   useEffect(() => {
@@ -4010,6 +4010,7 @@ function GitStatusMenu({
   const aheadCount = status?.ahead || 0;
   const behindCount = status?.behind || 0;
   const unpushedCommits = status?.unpushedCommits || [];
+  const incomingCommits = status?.incomingCommits || [];
 
   if (hideWhenNoPendingPushes && (!status?.isRepo || (aheadCount <= 0 && behindCount <= 0))) return null;
 
@@ -4057,7 +4058,7 @@ function GitStatusMenu({
                   {loading ? "Checking..." : status?.isRepo ? status.branch || "Repository" : status?.message || "Not a Git repository"}
                 </div>
               </div>
-              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => void refresh()} disabled={!projectId || loading}>
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => void fetchAndRefresh()} disabled={!projectId || loading}>
                 <RefreshCw className="h-4 w-4" />
               </Button>
             </div>
@@ -4081,6 +4082,35 @@ function GitStatusMenu({
                     </div>
                   )}
                 </div>
+
+                {behindCount > 0 && (
+                  <div className="grid gap-1">
+                    <div className="text-xs font-medium text-muted-foreground">Commits to pull</div>
+                    {incomingCommits.length === 0 ? (
+                      <div className="rounded-md border border-dashed border-border px-2 py-3 text-center text-xs text-muted-foreground">
+                        Commit details unavailable
+                      </div>
+                    ) : (
+                      <div className="max-h-44 overflow-y-auto rounded-md border border-border">
+                        {incomingCommits.map((commit) => (
+                          <div key={commit.hash} className="grid gap-0.5 border-b border-border px-2 py-1.5 last:border-b-0">
+                            <div className="flex min-w-0 items-center gap-2">
+                              <Badge className="shrink-0 px-1.5 py-0 font-mono text-[10px]">{commit.hash}</Badge>
+                              <span className="min-w-0 truncate text-xs" title={commit.subject}>
+                                {commit.subject}
+                              </span>
+                            </div>
+                            {commit.authorName && (
+                              <div className="truncate pl-[3.25rem] text-[11px] text-muted-foreground" title={commit.authorName}>
+                                {commit.authorName}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {aheadCount > 0 && (
                   <div className="grid gap-1">

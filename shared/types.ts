@@ -158,6 +158,7 @@ export interface GitStatus {
   ahead: number;
   behind: number;
   unpushedCommits?: GitUnpushedCommit[];
+  incomingCommits?: GitUnpushedCommit[];
   files: GitChangedFile[];
   message?: string;
 }

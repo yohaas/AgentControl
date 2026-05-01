@@ -1310,6 +1310,10 @@ async function projectGitStatus(project: Project): Promise<GitStatus> {
       const commits = await gitCommand(project, ["log", "--pretty=format:%h%x1f%s%x1f%an%x1f%cI", "@{upstream}..HEAD"]).catch(() => "");
       status.unpushedCommits = parseGitUnpushedCommits(commits);
     }
+    if (status.behind > 0) {
+      const commits = await gitCommand(project, ["log", "--pretty=format:%h%x1f%s%x1f%an%x1f%cI", "HEAD..@{upstream}"]).catch(() => "");
+      status.incomingCommits = parseGitUnpushedCommits(commits);
+    }
     return status;
   } catch (error) {
     return {
@@ -1317,6 +1321,7 @@ async function projectGitStatus(project: Project): Promise<GitStatus> {
       ahead: 0,
       behind: 0,
       unpushedCommits: [],
+      incomingCommits: [],
       files: [],
       message: error instanceof Error ? error.message : String(error)
     };
