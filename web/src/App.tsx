@@ -3173,6 +3173,7 @@ function Header({
   const [layoutChatFontDraft, setLayoutChatFontDraft] = useState(normalizeChatFontFamily((settings as ChatDisplaySettings).chatFontFamily));
   const [layoutChatFontSizeDraft, setLayoutChatFontSizeDraft] = useState(String(normalizeChatFontSize((settings as ChatDisplaySettings).chatFontSize)));
   const selectedProject = projects.find((project) => project.id === selectedProjectId);
+  const activeProjectId = selectedProject?.id;
   const projectRows = useMemo(() => projectSelectorRows(projects), [projects]);
   const inputNeededProjectAlertLabels = useMemo(() => {
     const labelsByProjectId = new Map<string, string[]>();
@@ -3201,24 +3202,24 @@ function Header({
         }),
     [agentsById, projects, selectedProjectId]
   );
-  const projectAgents = useMemo(() => agentsForProject(agentsById, selectedProjectId), [agentsById, selectedProjectId]);
+  const projectAgents = useMemo(() => agentsForProject(agentsById, activeProjectId), [activeProjectId, agentsById]);
   const agentCount = projectAgents.length;
   const terminalCount = useMemo(
-    () => terminalsForProject(terminalSessions, selectedProjectId).length,
-    [terminalSessions, selectedProjectId]
+    () => terminalsForProject(terminalSessions, activeProjectId).length,
+    [activeProjectId, terminalSessions]
   );
   const projectDevTerminals = useMemo(
-    () => terminalsForProject(terminalSessions, selectedProjectId).filter(isDevTerminal),
-    [terminalSessions, selectedProjectId]
+    () => terminalsForProject(terminalSessions, activeProjectId).filter(isDevTerminal),
+    [activeProjectId, terminalSessions]
   );
 
   useEffect(() => {
-    if (!selectedProjectId) {
+    if (!activeProjectId) {
       setDevCommand("npm run dev");
       return;
     }
-    setDevCommand(readLocalStorageWithLegacy(devCommandStorageKey(selectedProjectId)) || "npm run dev");
-  }, [selectedProjectId]);
+    setDevCommand(readLocalStorageWithLegacy(devCommandStorageKey(activeProjectId)) || "npm run dev");
+  }, [activeProjectId]);
 
   useEffect(() => {
     if (!connectionMenuOpen) return;
@@ -3299,16 +3300,16 @@ function Header({
       return;
     }
     if (!terminalOpen && terminalCount === 0) {
-      sendCommand({ type: "terminalStart", projectId: selectedProjectId });
+      sendCommand({ type: "terminalStart", projectId: activeProjectId });
     }
     setTerminalOpen(!terminalOpen);
   }
 
   function runProjectDev() {
-    if (!selectedProjectId) return;
+    if (!activeProjectId) return;
     const command = devCommand.trim() || "npm run dev";
     setTerminalOpen(true);
-    sendCommand({ type: "terminalStart", projectId: selectedProjectId, command, title: `Dev: ${command}` });
+    sendCommand({ type: "terminalStart", projectId: activeProjectId, command, title: `Dev: ${command}` });
   }
 
   function stopProjectDev() {
@@ -3321,17 +3322,17 @@ function Header({
   }
 
   function customizeProjectDev() {
-    if (!selectedProjectId) return;
+    if (!activeProjectId) return;
     const nextCommand = window.prompt("Command to run for this project", devCommand.trim() || "npm run dev");
     if (nextCommand === null) return;
     const trimmed = nextCommand.trim() || "npm run dev";
-    window.localStorage.setItem(devCommandStorageKey(selectedProjectId), trimmed);
+    window.localStorage.setItem(devCommandStorageKey(activeProjectId), trimmed);
     setDevCommand(trimmed);
   }
 
   function openFileExplorerPopoutFromHeader() {
-    if (!selectedProjectId) return false;
-    const popup = window.open(`/file-explorer-popout?projectId=${encodeURIComponent(selectedProjectId)}`, "agent-hero-file-explorer", "popup,width=1100,height=760");
+    if (!activeProjectId) return false;
+    const popup = window.open(`/file-explorer-popout?projectId=${encodeURIComponent(activeProjectId)}`, "agent-hero-file-explorer", "popup,width=1100,height=760");
     if (!popup) return false;
     window.localStorage.setItem(FILE_EXPLORER_POPOUT_STORAGE_KEY, "true");
     setFileExplorerOpen(false);
@@ -3502,13 +3503,13 @@ function Header({
   );
 
   async function closeSelectedProject() {
-    if (!selectedProjectId || !selectedProject) return;
+    if (!activeProjectId || !selectedProject) return;
     const confirmed = window.confirm(
       `Close ${selectedProject.name}? This exits its agents and terminals, and removes it from the dashboard. Files stay on disk.`
     );
     if (!confirmed) return;
     try {
-      setProjects(await api.closeProject(selectedProjectId));
+      setProjects(await api.closeProject(activeProjectId));
     } catch (error) {
       addError(error instanceof Error ? error.message : String(error));
     }
@@ -3703,7 +3704,7 @@ function Header({
             variant="outline"
             size={showMenuText ? undefined : "icon"}
             className={cn("rounded-r-none", showMenuText && "gap-2 px-3")}
-            disabled={!selectedProjectId}
+            disabled={!activeProjectId}
             onClick={runProjectDev}
             title={`Run ${devCommand}`}
           >
@@ -3716,7 +3717,7 @@ function Header({
                 variant="outline"
                 size="icon"
                 className="-ml-px w-7 rounded-l-none"
-                disabled={!selectedProjectId}
+                disabled={!activeProjectId}
                 title={`Dev command options: ${devCommand}`}
               >
                 <ChevronDown className="h-4 w-4" />
@@ -3731,13 +3732,13 @@ function Header({
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-        <GitStatusMenu projectId={selectedProjectId} />
-        <WorktreesDialog projectId={selectedProjectId} />
+        <GitStatusMenu projectId={activeProjectId} />
+        <WorktreesDialog projectId={activeProjectId} />
         <Button
           variant="outline"
           size={showMenuText ? undefined : "icon"}
           className={showMenuText ? "gap-2 px-3" : undefined}
-          disabled={!selectedProjectId}
+          disabled={!activeProjectId}
           onClick={() => void closeSelectedProject()}
           title="Close project"
         >
@@ -3768,7 +3769,7 @@ function Header({
           variant={fileExplorerOpen ? "default" : "outline"}
           size={showMenuText ? undefined : "icon"}
           className={showMenuText ? "gap-2 px-3" : undefined}
-          disabled={!selectedProjectId}
+          disabled={!activeProjectId}
           onClick={toggleFileExplorer}
           title={fileExplorerOpen ? "Close File Explorer" : "Open File Explorer"}
         >
@@ -3798,15 +3799,16 @@ function WorktreeTabs() {
   const setSelectedProject = useAppStore((state) => state.setSelectedProject);
   const addError = useAppStore((state) => state.addError);
   const [worktrees, setWorktrees] = useState<GitWorktreeList | undefined>();
+  const activeProjectId = projects.some((project) => project.id === selectedProjectId) ? selectedProjectId : undefined;
 
   useEffect(() => {
-    if (!selectedProjectId) {
+    if (!activeProjectId) {
       setWorktrees(undefined);
       return;
     }
     let cancelled = false;
     api
-      .gitWorktrees(selectedProjectId)
+      .gitWorktrees(activeProjectId)
       .then((result) => {
         if (!cancelled) setWorktrees(result);
       })
@@ -3819,7 +3821,7 @@ function WorktreeTabs() {
     return () => {
       cancelled = true;
     };
-  }, [addError, projects, selectedProjectId]);
+  }, [activeProjectId, addError]);
 
   const openWorktrees = useMemo(() => {
     const byProjectId = new Map(projects.map((project) => [project.id, project]));
@@ -4661,6 +4663,11 @@ function WorktreesDialog({ projectId }: { projectId?: string }) {
   );
 }
 
+function normalizeWslInputPath(value: string): string {
+  const withSlash = value.trim().startsWith("/") ? value.trim() : `/${value.trim()}`;
+  return withSlash.replace(/\/+/g, "/").replace(/\/$/, "") || "/";
+}
+
 function AddProjectDialog({
   open: controlledOpen,
   onOpenChange,
@@ -4683,6 +4690,7 @@ function AddProjectDialog({
   const open = controlledOpen ?? internalOpen;
   const setOpen = onOpenChange ?? setInternalOpen;
   const wslDistroOptions = [...new Set([wslDistro, ...wslDistros].filter(Boolean))];
+  const normalizedRequestedWslPath = normalizeWslInputPath(wslPath);
 
   useEffect(() => {
     if (!open || runtime !== "wsl") return;
@@ -4710,7 +4718,12 @@ function AddProjectDialog({
       setProjects(projects);
       const added =
         runtime === "wsl"
-          ? projects.find((project) => project.runtime === "wsl" && project.wslDistro === (wslDistro.trim() || "Ubuntu") && project.wslPath === trimmed) || projects[projects.length - 1]
+          ? projects.find(
+              (project) =>
+                project.runtime === "wsl" &&
+                project.wslDistro?.toLowerCase() === (wslDistro.trim() || "Ubuntu").toLowerCase() &&
+                normalizeWslInputPath(project.wslPath || "") === normalizedRequestedWslPath
+            ) || projects[projects.length - 1]
           : projects.find((project) => project.path.toLowerCase() === trimmed.toLowerCase()) || projects[projects.length - 1];
       setSelectedProject(added?.id);
       setPath("");
@@ -13584,7 +13597,7 @@ export function App() {
   const fileExplorerSideDocked = fileExplorerOpen && (fileExplorerDock === "left" || fileExplorerDock === "right");
   const fileExplorerBottomDocked = fileExplorerOpen && fileExplorerDock === "bottom";
   const selectedProject = useMemo(() => projects.find((project) => project.id === selectedProjectId) || projects[0], [projects, selectedProjectId]);
-  const projectAgents = useMemo(() => agentsForProject(agentsById, selectedProjectId), [agentsById, selectedProjectId]);
+  const projectAgents = useMemo(() => agentsForProject(agentsById, selectedProject?.id), [agentsById, selectedProject?.id]);
   const TOP_BAR_DOCKED_STORAGE_KEY = "agent-hero-top-bar-docked";
   const [topBarDocked, setTopBarDockedState] = useState(() => readLocalStorageWithLegacy(TOP_BAR_DOCKED_STORAGE_KEY) === "true");
   useThemeMode(themeMode);
