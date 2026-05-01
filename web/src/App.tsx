@@ -83,8 +83,6 @@ import {
   PanelBottom,
   PanelLeft,
   PanelRight,
-  PanelRightClose,
-  PanelRightOpen,
   Pencil,
   PictureInPicture2,
   Play,
@@ -3323,7 +3321,7 @@ function Header({
           title="Expand top bar"
           aria-label="Expand top bar"
         >
-          <PanelRightClose className="h-5 w-5" />
+          <PanelLeftOpen className="h-5 w-5" />
         </button>
       </header>
     );
@@ -3391,7 +3389,7 @@ function Header({
         title="Dock top bar to left nav"
         aria-label="Dock top bar to left nav"
       >
-        <PanelRightOpen className="h-5 w-5" />
+        <PanelLeftClose className="h-5 w-5" />
       </button>
       <div className="ml-auto flex items-center gap-2">
         {offProjectInputAlerts.length > 0 && (
