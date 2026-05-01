@@ -1,11 +1,16 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="AgentHero">
-  <rect width="512" height="512" rx="112" fill="#0f172a"/>
-  <g fill="none" stroke="#2dd4bf" stroke-width="40" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M256 176v-72h-72"/>
-    <rect width="288" height="216" x="112" y="176" rx="48"/>
-    <path d="M76 284h36"/>
-    <path d="M400 284h36"/>
-    <path d="M310 266v48"/>
-    <path d="M202 266v48"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" role="img" aria-label="AgentHero">
+  <defs>
+    <clipPath id="hexClip">
+      <path transform="scale(8.333)" d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+    </clipPath>
+  </defs>
+  <path transform="scale(8.333)" d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" fill="#0f172a"/>
+  <g transform="translate(40, 40) scale(5)" stroke="#1DAFBF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <path d="M12 8V4H8"/>
+    <rect width="16" height="12" x="4" y="8" rx="2"/>
+    <path d="M2 14h2"/>
+    <path d="M20 14h2"/>
+    <path d="M15 13v2"/>
+    <path d="M9 13v2"/>
   </g>
 </svg>
