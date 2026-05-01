@@ -3274,7 +3274,7 @@ function Header({
   async function saveDisplaySettings(patch: Partial<Pick<ChatDisplaySettings, "tileHeight" | "tileColumns" | "chatFontFamily" | "chatFontSize">>) {
     try {
       const next = await api.saveSettings({ ...settings, ...patch } as SettingsState);
-      setSettings(next);
+      setSettings({ ...next, ...patch } as SettingsState);
       setCurrentTileHeight(undefined);
       return true;
     } catch (error) {
@@ -6729,7 +6729,7 @@ function SettingsDialog() {
 
   async function save() {
     try {
-      const next = await api.saveSettings({
+      const submittedSettings = {
         ...settings,
         projectPaths,
         modelProfiles: [
@@ -6768,8 +6768,13 @@ function SettingsDialog() {
         agentControlProjectPath,
         updateChecksEnabled,
         updateCommands: updateCommandsText.split(/\r?\n/).map((command) => command.trim()).filter(Boolean)
+      } as SettingsState;
+      const next = await api.saveSettings(submittedSettings);
+      setSettings({
+        ...next,
+        chatFontFamily,
+        chatFontSize
       } as SettingsState);
-      setSettings(next);
       setProjects(await api.refresh());
       setOpen(false);
     } catch (error) {
