@@ -92,7 +92,8 @@ function sendMessageQueues() {
   if (!socket || socket.readyState !== WebSocket.OPEN) return;
   const messageQueues = useAppStore.getState().messageQueues;
   const serialized = JSON.stringify(messageQueues);
-  if (serialized === "{}" || serialized === lastSyncedMessageQueues) return;
+  if (serialized === lastSyncedMessageQueues) return;
+  if (serialized === "{}" && !lastSyncedMessageQueues) return;
   lastSyncedMessageQueues = serialized;
   socket.send(JSON.stringify({ type: "messageQueues", messageQueues } satisfies WsClientCommand));
 }

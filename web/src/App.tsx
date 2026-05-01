@@ -82,6 +82,8 @@ import {
   PanelBottom,
   PanelLeft,
   PanelRight,
+  PanelRightClose,
+  PanelRightOpen,
   Pencil,
   PictureInPicture2,
   Play,
@@ -3309,14 +3311,14 @@ function Header({
         <button
           type="button"
           className={cn(
-            "grid shrink-0 place-items-center rounded-md border border-border bg-background text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-            sidebarCollapsed ? "absolute left-1/2 top-[calc(50%-2px)] h-8 w-8 -translate-x-1/2 -translate-y-1/2" : "h-8 w-8"
+            "grid shrink-0 place-items-center rounded-md bg-background text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            sidebarCollapsed ? "absolute left-1/2 top-[calc(50%-2px)] h-10 w-10 -translate-x-1/2 -translate-y-1/2" : "h-10 w-10"
           )}
           onClick={onUndock}
           title="Expand top bar"
           aria-label="Expand top bar"
         >
-          <ChevronRight className="h-4 w-4" />
+          <PanelRightClose className="h-5 w-5" />
         </button>
       </header>
     );
@@ -3378,13 +3380,13 @@ function Header({
       </div>
       <button
         type="button"
-        className="absolute top-[calc(50%-2px)] grid h-8 w-8 -translate-y-1/2 place-items-center rounded-md border border-border bg-background text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        style={{ left: Math.max(16, (settings.sidebarWidth || 280) - 40) }}
+        className="absolute top-[calc(50%-2px)] grid h-10 w-10 -translate-y-1/2 place-items-center rounded-md bg-background text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        style={{ left: Math.max(16, (settings.sidebarWidth || 280) - 52) }}
         onClick={onDock}
         title="Dock top bar to left nav"
         aria-label="Dock top bar to left nav"
       >
-        <ChevronLeft className="h-4 w-4" />
+        <PanelRightOpen className="h-5 w-5" />
       </button>
       <div className="ml-auto flex items-center gap-2">
         {offProjectInputAlerts.length > 0 && (
@@ -4958,9 +4960,9 @@ function Sidebar({ topSlot }: { topSlot?: ReactNode }) {
     return (
       <aside className="relative flex w-14 shrink-0 flex-col overflow-x-hidden border-r border-border bg-card/45">
         {topSlot}
-        <div className="flex min-h-0 flex-1 flex-col items-center gap-2 py-3">
-          <Button variant="ghost" size="icon" onClick={() => setCollapsed(false)} title="Expand sidebar">
-            <PanelLeftOpen className="h-4 w-4" />
+        <div className={cn("flex min-h-0 flex-1 flex-col items-center gap-2 pb-3 pt-0", topSlot && "-mt-1")}>
+          <Button variant="ghost" size="icon" className="h-10 w-10" onClick={() => setCollapsed(false)} title="Expand sidebar">
+            <PanelLeftOpen className="h-5 w-5" />
           </Button>
           <Button
             size="icon"
@@ -5011,9 +5013,6 @@ function Sidebar({ topSlot }: { topSlot?: ReactNode }) {
       <section className="flex min-h-0 flex-1 flex-col p-3">
         <div className="mb-2 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" onClick={() => setCollapsed(true)} title="Collapse sidebar">
-              <PanelLeftClose className="h-4 w-4" />
-            </Button>
             <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Running</h2>
             <Button
               size="icon"
@@ -5042,22 +5041,34 @@ function Sidebar({ topSlot }: { topSlot?: ReactNode }) {
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
-          {running.length > 0 && (
+          <div className="flex items-center gap-2">
+            {running.length > 0 && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6"
+                title="Close all agents"
+                aria-label="Close all agents"
+                onClick={() => {
+                  if (window.confirm("Close all open agents in this project?")) {
+                    sendCommand({ type: "clearAll", projectId: selectedProjectId });
+                  }
+                }}
+              >
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="icon"
-              className="h-6 w-6"
-              title="Close all agents"
-              aria-label="Close all agents"
-              onClick={() => {
-                if (window.confirm("Close all open agents in this project?")) {
-                  sendCommand({ type: "clearAll", projectId: selectedProjectId });
-                }
-              }}
+              className="h-10 w-10"
+              onClick={() => setCollapsed(true)}
+              title="Collapse sidebar"
+              aria-label="Collapse sidebar"
             >
-              <X className="h-3.5 w-3.5" />
+              <PanelLeftClose className="h-5 w-5" />
             </Button>
-          )}
+          </div>
         </div>
         <div className="min-h-0 flex-1 space-y-1 overflow-y-auto overflow-x-hidden pr-1">
           {running.length === 0 ? (
@@ -9317,7 +9328,7 @@ function AgentTile({
                       aria-label="Jump to bottom"
                       onClick={() => scrollTranscriptToBottom(rootRef.current)}
                     >
-                      <CircleArrowDown className="h-4 w-4" />
+                      <CircleArrowDown className="h-6 w-6" />
                     </Button>
                   </div>
                 )}
@@ -10665,7 +10676,7 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
                   aria-label="Jump to bottom"
                   onClick={() => scrollTranscriptToBottom(rootRef.current)}
                 >
-                  <CircleArrowDown className="h-5 w-5" />
+                  <CircleArrowDown className="h-6 w-6" />
                 </Button>
               </div>
             )}
@@ -12923,7 +12934,7 @@ function MobileChatPane({ agent, addError }: { agent: RunningAgent; addError: (m
           title="Jump to bottom"
           onClick={() => scrollTranscriptToBottom(rootRef.current)}
         >
-          <CircleArrowDown className="h-4 w-4" />
+          <CircleArrowDown className="h-6 w-6" />
         </Button>
       )}
 
