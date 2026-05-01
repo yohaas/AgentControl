@@ -13938,11 +13938,15 @@ export function App() {
     const onKeyDown = (event: KeyboardEvent) => {
       const mod = event.metaKey || event.ctrlKey;
       if (!mod) return;
+      const state = useAppStore.getState();
+      const activeChatAgentId = state.selectedAgentId || state.chatFocusedAgentId || state.focusedAgentId;
       if (event.key.toLowerCase() === "n") {
         event.preventDefault();
         openLaunchModal({ projectId: selectedProjectId });
-      } else if (event.key.toLowerCase() === "f" && selectedAgentId) {
+      } else if (event.key.toLowerCase() === "f" && activeChatAgentId) {
         event.preventDefault();
+        event.stopPropagation();
+        setSelectedAgent(activeChatAgentId);
         setSearchOpen(true);
       } else if (event.key.toLowerCase() === "k") {
         event.preventDefault();
@@ -13962,8 +13966,8 @@ export function App() {
         }
       }
     };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [openLaunchModal, selectedAgentId, selectedProjectId, setSearchOpen, setSelectedAgent]);
 
   if (serverStartupError) {
