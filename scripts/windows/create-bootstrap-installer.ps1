@@ -10,34 +10,70 @@ param(
 
 $ErrorActionPreference = "Stop"
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
-$iexpress = (Get-Command iexpress.exe -ErrorAction Stop).Source
 $artifactsDir = Join-Path $repoRoot "artifacts"
 $buildDir = Join-Path $artifactsDir "installer-build"
 $installerScript = Join-Path $PSScriptRoot "install-agent-hero.ps1"
+$iconPath = Join-Path $repoRoot "assets\AgentHero.ico"
 $targetPath = if ($OutputPath.Trim()) { $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutputPath.Trim()) } else { Join-Path $artifactsDir "AgentHeroSetup.exe" }
+
+function Resolve-InnoCompiler {
+  $pathCommand = Get-Command ISCC.exe -ErrorAction SilentlyContinue
+  if ($pathCommand) { return $pathCommand.Source }
+
+  $candidates = @(
+    "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
+    "$env:ProgramFiles\Inno Setup 6\ISCC.exe",
+    "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe"
+  )
+  foreach ($candidate in $candidates) {
+    if ($candidate -and (Test-Path $candidate)) { return $candidate }
+  }
+
+  throw "Inno Setup compiler ISCC.exe was not found. Install it with: winget install --id JRSoftware.InnoSetup -e"
+}
+
+function InnoString {
+  param([string]$Value)
+  return $Value -replace '"', '""'
+}
+
+function PascalString {
+  param([string]$Value)
+  return $Value -replace "'", "''"
+}
 
 if (-not $ManifestUrl.Trim()) { throw "ManifestUrl is required." }
 if (-not (Test-Path $installerScript)) { throw "Installer script was not found at $installerScript" }
+if (-not (Test-Path $iconPath)) { throw "Installer icon was not found at $iconPath" }
 
+$iscc = Resolve-InnoCompiler
+$targetDir = Split-Path -Parent $targetPath
+$targetBaseName = [System.IO.Path]::GetFileNameWithoutExtension($targetPath)
 if (Test-Path $buildDir) { Remove-Item -LiteralPath $buildDir -Recurse -Force }
 if (Test-Path $targetPath) { Remove-Item -LiteralPath $targetPath -Force }
-New-Item -ItemType Directory -Path $buildDir, (Split-Path -Parent $targetPath) -Force | Out-Null
+New-Item -ItemType Directory -Path $buildDir, $targetDir -Force | Out-Null
 
 $embeddedInstaller = Join-Path $buildDir "install-agent-hero.ps1"
-$launcher = Join-Path $buildDir "install.cmd"
-$sedPath = Join-Path $buildDir "AgentHeroSetup.sed"
+$embeddedIcon = Join-Path $buildDir "AgentHero.ico"
 Copy-Item -LiteralPath $installerScript -Destination $embeddedInstaller -Force
-$embeddedFiles = @("install.cmd", "install-agent-hero.ps1")
+Copy-Item -LiteralPath $iconPath -Destination $embeddedIcon -Force
+
 $launcherManifestUrl = $ManifestUrl
-$minimumTargetSize = 1
+$files = @(
+  @{ Source = $embeddedInstaller; DestName = "install-agent-hero.ps1" },
+  @{ Source = $embeddedIcon; DestName = "AgentHero.ico" }
+)
+$appVersion = "0.1.0"
 
 if (Test-Path $ManifestUrl) {
   $resolvedManifestPath = (Resolve-Path $ManifestUrl).Path
   $manifest = Get-Content -Raw -Path $resolvedManifestPath | ConvertFrom-Json
+  if ($manifest.version) { $appVersion = [string]$manifest.version }
+
   $embeddedManifest = Join-Path $buildDir "manifest.json"
   Copy-Item -LiteralPath $resolvedManifestPath -Destination $embeddedManifest -Force
-  $embeddedFiles += "manifest.json"
-  $launcherManifestUrl = "%~dp0manifest.json"
+  $files += @{ Source = $embeddedManifest; DestName = "manifest.json" }
+  $launcherManifestUrl = "{tmp}\manifest.json"
 
   $manifestDir = Split-Path -Parent $resolvedManifestPath
   $asset = $manifest.assets | Where-Object { $_.platform -eq "windows" } | Select-Object -First 1
@@ -49,118 +85,89 @@ if (Test-Path $ManifestUrl) {
   if (Test-Path $assetPath) {
     $embeddedAssetPath = Join-Path $buildDir (Split-Path -Leaf $assetPath)
     Copy-Item -LiteralPath $assetPath -Destination $embeddedAssetPath -Force
-    $embeddedFiles += (Split-Path -Leaf $assetPath)
-    $minimumTargetSize = [Math]::Max(1048576, [int64]((Get-Item -LiteralPath $embeddedAssetPath).Length * 0.5))
+    $files += @{ Source = $embeddedAssetPath; DestName = (Split-Path -Leaf $assetPath) }
   }
 }
 
+$defaultInstallDir = if ($InstallDir.Trim()) { $InstallDir.Trim() } else { "{localappdata}\Programs\AgentHero" }
 $installerArgs = @(
   "-NoProfile",
   "-ExecutionPolicy",
   "Bypass",
   "-File",
-  "`"%~dp0install-agent-hero.ps1`"",
+  "`"{tmp}\install-agent-hero.ps1`"",
   "-ManifestUrl",
   "`"$launcherManifestUrl`"",
+  "-InstallDir",
+  "`"{app}`"",
   "-TaskName",
   "`"$TaskName`"",
   "-Port",
   "$Port"
 )
-if ($InstallDir.Trim()) {
-  $installerArgs += @("-InstallDir", "`"$InstallDir`"")
-}
 if ($NoStart) {
   $installerArgs += "-NoStart"
 }
 
+$fileEntries = foreach ($file in $files) {
+  "Source: ""$((InnoString $file.Source))""; DestDir: ""{tmp}""; DestName: ""$((InnoString $file.DestName))""; Flags: deleteafterinstall"
+}
+$runParameters = PascalString ($installerArgs -join " ")
+
+$issPath = Join-Path $buildDir "AgentHeroSetup.iss"
 @"
-@echo off
-title AgentHero Setup Launcher
-echo.
-echo AgentHero Setup
-echo ===============
-echo.
-echo Installing AgentHero for the current Windows user.
-echo Opening the setup progress window...
-echo.
-start "AgentHero Setup" /wait powershell.exe -NoExit $($installerArgs -join " ")
-set EXIT_CODE=%ERRORLEVEL%
-if not "%EXIT_CODE%"=="0" (
-  echo.
-  echo AgentHero setup failed with exit code %EXIT_CODE%.
-  pause
-  exit /b %EXIT_CODE%
-)
-exit /b 0
-"@ | Set-Content -Path $launcher -Encoding ASCII
+[Setup]
+AppId={{C82E3682-41D8-4A44-A59D-EFB91A1057D7}
+AppName=AgentHero
+AppVersion=$appVersion
+AppPublisher=AgentHero
+DefaultDirName=$defaultInstallDir
+DisableProgramGroupPage=yes
+OutputDir=$targetDir
+OutputBaseFilename=$targetBaseName
+SetupIconFile=$embeddedIcon
+Compression=lzma2
+SolidCompression=yes
+WizardStyle=modern
+PrivilegesRequired=lowest
+ArchitecturesAllowed=x64compatible
+ArchitecturesInstallIn64BitMode=x64compatible
+Uninstallable=no
 
-$escapedBuildDir = $buildDir
-$escapedTargetPath = $targetPath
-$stringEntries = for ($index = 0; $index -lt $embeddedFiles.Count; $index += 1) {
-  "FILE$index=`"$($embeddedFiles[$index])`""
-}
-$sourceEntries = for ($index = 0; $index -lt $embeddedFiles.Count; $index += 1) {
-  "%FILE$index%="
-}
-@"
-[Version]
-Class=IEXPRESS
-SEDVersion=3
+[Languages]
+Name: "english"; MessagesFile: "compiler:Default.isl"
 
-[Options]
-PackagePurpose=InstallApp
-ShowInstallProgramWindow=1
-HideExtractAnimation=1
-UseLongFileName=1
-InsideCompressed=0
-CAB_FixedSize=0
-CAB_ResvCodeSigning=0
-RebootMode=N
-InstallPrompt=
-DisplayLicense=
-FinishMessage=AgentHero setup complete.
-TargetName=$escapedTargetPath
-FriendlyName=AgentHero Setup
-AppLaunched=install.cmd
-PostInstallCmd=<None>
-AdminQuietInstCmd=install.cmd
-UserQuietInstCmd=install.cmd
-SourceFiles=SourceFiles
+[Files]
+$($fileEntries -join "`r`n")
 
-[Strings]
-$($stringEntries -join "`r`n")
+[Code]
+procedure CurStepChanged(CurStep: TSetupStep);
+var
+  ResultCode: Integer;
+begin
+  if CurStep = ssInstall then
+  begin
+    WizardForm.StatusLabel.Caption := 'Installing AgentHero and registering startup...';
+    if not Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'), ExpandConstant('$runParameters'), '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+    begin
+      MsgBox('AgentHero setup could not start PowerShell.', mbError, MB_OK);
+      Abort;
+    end;
+    if ResultCode <> 0 then
+    begin
+      MsgBox('AgentHero setup failed. Check the installer logs under %LocalAppData%\AgentHero\logs.', mbError, MB_OK);
+      Abort;
+    end;
+  end;
+end;
+"@ | Set-Content -Path $issPath -Encoding ASCII
 
-[SourceFiles]
-SourceFiles0=$escapedBuildDir
-
-[SourceFiles0]
-$($sourceEntries -join "`r`n")
-"@ | Set-Content -Path $sedPath -Encoding ASCII
-
-$iexpressProcess = Start-Process -FilePath $iexpress -ArgumentList @("/N", $sedPath) -Wait -PassThru -WindowStyle Hidden
-for ($attempt = 0; $attempt -lt 20 -and -not (Test-Path $targetPath); $attempt += 1) {
-  Start-Sleep -Milliseconds 500
-}
-if (Test-Path $targetPath) {
-  $lastLength = -1
-  $stableCount = 0
-  for ($attempt = 0; $attempt -lt 120 -and $stableCount -lt 3; $attempt += 1) {
-    $currentLength = (Get-Item -LiteralPath $targetPath).Length
-    if ($currentLength -eq $lastLength -and $currentLength -ge $minimumTargetSize) {
-      $stableCount += 1
-    } else {
-      $stableCount = 0
-      $lastLength = $currentLength
-    }
-    Start-Sleep -Milliseconds 500
-  }
+$process = Start-Process -FilePath $iscc -ArgumentList @($issPath) -Wait -PassThru -NoNewWindow
+if ($process.ExitCode -ne 0) {
+  throw "Inno Setup failed with exit code $($process.ExitCode)"
 }
 if (-not (Test-Path $targetPath)) {
-  if ($null -ne $iexpressProcess.ExitCode -and $iexpressProcess.ExitCode -ne 0) {
-    throw "IExpress failed with exit code $($iexpressProcess.ExitCode)"
-  }
-  throw "IExpress did not create $targetPath"
+  throw "Inno Setup did not create $targetPath"
 }
 
 Write-Host "Created $targetPath"

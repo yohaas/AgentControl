@@ -111,13 +111,14 @@ The server serves `web/dist` directly in production-style mode.
 
 ## Windows Install
 
-Use the checked-in installer:
+Use the checked-in graphical installer:
 
 [installer/AgentHeroSetup.exe](installer/AgentHeroSetup.exe)
 
-To regenerate it, build a Windows release bundle and copy the setup EXE into `installer/`:
+The setup wizard is built with Inno Setup and runs the AgentHero install steps behind its normal installer UI. To regenerate it, install Inno Setup 6 so `ISCC.exe` is available, then build a Windows release bundle and copy the setup EXE into `installer/`:
 
 ```powershell
+winget install --id JRSoftware.InnoSetup -e
 npm run bundle:windows
 npm run installer:windows -- -ManifestUrl .\artifacts\manifest.json -OutputPath .\artifacts\AgentHeroSetup.exe
 Copy-Item .\artifacts\AgentHeroSetup.exe .\installer\AgentHeroSetup.exe -Force
