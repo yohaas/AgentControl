@@ -139,6 +139,7 @@ It also creates:
 
 - A per-user Scheduled Task named `AgentHero`.
 - A desktop shortcut to `http://127.0.0.1:4317`.
+- A Start Menu shortcut under `AgentHero`.
 - An uninstall entry for the current Windows user.
 - Logs and update state under `%LocalAppData%\AgentHero`.
 

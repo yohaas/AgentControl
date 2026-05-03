@@ -139,6 +139,23 @@ $($sourceEntries -join "`r`n")
 "@ | Set-Content -Path $sedPath -Encoding ASCII
 
 & $iexpress /N /Q $sedPath
+for ($attempt = 0; $attempt -lt 20 -and -not (Test-Path $targetPath); $attempt += 1) {
+  Start-Sleep -Milliseconds 500
+}
+if (Test-Path $targetPath) {
+  $lastLength = -1
+  $stableCount = 0
+  for ($attempt = 0; $attempt -lt 120 -and $stableCount -lt 3; $attempt += 1) {
+    $currentLength = (Get-Item -LiteralPath $targetPath).Length
+    if ($currentLength -eq $lastLength) {
+      $stableCount += 1
+    } else {
+      $stableCount = 0
+      $lastLength = $currentLength
+    }
+    Start-Sleep -Milliseconds 500
+  }
+}
 if (-not (Test-Path $targetPath)) {
   if ($null -ne $LASTEXITCODE -and $LASTEXITCODE -ne 0) {
     throw "IExpress failed with exit code $LASTEXITCODE"

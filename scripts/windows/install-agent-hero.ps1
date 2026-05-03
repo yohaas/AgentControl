@@ -26,6 +26,11 @@ function Write-InstallDetail {
   Write-Host "    $Message"
 }
 
+function PowerShellSingleQuoted {
+  param([string]$Value)
+  return "'$($Value -replace "'", "''")'"
+}
+
 function Get-Sha256FileHash {
   param([string]$Path)
   $stream = [System.IO.File]::OpenRead($Path)
@@ -113,10 +118,15 @@ $task = New-ScheduledTask -Action $action -Trigger $trigger -Principal $principa
 Register-ScheduledTask -TaskName $TaskName -InputObject $task -Force | Out-Host
 Write-InstallDetail "Scheduled task: $TaskName"
 
-Write-InstallStep "Creating desktop shortcut"
+Write-InstallStep "Creating shortcuts"
 $shortcutPath = Join-Path ([Environment]::GetFolderPath("Desktop")) "AgentHero.url"
 "[InternetShortcut]`r`nURL=http://127.0.0.1:$Port`r`n" | Set-Content -Path $shortcutPath -Encoding ASCII
-Write-InstallDetail $shortcutPath
+Write-InstallDetail "Desktop: $shortcutPath"
+$startMenuDir = Join-Path ([Environment]::GetFolderPath("Programs")) "AgentHero"
+$startMenuShortcutPath = Join-Path $startMenuDir "AgentHero.url"
+New-Item -ItemType Directory -Path $startMenuDir -Force | Out-Null
+"[InternetShortcut]`r`nURL=http://127.0.0.1:$Port`r`n" | Set-Content -Path $startMenuShortcutPath -Encoding ASCII
+Write-InstallDetail "Start Menu: $startMenuShortcutPath"
 
 Write-InstallStep "Registering uninstall entry"
 $uninstallKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\AgentHero"
@@ -124,7 +134,14 @@ New-Item -Path $uninstallKey -Force | Out-Null
 Set-ItemProperty -Path $uninstallKey -Name "DisplayName" -Value "AgentHero"
 Set-ItemProperty -Path $uninstallKey -Name "InstallLocation" -Value $resolvedInstallDir
 Set-ItemProperty -Path $uninstallKey -Name "DisplayVersion" -Value ([string]$manifest.version)
-Set-ItemProperty -Path $uninstallKey -Name "UninstallString" -Value "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command `"Unregister-ScheduledTask -TaskName '$TaskName' -Confirm:`$false; Remove-Item -LiteralPath '$resolvedInstallDir' -Recurse -Force; Remove-Item -Path '$uninstallKey' -Recurse -Force`""
+$uninstallCommand = @(
+  "Unregister-ScheduledTask -TaskName $(PowerShellSingleQuoted $TaskName) -Confirm:`$false -ErrorAction SilentlyContinue",
+  "Remove-Item -LiteralPath $(PowerShellSingleQuoted $resolvedInstallDir) -Recurse -Force -ErrorAction SilentlyContinue",
+  "Remove-Item -LiteralPath $(PowerShellSingleQuoted $shortcutPath) -Force -ErrorAction SilentlyContinue",
+  "Remove-Item -LiteralPath $(PowerShellSingleQuoted $startMenuDir) -Recurse -Force -ErrorAction SilentlyContinue",
+  "Remove-Item -Path $(PowerShellSingleQuoted $uninstallKey) -Recurse -Force -ErrorAction SilentlyContinue"
+) -join "; "
+Set-ItemProperty -Path $uninstallKey -Name "UninstallString" -Value "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command `"$uninstallCommand`""
 
 if (-not $NoStart) {
   Write-InstallStep "Starting AgentHero"
