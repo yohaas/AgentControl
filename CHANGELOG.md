@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-05-03
 
+- [18eee04](https://github.com/yohaas/AgentHero/commit/18eee04) Replace the collapsed mobile status dot with a compact colored project-name sidebar opener.
 - [94ba042](https://github.com/yohaas/AgentHero/commit/94ba042) Switch busy chat composers back to Send when a draft message is present.
 - [9477cbe](https://github.com/yohaas/AgentHero/commit/9477cbe) Show the active project name under the collapsed mobile connection dot.
 - [38e909e](https://github.com/yohaas/AgentHero/commit/38e909e) Show version and last updated details in the update dialog.
