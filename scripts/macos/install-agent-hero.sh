@@ -149,7 +149,12 @@ if [[ -f "$icon_png_path" ]] && command -v sips >/dev/null 2>&1 && command -v ic
   cp "$icon_png_path" "$iconset_path/icon_512x512@2x.png"
   if iconutil -c icns "$iconset_path" -o "$app_bundle_path/Contents/Resources/AgentHero.icns"; then
     icon_file_entry=$'  <key>CFBundleIconFile</key>\n  <string>AgentHero</string>\n'
+    echo "Application icon: $app_bundle_path/Contents/Resources/AgentHero.icns"
+  else
+    echo "Application icon generation failed; continuing without an icon."
   fi
+else
+  echo "Application icon generation skipped; AgentHero.png, sips, or iconutil was not available."
 fi
 cat > "$app_bundle_path/Contents/Info.plist" <<APP_PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -178,19 +183,47 @@ APP_PLIST
 cat > "$app_bundle_path/Contents/MacOS/AgentHero" <<APP_SCRIPT
 #!/usr/bin/env bash
 set -euo pipefail
+install_dir="$install_dir"
+node_path="$node_path"
+log_dir="\$HOME/Library/Logs/AgentHero"
+manifest_url="$manifest_url"
+port="$port"
+mkdir -p "\$log_dir"
+exec >> "\$log_dir/launcher.log" 2>&1
+echo "AgentHero launcher started at \$(date '+%Y-%m-%d %H:%M:%S')"
 plist_path="\$HOME/Library/LaunchAgents/$label.plist"
 if [[ -f "\$plist_path" ]]; then
   launchctl bootstrap "gui/\$UID" "\$plist_path" >/dev/null 2>&1 || true
-  launchctl kickstart -k "gui/\$UID/$label" >/dev/null 2>&1 || true
+  launchctl kickstart -kp "gui/\$UID/$label" >/dev/null 2>&1 || true
+else
+  echo "LaunchAgent plist not found: \$plist_path"
 fi
 deadline=\$((SECONDS + 20))
 while [[ \$SECONDS -lt \$deadline ]]; do
-  if curl -fsS "http://127.0.0.1:$port/api/health" >/dev/null 2>&1; then
+  if curl -fsS "http://127.0.0.1:\$port/api/health" >/dev/null 2>&1; then
     break
   fi
   sleep 1
 done
-open "http://127.0.0.1:$port"
+if ! curl -fsS "http://127.0.0.1:\$port/api/health" >/dev/null 2>&1; then
+  echo "LaunchAgent did not become healthy; starting AgentHero directly."
+  (
+    cd "\$install_dir"
+    export AGENTHERO_INSTALL_MODE="installed"
+    export AGENTHERO_UPDATE_MANIFEST_URL="\$manifest_url"
+    export HOST="127.0.0.1"
+    export PORT="\$port"
+    nohup "\$node_path" "\$install_dir/server/dist/index.js" >> "\$log_dir/agent-hero.out.log" 2>> "\$log_dir/agent-hero.err.log" &
+  )
+  deadline=\$((SECONDS + 20))
+  while [[ \$SECONDS -lt \$deadline ]]; do
+    if curl -fsS "http://127.0.0.1:\$port/api/health" >/dev/null 2>&1; then
+      break
+    fi
+    sleep 1
+  done
+fi
+open "http://127.0.0.1:\$port"
 APP_SCRIPT
 chmod +x "$app_bundle_path/Contents/MacOS/AgentHero"
 

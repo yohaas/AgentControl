@@ -89,6 +89,8 @@ if [[ -d "\$user_app" && -d /Applications ]]; then
   cp -R "\$user_app" "\$system_app"
   chown -R "\$console_user":staff "\$system_app"
   echo "Application launcher copied to \$system_app"
+else
+  echo "Application launcher was not copied. user_app_exists=\$(test -d "\$user_app" && echo yes || echo no) applications_exists=\$(test -d /Applications && echo yes || echo no)"
 fi
 SCRIPT
 chmod +x "$scripts_dir/postinstall"
