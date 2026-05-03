@@ -910,16 +910,24 @@ async function readLocalVersionMetadata(): Promise<AppVersionMetadata | undefine
   for (const root of roots) {
     const rawVersion = await readFile(path.join(root, "version.json"), "utf8").catch(() => "");
     if (rawVersion.trim()) {
-      const parsed = JSON.parse(rawVersion) as AppVersionMetadata;
-      if (parsed.version) return parsed;
+      try {
+        const parsed = JSON.parse(rawVersion.replace(/^\uFEFF/, "")) as AppVersionMetadata;
+        if (parsed.version) return parsed;
+      } catch {
+        // Continue to package.json. Older Windows bundles may have written version.json with an encoding marker.
+      }
     }
   }
 
   for (const root of roots) {
     const rawPackage = await readFile(path.join(root, "package.json"), "utf8").catch(() => "");
     if (!rawPackage.trim()) continue;
-    const parsedPackage = JSON.parse(rawPackage) as { version?: string };
-    if (parsedPackage.version) return { version: parsedPackage.version };
+    try {
+      const parsedPackage = JSON.parse(rawPackage.replace(/^\uFEFF/, "")) as { version?: string };
+      if (parsedPackage.version) return { version: parsedPackage.version };
+    } catch {
+      continue;
+    }
   }
 
   return undefined;
@@ -1023,7 +1031,11 @@ async function appUpdateStatus(): Promise<AppUpdateStatus> {
         commits: [],
         message: manifestOlder
           ? "Your installed version is newer than the update manifest."
-          : updateAsset || !releaseAvailable ? undefined : "A newer release exists, but this platform has no matching update asset."
+          : updateAsset || !releaseAvailable
+            ? undefined
+            : !localVersion?.version
+              ? "AgentHero could not read the installed version, so it cannot choose a patch update."
+              : "A newer release exists, but this platform has no matching update asset."
       };
     } catch (error) {
       return {
