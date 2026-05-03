@@ -27,6 +27,8 @@ launch_agents_dir="$HOME/Library/LaunchAgents"
 plist_path="$launch_agents_dir/$label.plist"
 manifest_path="$download_dir/manifest.json"
 stage_dir="$download_dir/stage"
+apps_dir="$(dirname "$install_dir")"
+app_bundle_path="$apps_dir/AgentHero.app"
 
 mkdir -p "$install_dir" "$download_dir" "$log_dir" "$launch_agents_dir"
 install_log_path="$log_dir/install.log"
@@ -127,6 +129,41 @@ cat > "$plist_path" <<PLIST
 </plist>
 PLIST
 
+mkdir -p "$app_bundle_path/Contents/MacOS"
+cat > "$app_bundle_path/Contents/Info.plist" <<APP_PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleExecutable</key>
+  <string>AgentHero</string>
+  <key>CFBundleIdentifier</key>
+  <string>com.agenthero.launcher</string>
+  <key>CFBundleName</key>
+  <string>AgentHero</string>
+  <key>CFBundleDisplayName</key>
+  <string>AgentHero</string>
+  <key>CFBundlePackageType</key>
+  <string>APPL</string>
+  <key>CFBundleVersion</key>
+  <string>$version</string>
+  <key>CFBundleShortVersionString</key>
+  <string>$version</string>
+</dict>
+</plist>
+APP_PLIST
+cat > "$app_bundle_path/Contents/MacOS/AgentHero" <<APP_SCRIPT
+#!/usr/bin/env bash
+set -euo pipefail
+plist_path="\$HOME/Library/LaunchAgents/$label.plist"
+if [[ -f "\$plist_path" ]]; then
+  launchctl bootstrap "gui/\$UID" "\$plist_path" >/dev/null 2>&1 || true
+  launchctl kickstart -k "gui/\$UID/$label" >/dev/null 2>&1 || true
+fi
+open "http://127.0.0.1:$port"
+APP_SCRIPT
+chmod +x "$app_bundle_path/Contents/MacOS/AgentHero"
+
 if [[ "$no_start" != "1" ]]; then
   launchctl bootout "gui/$UID" "$plist_path" >/dev/null 2>&1 || true
   launchctl bootstrap "gui/$UID" "$plist_path"
@@ -134,6 +171,7 @@ if [[ "$no_start" != "1" ]]; then
 fi
 
 echo "AgentHero installed to $install_dir"
+echo "Application launcher: $app_bundle_path"
 echo "LaunchAgent: $plist_path"
 echo "Version: $version"
 echo "Open http://127.0.0.1:$port"
