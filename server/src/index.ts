@@ -875,6 +875,19 @@ function compareVersionStrings(left: string, right: string): number {
   return 0;
 }
 
+function installedReleaseAvailable(localVersion: AppVersionMetadata | undefined, latestVersion: AppVersionMetadata | undefined): boolean {
+  if (!latestVersion) return false;
+  if (!localVersion) return true;
+  if (latestVersion.version && localVersion.version) {
+    const versionDelta = compareVersionStrings(latestVersion.version, localVersion.version);
+    if (versionDelta > 0) return true;
+    if (versionDelta < 0) return false;
+  }
+  if (latestVersion.releaseTag && localVersion.releaseTag && latestVersion.releaseTag !== localVersion.releaseTag) return true;
+  if (latestVersion.commitSha && localVersion.commitSha && latestVersion.commitSha !== localVersion.commitSha) return true;
+  return false;
+}
+
 function manifestVersion(manifest: AppUpdateManifest): AppVersionMetadata | undefined {
   if (manifest.latest?.version) return manifest.latest;
   if (!manifest.version) return undefined;
@@ -960,11 +973,7 @@ async function appUpdateStatus(): Promise<AppUpdateStatus> {
       const manifest = await fetchUpdateManifest(manifestUrl);
       const latestVersion = manifestVersion(manifest);
       const updateAsset = selectUpdateAsset(manifest.assets);
-      const releaseAvailable = Boolean(
-        latestVersion?.version &&
-          localVersion?.version &&
-          compareVersionStrings(latestVersion.version, localVersion.version) > 0
-      );
+      const releaseAvailable = installedReleaseAvailable(localVersion, latestVersion);
       return {
         installMode,
         isRepo: false,
