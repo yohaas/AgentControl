@@ -68,6 +68,11 @@ if [[ -z "\$console_user" || "\$console_user" == "root" ]]; then
   exit 1
 fi
 user_home="\$(dscl . -read "/Users/\$console_user" NFSHomeDirectory | awk '{print \$2}')"
+log_dir="\$user_home/Library/Logs/AgentHero"
+mkdir -p "\$log_dir"
+exec >> "\$log_dir/pkg-postinstall.log" 2>&1
+echo "AgentHero pkg postinstall started at \$(date '+%Y-%m-%d %H:%M:%S')"
+echo "Console user: \$console_user"
 args=(--manifest-url "$installer_manifest_url" --label "$label" --port "$port")
 if [[ -n "$install_dir" ]]; then
   args+=(--install-dir "$install_dir")
@@ -76,7 +81,7 @@ if [[ "$no_start" == "1" ]]; then
   args+=(--no-start)
 fi
 
-sudo -u "\$console_user" HOME="\$user_home" /bin/bash "\$SCRIPT_DIR/install-agent-hero.sh" "\${args[@]}"
+sudo -u "\$console_user" HOME="\$user_home" PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:\$PATH" /bin/bash "\$SCRIPT_DIR/install-agent-hero.sh" "\${args[@]}"
 SCRIPT
 chmod +x "$scripts_dir/postinstall"
 

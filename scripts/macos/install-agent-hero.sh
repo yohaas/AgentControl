@@ -27,9 +27,31 @@ launch_agents_dir="$HOME/Library/LaunchAgents"
 plist_path="$launch_agents_dir/$label.plist"
 manifest_path="$download_dir/manifest.json"
 stage_dir="$download_dir/stage"
-node_path="$(command -v node)"
 
 mkdir -p "$install_dir" "$download_dir" "$log_dir" "$launch_agents_dir"
+install_log_path="$log_dir/install.log"
+exec > >(tee -a "$install_log_path") 2>&1
+export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
+
+resolve_node_path() {
+  if command -v node >/dev/null 2>&1; then
+    command -v node
+    return
+  fi
+  for candidate in /opt/homebrew/bin/node /usr/local/bin/node /usr/bin/node; do
+    if [[ -x "$candidate" ]]; then
+      echo "$candidate"
+      return
+    fi
+  done
+  echo "Node.js was not found. Install Node.js 20 or newer and retry AgentHero setup." >&2
+  exit 1
+}
+
+echo "AgentHero install started at $(date '+%Y-%m-%d %H:%M:%S')"
+echo "Log: $install_log_path"
+node_path="$(resolve_node_path)"
+echo "Node: $node_path"
 
 if [[ -f "$manifest_url" ]]; then
   cp "$manifest_url" "$manifest_path"
@@ -39,12 +61,12 @@ else
   manifest_base=""
 fi
 
-asset_url="$(node -e "const fs=require('fs'); const m=JSON.parse(fs.readFileSync(process.argv[1], 'utf8')); const a=(m.assets||[]).find((x)=>x.platform==='macos' && (!x.arch || x.arch===process.arch)); if(!a) process.exit(2); console.log(a.url);" "$manifest_path")" || {
+asset_url="$("$node_path" -e "const fs=require('fs'); const m=JSON.parse(fs.readFileSync(process.argv[1], 'utf8')); const a=(m.assets||[]).find((x)=>x.platform==='macos' && (!x.arch || x.arch===process.arch)); if(!a) process.exit(2); console.log(a.url);" "$manifest_path")" || {
   echo "Manifest does not contain a matching macOS asset." >&2
   exit 1
 }
-expected_sha="$(node -e "const fs=require('fs'); const m=JSON.parse(fs.readFileSync(process.argv[1], 'utf8')); const a=(m.assets||[]).find((x)=>x.platform==='macos' && (!x.arch || x.arch===process.arch)); console.log(a.sha256);" "$manifest_path")"
-version="$(node -e "const fs=require('fs'); const m=JSON.parse(fs.readFileSync(process.argv[1], 'utf8')); console.log(m.version || '');" "$manifest_path")"
+expected_sha="$("$node_path" -e "const fs=require('fs'); const m=JSON.parse(fs.readFileSync(process.argv[1], 'utf8')); const a=(m.assets||[]).find((x)=>x.platform==='macos' && (!x.arch || x.arch===process.arch)); console.log(a.sha256);" "$manifest_path")"
+version="$("$node_path" -e "const fs=require('fs'); const m=JSON.parse(fs.readFileSync(process.argv[1], 'utf8')); console.log(m.version || '');" "$manifest_path")"
 
 if [[ -n "$manifest_base" && "$asset_url" != http://* && "$asset_url" != https://* ]]; then
   asset_url="$manifest_base/$asset_url"
