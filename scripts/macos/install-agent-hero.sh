@@ -36,17 +36,27 @@ exec > >(tee -a "$install_log_path") 2>&1
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
 
 resolve_node_path() {
-  if command -v node >/dev/null 2>&1; then
-    command -v node
-    return
-  fi
-  for candidate in /opt/homebrew/bin/node /usr/local/bin/node /usr/bin/node; do
+  for candidate in /opt/homebrew/opt/node@20/bin/node /usr/local/opt/node@20/bin/node /opt/homebrew/bin/node /usr/local/bin/node /usr/bin/node; do
     if [[ -x "$candidate" ]]; then
+      major="$("$candidate" -p "process.versions.node.split('.')[0]" 2>/dev/null || true)"
+      if [[ "$major" == "20" ]]; then
+        echo "$candidate"
+        return
+      fi
+    fi
+  done
+  if command -v node >/dev/null 2>&1; then
+    candidate="$(command -v node)"
+    major="$("$candidate" -p "process.versions.node.split('.')[0]" 2>/dev/null || true)"
+    if [[ "$major" == "20" ]]; then
       echo "$candidate"
       return
     fi
-  done
-  echo "Node.js was not found. Install Node.js 20 or newer and retry AgentHero setup." >&2
+    echo "AgentHero requires Node.js 20 LTS for macOS terminal support. Found $("$candidate" -p "process.version" 2>/dev/null || echo "$candidate")." >&2
+  else
+    echo "Node.js 20 LTS was not found." >&2
+  fi
+  echo "Install it with: brew install node@20" >&2
   exit 1
 }
 

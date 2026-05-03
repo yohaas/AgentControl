@@ -178,6 +178,8 @@ npm run installer:windows -- -ManifestUrl "https://example.com/agent-hero/manife
 Build macOS artifacts on a Mac. The package tools and native dependencies need Darwin/macOS binaries.
 
 ```bash
+brew install node@20
+export PATH="/opt/homebrew/opt/node@20/bin:/usr/local/opt/node@20/bin:$PATH"
 npm run bundle:mac
 npm run installer:mac -- --manifest-url ./artifacts/manifest.json --output-path ./artifacts/AgentHeroSetup.pkg
 ```

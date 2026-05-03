@@ -20,6 +20,11 @@ if [[ "$(uname -s)" != "Darwin" ]]; then
   echo "macOS bundles must be built on macOS so native dependencies are built for Darwin." >&2
   exit 1
 fi
+node_major="$(node -p "process.versions.node.split('.')[0]")"
+if [[ "$node_major" != "20" ]]; then
+  echo "macOS bundles must be built with Node.js 20 LTS so native terminal dependencies match the installed runtime. Current Node: $(node -p "process.version")" >&2
+  exit 1
+fi
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 app_version="${version:-$(node -p "require('$repo_root/package.json').version")}"
