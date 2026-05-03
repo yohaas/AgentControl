@@ -33,7 +33,6 @@ export async function connectWebSocket() {
     attempt = 0;
     useAppStore.getState().setWsConnected(true);
     sendCommand({ type: "snapshot" });
-    sendMessageQueues();
   });
   nextSocket.addEventListener("message", (message) => {
     if (socket !== nextSocket) return;

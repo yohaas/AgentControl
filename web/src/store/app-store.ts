@@ -228,23 +228,8 @@ function pruneMessageQueues(queues: Record<string, QueuedMessage[]>, agentIds: S
   return writeStoredMessageQueues(Object.fromEntries(Object.entries(queues).filter(([agentId]) => agentIds.has(agentId))));
 }
 
-function mergeMessageQueues(
-  primaryQueues: Record<string, QueuedMessage[]> | undefined,
-  fallbackQueues: Record<string, QueuedMessage[]>,
-  agentIds: Set<string>
-): Record<string, QueuedMessage[]> {
-  const merged: Record<string, QueuedMessage[]> = {};
-  for (const agentId of agentIds) {
-    const seen = new Set<string>();
-    const queue = [...(primaryQueues?.[agentId] || []), ...(fallbackQueues[agentId] || [])].filter((message) => {
-      if (wasRecentlyRemovedQueuedMessage(message.id)) return false;
-      if (seen.has(message.id)) return false;
-      seen.add(message.id);
-      return true;
-    });
-    if (queue.length > 0) merged[agentId] = queue;
-  }
-  return writeStoredMessageQueues(merged);
+function authoritativeMessageQueues(queues: Record<string, QueuedMessage[]> | undefined, agentIds: Set<string>): Record<string, QueuedMessage[]> {
+  return pruneMessageQueues(normalizeMessageQueues(queues || {}), agentIds);
 }
 
 function normalizeTileLayout(value: unknown): StoredTileLayout {
@@ -785,9 +770,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         transcripts: snapshot.transcripts,
         savedChats: snapshot.savedChats || [],
         capabilities: snapshot.capabilities || state.capabilities,
-        messageQueues: snapshot.messageQueues
-          ? mergeMessageQueues(snapshot.messageQueues, state.messageQueues, agentIds)
-          : pruneMessageQueues(state.messageQueues, agentIds),
+        messageQueues: authoritativeMessageQueues(snapshot.messageQueues, agentIds),
         chatTranscriptDetails: Object.fromEntries(Object.entries(state.chatTranscriptDetails).filter(([id]) => agentIds.has(id))),
         selectedAgentId: state.selectedAgentId && agentIds.has(state.selectedAgentId) ? state.selectedAgentId : undefined,
         focusedAgentId: state.focusedAgentId && agentIds.has(state.focusedAgentId) ? state.focusedAgentId : undefined,
@@ -809,7 +792,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       case "agent.message_queues":
         set((state) => {
           const agentIds = new Set(Object.keys(state.agents));
-          return { messageQueues: mergeMessageQueues(event.messageQueues, state.messageQueues, agentIds) };
+          return { messageQueues: authoritativeMessageQueues(event.messageQueues, agentIds) };
         });
         break;
       case "agent.launched":
