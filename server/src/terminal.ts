@@ -1,8 +1,9 @@
 import os from "node:os";
+import { spawn as spawnChild } from "node:child_process";
 import { mkdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { nanoid } from "nanoid";
-import { spawn as spawnPty, type IPty } from "node-pty";
+import { spawn as spawnPty } from "node-pty";
 import type { Project, TerminalSession, TerminalSnapshot, WsServerEvent } from "@agent-hero/shared";
 import { statePath } from "./storage.js";
 import { isWslProject, wslProjectPath } from "./wsl.js";
@@ -25,9 +26,17 @@ interface PtyStartAttempt {
   cwd: string;
 }
 
+interface TerminalProcess {
+  write: (data: string) => void;
+  resize: (cols: number, rows: number) => void;
+  kill: () => void;
+  onData: (callback: (data: string) => void) => void;
+  onExit: (callback: (event: { exitCode: number; signal?: string | number | null }) => void) => void;
+}
+
 interface TerminalState {
   session: TerminalSession;
-  process: IPty;
+  process: TerminalProcess;
   output: string[];
   pending: string;
   pendingBytes: number;
@@ -124,6 +133,30 @@ function ptyStartAttempts(shell: ShellSpec, cwd: string, commands: string[]): Pt
     }
   }
   return attempts;
+}
+
+function spawnScriptFallback(shell: ShellSpec, cwd: string, env: Record<string, string>): TerminalProcess {
+  const child = spawnChild("/usr/bin/script", ["-q", "/dev/null", shell.command, ...shell.args], {
+    cwd,
+    env,
+    stdio: ["pipe", "pipe", "pipe"]
+  });
+  return {
+    write: (data) => {
+      child.stdin.write(data);
+    },
+    resize: () => undefined,
+    kill: () => {
+      child.kill();
+    },
+    onData: (callback) => {
+      child.stdout.on("data", (chunk) => callback(chunk.toString()));
+      child.stderr.on("data", (chunk) => callback(chunk.toString()));
+    },
+    onExit: (callback) => {
+      child.on("exit", (code, signal) => callback({ exitCode: code ?? 0, signal }));
+    }
+  };
 }
 
 function commandShell(commands: string[]): ShellSpec {
@@ -227,7 +260,7 @@ export class TerminalManager {
       ? wslProjectPath(project)
       : existingDirectory(customCwd) || existingDirectory(project?.path) || existingDirectory(process.cwd()) || os.homedir();
     const timestamp = now();
-    let pty: IPty | undefined;
+    let pty: TerminalProcess | undefined;
     let startedShell = shell;
     let startedCwd = cwd;
     const errors: string[] = [];
@@ -245,6 +278,19 @@ export class TerminalManager {
         break;
       } catch (error) {
         errors.push(`${attempt.shell.command} in ${attempt.cwd}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+    if (!pty) {
+      if (process.platform === "darwin") {
+        try {
+          const fallbackEnv = { ...envForPty(), ...shell.env };
+          pty = spawnScriptFallback(shell, cwd, fallbackEnv);
+          startedShell = { command: "/usr/bin/script", args: [shell.command, ...shell.args], env: shell.env };
+          startedCwd = cwd;
+          errors.push("/usr/bin/script fallback started");
+        } catch (error) {
+          errors.push(`/usr/bin/script fallback in ${cwd}: ${error instanceof Error ? error.message : String(error)}`);
+        }
       }
     }
     if (!pty) {
