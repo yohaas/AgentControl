@@ -3025,6 +3025,16 @@ function formatLastActivityTime(value?: string) {
   return `${date.toLocaleDateString([], { month: "short", day: "numeric" })} ${time}`;
 }
 
+function MessageTimestamp({ timestamp, className }: { timestamp?: string; className?: string }) {
+  const value = timestampValue(timestamp);
+  if (!value) return null;
+  return (
+    <div className={cn("mt-1 text-right text-[10px] leading-none opacity-70", className)} title={new Date(value).toLocaleString()}>
+      {formatLastActivityTime(timestamp)}
+    </div>
+  );
+}
+
 function fullLastActivity(value?: string) {
   const timestamp = timestampValue(value);
   if (!timestamp) return "Last activity unavailable";
@@ -10103,6 +10113,7 @@ function TranscriptPreview({
             <ThinkingText agent={agent} prefix="Streaming" startedAt={agent.turnStartedAt} usage={agent.lastTokenUsage} />
           </span>
         )}
+        <MessageTimestamp timestamp={event.timestamp} className={isUser ? "text-primary-foreground" : "text-muted-foreground"} />
       </div>
     </div>
   );
@@ -10153,6 +10164,7 @@ function PinnedUserMessage({
         {event.attachments && event.attachments.length > 0 && (
           <div className="mt-1 text-[11px] opacity-80">{event.attachments.length} attachment(s)</div>
         )}
+        <MessageTimestamp timestamp={event.timestamp} className="text-primary-foreground" />
       </div>
       <div
         className={cn(
@@ -11728,6 +11740,7 @@ function TranscriptItem({
             )}
           </div>
         )}
+        <MessageTimestamp timestamp={event.timestamp} className={isUser ? "text-primary-foreground" : "text-muted-foreground"} />
       </div>
     </div>
   );
