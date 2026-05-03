@@ -34,6 +34,15 @@
       "url": "https://github.com/yohaas/AgentHero/raw/main/installer/releases/v0.1.13/agent-hero-0.1.13-macos-arm64.zip",
       "sha256": "53b4a961e2950e2247630de3cca5c2641661dd7f47c3a9d255cdd7c96b6703d3",
       "size": 18141651
+    },
+    {
+      "type": "full",
+      "platform": "macos",
+      "arch": "arm64",
+      "version": "0.1.15",
+      "url": "https://github.com/yohaas/AgentHero/raw/main/installer/releases/v0.1.15/agent-hero-0.1.15-macos-arm64.zip",
+      "sha256": "04db3abf0decee8bbe938189114304e7f0bfdbcacd53ef9d1b9090b8da6d19bb",
+      "size": 18142024
     }
   ]
 }
