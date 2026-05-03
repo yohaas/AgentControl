@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-05-02
 
+- [ba5202a](https://github.com/yohaas/AgentHero/commit/ba5202a) Detect installed updates by release tag and commit SHA when the package version is unchanged.
 - [a54b37b](https://github.com/yohaas/AgentHero/commit/a54b37b) Use the app icon for installed Windows shortcuts.
 - [d33d3a9](https://github.com/yohaas/AgentHero/commit/d33d3a9) Add a Start Menu shortcut to the Windows setup installer.
 - [9425a3a](https://github.com/yohaas/AgentHero/commit/9425a3a) Show visible progress while the Windows setup installer runs.
