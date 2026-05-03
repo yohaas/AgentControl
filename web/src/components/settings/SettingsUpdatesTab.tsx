@@ -94,7 +94,11 @@ export function SettingsUpdatesTab({
                 {manifestVersionOlder ? "Manifest" : "Latest"}: <span className="font-mono">{latestVersion.releaseTag || latestVersion.version}</span>
               </div>
             )}
-            {settingsUpdateStatus.updateAsset && <div className="font-mono">Asset: {settingsUpdateStatus.updateAsset.platform}</div>}
+            {settingsUpdateStatus.updateAsset && (
+              <div className="font-mono">
+                Asset: {settingsUpdateStatus.updateAsset.type || "full"} / {settingsUpdateStatus.updateAsset.platform}
+              </div>
+            )}
             {settingsUpdateStatus.message && <div>{settingsUpdateStatus.message}</div>}
           </div>
         )}

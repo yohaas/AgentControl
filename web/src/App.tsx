@@ -4541,6 +4541,7 @@ function AppUpdateNotice({ compact = false, hideWhenNoUpdate = false }: { compac
               <div className="grid gap-1">
                 <div className="text-xs font-medium text-muted-foreground">Release asset</div>
                 <div className="rounded-md border border-border bg-muted p-2 font-mono text-xs [overflow-wrap:anywhere]">
+                  <div>type: {status.updateAsset.type || "full"}</div>
                   <div>{status.updateAsset.url}</div>
                   <div>sha256: {status.updateAsset.sha256}</div>
                 </div>

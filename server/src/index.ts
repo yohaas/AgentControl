@@ -937,13 +937,39 @@ async function fetchUpdateManifest(manifestUrl: string): Promise<AppUpdateManife
   return (await response.json()) as AppUpdateManifest;
 }
 
-function selectUpdateAsset(assets: AppUpdateAsset[] | undefined): AppUpdateAsset | undefined {
+function assetMatchesRuntime(asset: AppUpdateAsset): boolean {
   const expectedPlatform = normalizeUpdatePlatform();
   const expectedArch = process.arch;
-  return assets?.find((asset) => {
-    const platform = asset.platform.toLowerCase();
-    const arch = asset.arch?.toLowerCase();
-    return platform === expectedPlatform && (!arch || arch === expectedArch);
+  const platform = asset.platform.toLowerCase();
+  const arch = asset.arch?.toLowerCase();
+  return (platform === "any" || platform === expectedPlatform) && (!arch || arch === "any" || arch === expectedArch);
+}
+
+function assetVersion(asset: AppUpdateAsset, latestVersion: AppVersionMetadata | undefined): string | undefined {
+  return asset.version || latestVersion?.version;
+}
+
+function selectUpdateAsset(
+  assets: AppUpdateAsset[] | undefined,
+  localVersion: AppVersionMetadata | undefined,
+  latestVersion: AppVersionMetadata | undefined
+): AppUpdateAsset | undefined {
+  const matchingAssets = (assets || []).filter(assetMatchesRuntime);
+  const targetVersion = latestVersion?.version;
+  const patchAsset = localVersion?.version
+    ? matchingAssets.find((asset) => {
+        const type = asset.type || "full";
+        return (
+          type === "patch" &&
+          asset.fromVersion === localVersion.version &&
+          (!targetVersion || assetVersion(asset, latestVersion) === targetVersion)
+        );
+      })
+    : undefined;
+  if (patchAsset) return patchAsset;
+  return matchingAssets.find((asset) => {
+    const type = asset.type || "full";
+    return type === "full" && (!targetVersion || !asset.version || asset.version === targetVersion);
   });
 }
 
@@ -982,7 +1008,7 @@ async function appUpdateStatus(): Promise<AppUpdateStatus> {
     try {
       const manifest = await fetchUpdateManifest(manifestUrl);
       const latestVersion = manifestVersion(manifest);
-      const updateAsset = selectUpdateAsset(manifest.assets);
+      const updateAsset = selectUpdateAsset(manifest.assets, localVersion, latestVersion);
       const releaseAvailable = installedReleaseAvailable(localVersion, latestVersion);
       const manifestOlder = manifestIsOlderThanLocal(localVersion, latestVersion);
       return {

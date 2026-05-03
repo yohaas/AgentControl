@@ -1,6 +1,6 @@
 {
   "name": "agent-hero",
-  "version": "0.1.11",
+  "version": "0.1.12",
   "private": true,
   "type": "module",
   "workspaces": [
@@ -12,6 +12,8 @@
     "dev": "concurrently -k -n server,web -c cyan,magenta \"npm run dev -w server\" \"wait-on http://127.0.0.1:4317/api/health && npm run dev -w web\"",
     "dev:supervised": "node scripts/supervisor.mjs",
     "build": "npm run build -w shared && npm run build -w server && npm run build -w web",
+    "patch:mac": "bash ./scripts/macos/create-update-patch.sh",
+    "patch:windows": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\windows\\create-update-patch.ps1",
     "bundle:mac": "bash ./scripts/macos/create-release-bundle.sh",
     "bundle:windows": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\windows\\create-release-bundle.ps1",
     "installer:mac": "bash ./scripts/macos/create-pkg-installer.sh",

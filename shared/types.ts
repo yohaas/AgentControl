@@ -226,8 +226,11 @@ export interface AppVersionMetadata {
 }
 
 export interface AppUpdateAsset {
+  type?: "full" | "patch";
   platform: string;
   arch?: string;
+  version?: string;
+  fromVersion?: string;
   url: string;
   sha256: string;
   size?: number;

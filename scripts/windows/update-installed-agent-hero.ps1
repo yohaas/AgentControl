@@ -91,6 +91,46 @@ function Test-AgentHeroHealth {
   return $false
 }
 
+function Get-LocalVersion {
+  $versionPath = Join-Path $resolvedInstallDir "version.json"
+  if (Test-Path $versionPath) {
+    $metadata = Get-Content -Raw -Path $versionPath | ConvertFrom-Json
+    if ($metadata.version) { return [string]$metadata.version }
+  }
+  $packagePath = Join-Path $resolvedInstallDir "package.json"
+  if (Test-Path $packagePath) {
+    $metadata = Get-Content -Raw -Path $packagePath | ConvertFrom-Json
+    if ($metadata.version) { return [string]$metadata.version }
+  }
+  return ""
+}
+
+function Test-AssetMatchesRuntime {
+  param($Asset)
+  $platform = ([string]$Asset.platform).ToLowerInvariant()
+  $arch = ([string]$Asset.arch).ToLowerInvariant()
+  return ($platform -eq "windows" -or $platform -eq "any") -and (-not $arch -or $arch -eq "x64" -or $arch -eq "any")
+}
+
+function Select-UpdateAsset {
+  param($Manifest, [string]$LocalVersion)
+  $targetVersion = [string]$Manifest.version
+  $matchingAssets = @($Manifest.assets | Where-Object { Test-AssetMatchesRuntime $_ })
+  if ($LocalVersion) {
+    $patchAsset = $matchingAssets | Where-Object {
+      $type = if ($_.type) { [string]$_.type } else { "full" }
+      $assetVersion = if ($_.version) { [string]$_.version } else { $targetVersion }
+      $type -eq "patch" -and [string]$_.fromVersion -eq $LocalVersion -and (-not $targetVersion -or $assetVersion -eq $targetVersion)
+    } | Select-Object -First 1
+    if ($patchAsset) { return $patchAsset }
+  }
+  return $matchingAssets | Where-Object {
+    $type = if ($_.type) { [string]$_.type } else { "full" }
+    $assetVersion = if ($_.version) { [string]$_.version } else { $targetVersion }
+    $type -eq "full" -and (-not $targetVersion -or -not $_.version -or $assetVersion -eq $targetVersion)
+  } | Select-Object -First 1
+}
+
 if (-not $manifestUri) {
   throw "ManifestUrl is required. Set AGENTHERO_UPDATE_MANIFEST_URL or pass -ManifestUrl."
 }
@@ -102,8 +142,11 @@ Write-UpdateLog "Manifest $manifestUri"
 $manifestPath = Join-Path $downloadDir "manifest.json"
 Invoke-WebRequest -Uri $manifestUri -OutFile $manifestPath -UseBasicParsing
 $manifest = Get-Content -Raw -Path $manifestPath | ConvertFrom-Json
-$asset = $manifest.assets | Where-Object { $_.platform -eq "windows" -and (-not $_.arch -or $_.arch -eq "x64") } | Select-Object -First 1
+$localVersion = Get-LocalVersion
+$asset = Select-UpdateAsset -Manifest $manifest -LocalVersion $localVersion
 if (-not $asset) { throw "Manifest does not contain a Windows update asset." }
+$assetType = if ($asset.type) { [string]$asset.type } else { "full" }
+Write-UpdateLog "Selected $assetType update asset for installed version $localVersion"
 
 $assetUrl = [string]$asset.url
 if (-not ([Uri]$assetUrl).IsAbsoluteUri) {
@@ -131,7 +174,14 @@ Stop-AgentHero
 Write-UpdateLog "Backing up current install to $backupPath"
 Move-Item -LiteralPath $resolvedInstallDir -Destination $backupPath
 New-Item -ItemType Directory -Path $resolvedInstallDir -Force | Out-Null
-Copy-Item -Path (Join-Path $stageDir "*") -Destination $resolvedInstallDir -Recurse -Force
+if ($assetType -eq "patch") {
+  Write-UpdateLog "Applying patch files"
+  Copy-Item -Path (Join-Path $backupPath "*") -Destination $resolvedInstallDir -Recurse -Force
+  Copy-Item -Path (Join-Path $stageDir "*") -Destination $resolvedInstallDir -Recurse -Force
+} else {
+  Write-UpdateLog "Applying full release files"
+  Copy-Item -Path (Join-Path $stageDir "*") -Destination $resolvedInstallDir -Recurse -Force
+}
 
 Write-UpdateLog "Starting AgentHero"
 Start-AgentHero

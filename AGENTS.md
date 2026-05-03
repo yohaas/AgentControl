@@ -7,3 +7,4 @@
 - Do not revert user changes unless explicitly asked.
 - Keep changes scoped to the requested behavior and existing project patterns.
 - Do not rebuild or recommit installer artifacts for routine app changes unless the user asks or the installer/update payload itself needs to change.
+- For release/update work, explicitly say whether the change needs a full build or can be shipped as a platform-neutral patch. Do not create a patch package automatically; ask before packaging one.
