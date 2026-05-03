@@ -21,10 +21,10 @@
       "type": "full",
       "platform": "windows",
       "arch": "x64",
-      "version": "0.1.13",
-      "url": "https://github.com/yohaas/AgentHero/raw/main/installer/releases/v0.1.13/agent-hero-0.1.13-windows-x64.zip",
-      "sha256": "df58a0f66e777a6ba0501a2035b3a3589e3890cd1bd4636362ebfec27104eb79",
-      "size": 18642434
+      "version": "0.1.15",
+      "url": "https://github.com/yohaas/AgentHero/raw/main/installer/releases/v0.1.15/agent-hero-0.1.15-windows-x64.zip",
+      "sha256": "71382f3c351859c7205a30b71346732970d25e91721bfeefdac70297a3282586",
+      "size": 18642822
     },
     {
       "type": "full",
