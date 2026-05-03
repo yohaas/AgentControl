@@ -4,6 +4,8 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-05-03
 
+- [0ae5802](https://github.com/yohaas/AgentHero/commit/0ae5802) Add a checked-in update manifest and repo-hosted Windows release bundle.
+- [520340d](https://github.com/yohaas/AgentHero/commit/520340d) Default installed update checks to the repo manifest URL.
 - [18eee04](https://github.com/yohaas/AgentHero/commit/18eee04) Replace the collapsed mobile status dot with a compact colored project-name sidebar opener.
 - [94ba042](https://github.com/yohaas/AgentHero/commit/94ba042) Switch busy chat composers back to Send when a draft message is present.
 - [9477cbe](https://github.com/yohaas/AgentHero/commit/9477cbe) Show the active project name under the collapsed mobile connection dot.
