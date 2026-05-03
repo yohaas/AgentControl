@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-05-03
 
+- [21397bb](https://github.com/yohaas/AgentHero/commit/21397bb) Use a pipe-based macOS terminal fallback when PTY and script startup fail.
 - [086843a](https://github.com/yohaas/AgentHero/commit/086843a) Add a macOS terminal fallback through the system script command when node-pty spawn fails.
 - [1f13814](https://github.com/yohaas/AgentHero/commit/1f13814) Retry macOS terminal startup with safe cwd and shell fallbacks.
 - [0880f8b](https://github.com/yohaas/AgentHero/commit/0880f8b) Clarify update status when the configured manifest is older than the installed app.
