@@ -17,6 +17,8 @@ After install, open AgentHero at:
 http://127.0.0.1:4317
 ```
 
+For the best desktop experience, install AgentHero as a browser PWA from Chrome or Edge after opening the local URL. The PWA keeps AgentHero in its own app-style window while still using the local server started by the installer.
+
 The installers run AgentHero as the current desktop user so local project folders, PATH entries, Claude credentials, and Codex credentials come from your normal user profile. For source checkout setup, see [Manual Checkout Run](#manual-checkout-run).
 
 See [CHANGELOG.md](CHANGELOG.md) for release history.
