@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-05-03
 
+- [1f13814](https://github.com/yohaas/AgentHero/commit/1f13814) Retry macOS terminal startup with safe cwd and shell fallbacks.
 - [0880f8b](https://github.com/yohaas/AgentHero/commit/0880f8b) Clarify update status when the configured manifest is older than the installed app.
 - [011ed03](https://github.com/yohaas/AgentHero/commit/011ed03) Harden macOS terminal startup with a normal LaunchAgent environment and valid cwd fallback.
 - [654dc47](https://github.com/yohaas/AgentHero/commit/654dc47) Add a macOS install repair script and bump the package patch version.
