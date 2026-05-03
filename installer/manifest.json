@@ -1,10 +1,10 @@
 {
   "version": "0.1.18",
   "releaseTag": "v0.1.18",
-  "commitSha": "5fff633d5c88d533a93928f2c29db8f8ca367e60",
+  "commitSha": "59aa1dd22772ea83a6203b297ebe14040870c93a",
   "platform": "any",
   "arch": "any",
-  "builtAt": "2026-05-03T21:35:30.5325179Z",
+  "builtAt": "2026-05-03T23:49:57Z",
   "releaseNotesUrl": "",
   "assets": [
     {
@@ -20,10 +20,10 @@
       "type": "full",
       "platform": "macos",
       "arch": "arm64",
-      "version": "0.1.15",
-      "url": "https://github.com/yohaas/AgentHero/raw/main/installer/releases/v0.1.15/agent-hero-0.1.15-macos-arm64.zip",
-      "sha256": "04db3abf0decee8bbe938189114304e7f0bfdbcacd53ef9d1b9090b8da6d19bb",
-      "size": 18142024
+      "version": "0.1.18",
+      "url": "https://github.com/yohaas/AgentHero/raw/main/installer/releases/v0.1.18/agent-hero-0.1.18-macos-arm64.zip",
+      "sha256": "d9a8eab762797d1b09409ca9790443f759936dd93385309c14c09a4e6a8eb350",
+      "size": 18142691
     }
   ]
 }
