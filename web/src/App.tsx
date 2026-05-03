@@ -4291,6 +4291,11 @@ function AppUpdateNotice({ compact = false, hideWhenNoUpdate = false }: { compac
   const [status, setStatus] = useState<AppUpdateStatus | undefined>();
   const [loading, setLoading] = useState(false);
   const [updateRun, setUpdateRun] = useState<{ requestId: string; commands: string[] }>();
+  const installedMode = status?.installMode === "installed" || settings.installMode === "installed";
+  const effectiveUpdateCommands =
+    installedMode && (settings.updateCommands || []).join("\n") === "powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\windows\\start-update.ps1"
+      ? ["powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\windows\\start-installed-update.ps1"]
+      : settings.updateCommands || [];
 
   useEffect(() => {
     if (settings.updateChecksEnabled === false) return;
@@ -4326,7 +4331,7 @@ function AppUpdateNotice({ compact = false, hideWhenNoUpdate = false }: { compac
   }, [addError, updateRun, updateSession]);
 
   function runUpdate() {
-    const commands = (settings.updateCommands || []).map((command) => command.trim()).filter(Boolean);
+    const commands = effectiveUpdateCommands.map((command) => command.trim()).filter(Boolean);
     if (commands.length === 0) return;
     const requestId =
       typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `update-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -4388,12 +4393,8 @@ function AppUpdateNotice({ compact = false, hideWhenNoUpdate = false }: { compac
               </Button>
             </div>
 
-            {status && (
+            {status && (status.localVersion?.version || status.latestVersion?.version) && (
               <div className="grid gap-1 rounded-md border border-border p-2 text-xs">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-muted-foreground">Install mode</span>
-                  <span className="font-mono">{status.installMode}</span>
-                </div>
                 {status.localVersion?.version && (
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-muted-foreground">Current version</span>
@@ -4477,28 +4478,32 @@ function AppUpdateNotice({ compact = false, hideWhenNoUpdate = false }: { compac
               </div>
             )}
 
-            <div className="grid gap-1">
-              <div className="text-xs font-medium text-muted-foreground">Project location</div>
-              <div className="rounded-md border border-border bg-muted p-2 font-mono text-xs">
-                {settings.agentControlProjectPath || "the AgentHero project folder"}
+            {!installedMode && (
+              <div className="grid gap-1">
+                <div className="text-xs font-medium text-muted-foreground">Project location</div>
+                <div className="rounded-md border border-border bg-muted p-2 font-mono text-xs">
+                  {settings.agentControlProjectPath || "the AgentHero project folder"}
+                </div>
               </div>
-            </div>
+            )}
 
-            <div className="grid gap-1">
-              <div className="text-xs font-medium text-muted-foreground">Commands</div>
-              <div className="rounded-md border border-border bg-muted p-2 font-mono text-xs">
-                {(settings.updateCommands || []).map((command) => (
-                  <div key={command}>{command}</div>
-                ))}
+            {!installedMode && (
+              <div className="grid gap-1">
+                <div className="text-xs font-medium text-muted-foreground">Commands</div>
+                <div className="rounded-md border border-border bg-muted p-2 font-mono text-xs">
+                  {effectiveUpdateCommands.map((command) => (
+                    <div key={command}>{command}</div>
+                  ))}
+                </div>
+                <div className="text-xs text-muted-foreground">Project location and commands can be updated in Settings.</div>
               </div>
-              <div className="text-xs text-muted-foreground">Project location and commands can be updated in Settings.</div>
-            </div>
+            )}
 
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setDetailsOpen(false)}>
                 Close
               </Button>
-              <Button onClick={runUpdate} disabled={(settings.updateCommands || []).length === 0 || Boolean(updateRun)}>
+              <Button onClick={runUpdate} disabled={effectiveUpdateCommands.length === 0 || Boolean(updateRun)}>
                 <SquareTerminal className="h-4 w-4" />
                 {updateRun ? "Running" : "Run Update"}
               </Button>

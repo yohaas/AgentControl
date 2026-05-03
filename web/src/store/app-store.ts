@@ -535,6 +535,8 @@ function normalizeSettings(settings: SettingsState): SettingsState {
       const commandKey = normalized.join("\n");
       return normalized.length &&
         commandKey !== LEGACY_UPDATE_COMMANDS.join("\n") &&
+        commandKey !== WINDOWS_UPDATE_COMMANDS.join("\n") &&
+        commandKey !== WINDOWS_INSTALLED_UPDATE_COMMANDS.join("\n") &&
         commandKey !== PREVIOUS_WINDOWS_UPDATE_COMMANDS.join("\n") &&
         commandKey !== OLDER_WINDOWS_UPDATE_COMMANDS.join("\n") &&
         commandKey !== PREVIOUS_WINDOWS_UPDATE_COMMANDS_LEGACY.join("\n") &&
