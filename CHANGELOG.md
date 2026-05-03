@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-05-03
 
+- [c1bb447](https://github.com/yohaas/AgentHero/commit/c1bb447) Prevent stale local queued messages from reappearing after another client consumes them.
 - [0ae5802](https://github.com/yohaas/AgentHero/commit/0ae5802) Add a checked-in update manifest and repo-hosted Windows release bundle.
 - [520340d](https://github.com/yohaas/AgentHero/commit/520340d) Default installed update checks to the repo manifest URL.
 - [18eee04](https://github.com/yohaas/AgentHero/commit/18eee04) Replace the collapsed mobile status dot with a compact colored project-name sidebar opener.
