@@ -13814,6 +13814,7 @@ function MobileChatPane({ agent, addError }: { agent: RunningAgent; addError: (m
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const didInitialTranscriptScrollRef = useRef(false);
   const [attachments, setAttachments] = useState<MessageAttachment[]>([]);
+  const [showPinnedMessage, setShowPinnedMessage] = useState(false);
   const [contextOpen, setContextOpen] = useState(false);
   const [composerCollapsed, setComposerCollapsed] = useState(false);
   const [activeSlashIndex, setActiveSlashIndex] = useState(0);
@@ -13836,6 +13837,7 @@ function MobileChatPane({ agent, addError }: { agent: RunningAgent; addError: (m
   const showAutoScrollControl = visibleTranscriptViewMode === "chat" && hasActiveAutoScrollStatus(agent);
   const showActivityIndicator = isBusy && agent.status !== "awaiting-input" && !hasStreamingAssistantText(transcript);
   const latestUser = latestUserMessage(transcript);
+  const pinLastSentMessage = settings.pinLastSentMessage;
   const phaseLabel = isBusy ? executingPlanPhase(transcript) : undefined;
   const rawSlashSuggestions = useMemo(
     () => slashCommandSuggestions(draft, modelIdsForProvider(settings, agent.provider || "claude"), agent.slashCommands, agent.provider || "claude"),
@@ -13857,6 +13859,7 @@ function MobileChatPane({ agent, addError }: { agent: RunningAgent; addError: (m
 
   useEffect(() => {
     didInitialTranscriptScrollRef.current = false;
+    setShowPinnedMessage(false);
     setShowJumpToBottom(false);
     setAutoScrollPaused(false);
   }, [agent.id]);
@@ -13919,16 +13922,20 @@ function MobileChatPane({ agent, addError }: { agent: RunningAgent; addError: (m
       didInitialTranscriptScrollRef.current = true;
       window.requestAnimationFrame(() => {
         root.scrollTop = root.scrollHeight;
+        setShowPinnedMessage(shouldShowPinnedUserMessage(root, latestUser?.id));
         setShowJumpToBottom(false);
       });
       return;
     }
     const nearBottom = root.scrollHeight - root.scrollTop - root.clientHeight < 180;
     if (!autoScrollPaused && (nearBottom || isBusy)) root.scrollTop = root.scrollHeight;
+    setShowPinnedMessage(shouldShowPinnedUserMessage(root, latestUser?.id));
     setShowJumpToBottom(!isNearScrollBottom(root));
-  }, [agent.id, transcript, autoScrollPaused, isBusy]);
+  }, [agent.id, transcript, autoScrollPaused, isBusy, latestUser?.id]);
 
   function handleTranscriptScroll(event: ReactUIEvent<HTMLDivElement>) {
+    const nextVisible = shouldShowPinnedUserMessage(event.currentTarget, latestUser?.id);
+    setShowPinnedMessage((current) => (current === nextVisible ? current : nextVisible));
     setShowJumpToBottom(!isNearScrollBottom(event.currentTarget));
   }
 
@@ -14237,6 +14244,9 @@ function MobileChatPane({ agent, addError }: { agent: RunningAgent; addError: (m
 
       <div className="relative min-h-0 min-w-0 max-w-full flex-1">
         <div ref={rootRef} className="h-full overflow-y-auto overflow-x-hidden bg-background px-3 py-4" onScroll={handleTranscriptScroll}>
+          {visibleTranscriptViewMode === "chat" && pinLastSentMessage && latestUser && showPinnedMessage && (
+            <PinnedUserMessage event={latestUser} compact onJump={() => scrollToLatestUserMessage(rootRef.current)} />
+          )}
           {visibleTranscriptViewMode === "raw" ? (
             <div className="grid gap-3">
               <RequiredFeedbackPanel items={requiredFeedbackItems} agent={agent} compact />
