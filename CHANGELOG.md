@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-05-03
 
+- [c670304](https://github.com/yohaas/AgentHero/commit/c670304) Fix macOS package ownership for user logs and installed launcher files.
 - [54ff6c3](https://github.com/yohaas/AgentHero/commit/54ff6c3) Make the macOS launcher log startup and fall back to starting the server directly.
 - [48f42d5](https://github.com/yohaas/AgentHero/commit/48f42d5) Copy the macOS launcher into Applications, add an icon, and wait for server readiness before opening.
 - [a12781a](https://github.com/yohaas/AgentHero/commit/a12781a) Add a macOS AgentHero.app launcher that opens the local app URL.
