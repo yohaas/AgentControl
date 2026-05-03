@@ -3025,12 +3025,26 @@ function formatLastActivityTime(value?: string) {
   return `${date.toLocaleDateString([], { month: "short", day: "numeric" })} ${time}`;
 }
 
+function formatMessageTimestamp(value?: string) {
+  const timestamp = timestampValue(value);
+  if (!timestamp) return "n/a";
+  const date = new Date(timestamp);
+  const today = new Date();
+  const sameDay =
+    date.getFullYear() === today.getFullYear() &&
+    date.getMonth() === today.getMonth() &&
+    date.getDate() === today.getDate();
+  const time = date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  if (sameDay) return time;
+  return `${date.toLocaleDateString(undefined, { dateStyle: "short" })} ${time}`;
+}
+
 function MessageTimestamp({ timestamp, className }: { timestamp?: string; className?: string }) {
   const value = timestampValue(timestamp);
   if (!value) return null;
   return (
     <div className={cn("mt-1 text-right text-[10px] leading-none opacity-70", className)} title={new Date(value).toLocaleString()}>
-      {formatLastActivityTime(timestamp)}
+      {formatMessageTimestamp(timestamp)}
     </div>
   );
 }
