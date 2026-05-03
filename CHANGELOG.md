@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-05-03
 
+- [9477cbe](https://github.com/yohaas/AgentHero/commit/9477cbe) Show the active project name under the collapsed mobile connection dot.
 - [38e909e](https://github.com/yohaas/AgentHero/commit/38e909e) Show version and last updated details in the update dialog.
 - [acf1a9a](https://github.com/yohaas/AgentHero/commit/acf1a9a) Use local short-date formatting for older message timestamps.
 - [3bd9418](https://github.com/yohaas/AgentHero/commit/3bd9418) Show compact timestamps on chat messages.
