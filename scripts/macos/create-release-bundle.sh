@@ -84,6 +84,10 @@ JSON
   npm ci --omit=dev --workspace server
 )
 
+if [[ -d "$work_dir/node_modules/node-pty" ]]; then
+  find "$work_dir/node_modules/node-pty" -name spawn-helper -type f -exec chmod 755 {} \;
+fi
+
 (
   cd "$work_dir"
   zip -qry "$zip_path" .

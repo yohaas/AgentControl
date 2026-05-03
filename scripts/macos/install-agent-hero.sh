@@ -101,6 +101,11 @@ rm -rf "$stage_dir"
 mkdir -p "$stage_dir"
 unzip -q "$zip_path" -d "$stage_dir"
 rsync -a --delete "$stage_dir/" "$install_dir/"
+if [[ -d "$install_dir/node_modules/node-pty" ]]; then
+  find "$install_dir/node_modules/node-pty" -name spawn-helper -type f -exec chmod 755 {} \;
+  find "$install_dir/node_modules/node-pty" -name spawn-helper -type f -exec ls -l {} \; || true
+fi
+xattr -dr com.apple.quarantine "$install_dir" >/dev/null 2>&1 || true
 
 cat > "$plist_path" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
