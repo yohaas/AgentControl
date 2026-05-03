@@ -70,6 +70,7 @@ fi
 user_home="\$(dscl . -read "/Users/\$console_user" NFSHomeDirectory | awk '{print \$2}')"
 log_dir="\$user_home/Library/Logs/AgentHero"
 mkdir -p "\$log_dir"
+chown -R "\$console_user":staff "\$log_dir"
 exec >> "\$log_dir/pkg-postinstall.log" 2>&1
 echo "AgentHero pkg postinstall started at \$(date '+%Y-%m-%d %H:%M:%S')"
 echo "Console user: \$console_user"
@@ -82,6 +83,11 @@ if [[ "$no_start" == "1" ]]; then
 fi
 
 sudo -u "\$console_user" HOME="\$user_home" PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:\$PATH" /bin/bash "\$SCRIPT_DIR/install-agent-hero.sh" "\${args[@]}"
+for user_path in "\$user_home/Applications/AgentHero" "\$user_home/Applications/AgentHero.app" "\$user_home/Library/Application Support/AgentHero" "\$user_home/Library/LaunchAgents/com.agenthero.plist" "\$log_dir"; do
+  if [[ -e "\$user_path" ]]; then
+    chown -R "\$console_user":staff "\$user_path"
+  fi
+done
 user_app="\$user_home/Applications/AgentHero.app"
 system_app="/Applications/AgentHero.app"
 if [[ -d "\$user_app" && -d /Applications ]]; then
