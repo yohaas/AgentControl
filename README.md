@@ -19,6 +19,25 @@ See [CHANGELOG.md](CHANGELOG.md) for release history.
 
 AgentHero is designed for trusted local use. Keep it bound to `127.0.0.1` unless you intentionally configure access controls for another setup.
 
+## Mobile And Remote Access
+
+AgentHero includes a mobile-friendly chat view at:
+
+```text
+http://127.0.0.1:4317/mobile
+```
+
+For access from a phone, tablet, laptop, or another machine, do not expose the AgentHero port directly to the public internet. The server can control local terminals, project files, and agent processes, so treat it like a private developer tool.
+
+Recommended remote access:
+
+- Use Tailscale, ZeroTier, WireGuard, or a similar private VPN/overlay network.
+- Keep AgentHero bound to `127.0.0.1` for local-only use.
+- If you intentionally bind beyond localhost, enable the access token requirement first.
+- Limit firewall rules to trusted private network addresses.
+
+Avoid port-forwarding `4317` or `4318` from a router or cloud firewall to the open internet.
+
 ## Agent Files
 
 Agent files define launchable agents. They are Markdown files with optional frontmatter plus the prompt body.
