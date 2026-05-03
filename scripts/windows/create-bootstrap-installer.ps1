@@ -90,6 +90,7 @@ if (Test-Path $ManifestUrl) {
 }
 
 $defaultInstallDir = if ($InstallDir.Trim()) { $InstallDir.Trim() } else { "{localappdata}\Programs\AgentHero" }
+$setupLogPath = "{localappdata}\AgentHero\logs\setup.log"
 $installerArgs = @(
   "-NoProfile",
   "-ExecutionPolicy",
@@ -103,7 +104,9 @@ $installerArgs = @(
   "-TaskName",
   "`"$TaskName`"",
   "-Port",
-  "$Port"
+  "$Port",
+  "-LogPath",
+  "`"$setupLogPath`""
 )
 if ($NoStart) {
   $installerArgs += "-NoStart"
@@ -144,18 +147,20 @@ $($fileEntries -join "`r`n")
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   ResultCode: Integer;
+  LogPath: String;
 begin
-  if CurStep = ssInstall then
+  if CurStep = ssPostInstall then
   begin
     WizardForm.StatusLabel.Caption := 'Installing AgentHero and registering startup...';
+    LogPath := ExpandConstant('$setupLogPath');
     if not Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'), ExpandConstant('$runParameters'), '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
     begin
-      MsgBox('AgentHero setup could not start PowerShell.', mbError, MB_OK);
+      MsgBox('AgentHero setup could not start PowerShell.' + #13#10 + #13#10 + 'Log: ' + LogPath, mbError, MB_OK);
       Abort;
     end;
     if ResultCode <> 0 then
     begin
-      MsgBox('AgentHero setup failed. Check the installer logs under %LocalAppData%\AgentHero\logs.', mbError, MB_OK);
+      MsgBox('AgentHero setup failed. Check the installer log:' + #13#10 + LogPath, mbError, MB_OK);
       Abort;
     end;
   end;

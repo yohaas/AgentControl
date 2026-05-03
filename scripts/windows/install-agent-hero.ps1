@@ -3,6 +3,7 @@ param(
   [string]$InstallDir = "",
   [string]$TaskName = "AgentHero",
   [int]$Port = 4317,
+  [string]$LogPath = "",
   [switch]$NoStart
 )
 
@@ -14,6 +15,8 @@ $stateDir = Join-Path $env:LOCALAPPDATA "AgentHero"
 $downloadDir = Join-Path $stateDir "installer"
 $logDir = Join-Path $stateDir "logs"
 $manifestPath = Join-Path $downloadDir "manifest.json"
+$resolvedLogPath = if ($LogPath.Trim()) { $LogPath.Trim() } else { Join-Path $logDir "setup.log" }
+$transcriptStarted = $false
 
 function Write-InstallStep {
   param([string]$Message)
@@ -56,6 +59,13 @@ Write-InstallStep "Preparing folders"
 Write-InstallDetail "Install directory: $resolvedInstallDir"
 Write-InstallDetail "Installer state: $downloadDir"
 New-Item -ItemType Directory -Path $resolvedInstallDir, $downloadDir, $logDir -Force | Out-Null
+try {
+  Start-Transcript -Path $resolvedLogPath -Append | Out-Null
+  $transcriptStarted = $true
+  Write-InstallDetail "Installer log: $resolvedLogPath"
+} catch {
+  Write-Warning "Could not start installer transcript at $resolvedLogPath. $($_.Exception.Message)"
+}
 
 $manifestIsLocal = Test-Path $ManifestUrl
 Write-InstallStep "Loading release manifest"
@@ -162,4 +172,8 @@ Write-Host "AgentHero setup complete." -ForegroundColor Green
 Write-Host "AgentHero installed to $resolvedInstallDir"
 Write-Host "Startup task: $TaskName"
 Write-Host "Open http://127.0.0.1:$Port"
+Write-Host "Installer log: $resolvedLogPath"
 Write-Host "Close this setup window when you are done."
+if ($transcriptStarted) {
+  Stop-Transcript | Out-Null
+}
