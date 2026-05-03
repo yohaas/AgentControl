@@ -130,6 +130,27 @@ cat > "$plist_path" <<PLIST
 PLIST
 
 mkdir -p "$app_bundle_path/Contents/MacOS"
+mkdir -p "$app_bundle_path/Contents/Resources"
+icon_file_entry=""
+icon_png_path="$install_dir/assets/AgentHero.png"
+if [[ -f "$icon_png_path" ]] && command -v sips >/dev/null 2>&1 && command -v iconutil >/dev/null 2>&1; then
+  iconset_path="$download_dir/AgentHero.iconset"
+  rm -rf "$iconset_path"
+  mkdir -p "$iconset_path"
+  sips -z 16 16 "$icon_png_path" --out "$iconset_path/icon_16x16.png" >/dev/null
+  sips -z 32 32 "$icon_png_path" --out "$iconset_path/icon_16x16@2x.png" >/dev/null
+  sips -z 32 32 "$icon_png_path" --out "$iconset_path/icon_32x32.png" >/dev/null
+  sips -z 64 64 "$icon_png_path" --out "$iconset_path/icon_32x32@2x.png" >/dev/null
+  sips -z 128 128 "$icon_png_path" --out "$iconset_path/icon_128x128.png" >/dev/null
+  sips -z 256 256 "$icon_png_path" --out "$iconset_path/icon_128x128@2x.png" >/dev/null
+  sips -z 256 256 "$icon_png_path" --out "$iconset_path/icon_256x256.png" >/dev/null
+  sips -z 512 512 "$icon_png_path" --out "$iconset_path/icon_256x256@2x.png" >/dev/null
+  sips -z 512 512 "$icon_png_path" --out "$iconset_path/icon_512x512.png" >/dev/null
+  cp "$icon_png_path" "$iconset_path/icon_512x512@2x.png"
+  if iconutil -c icns "$iconset_path" -o "$app_bundle_path/Contents/Resources/AgentHero.icns"; then
+    icon_file_entry=$'  <key>CFBundleIconFile</key>\n  <string>AgentHero</string>\n'
+  fi
+fi
 cat > "$app_bundle_path/Contents/Info.plist" <<APP_PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -145,6 +166,8 @@ cat > "$app_bundle_path/Contents/Info.plist" <<APP_PLIST
   <string>AgentHero</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
+${icon_file_entry}  <key>LSMinimumSystemVersion</key>
+  <string>11.0</string>
   <key>CFBundleVersion</key>
   <string>$version</string>
   <key>CFBundleShortVersionString</key>
@@ -160,6 +183,13 @@ if [[ -f "\$plist_path" ]]; then
   launchctl bootstrap "gui/\$UID" "\$plist_path" >/dev/null 2>&1 || true
   launchctl kickstart -k "gui/\$UID/$label" >/dev/null 2>&1 || true
 fi
+deadline=\$((SECONDS + 20))
+while [[ \$SECONDS -lt \$deadline ]]; do
+  if curl -fsS "http://127.0.0.1:$port/api/health" >/dev/null 2>&1; then
+    break
+  fi
+  sleep 1
+done
 open "http://127.0.0.1:$port"
 APP_SCRIPT
 chmod +x "$app_bundle_path/Contents/MacOS/AgentHero"

@@ -191,13 +191,14 @@ The installer package creates a per-user LaunchAgent:
 Default installed files:
 
 ```text
+/Applications/AgentHero.app
 ~/Applications/AgentHero.app
 ~/Applications/AgentHero
 ~/Library/Application Support/AgentHero
 ~/Library/Logs/AgentHero
 ```
 
-The LaunchAgent runs as the logged-in macOS user so shell paths, local projects, and provider credentials resolve from that user's environment. `AgentHero.app` is a small launcher that starts the LaunchAgent if needed and opens `http://127.0.0.1:4317`.
+The LaunchAgent runs as the logged-in macOS user so shell paths, local projects, and provider credentials resolve from that user's environment. `AgentHero.app` is a small launcher that starts the LaunchAgent if needed, waits briefly for the local server, and opens `http://127.0.0.1:4317`.
 
 For a hosted bootstrap package, pass a hosted manifest URL:
 

@@ -82,6 +82,14 @@ if [[ "$no_start" == "1" ]]; then
 fi
 
 sudo -u "\$console_user" HOME="\$user_home" PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:\$PATH" /bin/bash "\$SCRIPT_DIR/install-agent-hero.sh" "\${args[@]}"
+user_app="\$user_home/Applications/AgentHero.app"
+system_app="/Applications/AgentHero.app"
+if [[ -d "\$user_app" && -d /Applications ]]; then
+  rm -rf "\$system_app"
+  cp -R "\$user_app" "\$system_app"
+  chown -R "\$console_user":staff "\$system_app"
+  echo "Application launcher copied to \$system_app"
+fi
 SCRIPT
 chmod +x "$scripts_dir/postinstall"
 
