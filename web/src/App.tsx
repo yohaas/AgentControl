@@ -9209,6 +9209,8 @@ function AgentTile({
   const visibleTranscriptViewMode = chatTranscriptDetail === "raw" ? "raw" : "chat";
   const canType = agentHasProcess(agent);
   const canAttach = !agent.remoteControl;
+  const hasDraftPayload = Boolean(draft.trim() || attachments.length > 0);
+  const showStopButton = isBusy && !hasDraftPayload;
   const showAutoScrollControl = visibleTranscriptViewMode === "chat" && hasActiveAutoScrollStatus(agent);
   const showActivityIndicator = isBusy && agent.status !== "awaiting-input" && !hasStreamingAssistantText(transcript);
   const phaseLabel = isBusy ? executingPlanPhase(transcript) : undefined;
@@ -10038,11 +10040,11 @@ function AgentTile({
                 <Button
                   size="icon"
                   className="h-8 w-8"
-                  disabled={isBusy ? !agentHasProcess(agent) : !canType || (!draft.trim() && attachments.length === 0)}
-                  onClick={isBusy ? stopCurrentResponse : send}
-                  title={isBusy ? "Stop response" : "Send"}
+                  disabled={showStopButton ? !agentHasProcess(agent) : !canType || !hasDraftPayload}
+                  onClick={showStopButton ? stopCurrentResponse : send}
+                  title={showStopButton ? "Stop response" : "Send"}
                 >
-                  {isBusy ? <Square className="h-4 w-4" /> : <ArrowUp className="h-4 w-4" />}
+                  {showStopButton ? <Square className="h-4 w-4" /> : <ArrowUp className="h-4 w-4" />}
                 </Button>
               </div>
             </div>
@@ -10931,6 +10933,8 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
   const visibleTranscriptViewMode = chatTranscriptDetail === "raw" ? "raw" : "chat";
   const canType = agentHasProcess(agent);
   const canAttach = !agent.remoteControl;
+  const hasDraftPayload = Boolean(draft.trim() || attachments.length > 0);
+  const showStopButton = isBusy && !hasDraftPayload;
   const showAutoScrollControl = visibleTranscriptViewMode === "chat" && hasActiveAutoScrollStatus(agent);
   const showActivityIndicator = isBusy && !hasStreamingAssistantText(transcript);
   const phaseLabel = isBusy ? executingPlanPhase(transcript) : undefined;
@@ -11537,11 +11541,11 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
               <Button
                 size="icon"
                 className="h-8 w-8"
-                disabled={isBusy ? !agentHasProcess(agent) : !canType || (!draft.trim() && attachments.length === 0)}
-                onClick={isBusy ? stopCurrentResponse : send}
-                title={isBusy ? "Stop response" : "Send"}
+                disabled={showStopButton ? !agentHasProcess(agent) : !canType || !hasDraftPayload}
+                onClick={showStopButton ? stopCurrentResponse : send}
+                title={showStopButton ? "Stop response" : "Send"}
               >
-                {isBusy ? <Square className="h-4 w-4" /> : <ArrowUp className="h-4 w-4" />}
+                {showStopButton ? <Square className="h-4 w-4" /> : <ArrowUp className="h-4 w-4" />}
               </Button>
             </div>
           </div>
@@ -13775,6 +13779,8 @@ function MobileChatPane({ agent, addError }: { agent: RunningAgent; addError: (m
   const visibleTranscriptViewMode = chatTranscriptDetail === "raw" ? "raw" : "chat";
   const canType = agentHasProcess(agent);
   const canAttach = !agent.remoteControl;
+  const hasDraftPayload = Boolean(draft.trim() || attachments.length > 0);
+  const showStopButton = isBusy && !hasDraftPayload;
   const showAutoScrollControl = visibleTranscriptViewMode === "chat" && hasActiveAutoScrollStatus(agent);
   const showActivityIndicator = isBusy && agent.status !== "awaiting-input" && !hasStreamingAssistantText(transcript);
   const latestUser = latestUserMessage(transcript);
@@ -14320,12 +14326,12 @@ function MobileChatPane({ agent, addError }: { agent: RunningAgent; addError: (m
                 type="button"
                 size="icon"
                 className="h-9 w-9"
-                disabled={isBusy ? !agentHasProcess(agent) : !canType || sending || (!draft.trim() && attachments.length === 0)}
-                onClick={isBusy ? () => void stopCurrentResponse() : () => void send()}
-                title={isBusy ? "Stop response" : "Send"}
-                aria-label={isBusy ? "Stop response" : "Send message"}
+                disabled={showStopButton ? !agentHasProcess(agent) : !canType || sending || !hasDraftPayload}
+                onClick={showStopButton ? () => void stopCurrentResponse() : () => void send()}
+                title={showStopButton ? "Stop response" : "Send"}
+                aria-label={showStopButton ? "Stop response" : "Send message"}
               >
-                {isBusy ? <Square className="h-4 w-4" /> : <ArrowUp className="h-4 w-4" />}
+                {showStopButton ? <Square className="h-4 w-4" /> : <ArrowUp className="h-4 w-4" />}
               </Button>
             </div>
           </div>
