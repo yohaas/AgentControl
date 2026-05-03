@@ -12,7 +12,9 @@
     "dev": "concurrently -k -n server,web -c cyan,magenta \"npm run dev -w server\" \"wait-on http://127.0.0.1:4317/api/health && npm run dev -w web\"",
     "dev:supervised": "node scripts/supervisor.mjs",
     "build": "npm run build -w shared && npm run build -w server && npm run build -w web",
+    "bundle:mac": "bash ./scripts/macos/create-release-bundle.sh",
     "bundle:windows": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\windows\\create-release-bundle.ps1",
+    "installer:mac": "bash ./scripts/macos/create-pkg-installer.sh",
     "installer:windows": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\windows\\create-bootstrap-installer.ps1",
     "start": "npm run build && npm run start -w server",
     "start:server": "npm run start -w server"
