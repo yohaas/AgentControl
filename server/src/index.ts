@@ -965,7 +965,7 @@ async function appUpdateStatus(): Promise<AppUpdateStatus> {
         releaseAvailable: false,
         updateAvailable: false,
         commits: [],
-        message: "Installed update checks need AGENTHERO_UPDATE_MANIFEST_URL or an update manifest URL in Settings."
+        message: "Add a release manifest URL in Settings before running installed updates."
       };
     }
 

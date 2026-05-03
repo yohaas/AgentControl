@@ -3055,6 +3055,12 @@ function fullLastActivity(value?: string) {
   return `Last activity: ${new Date(timestamp).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}`;
 }
 
+function formatShortDateTime(value?: string) {
+  const timestamp = timestampValue(value);
+  if (!timestamp) return "n/a";
+  return new Date(timestamp).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" });
+}
+
 function agentHasProcess(agent: RunningAgent) {
   if (agent.provider === "openai" || agent.provider === "codex") return agent.status !== "killed" && agent.status !== "error";
   return (Boolean(agent.pid) || agent.status === "paused" || agent.restorable) && agent.status !== "killed" && agent.status !== "error";
@@ -4421,20 +4427,34 @@ function AppUpdateNotice({ compact = false, hideWhenNoUpdate = false }: { compac
               </Button>
             </div>
 
-            {status && (status.localVersion?.version || status.latestVersion?.version) && (
+            {status && (status.localVersion?.version || status.localVersion?.builtAt || status.latestVersion?.version) && (
               <div className="grid gap-1 rounded-md border border-border p-2 text-xs">
                 {status.localVersion?.version && (
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-muted-foreground">Current version</span>
+                    <span className="text-muted-foreground">Version</span>
                     <span className="min-w-0 truncate font-mono" title={status.localVersion.commitSha}>
-                      {status.localVersion.releaseTag || status.localVersion.version}
+                      {status.localVersion.version}
                     </span>
+                  </div>
+                )}
+                {status.localVersion?.builtAt && (
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-muted-foreground">Last updated</span>
+                    <span className="min-w-0 truncate font-mono" title={new Date(status.localVersion.builtAt).toLocaleString()}>
+                      {formatShortDateTime(status.localVersion.builtAt)}
+                    </span>
+                  </div>
+                )}
+                {status.localVersion?.releaseTag && status.localVersion.releaseTag !== status.localVersion.version && (
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-muted-foreground">Release</span>
+                    <span className="min-w-0 truncate font-mono">{status.localVersion.releaseTag}</span>
                   </div>
                 )}
                 {status.latestVersion?.version && (
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-muted-foreground">Latest version</span>
-                    <span className="min-w-0 truncate font-mono">{status.latestVersion.releaseTag || status.latestVersion.version}</span>
+                    <span className="min-w-0 truncate font-mono">{status.latestVersion.version}</span>
                   </div>
                 )}
               </div>
@@ -4496,7 +4516,7 @@ function AppUpdateNotice({ compact = false, hideWhenNoUpdate = false }: { compac
               <div className="rounded-md border border-border bg-muted p-3 text-sm text-muted-foreground">{status.message}</div>
             )}
 
-            {installedMode && !installedUpdateManifestUrl && (
+            {installedMode && !installedUpdateManifestUrl && !status?.message && (
               <div className="rounded-md border border-border bg-muted p-3 text-sm text-muted-foreground">
                 Add a release manifest URL in Settings before running installed updates.
               </div>
