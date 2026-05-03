@@ -76,15 +76,15 @@ if ($NoStart) {
 
 @"
 @echo off
-title AgentHero Setup
+title AgentHero Setup Launcher
 echo.
 echo AgentHero Setup
 echo ===============
 echo.
 echo Installing AgentHero for the current Windows user.
-echo This window will show progress and stay open when setup finishes.
+echo Opening the setup progress window...
 echo.
-powershell.exe $($installerArgs -join " ")
+start "AgentHero Setup" /wait powershell.exe -NoExit $($installerArgs -join " ")
 set EXIT_CODE=%ERRORLEVEL%
 if not "%EXIT_CODE%"=="0" (
   echo.
@@ -92,9 +92,6 @@ if not "%EXIT_CODE%"=="0" (
   pause
   exit /b %EXIT_CODE%
 )
-echo.
-echo Setup finished. Press any key to close this window.
-pause >nul
 exit /b 0
 "@ | Set-Content -Path $launcher -Encoding ASCII
 
@@ -141,7 +138,7 @@ SourceFiles0=$escapedBuildDir
 $($sourceEntries -join "`r`n")
 "@ | Set-Content -Path $sedPath -Encoding ASCII
 
-& $iexpress /N /Q $sedPath
+$iexpressProcess = Start-Process -FilePath $iexpress -ArgumentList @("/N", $sedPath) -Wait -PassThru -WindowStyle Hidden
 for ($attempt = 0; $attempt -lt 20 -and -not (Test-Path $targetPath); $attempt += 1) {
   Start-Sleep -Milliseconds 500
 }
@@ -160,8 +157,8 @@ if (Test-Path $targetPath) {
   }
 }
 if (-not (Test-Path $targetPath)) {
-  if ($null -ne $LASTEXITCODE -and $LASTEXITCODE -ne 0) {
-    throw "IExpress failed with exit code $LASTEXITCODE"
+  if ($null -ne $iexpressProcess.ExitCode -and $iexpressProcess.ExitCode -ne 0) {
+    throw "IExpress failed with exit code $($iexpressProcess.ExitCode)"
   }
   throw "IExpress did not create $targetPath"
 }

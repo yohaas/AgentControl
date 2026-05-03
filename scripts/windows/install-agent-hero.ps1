@@ -162,3 +162,4 @@ Write-Host "AgentHero setup complete." -ForegroundColor Green
 Write-Host "AgentHero installed to $resolvedInstallDir"
 Write-Host "Startup task: $TaskName"
 Write-Host "Open http://127.0.0.1:$Port"
+Write-Host "Close this setup window when you are done."
