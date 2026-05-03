@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-05-03
 
+- [a8f485f](https://github.com/yohaas/AgentHero/commit/a8f485f) Support platform-neutral installed update patches with patch/full manifest assets.
 - [edd5599](https://github.com/yohaas/AgentHero/commit/edd5599) Read installed version metadata from the runtime root and label the update dialog installed version.
 - [8faa847](https://github.com/yohaas/AgentHero/commit/8faa847) Harden macOS installed terminal support with Node 20, preserved node-pty helper permissions, and login-shell zsh startup.
 - [0880f8b](https://github.com/yohaas/AgentHero/commit/0880f8b) Clarify update status when the configured manifest is older than the installed app.
