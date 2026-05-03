@@ -29,6 +29,7 @@ $sedPath = Join-Path $buildDir "AgentHeroSetup.sed"
 Copy-Item -LiteralPath $installerScript -Destination $embeddedInstaller -Force
 $embeddedFiles = @("install.cmd", "install-agent-hero.ps1")
 $launcherManifestUrl = $ManifestUrl
+$minimumTargetSize = 1
 
 if (Test-Path $ManifestUrl) {
   $resolvedManifestPath = (Resolve-Path $ManifestUrl).Path
@@ -46,8 +47,10 @@ if (Test-Path $ManifestUrl) {
     $assetPath = Join-Path $manifestDir $assetPath
   }
   if (Test-Path $assetPath) {
-    Copy-Item -LiteralPath $assetPath -Destination (Join-Path $buildDir (Split-Path -Leaf $assetPath)) -Force
+    $embeddedAssetPath = Join-Path $buildDir (Split-Path -Leaf $assetPath)
+    Copy-Item -LiteralPath $assetPath -Destination $embeddedAssetPath -Force
     $embeddedFiles += (Split-Path -Leaf $assetPath)
+    $minimumTargetSize = [Math]::Max(1048576, [int64]((Get-Item -LiteralPath $embeddedAssetPath).Length * 0.5))
   }
 }
 
@@ -147,7 +150,7 @@ if (Test-Path $targetPath) {
   $stableCount = 0
   for ($attempt = 0; $attempt -lt 120 -and $stableCount -lt 3; $attempt += 1) {
     $currentLength = (Get-Item -LiteralPath $targetPath).Length
-    if ($currentLength -eq $lastLength) {
+    if ($currentLength -eq $lastLength -and $currentLength -ge $minimumTargetSize) {
       $stableCount += 1
     } else {
       $stableCount = 0

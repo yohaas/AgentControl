@@ -119,13 +119,19 @@ Register-ScheduledTask -TaskName $TaskName -InputObject $task -Force | Out-Host
 Write-InstallDetail "Scheduled task: $TaskName"
 
 Write-InstallStep "Creating shortcuts"
+$iconPath = Join-Path $resolvedInstallDir "assets\AgentHero.ico"
+$shortcutContent = "[InternetShortcut]`r`nURL=http://127.0.0.1:$Port`r`n"
+if (Test-Path $iconPath) {
+  $shortcutContent += "IconFile=$iconPath`r`nIconIndex=0`r`n"
+  Write-InstallDetail "Icon: $iconPath"
+}
 $shortcutPath = Join-Path ([Environment]::GetFolderPath("Desktop")) "AgentHero.url"
-"[InternetShortcut]`r`nURL=http://127.0.0.1:$Port`r`n" | Set-Content -Path $shortcutPath -Encoding ASCII
+$shortcutContent | Set-Content -Path $shortcutPath -Encoding ASCII
 Write-InstallDetail "Desktop: $shortcutPath"
 $startMenuDir = Join-Path ([Environment]::GetFolderPath("Programs")) "AgentHero"
 $startMenuShortcutPath = Join-Path $startMenuDir "AgentHero.url"
 New-Item -ItemType Directory -Path $startMenuDir -Force | Out-Null
-"[InternetShortcut]`r`nURL=http://127.0.0.1:$Port`r`n" | Set-Content -Path $startMenuShortcutPath -Encoding ASCII
+$shortcutContent | Set-Content -Path $startMenuShortcutPath -Encoding ASCII
 Write-InstallDetail "Start Menu: $startMenuShortcutPath"
 
 Write-InstallStep "Registering uninstall entry"

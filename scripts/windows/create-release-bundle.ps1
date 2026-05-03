@@ -57,6 +57,7 @@ $pathsToCopy = @(
   "shared\dist",
   "web\package.json",
   "web\dist",
+  "assets",
   ".agent-hero",
   "scripts\windows\start-installed-agent-hero.ps1",
   "scripts\windows\start-installed-update.ps1",
