@@ -135,8 +135,14 @@ function ptyStartAttempts(shell: ShellSpec, cwd: string, commands: string[]): Pt
   return attempts;
 }
 
-function spawnScriptFallback(shell: ShellSpec, cwd: string, env: Record<string, string>): TerminalProcess {
-  const child = spawnChild("/usr/bin/script", ["-q", "/dev/null", shell.command, ...shell.args], {
+function pipeFallbackArgs(shell: ShellSpec): string[] {
+  if (shell.args.length > 0) return shell.args;
+  const name = shellName(shell.command);
+  return name === "zsh" || name === "bash" || name === "sh" ? ["-i"] : [];
+}
+
+function spawnPipeFallback(shell: ShellSpec, cwd: string, env: Record<string, string>): TerminalProcess {
+  const child = spawnChild(shell.command, pipeFallbackArgs(shell), {
     cwd,
     env,
     stdio: ["pipe", "pipe", "pipe"]
@@ -284,12 +290,12 @@ export class TerminalManager {
       if (process.platform === "darwin") {
         try {
           const fallbackEnv = { ...envForPty(), ...shell.env };
-          pty = spawnScriptFallback(shell, cwd, fallbackEnv);
-          startedShell = { command: "/usr/bin/script", args: [shell.command, ...shell.args], env: shell.env };
+          pty = spawnPipeFallback(shell, cwd, fallbackEnv);
+          startedShell = { command: `${shell.command} (pipe fallback)`, args: shell.args, env: shell.env };
           startedCwd = cwd;
-          errors.push("/usr/bin/script fallback started");
+          errors.push("pipe fallback started");
         } catch (error) {
-          errors.push(`/usr/bin/script fallback in ${cwd}: ${error instanceof Error ? error.message : String(error)}`);
+          errors.push(`pipe fallback ${shell.command} in ${cwd}: ${error instanceof Error ? error.message : String(error)}`);
         }
       }
     }
