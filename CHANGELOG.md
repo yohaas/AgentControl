@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-05-03
 
+- [1b464f7](https://github.com/yohaas/AgentHero/commit/1b464f7) Publish the 0.1.16 platform-neutral app patch and keep full installers on the latest full bundle.
 - [9ae05c4](https://github.com/yohaas/AgentHero/commit/9ae05c4) Disable the update action when the installed app is already current.
 - [f01fb4f](https://github.com/yohaas/AgentHero/commit/f01fb4f) Make fresh installers choose the current full release asset instead of older platform bundles.
 - [1b5e929](https://github.com/yohaas/AgentHero/commit/1b5e929) Publish the Windows 0.1.15 full release bundle and setup installer.
