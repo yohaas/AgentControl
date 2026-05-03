@@ -20,6 +20,7 @@ if (-not $ManifestUrl.Trim()) { throw "ManifestUrl is required." }
 if (-not (Test-Path $installerScript)) { throw "Installer script was not found at $installerScript" }
 
 if (Test-Path $buildDir) { Remove-Item -LiteralPath $buildDir -Recurse -Force }
+if (Test-Path $targetPath) { Remove-Item -LiteralPath $targetPath -Force }
 New-Item -ItemType Directory -Path $buildDir, (Split-Path -Parent $targetPath) -Force | Out-Null
 
 $embeddedInstaller = Join-Path $buildDir "install-agent-hero.ps1"
@@ -72,14 +73,26 @@ if ($NoStart) {
 
 @"
 @echo off
+title AgentHero Setup
+echo.
+echo AgentHero Setup
+echo ===============
+echo.
+echo Installing AgentHero for the current Windows user.
+echo This window will show progress and stay open when setup finishes.
+echo.
 powershell.exe $($installerArgs -join " ")
 set EXIT_CODE=%ERRORLEVEL%
 if not "%EXIT_CODE%"=="0" (
   echo.
   echo AgentHero setup failed with exit code %EXIT_CODE%.
   pause
+  exit /b %EXIT_CODE%
 )
-exit /b %EXIT_CODE%
+echo.
+echo Setup finished. Press any key to close this window.
+pause >nul
+exit /b 0
 "@ | Set-Content -Path $launcher -Encoding ASCII
 
 $escapedBuildDir = $buildDir
