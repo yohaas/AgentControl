@@ -4385,6 +4385,10 @@ function AppUpdateNotice({ compact = false, hideWhenNoUpdate = false }: { compac
   }, [addError, updateRun, updateSession]);
 
   function runUpdate() {
+    if (!updateAvailable) {
+      addError(status?.message || "AgentHero is already up to date.");
+      return;
+    }
     const commands = effectiveUpdateCommands.map((command) => command.trim()).filter(Boolean);
     if (commands.length === 0) return;
     const requestId =
@@ -4402,6 +4406,7 @@ function AppUpdateNotice({ compact = false, hideWhenNoUpdate = false }: { compac
 
   const commits = status?.commits || [];
   const updateAvailable = Boolean(status?.updateAvailable);
+  const canRunUpdate = updateAvailable && effectiveUpdateCommands.length > 0 && !updateRun;
   const manifestVersionOlder =
     status?.latestVersion?.version && status.localVersion?.version
       ? compareDottedVersions(status.latestVersion.version, status.localVersion.version) < 0
@@ -4600,9 +4605,9 @@ function AppUpdateNotice({ compact = false, hideWhenNoUpdate = false }: { compac
               <Button variant="outline" onClick={() => setDetailsOpen(false)}>
                 Close
               </Button>
-              <Button onClick={runUpdate} disabled={effectiveUpdateCommands.length === 0 || Boolean(updateRun)}>
+              <Button onClick={runUpdate} disabled={!canRunUpdate}>
                 <SquareTerminal className="h-4 w-4" />
-                {updateRun ? "Running" : "Run Update"}
+                {updateRun ? "Running" : updateAvailable ? "Run Update" : "Up to date"}
               </Button>
             </div>
           </div>
