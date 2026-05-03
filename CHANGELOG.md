@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-05-03
 
+- [98650c3](https://github.com/yohaas/AgentHero/commit/98650c3) Preserve macOS node-pty helper permissions in release bundles and installs.
 - [58f7108](https://github.com/yohaas/AgentHero/commit/58f7108) Skip zsh startup files when using the macOS pipe terminal fallback.
 - [f308652](https://github.com/yohaas/AgentHero/commit/f308652) Require Node 20 LTS for macOS bundles and installed runtime terminal support.
 - [21397bb](https://github.com/yohaas/AgentHero/commit/21397bb) Use a pipe-based macOS terminal fallback when PTY and script startup fail.
