@@ -4446,7 +4446,7 @@ function AppUpdateNotice({ compact = false, hideWhenNoUpdate = false }: { compac
               <div className="grid gap-1 rounded-md border border-border p-2 text-xs">
                 {status.localVersion?.version && (
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-muted-foreground">Version</span>
+                    <span className="text-muted-foreground">{status.installMode === "installed" ? "Installed version" : "Version"}</span>
                     <span className="min-w-0 truncate font-mono" title={status.localVersion.commitSha}>
                       {status.localVersion.version}
                     </span>

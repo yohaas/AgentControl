@@ -907,18 +907,23 @@ function manifestVersion(manifest: AppUpdateManifest): AppVersionMetadata | unde
 }
 
 async function readLocalVersionMetadata(): Promise<AppVersionMetadata | undefined> {
-  const versionPath = path.join(appRoot, "version.json");
-  const rawVersion = await readFile(versionPath, "utf8").catch(() => "");
-  if (rawVersion.trim()) {
-    const parsed = JSON.parse(rawVersion) as AppVersionMetadata;
-    if (parsed.version) return parsed;
+  const roots = Array.from(new Set([appRoot, process.cwd()]));
+  for (const root of roots) {
+    const rawVersion = await readFile(path.join(root, "version.json"), "utf8").catch(() => "");
+    if (rawVersion.trim()) {
+      const parsed = JSON.parse(rawVersion) as AppVersionMetadata;
+      if (parsed.version) return parsed;
+    }
   }
 
-  const packagePath = path.join(appRoot, "package.json");
-  const rawPackage = await readFile(packagePath, "utf8").catch(() => "");
-  if (!rawPackage.trim()) return undefined;
-  const parsedPackage = JSON.parse(rawPackage) as { version?: string };
-  return parsedPackage.version ? { version: parsedPackage.version } : undefined;
+  for (const root of roots) {
+    const rawPackage = await readFile(path.join(root, "package.json"), "utf8").catch(() => "");
+    if (!rawPackage.trim()) continue;
+    const parsedPackage = JSON.parse(rawPackage) as { version?: string };
+    if (parsedPackage.version) return { version: parsedPackage.version };
+  }
+
+  return undefined;
 }
 
 async function fetchUpdateManifest(manifestUrl: string): Promise<AppUpdateManifest> {
