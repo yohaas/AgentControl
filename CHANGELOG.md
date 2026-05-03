@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-05-02
 
+- [0885c22](https://github.com/yohaas/AgentHero/commit/0885c22) Add Windows installed update mode with release bundles, manifest checks, and per-user startup.
 - [7999b32](https://github.com/yohaas/AgentHero/commit/7999b32) Show built-in agents in chat send shortcuts.
 
 ## 2026-05-01
