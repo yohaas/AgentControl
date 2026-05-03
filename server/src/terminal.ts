@@ -138,7 +138,8 @@ function ptyStartAttempts(shell: ShellSpec, cwd: string, commands: string[]): Pt
 function pipeFallbackArgs(shell: ShellSpec): string[] {
   if (shell.args.length > 0) return shell.args;
   const name = shellName(shell.command);
-  return name === "zsh" || name === "bash" || name === "sh" ? ["-i"] : [];
+  if (name === "zsh") return ["-f", "-i"];
+  return name === "bash" || name === "sh" ? ["-i"] : [];
 }
 
 function spawnPipeFallback(shell: ShellSpec, cwd: string, env: Record<string, string>): TerminalProcess {
