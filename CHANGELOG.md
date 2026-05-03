@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-05-03
 
+- [acf1a9a](https://github.com/yohaas/AgentHero/commit/acf1a9a) Use local short-date formatting for older message timestamps.
 - [3bd9418](https://github.com/yohaas/AgentHero/commit/3bd9418) Show compact timestamps on chat messages.
 - [75f17da](https://github.com/yohaas/AgentHero/commit/75f17da) Document mobile and remote access guidance with private-network recommendations.
 - [3d2a46e](https://github.com/yohaas/AgentHero/commit/3d2a46e) Require a configured release manifest URL before running installed updates.
