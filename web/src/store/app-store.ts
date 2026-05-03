@@ -131,6 +131,7 @@ const WINDOWS_UPDATE_COMMANDS = [
 const WINDOWS_INSTALLED_UPDATE_COMMANDS = [
   "powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\windows\\start-installed-update.ps1"
 ];
+const POSIX_INSTALLED_UPDATE_COMMANDS = ["bash ./scripts/macos/update-installed-agent-hero.sh"];
 const PREVIOUS_WINDOWS_UPDATE_COMMANDS = [
   "$script = Join-Path (Get-Location) 'scripts\\update-agent-hero.ps1'; $command = \"Write-Host 'Starting AgentHero updater...'; & `\"$script`\"\"; Start-Process powershell -Verb RunAs -WorkingDirectory (Get-Location).Path -ArgumentList @('-NoExit', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', $command)"
 ];
@@ -522,6 +523,8 @@ function normalizeSettings(settings: SettingsState): SettingsState {
         commandKey !== LEGACY_UPDATE_COMMANDS.join("\n") &&
         commandKey !== WINDOWS_UPDATE_COMMANDS.join("\n") &&
         commandKey !== WINDOWS_INSTALLED_UPDATE_COMMANDS.join("\n") &&
+        commandKey !== POSIX_UPDATE_COMMANDS.join("\n") &&
+        commandKey !== POSIX_INSTALLED_UPDATE_COMMANDS.join("\n") &&
         commandKey !== PREVIOUS_WINDOWS_UPDATE_COMMANDS.join("\n") &&
         commandKey !== OLDER_WINDOWS_UPDATE_COMMANDS.join("\n") &&
         commandKey !== PREVIOUS_WINDOWS_UPDATE_COMMANDS_LEGACY.join("\n") &&

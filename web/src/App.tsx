@@ -4335,10 +4335,19 @@ function AppUpdateNotice({ compact = false, hideWhenNoUpdate = false }: { compac
   const installedMode = status?.installMode === "installed" || settings.installMode === "installed";
   const installedUpdateManifestUrl = (settings.updateManifestUrl || "").trim();
   const quotePowerShellValue = (value: string) => `"${value.replace(/[`"$]/g, (match) => `\`${match}`)}"`;
+  const quoteShellValue = (value: string) => `'${value.replace(/'/g, "'\\''")}'`;
   const effectiveUpdateCommands =
     installedMode
       ? installedUpdateManifestUrl
-        ? [`powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\windows\\start-installed-update.ps1 -ManifestUrl ${quotePowerShellValue(installedUpdateManifestUrl)}`]
+        ? (settings.updateCommands || []).map((command) => {
+            if (command.includes("start-installed-update.ps1")) {
+              return `powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\windows\\start-installed-update.ps1 -ManifestUrl ${quotePowerShellValue(installedUpdateManifestUrl)}`;
+            }
+            if (command.includes("update-installed-agent-hero.sh")) {
+              return `bash ./scripts/macos/update-installed-agent-hero.sh --manifest-url ${quoteShellValue(installedUpdateManifestUrl)}`;
+            }
+            return command;
+          })
         : []
       : settings.updateCommands || [];
 

@@ -94,6 +94,7 @@ const WINDOWS_UPDATE_COMMANDS = [
 const WINDOWS_INSTALLED_UPDATE_COMMANDS = [
   "powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\windows\\start-installed-update.ps1"
 ];
+const POSIX_INSTALLED_UPDATE_COMMANDS = ["bash ./scripts/macos/update-installed-agent-hero.sh"];
 const PREVIOUS_WINDOWS_UPDATE_COMMANDS = [
   "$script = Join-Path (Get-Location) 'scripts\\update-agent-hero.ps1'; $command = \"Write-Host 'Starting AgentHero updater...'; & `\"$script`\"\"; Start-Process powershell -Verb RunAs -WorkingDirectory (Get-Location).Path -ArgumentList @('-NoExit', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', $command)"
 ];
@@ -115,6 +116,7 @@ const DEFAULT_RELEASE_MANIFEST_URL = "https://raw.githubusercontent.com/yohaas/A
 
 export function defaultUpdateCommands(platform = process.platform, installMode: AppInstallMode = "checkout"): string[] {
   if (platform === "win32" && installMode === "installed") return WINDOWS_INSTALLED_UPDATE_COMMANDS;
+  if (platform !== "win32" && installMode === "installed") return POSIX_INSTALLED_UPDATE_COMMANDS;
   return platform === "win32" ? WINDOWS_UPDATE_COMMANDS : POSIX_UPDATE_COMMANDS;
 }
 
@@ -339,6 +341,8 @@ export function resolveUpdateCommands(config: DashboardConfig): string[] {
     commandKey !== LEGACY_UPDATE_COMMANDS.join("\n") &&
     commandKey !== WINDOWS_UPDATE_COMMANDS.join("\n") &&
     commandKey !== WINDOWS_INSTALLED_UPDATE_COMMANDS.join("\n") &&
+    commandKey !== POSIX_UPDATE_COMMANDS.join("\n") &&
+    commandKey !== POSIX_INSTALLED_UPDATE_COMMANDS.join("\n") &&
     commandKey !== PREVIOUS_WINDOWS_UPDATE_COMMANDS.join("\n") &&
     commandKey !== OLDER_WINDOWS_UPDATE_COMMANDS.join("\n") &&
     commandKey !== PREVIOUS_WINDOWS_UPDATE_COMMANDS_LEGACY.join("\n") &&
