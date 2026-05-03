@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-05-03
 
+- [81a6623](https://github.com/yohaas/AgentHero/commit/81a6623) Use the macOS installed updater command instead of checkout or Windows update commands.
 - [d4095a6](https://github.com/yohaas/AgentHero/commit/d4095a6) Show a clear update availability banner in the update dialog.
 - [867b6be](https://github.com/yohaas/AgentHero/commit/867b6be) Prefer installed update version comparisons over commit SHA once versions are known.
 - [a8f485f](https://github.com/yohaas/AgentHero/commit/a8f485f) Support platform-neutral installed update patches with patch/full manifest assets.
