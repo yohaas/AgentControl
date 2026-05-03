@@ -11463,6 +11463,7 @@ function SendToMenu({
   const openSendDialog = useAppStore((state) => state.openSendDialog);
   const addError = useAppStore((state) => state.addError);
   const project = projects.find((candidate) => candidate.id === source.projectId);
+  const launchableAgents = useMemo(() => agentDefsWithSources(project), [project]);
   const agents = useMemo(
     () => Object.values(agentsById).filter((agent) => agent.projectId === source.projectId),
     [agentsById, source.projectId]
@@ -11512,21 +11513,23 @@ function SendToMenu({
               New agent
             </ContextMenuSubTrigger>
             <ContextMenuSubContent>
-              {project?.agents.map((def) => (
+              {launchableAgents.map(({ source: agentSource, def }) => (
                 <ContextMenuItem
-                  key={def.name}
+                  key={`${agentSource}:${def.name}`}
                   onClick={() => {
                     const target = currentCopyTarget();
                     if (!target.text) return;
                     openLaunchModal({
                       projectId: source.projectId,
                       defName: def.name,
+                      agentSource,
                       initialPrompt: wrapForwardedText(source, target.text)
                     });
                   }}
                 >
                   <AgentDot color={def.color} />
                   <span className="ml-2">{def.name}</span>
+                  {agentSource === "builtIn" && <Badge className="ml-2">Built-In</Badge>}
                 </ContextMenuItem>
               ))}
             </ContextMenuSubContent>
@@ -12041,7 +12044,7 @@ function ChatBlockPopoutButton({
     getCachedSelection: getCachedPopoutSelection
   } = useTextSelection(`#${selectionRootId}`);
   const project = projects.find((candidate) => candidate.id === source.projectId);
-  const newAgentDefs = useMemo(() => agentDefsWithBuiltIns(project), [project]);
+  const launchableAgents = useMemo(() => agentDefsWithSources(project), [project]);
   const targetAgents = useMemo(
     () => Object.values(agentsById).filter((agent) => agent.projectId === source.projectId && agent.id !== source.id),
     [agentsById, source.id, source.projectId]
@@ -12112,13 +12115,14 @@ function ChatBlockPopoutButton({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start">
-                {newAgentDefs.map((def) => (
+                {launchableAgents.map(({ source: agentSource, def }) => (
                   <DropdownMenuItem
-                    key={`${def.provider || "claude"}:${def.name}`}
+                    key={`${agentSource}:${def.name}`}
                     onClick={() => {
                       openLaunchModal({
                         projectId: source.projectId,
                         defName: def.name,
+                        agentSource,
                         initialPrompt: wrapForwardedText(source, actionText())
                       });
                       setOpen(false);
@@ -12126,6 +12130,7 @@ function ChatBlockPopoutButton({
                   >
                     <AgentDot color={def.color} />
                     <span className="ml-2">{def.name}</span>
+                    {agentSource === "builtIn" && <Badge className="ml-2">Built-In</Badge>}
                   </DropdownMenuItem>
                 ))}
               </DropdownMenuContent>
@@ -12209,13 +12214,14 @@ function ChatBlockPopoutButton({
                       New agent
                     </ContextMenuSubTrigger>
                     <ContextMenuSubContent>
-                      {newAgentDefs.map((def) => (
+                      {launchableAgents.map(({ source: agentSource, def }) => (
                         <ContextMenuItem
-                          key={`${def.provider || "claude"}:${def.name}`}
+                          key={`${agentSource}:${def.name}`}
                           onClick={() => {
                             openLaunchModal({
                               projectId: source.projectId,
                               defName: def.name,
+                              agentSource,
                               initialPrompt: wrapForwardedText(source, actionText())
                             });
                             setOpen(false);
@@ -12223,6 +12229,7 @@ function ChatBlockPopoutButton({
                         >
                           <AgentDot color={def.color} />
                           <span className="ml-2">{def.name}</span>
+                          {agentSource === "builtIn" && <Badge className="ml-2">Built-In</Badge>}
                         </ContextMenuItem>
                       ))}
                     </ContextMenuSubContent>
