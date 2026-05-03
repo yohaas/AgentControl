@@ -880,8 +880,7 @@ function installedReleaseAvailable(localVersion: AppVersionMetadata | undefined,
   if (!localVersion) return true;
   if (latestVersion.version && localVersion.version) {
     const versionDelta = compareVersionStrings(latestVersion.version, localVersion.version);
-    if (versionDelta > 0) return true;
-    if (versionDelta < 0) return false;
+    return versionDelta > 0;
   }
   if (latestVersion.releaseTag && localVersion.releaseTag && latestVersion.releaseTag !== localVersion.releaseTag) return true;
   if (latestVersion.commitSha && localVersion.commitSha && latestVersion.commitSha !== localVersion.commitSha) return true;
