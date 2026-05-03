@@ -46,7 +46,7 @@ if [[ -f "$manifest_url" ]]; then
   cp "$manifest_path" "$scripts_dir/manifest.json"
   installer_manifest_url="\$SCRIPT_DIR/manifest.json"
 
-  asset_url="$(node -e "const fs=require('fs'); const m=JSON.parse(fs.readFileSync(process.argv[1], 'utf8')); const target=m.version||''; const a=(m.assets||[]).find((x)=>(x.type||'full')==='full'&&x.platform==='macos'&&(!x.version||!target||x.version===target)); if(!a) process.exit(2); console.log(a.url);" "$manifest_path")" || {
+  asset_url="$(node -e "const fs=require('fs'); const m=JSON.parse(fs.readFileSync(process.argv[1], 'utf8')); const parts=(v)=>String(v||'0').replace(/^v/i,'').split(/[.-]/).map((p)=>Number(p)||0); const cmp=(a,b)=>{const x=parts(a.version), y=parts(b.version); for(let i=0;i<Math.max(x.length,y.length);i++){const d=(y[i]||0)-(x[i]||0); if(d) return d;} return 0;}; const a=(m.assets||[]).filter((x)=>(x.type||'full')==='full'&&x.platform==='macos').sort(cmp)[0]; if(!a) process.exit(2); console.log(a.url);" "$manifest_path")" || {
     echo "Local manifest does not contain a macOS asset." >&2
     exit 1
   }

@@ -76,17 +76,25 @@ fi
 asset_json="$("$node_path" -e "
 const fs = require('fs');
 const m = JSON.parse(fs.readFileSync(process.argv[1], 'utf8'));
-const targetVersion = m.version || '';
-const selected = (m.assets || []).find((asset) => {
+const versionParts = (version) => String(version || '0').replace(/^v/i, '').split(/[.-]/).map((part) => Number(part) || 0);
+const compareDescending = (left, right) => {
+  const leftParts = versionParts(left.version);
+  const rightParts = versionParts(right.version);
+  const length = Math.max(leftParts.length, rightParts.length);
+  for (let index = 0; index < length; index += 1) {
+    const delta = (rightParts[index] || 0) - (leftParts[index] || 0);
+    if (delta !== 0) return delta;
+  }
+  return 0;
+};
+const selected = (m.assets || []).filter((asset) => {
   const type = asset.type || 'full';
   const platform = String(asset.platform || '').toLowerCase();
   const arch = String(asset.arch || '').toLowerCase();
-  const version = asset.version || targetVersion;
   return type === 'full' &&
     platform === 'macos' &&
-    (!arch || arch === process.arch || arch === 'any') &&
-    (!targetVersion || version === targetVersion);
-});
+    (!arch || arch === process.arch || arch === 'any');
+}).sort(compareDescending)[0];
 if (!selected) process.exit(2);
 process.stdout.write(JSON.stringify(selected));
 " "$manifest_path")" || {
