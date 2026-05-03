@@ -2,6 +2,10 @@
 
 All notable repository changes are listed newest-first and grouped by commit date.
 
+## 2026-05-02
+
+- [7999b32](https://github.com/yohaas/AgentHero/commit/7999b32) Show built-in agents in chat send shortcuts.
+
 ## 2026-05-01
 
 - [03be3f8](https://github.com/yohaas/AgentHero/commit/03be3f8) Focus newly launched chats in the mobile app.
