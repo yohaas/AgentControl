@@ -2,6 +2,8 @@
 
 AgentHero is a local dashboard for running coding agents against your own project folders. It starts a localhost Express/WebSocket server, serves a React UI, and launches Claude, Codex, or OpenAI API sessions from the selected project directory.
 
+![AgentHero dashboard](docs/screenshots/dashboard.png)
+
 See [CHANGELOG.md](CHANGELOG.md) for release history.
 
 ## Top Features
