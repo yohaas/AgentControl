@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-05-02
 
+- [9425a3a](https://github.com/yohaas/AgentHero/commit/9425a3a) Show visible progress while the Windows setup installer runs.
 - [bedb7a6](https://github.com/yohaas/AgentHero/commit/bedb7a6) Track the Windows setup installer and link it from the README.
 - [75b7c80](https://github.com/yohaas/AgentHero/commit/75b7c80) Add macOS installer scripts and simplify the README around features, agents, and installs.
 - [96f8ee5](https://github.com/yohaas/AgentHero/commit/96f8ee5) Add a Windows setup executable builder for web and offline installers.
