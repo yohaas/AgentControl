@@ -2,6 +2,10 @@
 
 All notable repository changes are listed newest-first and grouped by commit date.
 
+## 2026-05-03
+
+- [22a383c](https://github.com/yohaas/AgentHero/commit/22a383c) Open a dedicated visible PowerShell setup progress window from the Windows installer.
+
 ## 2026-05-02
 
 - [ba5202a](https://github.com/yohaas/AgentHero/commit/ba5202a) Detect installed updates by release tag and commit SHA when the package version is unchanged.
