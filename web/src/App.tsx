@@ -13528,15 +13528,19 @@ function MobileSidebar({
   if (collapsed) {
     return (
       <aside className="flex w-14 shrink-0 flex-col overflow-x-hidden border-r border-border bg-card/45" onClick={toggleOnEmptyNavTap}>
-        <div className="flex h-16 shrink-0 flex-col items-center justify-center gap-1 border-b border-border px-1">
-          <span
-            className={cn("h-2.5 w-2.5 rounded-full", wsConnected ? "bg-emerald-500" : "bg-red-500")}
-            title={wsConnected ? "Connected" : "Disconnected"}
-            aria-label={wsConnected ? "Connected" : "Disconnected"}
-          />
-          <span className="max-w-full truncate text-[9px] leading-none text-muted-foreground" title={selectedProject?.name || "No project"}>
+        <div className="flex h-10 shrink-0 items-center justify-center border-b border-border px-1">
+          <button
+            type="button"
+            className={cn(
+              "max-w-full truncate rounded px-1 text-[9px] font-medium leading-none hover:bg-accent",
+              wsConnected ? "text-emerald-500" : "text-red-500"
+            )}
+            onClick={() => setCollapsed(false)}
+            title={`${selectedProject?.name || "No project"} - ${wsConnected ? "Connected" : "Disconnected"}`}
+            aria-label={`Open sidebar. ${wsConnected ? "Connected" : "Disconnected"}. ${selectedProject?.name || "No project"}`}
+          >
             {selectedProject?.name || "Project"}
-          </span>
+          </button>
         </div>
         <div className="flex min-h-0 flex-1 flex-col items-center gap-2 py-3" data-mobile-nav-empty-toggle>
           <Button variant="ghost" size="icon" onClick={() => setCollapsed(false)} title="Expand sidebar" aria-label="Expand sidebar">
