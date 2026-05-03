@@ -4,21 +4,9 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-05-03
 
-- [8faa847](https://github.com/yohaas/AgentHero/commit/8faa847) Launch macOS zsh terminals as login shells to match normal Terminal startup.
-- [98650c3](https://github.com/yohaas/AgentHero/commit/98650c3) Preserve macOS node-pty helper permissions in release bundles and installs.
-- [58f7108](https://github.com/yohaas/AgentHero/commit/58f7108) Skip zsh startup files when using the macOS pipe terminal fallback.
-- [f308652](https://github.com/yohaas/AgentHero/commit/f308652) Require Node 20 LTS for macOS bundles and installed runtime terminal support.
-- [21397bb](https://github.com/yohaas/AgentHero/commit/21397bb) Use a pipe-based macOS terminal fallback when PTY and script startup fail.
-- [086843a](https://github.com/yohaas/AgentHero/commit/086843a) Add a macOS terminal fallback through the system script command when node-pty spawn fails.
-- [1f13814](https://github.com/yohaas/AgentHero/commit/1f13814) Retry macOS terminal startup with safe cwd and shell fallbacks.
+- [8faa847](https://github.com/yohaas/AgentHero/commit/8faa847) Harden macOS installed terminal support with Node 20, preserved node-pty helper permissions, and login-shell zsh startup.
 - [0880f8b](https://github.com/yohaas/AgentHero/commit/0880f8b) Clarify update status when the configured manifest is older than the installed app.
-- [011ed03](https://github.com/yohaas/AgentHero/commit/011ed03) Harden macOS terminal startup with a normal LaunchAgent environment and valid cwd fallback.
-- [654dc47](https://github.com/yohaas/AgentHero/commit/654dc47) Add a macOS install repair script and bump the package patch version.
-- [c670304](https://github.com/yohaas/AgentHero/commit/c670304) Fix macOS package ownership for user logs and installed launcher files.
-- [54ff6c3](https://github.com/yohaas/AgentHero/commit/54ff6c3) Make the macOS launcher log startup and fall back to starting the server directly.
-- [48f42d5](https://github.com/yohaas/AgentHero/commit/48f42d5) Copy the macOS launcher into Applications, add an icon, and wait for server readiness before opening.
-- [a12781a](https://github.com/yohaas/AgentHero/commit/a12781a) Add a macOS AgentHero.app launcher that opens the local app URL.
-- [8b2a0d5](https://github.com/yohaas/AgentHero/commit/8b2a0d5) Add macOS installer script logs and more reliable Node path resolution.
+- [48f42d5](https://github.com/yohaas/AgentHero/commit/48f42d5) Improve the macOS installer with user-owned logs, a launchable AgentHero.app, app icon support, and server startup checks.
 - [c1bb447](https://github.com/yohaas/AgentHero/commit/c1bb447) Prevent stale local queued messages from reappearing after another client consumes them.
 - [0ae5802](https://github.com/yohaas/AgentHero/commit/0ae5802) Add a checked-in update manifest and repo-hosted Windows release bundle.
 - [520340d](https://github.com/yohaas/AgentHero/commit/520340d) Default installed update checks to the repo manifest URL.
