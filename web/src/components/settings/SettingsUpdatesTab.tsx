@@ -26,6 +26,17 @@ interface SettingsUpdatesTabProps {
   setUpdateCommandsText: (value: string) => void;
 }
 
+function compareDottedVersions(left: string, right: string): number {
+  const leftParts = left.split(/[.-]/).map((part) => Number.parseInt(part, 10) || 0);
+  const rightParts = right.split(/[.-]/).map((part) => Number.parseInt(part, 10) || 0);
+  const length = Math.max(leftParts.length, rightParts.length);
+  for (let index = 0; index < length; index += 1) {
+    const delta = (leftParts[index] || 0) - (rightParts[index] || 0);
+    if (delta !== 0) return delta;
+  }
+  return 0;
+}
+
 export function SettingsUpdatesTab({
   updateChecksEnabled,
   setUpdateChecksEnabled,
@@ -47,6 +58,8 @@ export function SettingsUpdatesTab({
 }: SettingsUpdatesTabProps) {
   const localVersion = settingsUpdateStatus?.localVersion;
   const latestVersion = settingsUpdateStatus?.latestVersion;
+  const manifestVersionOlder =
+    latestVersion?.version && localVersion?.version ? compareDottedVersions(latestVersion.version, localVersion.version) < 0 : false;
 
   return (
     <>
@@ -78,7 +91,7 @@ export function SettingsUpdatesTab({
             )}
             {latestVersion?.version && (
               <div>
-                Latest: <span className="font-mono">{latestVersion.releaseTag || latestVersion.version}</span>
+                {manifestVersionOlder ? "Manifest" : "Latest"}: <span className="font-mono">{latestVersion.releaseTag || latestVersion.version}</span>
               </div>
             )}
             {settingsUpdateStatus.updateAsset && <div className="font-mono">Asset: {settingsUpdateStatus.updateAsset.platform}</div>}

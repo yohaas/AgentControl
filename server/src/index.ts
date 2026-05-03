@@ -888,6 +888,11 @@ function installedReleaseAvailable(localVersion: AppVersionMetadata | undefined,
   return false;
 }
 
+function manifestIsOlderThanLocal(localVersion: AppVersionMetadata | undefined, latestVersion: AppVersionMetadata | undefined): boolean {
+  if (!latestVersion?.version || !localVersion?.version) return false;
+  return compareVersionStrings(latestVersion.version, localVersion.version) < 0;
+}
+
 function manifestVersion(manifest: AppUpdateManifest): AppVersionMetadata | undefined {
   if (manifest.latest?.version) return manifest.latest;
   if (!manifest.version) return undefined;
@@ -974,6 +979,7 @@ async function appUpdateStatus(): Promise<AppUpdateStatus> {
       const latestVersion = manifestVersion(manifest);
       const updateAsset = selectUpdateAsset(manifest.assets);
       const releaseAvailable = installedReleaseAvailable(localVersion, latestVersion);
+      const manifestOlder = manifestIsOlderThanLocal(localVersion, latestVersion);
       return {
         installMode,
         isRepo: false,
@@ -985,7 +991,9 @@ async function appUpdateStatus(): Promise<AppUpdateStatus> {
         releaseAvailable,
         updateAvailable: releaseAvailable && Boolean(updateAsset),
         commits: [],
-        message: updateAsset || !releaseAvailable ? undefined : "A newer release exists, but this platform has no matching update asset."
+        message: manifestOlder
+          ? "The configured update manifest is older than this install."
+          : updateAsset || !releaseAvailable ? undefined : "A newer release exists, but this platform has no matching update asset."
       };
     } catch (error) {
       return {

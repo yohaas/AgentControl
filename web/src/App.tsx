@@ -481,6 +481,17 @@ function formatDateTime(value: string): string {
   return date.toLocaleString();
 }
 
+function compareDottedVersions(left: string, right: string): number {
+  const leftParts = left.split(/[.-]/).map((part) => Number.parseInt(part, 10) || 0);
+  const rightParts = right.split(/[.-]/).map((part) => Number.parseInt(part, 10) || 0);
+  const length = Math.max(leftParts.length, rightParts.length);
+  for (let index = 0; index < length; index += 1) {
+    const delta = (leftParts[index] || 0) - (rightParts[index] || 0);
+    if (delta !== 0) return delta;
+  }
+  return 0;
+}
+
 const GENERAL_AGENT_DEF: AgentDef = {
   name: "general",
   description: "General-purpose engineering assistant",
@@ -4382,6 +4393,10 @@ function AppUpdateNotice({ compact = false, hideWhenNoUpdate = false }: { compac
 
   const commits = status?.commits || [];
   const updateAvailable = Boolean(status?.updateAvailable);
+  const manifestVersionOlder =
+    status?.latestVersion?.version && status.localVersion?.version
+      ? compareDottedVersions(status.latestVersion.version, status.localVersion.version) < 0
+      : false;
   if (settings.updateChecksEnabled === false) return null;
   if (hideWhenNoUpdate && !updateAvailable) return null;
 
@@ -4453,7 +4468,7 @@ function AppUpdateNotice({ compact = false, hideWhenNoUpdate = false }: { compac
                 )}
                 {status.latestVersion?.version && (
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-muted-foreground">Latest version</span>
+                    <span className="text-muted-foreground">{manifestVersionOlder ? "Manifest version" : "Latest version"}</span>
                     <span className="min-w-0 truncate font-mono">{status.latestVersion.version}</span>
                   </div>
                 )}
