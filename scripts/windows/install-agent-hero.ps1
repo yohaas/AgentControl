@@ -118,7 +118,15 @@ if ($manifestIsLocal) {
 $manifest = Get-Content -Raw -Path $manifestPath | ConvertFrom-Json
 Write-InstallDetail "Version: $($manifest.version)"
 $startupManifestUrl = if ($manifestIsLocal) { "" } else { $ManifestUrl.Trim() }
-$asset = $manifest.assets | Where-Object { $_.platform -eq "windows" -and (-not $_.arch -or $_.arch -eq "x64") } | Select-Object -First 1
+$targetVersion = [string]$manifest.version
+$asset = $manifest.assets | Where-Object {
+  $type = if ($_.type) { [string]$_.type } else { "full" }
+  $assetVersion = if ($_.version) { [string]$_.version } else { $targetVersion }
+  $type -eq "full" -and
+    $_.platform -eq "windows" -and
+    (-not $_.arch -or $_.arch -eq "x64" -or $_.arch -eq "any") -and
+    (-not $targetVersion -or $assetVersion -eq $targetVersion)
+} | Select-Object -First 1
 if (-not $asset) { throw "Manifest does not contain a Windows update asset." }
 
 $assetUrl = [string]$asset.url

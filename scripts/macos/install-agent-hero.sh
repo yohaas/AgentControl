@@ -73,11 +73,28 @@ else
   manifest_base=""
 fi
 
-asset_url="$("$node_path" -e "const fs=require('fs'); const m=JSON.parse(fs.readFileSync(process.argv[1], 'utf8')); const a=(m.assets||[]).find((x)=>x.platform==='macos' && (!x.arch || x.arch===process.arch)); if(!a) process.exit(2); console.log(a.url);" "$manifest_path")" || {
+asset_json="$("$node_path" -e "
+const fs = require('fs');
+const m = JSON.parse(fs.readFileSync(process.argv[1], 'utf8'));
+const targetVersion = m.version || '';
+const selected = (m.assets || []).find((asset) => {
+  const type = asset.type || 'full';
+  const platform = String(asset.platform || '').toLowerCase();
+  const arch = String(asset.arch || '').toLowerCase();
+  const version = asset.version || targetVersion;
+  return type === 'full' &&
+    platform === 'macos' &&
+    (!arch || arch === process.arch || arch === 'any') &&
+    (!targetVersion || version === targetVersion);
+});
+if (!selected) process.exit(2);
+process.stdout.write(JSON.stringify(selected));
+" "$manifest_path")" || {
   echo "Manifest does not contain a matching macOS asset." >&2
   exit 1
 }
-expected_sha="$("$node_path" -e "const fs=require('fs'); const m=JSON.parse(fs.readFileSync(process.argv[1], 'utf8')); const a=(m.assets||[]).find((x)=>x.platform==='macos' && (!x.arch || x.arch===process.arch)); console.log(a.sha256);" "$manifest_path")"
+asset_url="$("$node_path" -e "const a=JSON.parse(process.argv[1]); console.log(a.url);" "$asset_json")"
+expected_sha="$("$node_path" -e "const a=JSON.parse(process.argv[1]); console.log(a.sha256);" "$asset_json")"
 version="$("$node_path" -e "const fs=require('fs'); const m=JSON.parse(fs.readFileSync(process.argv[1], 'utf8')); console.log(m.version || '');" "$manifest_path")"
 
 if [[ -n "$manifest_base" && "$asset_url" != http://* && "$asset_url" != https://* ]]; then
