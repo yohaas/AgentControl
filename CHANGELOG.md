@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-05-03
 
+- [073f64b](https://github.com/yohaas/AgentHero/commit/073f64b) Write a Windows setup log and run the hidden install step after bundled files are extracted.
 - [ebbc432](https://github.com/yohaas/AgentHero/commit/ebbc432) Build the Windows setup executable with a graphical Inno Setup wizard.
 - [22a383c](https://github.com/yohaas/AgentHero/commit/22a383c) Open a dedicated visible PowerShell setup progress window from the Windows installer.
 
