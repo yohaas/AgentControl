@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-05-03
 
+- [9ae05c4](https://github.com/yohaas/AgentHero/commit/9ae05c4) Disable the update action when the installed app is already current.
 - [f01fb4f](https://github.com/yohaas/AgentHero/commit/f01fb4f) Make fresh installers choose the current full release asset instead of older platform bundles.
 - [1b5e929](https://github.com/yohaas/AgentHero/commit/1b5e929) Publish the Windows 0.1.15 full release bundle and setup installer.
 - [81a6623](https://github.com/yohaas/AgentHero/commit/81a6623) Use the macOS installed updater command instead of checkout or Windows update commands.
