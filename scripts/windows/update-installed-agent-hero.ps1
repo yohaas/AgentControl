@@ -55,6 +55,18 @@ function Stop-AgentHero {
     }
     Remove-Item -LiteralPath $pidPath -Force -ErrorAction SilentlyContinue
   }
+  $installDirLower = $resolvedInstallDir.TrimEnd("\").ToLowerInvariant()
+  $processes = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
+    $_.ProcessId -ne $PID -and (
+      ([string]$_.ExecutablePath).ToLowerInvariant().StartsWith($installDirLower) -or
+      ([string]$_.CommandLine).ToLowerInvariant().Contains($installDirLower)
+    )
+  }
+  foreach ($processInfo in $processes) {
+    Write-UpdateLog "Stopping process $($processInfo.ProcessId): $($processInfo.Name)"
+    Stop-Process -Id $processInfo.ProcessId -Force -ErrorAction SilentlyContinue
+  }
+  Start-Sleep -Seconds 2
 }
 
 function Start-AgentHero {

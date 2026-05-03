@@ -50,6 +50,43 @@ function Get-Sha256FileHash {
   }
 }
 
+function Stop-ExistingAgentHero {
+  Write-InstallStep "Stopping existing AgentHero"
+  $task = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+  if ($task) {
+    Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+    Write-InstallDetail "Stopped scheduled task: $TaskName"
+  }
+
+  $pidPath = Join-Path $stateDir "agent-hero.pid"
+  if (Test-Path $pidPath) {
+    $pidValue = Get-Content -Path $pidPath -ErrorAction SilentlyContinue | Select-Object -First 1
+    $parsedPid = 0
+    if ($pidValue -and [int]::TryParse([string]$pidValue, [ref]$parsedPid)) {
+      $process = Get-Process -Id $parsedPid -ErrorAction SilentlyContinue
+      if ($process) {
+        Write-InstallDetail "Stopping AgentHero PID $parsedPid"
+        Stop-Process -Id $parsedPid -Force
+        $process.WaitForExit(15000)
+      }
+    }
+    Remove-Item -LiteralPath $pidPath -Force -ErrorAction SilentlyContinue
+  }
+
+  $installDirLower = $resolvedInstallDir.TrimEnd("\").ToLowerInvariant()
+  $processes = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
+    $_.ProcessId -ne $PID -and (
+      ([string]$_.ExecutablePath).ToLowerInvariant().StartsWith($installDirLower) -or
+      ([string]$_.CommandLine).ToLowerInvariant().Contains($installDirLower)
+    )
+  }
+  foreach ($processInfo in $processes) {
+    Write-InstallDetail "Stopping process $($processInfo.ProcessId): $($processInfo.Name)"
+    Stop-Process -Id $processInfo.ProcessId -Force -ErrorAction SilentlyContinue
+  }
+  Start-Sleep -Seconds 2
+}
+
 Write-Host ""
 Write-Host "AgentHero Setup" -ForegroundColor Green
 Write-Host "This installer will install AgentHero for the current Windows user."
@@ -114,6 +151,8 @@ Write-InstallStep "Extracting files"
 if (Test-Path $stageDir) { Remove-Item -LiteralPath $stageDir -Recurse -Force }
 New-Item -ItemType Directory -Path $stageDir -Force | Out-Null
 Expand-Archive -Path $zipPath -DestinationPath $stageDir -Force
+
+Stop-ExistingAgentHero
 
 Write-InstallStep "Installing AgentHero"
 Copy-Item -Path (Join-Path $stageDir "*") -Destination $resolvedInstallDir -Recurse -Force
