@@ -42,6 +42,28 @@ function Get-Sha256FileHash {
   }
 }
 
+function Compress-DirectoryWithPortablePaths {
+  param([string]$SourceDir, [string]$DestinationPath)
+  Add-Type -AssemblyName System.IO.Compression
+  Add-Type -AssemblyName System.IO.Compression.FileSystem
+  if (Test-Path $DestinationPath) { Remove-Item -LiteralPath $DestinationPath -Force }
+  $sourceRoot = (Resolve-Path $SourceDir).Path.TrimEnd("\") + "\"
+  $zip = [System.IO.Compression.ZipFile]::Open($DestinationPath, [System.IO.Compression.ZipArchiveMode]::Create)
+  try {
+    Get-ChildItem -LiteralPath $SourceDir -Recurse -File | ForEach-Object {
+      $entryName = $_.FullName.Substring($sourceRoot.Length).Replace("\", "/")
+      [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
+        $zip,
+        $_.FullName,
+        $entryName,
+        [System.IO.Compression.CompressionLevel]::Optimal
+      ) | Out-Null
+    }
+  } finally {
+    $zip.Dispose()
+  }
+}
+
 New-Item -ItemType Directory -Path $artifactsDir -Force | Out-Null
 if (Test-Path $workDir) { Remove-Item -LiteralPath $workDir -Recurse -Force }
 if (Test-Path $zipPath) { Remove-Item -LiteralPath $zipPath -Force }
@@ -86,7 +108,7 @@ $versionJson = [ordered]@{
 }
 $versionJson | ConvertTo-Json -Depth 4 | Set-Content -Path (Join-Path $workDir "version.json") -Encoding UTF8
 
-Compress-Archive -Path (Join-Path $workDir "*") -DestinationPath $zipPath -Force
+Compress-DirectoryWithPortablePaths -SourceDir $workDir -DestinationPath $zipPath
 $hash = Get-Sha256FileHash $zipPath
 $assetName = Split-Path -Leaf $zipPath
 $assetUrl = if ($ManifestBaseUrl.Trim()) { "$($ManifestBaseUrl.TrimEnd('/'))/$assetName" } else { $assetName }
