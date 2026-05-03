@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-05-03
 
+- [a12781a](https://github.com/yohaas/AgentHero/commit/a12781a) Add a macOS AgentHero.app launcher that opens the local app URL.
 - [8b2a0d5](https://github.com/yohaas/AgentHero/commit/8b2a0d5) Add macOS installer script logs and more reliable Node path resolution.
 - [c1bb447](https://github.com/yohaas/AgentHero/commit/c1bb447) Prevent stale local queued messages from reappearing after another client consumes them.
 - [0ae5802](https://github.com/yohaas/AgentHero/commit/0ae5802) Add a checked-in update manifest and repo-hosted Windows release bundle.
