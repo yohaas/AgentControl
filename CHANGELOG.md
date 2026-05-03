@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-05-03
 
+- [0880f8b](https://github.com/yohaas/AgentHero/commit/0880f8b) Clarify update status when the configured manifest is older than the installed app.
 - [011ed03](https://github.com/yohaas/AgentHero/commit/011ed03) Harden macOS terminal startup with a normal LaunchAgent environment and valid cwd fallback.
 - [654dc47](https://github.com/yohaas/AgentHero/commit/654dc47) Add a macOS install repair script and bump the package patch version.
 - [c670304](https://github.com/yohaas/AgentHero/commit/c670304) Fix macOS package ownership for user logs and installed launcher files.
