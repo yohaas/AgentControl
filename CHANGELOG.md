@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-05-03
 
+- [60a09aa](https://github.com/yohaas/AgentHero/commit/60a09aa) Stop the running installed app before installer or updater file replacement.
 - [c10970f](https://github.com/yohaas/AgentHero/commit/c10970f) Hide checkout update details in installed mode and run the installed updater command.
 - [b2df26d](https://github.com/yohaas/AgentHero/commit/b2df26d) Point the README Windows installer link at a direct GitHub download URL.
 - [073f64b](https://github.com/yohaas/AgentHero/commit/073f64b) Write a Windows setup log and run the hidden install step after bundled files are extracted.
