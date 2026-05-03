@@ -4397,6 +4397,13 @@ function AppUpdateNotice({ compact = false, hideWhenNoUpdate = false }: { compac
     status?.latestVersion?.version && status.localVersion?.version
       ? compareDottedVersions(status.latestVersion.version, status.localVersion.version) < 0
       : false;
+  const updateStatusText = status
+    ? updateAvailable
+      ? `Update available${status.latestVersion?.version ? `: ${status.localVersion?.version || "installed"} -> ${status.latestVersion.version}` : ""}`
+      : status.message || "AgentHero is up to date."
+    : loading
+      ? "Checking for updates..."
+      : "No update status yet.";
   if (settings.updateChecksEnabled === false) return null;
   if (hideWhenNoUpdate && !updateAvailable) return null;
 
@@ -4440,6 +4447,17 @@ function AppUpdateNotice({ compact = false, hideWhenNoUpdate = false }: { compac
                 <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
                 Refresh
               </Button>
+            </div>
+
+            <div
+              className={cn(
+                "rounded-md border px-3 py-2 text-sm font-medium",
+                updateAvailable
+                  ? "border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100"
+                  : "border-border bg-muted text-foreground"
+              )}
+            >
+              {updateStatusText}
             </div>
 
             {status && (status.localVersion?.version || status.localVersion?.builtAt || status.latestVersion?.version) && (
