@@ -20,6 +20,11 @@ interface ShellSpec {
   env?: Record<string, string>;
 }
 
+interface PtyStartAttempt {
+  shell: ShellSpec;
+  cwd: string;
+}
+
 interface TerminalState {
   session: TerminalSession;
   process: IPty;
@@ -103,6 +108,22 @@ function existingDirectory(candidate?: string): string | undefined {
   } catch {
     return undefined;
   }
+}
+
+function ptyStartAttempts(shell: ShellSpec, cwd: string, commands: string[]): PtyStartAttempt[] {
+  const home = existingDirectory(os.homedir()) || cwd;
+  const attempts: PtyStartAttempt[] = [{ shell, cwd }];
+  if (home !== cwd) attempts.push({ shell, cwd: home });
+  if (process.platform === "darwin") {
+    const fallbackArgs = commands.length ? ["-lc", bashSequence(commands)] : [];
+    for (const command of ["/bin/bash", "/bin/sh"]) {
+      if (command !== shell.command) {
+        attempts.push({ shell: { command, args: fallbackArgs, env: shell.env }, cwd });
+        if (home !== cwd) attempts.push({ shell: { command, args: fallbackArgs, env: shell.env }, cwd: home });
+      }
+    }
+  }
+  return attempts;
 }
 
 function commandShell(commands: string[]): ShellSpec {
@@ -206,6 +227,29 @@ export class TerminalManager {
       ? wslProjectPath(project)
       : existingDirectory(customCwd) || existingDirectory(project?.path) || existingDirectory(process.cwd()) || os.homedir();
     const timestamp = now();
+    let pty: IPty | undefined;
+    let startedShell = shell;
+    let startedCwd = cwd;
+    const errors: string[] = [];
+    for (const attempt of ptyStartAttempts(shell, cwd, commands)) {
+      try {
+        pty = spawnPty(attempt.shell.command, attempt.shell.args, {
+          name: "xterm-256color",
+          cols,
+          rows,
+          cwd: project && isWslProject(project) ? process.cwd() : attempt.cwd,
+          env: { ...envForPty(), ...attempt.shell.env }
+        });
+        startedShell = attempt.shell;
+        startedCwd = attempt.cwd;
+        break;
+      } catch (error) {
+        errors.push(`${attempt.shell.command} in ${attempt.cwd}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+    if (!pty) {
+      throw new Error(`Unable to start terminal. Tried ${errors.join("; ")}`);
+    }
     const session: TerminalSession = {
       id: nanoid(10),
       requestId: options.requestId,
@@ -213,30 +257,18 @@ export class TerminalManager {
       title,
       projectId: project?.id,
       projectName: project?.name,
-      cwd,
-      shell: shell.command,
+      cwd: startedCwd,
+      shell: startedShell.command,
       cols,
       rows,
       status: "running",
       startedAt: timestamp,
       updatedAt: timestamp
     };
-    let pty: IPty;
-    try {
-      pty = spawnPty(shell.command, shell.args, {
-        name: "xterm-256color",
-        cols,
-        rows,
-        cwd: project && isWslProject(project) ? process.cwd() : session.cwd,
-        env: { ...envForPty(), ...shell.env }
-      });
-    } catch (error) {
-      throw new Error(`Unable to start terminal (${shell.command}): ${error instanceof Error ? error.message : String(error)}`);
-    }
     const state: TerminalState = {
       session,
       process: pty,
-      output: [`\x1b[36m${shell.command} started in ${session.cwd}${os.EOL}\x1b[0m`],
+      output: [`\x1b[36m${session.shell} started in ${session.cwd}${os.EOL}\x1b[0m`],
       pending: "",
       pendingBytes: 0,
       flushTimer: null,
