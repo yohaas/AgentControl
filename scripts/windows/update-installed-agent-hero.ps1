@@ -23,6 +23,22 @@ function Write-UpdateLog {
   Add-Content -Path $logPath -Value $line
 }
 
+function Get-Sha256FileHash {
+  param([string]$Path)
+  $stream = [System.IO.File]::OpenRead($Path)
+  try {
+    $sha256 = [System.Security.Cryptography.SHA256]::Create()
+    try {
+      $bytes = $sha256.ComputeHash($stream)
+      return ([System.BitConverter]::ToString($bytes) -replace "-", "").ToLowerInvariant()
+    } finally {
+      $sha256.Dispose()
+    }
+  } finally {
+    $stream.Dispose()
+  }
+}
+
 function Stop-AgentHero {
   $task = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
   if ($task) {
@@ -86,7 +102,7 @@ $stageDir = Join-Path $downloadDir "stage"
 
 Write-UpdateLog "Downloading $assetUrl"
 Invoke-WebRequest -Uri $assetUrl -OutFile $zipPath -UseBasicParsing
-$actualHash = (Get-FileHash -Path $zipPath -Algorithm SHA256).Hash.ToLowerInvariant()
+$actualHash = Get-Sha256FileHash $zipPath
 $expectedHash = ([string]$asset.sha256).ToLowerInvariant()
 if ($actualHash -ne $expectedHash) {
   throw "Checksum mismatch. Expected $expectedHash but got $actualHash."

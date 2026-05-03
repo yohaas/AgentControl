@@ -20,6 +20,22 @@ $workDir = Join-Path $artifactsDir "agent-hero-$appVersion-$platform-$arch"
 $zipPath = Join-Path $artifactsDir "agent-hero-$appVersion-$platform-$arch.zip"
 $manifestPath = Join-Path $artifactsDir "manifest.json"
 
+function Get-Sha256FileHash {
+  param([string]$Path)
+  $stream = [System.IO.File]::OpenRead($Path)
+  try {
+    $sha256 = [System.Security.Cryptography.SHA256]::Create()
+    try {
+      $bytes = $sha256.ComputeHash($stream)
+      return ([System.BitConverter]::ToString($bytes) -replace "-", "").ToLowerInvariant()
+    } finally {
+      $sha256.Dispose()
+    }
+  } finally {
+    $stream.Dispose()
+  }
+}
+
 New-Item -ItemType Directory -Path $artifactsDir -Force | Out-Null
 if (Test-Path $workDir) { Remove-Item -LiteralPath $workDir -Recurse -Force }
 if (Test-Path $zipPath) { Remove-Item -LiteralPath $zipPath -Force }
@@ -74,7 +90,7 @@ try {
 }
 
 Compress-Archive -Path (Join-Path $workDir "*") -DestinationPath $zipPath -Force
-$hash = (Get-FileHash -Path $zipPath -Algorithm SHA256).Hash.ToLowerInvariant()
+$hash = Get-Sha256FileHash $zipPath
 $assetName = Split-Path -Leaf $zipPath
 $assetUrl = if ($ManifestBaseUrl.Trim()) { "$($ManifestBaseUrl.TrimEnd('/'))/$assetName" } else { $assetName }
 $manifest = [ordered]@{

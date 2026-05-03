@@ -15,22 +15,52 @@ $downloadDir = Join-Path $stateDir "installer"
 $logDir = Join-Path $stateDir "logs"
 $manifestPath = Join-Path $downloadDir "manifest.json"
 
+function Get-Sha256FileHash {
+  param([string]$Path)
+  $stream = [System.IO.File]::OpenRead($Path)
+  try {
+    $sha256 = [System.Security.Cryptography.SHA256]::Create()
+    try {
+      $bytes = $sha256.ComputeHash($stream)
+      return ([System.BitConverter]::ToString($bytes) -replace "-", "").ToLowerInvariant()
+    } finally {
+      $sha256.Dispose()
+    }
+  } finally {
+    $stream.Dispose()
+  }
+}
+
 New-Item -ItemType Directory -Path $resolvedInstallDir, $downloadDir, $logDir -Force | Out-Null
 
-Invoke-WebRequest -Uri $ManifestUrl -OutFile $manifestPath -UseBasicParsing
+$manifestIsLocal = Test-Path $ManifestUrl
+if ($manifestIsLocal) {
+  Copy-Item -LiteralPath $ManifestUrl -Destination $manifestPath -Force
+  $manifestBasePath = Split-Path -Parent (Resolve-Path $ManifestUrl).Path
+} else {
+  Invoke-WebRequest -Uri $ManifestUrl -OutFile $manifestPath -UseBasicParsing
+  $manifestBasePath = ""
+}
 $manifest = Get-Content -Raw -Path $manifestPath | ConvertFrom-Json
 $asset = $manifest.assets | Where-Object { $_.platform -eq "windows" -and (-not $_.arch -or $_.arch -eq "x64") } | Select-Object -First 1
 if (-not $asset) { throw "Manifest does not contain a Windows update asset." }
 
 $assetUrl = [string]$asset.url
-if (-not ([Uri]$assetUrl).IsAbsoluteUri) {
+if ($manifestIsLocal -and -not ([Uri]$assetUrl).IsAbsoluteUri) {
+  $assetUrl = Join-Path $manifestBasePath $assetUrl
+} elseif (-not ([Uri]$assetUrl).IsAbsoluteUri) {
   $assetUrl = [Uri]::new([Uri]$ManifestUrl, $assetUrl).AbsoluteUri
 }
-$zipPath = Join-Path $downloadDir (Split-Path -Leaf ([Uri]$assetUrl).LocalPath)
+$assetLeaf = if (Test-Path $assetUrl) { Split-Path -Leaf $assetUrl } else { Split-Path -Leaf ([Uri]$assetUrl).LocalPath }
+$zipPath = Join-Path $downloadDir $assetLeaf
 $stageDir = Join-Path $downloadDir "stage"
 
-Invoke-WebRequest -Uri $assetUrl -OutFile $zipPath -UseBasicParsing
-$actualHash = (Get-FileHash -Path $zipPath -Algorithm SHA256).Hash.ToLowerInvariant()
+if (Test-Path $assetUrl) {
+  Copy-Item -LiteralPath $assetUrl -Destination $zipPath -Force
+} else {
+  Invoke-WebRequest -Uri $assetUrl -OutFile $zipPath -UseBasicParsing
+}
+$actualHash = Get-Sha256FileHash $zipPath
 $expectedHash = ([string]$asset.sha256).ToLowerInvariant()
 if ($actualHash -ne $expectedHash) {
   throw "Checksum mismatch. Expected $expectedHash but got $actualHash."

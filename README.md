@@ -228,6 +228,18 @@ npm run bundle:windows
 
 The bundle script creates `artifacts\agent-hero-<version>-windows-<arch>.zip`, writes `version.json` into the bundle, and emits a `manifest.json` with the Windows asset URL, SHA256 checksum, version, release tag, commit SHA, platform, architecture, and build timestamp.
 
+To build a setup executable, pass either a hosted manifest URL for a small web bootstrapper or the local `artifacts\manifest.json` for an offline EXE that embeds the release ZIP:
+
+```powershell
+# Web bootstrapper
+npm run installer:windows -- -ManifestUrl "https://example.com/agent-hero/manifest.json"
+
+# Offline installer after npm run bundle:windows
+npm run installer:windows -- -ManifestUrl .\artifacts\manifest.json -OutputPath .\artifacts\AgentHeroSetup.exe
+```
+
+Both commands use Windows' built-in IExpress tool and write the setup executable under `artifacts\` by default.
+
 The installer downloads the manifest asset, verifies its checksum, installs to `%LocalAppData%\Programs\AgentHero` by default, registers a per-user Scheduled Task named `AgentHero` at logon, creates a desktop URL shortcut, and writes an uninstall entry under the current user. The Scheduled Task runs AgentHero as the interactive Windows user, which is required for the folder selector, OneDrive paths, user-scoped PATH entries, and Claude/Codex credentials to resolve correctly.
 
 Installed mode uses these scripts:

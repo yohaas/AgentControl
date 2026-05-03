@@ -11,6 +11,7 @@ build/
 out/
 coverage/
 *.tsbuildinfo
+/artifacts/
 
 # Environment and secrets
 .env
