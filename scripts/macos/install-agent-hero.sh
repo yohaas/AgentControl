@@ -112,10 +112,20 @@ cat > "$plist_path" <<PLIST
     <string>installed</string>
     <key>AGENTHERO_UPDATE_MANIFEST_URL</key>
     <string>$manifest_url</string>
+    <key>HOME</key>
+    <string>$HOME</string>
     <key>HOST</key>
     <string>127.0.0.1</string>
+    <key>LOGNAME</key>
+    <string>$(id -un)</string>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
     <key>PORT</key>
     <string>$port</string>
+    <key>SHELL</key>
+    <string>/bin/zsh</string>
+    <key>USER</key>
+    <string>$(id -un)</string>
   </dict>
   <key>RunAtLoad</key>
   <true/>

@@ -1,5 +1,5 @@
 import os from "node:os";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { nanoid } from "nanoid";
 import { spawn as spawnPty, type IPty } from "node-pty";
@@ -96,6 +96,15 @@ function bashSequence(commands: string[]): string {
   return lines.join(os.EOL);
 }
 
+function existingDirectory(candidate?: string): string | undefined {
+  if (!candidate) return undefined;
+  try {
+    return statSync(candidate).isDirectory() ? candidate : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function commandShell(commands: string[]): ShellSpec {
   if (process.platform === "win32") {
     const command = process.env.AGENT_HERO_SHELL?.trim() || process.env.AGENT_CONTROL_SHELL?.trim() || "powershell.exe";
@@ -111,7 +120,7 @@ function commandShell(commands: string[]): ShellSpec {
       args: ["/d", "/s", "/c", commands.map((item) => `(${item}) || exit /b %errorlevel%`).join(" && ")]
     };
   }
-  const command = process.env.AGENT_HERO_SHELL || process.env.AGENT_CONTROL_SHELL || process.env.SHELL || "bash";
+  const command = process.env.AGENT_HERO_SHELL || process.env.AGENT_CONTROL_SHELL || process.env.SHELL || (process.platform === "darwin" ? "/bin/zsh" : "bash");
   return {
     command,
     args: ["-lc", bashSequence(commands)]
@@ -149,7 +158,7 @@ function defaultShell(historyPath: string, project?: Project): ShellSpec {
       args: []
     };
   }
-  const command = process.env.AGENT_HERO_SHELL || process.env.AGENT_CONTROL_SHELL || process.env.SHELL || "bash";
+  const command = process.env.AGENT_HERO_SHELL || process.env.AGENT_CONTROL_SHELL || process.env.SHELL || (process.platform === "darwin" ? "/bin/zsh" : "bash");
   const existingPromptCommand = process.env.PROMPT_COMMAND;
   const promptCommand = existingPromptCommand
     ? `history -a; history -n; ${existingPromptCommand}`
@@ -193,7 +202,9 @@ export class TerminalManager {
     const commands = Array.isArray(options.commands) ? options.commands.map((command) => command.trim()).filter(Boolean) : [];
     const customCwd = options.cwd?.trim();
     const shell = commands.length ? commandShell(commands) : defaultShell(historyPathForProject(project?.id || projectId), project);
-    const cwd = project && isWslProject(project) ? wslProjectPath(project) : customCwd || project?.path || process.cwd();
+    const cwd = project && isWslProject(project)
+      ? wslProjectPath(project)
+      : existingDirectory(customCwd) || existingDirectory(project?.path) || existingDirectory(process.cwd()) || os.homedir();
     const timestamp = now();
     const session: TerminalSession = {
       id: nanoid(10),
