@@ -206,6 +206,12 @@ For a hosted bootstrap package, pass a hosted manifest URL:
 npm run installer:mac -- --manifest-url "https://example.com/agent-hero/manifest.json"
 ```
 
+If an older macOS installer left user files owned by root, repair the installed LaunchAgent, logs, and app launcher from the repo checkout:
+
+```bash
+bash ./scripts/macos/repair-installed-agent-hero.sh
+```
+
 ## Updates
 
 AgentHero has two update modes:
