@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-05-03
 
+- [abeca5f](https://github.com/yohaas/AgentHero/commit/abeca5f) Publish a small 0.1.17 platform-neutral patch to test installed updates.
 - [53b2353](https://github.com/yohaas/AgentHero/commit/53b2353) Reset release publishing to clean full installers and remove packaged patch updates.
 - [429a0a9](https://github.com/yohaas/AgentHero/commit/429a0a9) Add direct 0.1.16 patch assets for older installed versions.
 - [1b464f7](https://github.com/yohaas/AgentHero/commit/1b464f7) Publish the 0.1.16 platform-neutral app patch and keep full installers on the latest full bundle.
