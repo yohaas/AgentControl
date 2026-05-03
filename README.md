@@ -4,6 +4,21 @@ AgentHero is a local dashboard for running coding agents against your own projec
 
 ![AgentHero dashboard](docs/screenshots/dashboard.png)
 
+## Install
+
+Download an installer:
+
+- Windows: [AgentHeroSetup.exe](https://github.com/yohaas/AgentHero/raw/main/installer/AgentHeroSetup.exe)
+- macOS: [AgentHeroSetup.pkg](https://github.com/yohaas/AgentHero/raw/main/installer/AgentHeroSetup.pkg)
+
+After install, open AgentHero at:
+
+```text
+http://127.0.0.1:4317
+```
+
+The installers run AgentHero as the current desktop user so local project folders, PATH entries, Claude credentials, and Codex credentials come from your normal user profile. For source checkout setup, see [Manual Checkout Run](#manual-checkout-run).
+
 See [CHANGELOG.md](CHANGELOG.md) for release history.
 
 ## Top Features
@@ -15,7 +30,7 @@ See [CHANGELOG.md](CHANGELOG.md) for release history.
 - Run terminals in project folders with the same project switching model as agents.
 - Inspect Git status, incoming commits, unpushed commits, push, pull, fetch, and worktrees from the UI.
 - Use a mobile-friendly view for existing chats at `/mobile`.
-- Install locally on Windows with a setup EXE, or run manually from a checkout.
+- Install locally on Windows or macOS, or run manually from a checkout.
 
 AgentHero is designed for trusted local use. Keep it bound to `127.0.0.1` unless you intentionally configure access controls for another setup.
 
