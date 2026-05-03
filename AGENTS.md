@@ -6,3 +6,4 @@
 - After every update, say whether a browser refresh is enough or whether the server must restart.
 - Do not revert user changes unless explicitly asked.
 - Keep changes scoped to the requested behavior and existing project patterns.
+- Do not rebuild or recommit installer artifacts for routine app changes unless the user asks or the installer/update payload itself needs to change.

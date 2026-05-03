@@ -111,6 +111,7 @@ const POSIX_UPDATE_COMMANDS_LEGACY = ["bash ./scripts/update-agent-control.sh"];
 const LEGACY_UPDATE_COMMANDS = ["git pull", "npm ci", "npm run build", "Restart-Service AgentControl"];
 const LEGACY_BUILT_IN_AGENT_DIR = "~/.agent-control/built-in-agents";
 const LEGACY_REPO_RELATIVE_BUILT_IN_AGENT_DIR = ".agent-control/built-in-agents";
+const DEFAULT_RELEASE_MANIFEST_URL = "https://raw.githubusercontent.com/yohaas/AgentHero/main/installer/manifest.json";
 
 export function defaultUpdateCommands(platform = process.platform, installMode: AppInstallMode = "checkout"): string[] {
   if (platform === "win32" && installMode === "installed") return WINDOWS_INSTALLED_UPDATE_COMMANDS;
@@ -312,12 +313,21 @@ export function resolveInstallMode(config: DashboardConfig): AppInstallMode {
 }
 
 export function resolveUpdateManifestUrl(config: DashboardConfig): string | undefined {
-  const value = (process.env.AGENTHERO_UPDATE_MANIFEST_URL || config.updateManifestUrl || "").trim();
-  if (!value) return undefined;
-  if (resolveInstallMode(config) === "installed" && !/^https?:\/\//i.test(value) && !existsSync(expandHome(value))) {
-    return undefined;
+  const installMode = resolveInstallMode(config);
+  const candidates = [
+    process.env.AGENTHERO_UPDATE_MANIFEST_URL,
+    config.updateManifestUrl,
+    installMode === "installed" ? DEFAULT_RELEASE_MANIFEST_URL : undefined
+  ];
+  for (const candidate of candidates) {
+    const value = (candidate || "").trim();
+    if (!value) continue;
+    if (installMode === "installed" && !/^https?:\/\//i.test(value) && !existsSync(expandHome(value))) {
+      continue;
+    }
+    return value;
   }
-  return value;
+  return undefined;
 }
 
 export function resolveUpdateCommands(config: DashboardConfig): string[] {
