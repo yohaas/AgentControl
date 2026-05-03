@@ -111,14 +111,19 @@ The server serves `web/dist` directly in production-style mode.
 
 ## Windows Install
 
-Build a Windows release bundle and setup EXE:
+Use the checked-in installer:
+
+[installer/AgentHeroSetup.exe](installer/AgentHeroSetup.exe)
+
+To regenerate it, build a Windows release bundle and copy the setup EXE into `installer/`:
 
 ```powershell
 npm run bundle:windows
 npm run installer:windows -- -ManifestUrl .\artifacts\manifest.json -OutputPath .\artifacts\AgentHeroSetup.exe
+Copy-Item .\artifacts\AgentHeroSetup.exe .\installer\AgentHeroSetup.exe -Force
 ```
 
-The generated installer is:
+The generated build output also remains in the ignored artifacts folder:
 
 ```text
 artifacts\AgentHeroSetup.exe
