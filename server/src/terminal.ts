@@ -220,13 +220,14 @@ function defaultShell(historyPath: string, project?: Project): ShellSpec {
     };
   }
   const command = process.env.AGENT_HERO_SHELL || process.env.AGENT_CONTROL_SHELL || process.env.SHELL || (process.platform === "darwin" ? "/bin/zsh" : "bash");
+  const args = process.platform === "darwin" && shellName(command) === "zsh" ? ["-l"] : [];
   const existingPromptCommand = process.env.PROMPT_COMMAND;
   const promptCommand = existingPromptCommand
     ? `history -a; history -n; ${existingPromptCommand}`
     : "history -a; history -n";
   return {
     command,
-    args: [],
+    args,
     env: {
       HISTFILE: historyPath,
       HISTSIZE: "5000",
