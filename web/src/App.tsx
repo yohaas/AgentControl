@@ -109,6 +109,7 @@ import type {
   AgentEffort,
   AgentPermissionMode,
   AgentProvider,
+  AppInstallMode,
   AppUpdateStatus,
   ClaudePluginCatalog,
   DirectoryEntry,
@@ -4372,7 +4373,9 @@ function AppUpdateNotice({ compact = false, hideWhenNoUpdate = false }: { compac
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0 text-sm text-muted-foreground">
                 {loading
-                  ? "Checking GitHub..."
+                  ? status?.installMode === "installed"
+                    ? "Checking release manifest..."
+                    : "Checking GitHub..."
                   : status?.checkedAt
                     ? `Checked ${new Date(status.checkedAt).toLocaleString()}`
                     : updateAvailable
@@ -4384,6 +4387,29 @@ function AppUpdateNotice({ compact = false, hideWhenNoUpdate = false }: { compac
                 Refresh
               </Button>
             </div>
+
+            {status && (
+              <div className="grid gap-1 rounded-md border border-border p-2 text-xs">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-muted-foreground">Install mode</span>
+                  <span className="font-mono">{status.installMode}</span>
+                </div>
+                {status.localVersion?.version && (
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-muted-foreground">Current version</span>
+                    <span className="min-w-0 truncate font-mono" title={status.localVersion.commitSha}>
+                      {status.localVersion.releaseTag || status.localVersion.version}
+                    </span>
+                  </div>
+                )}
+                {status.latestVersion?.version && (
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-muted-foreground">Latest version</span>
+                    <span className="min-w-0 truncate font-mono">{status.latestVersion.releaseTag || status.latestVersion.version}</span>
+                  </div>
+                )}
+              </div>
+            )}
 
             {status?.isRepo && (
               <>
@@ -4439,6 +4465,16 @@ function AppUpdateNotice({ compact = false, hideWhenNoUpdate = false }: { compac
 
             {!status?.isRepo && status?.message && (
               <div className="rounded-md border border-border bg-muted p-3 text-sm text-muted-foreground">{status.message}</div>
+            )}
+
+            {status?.installMode === "installed" && status.updateAsset && (
+              <div className="grid gap-1">
+                <div className="text-xs font-medium text-muted-foreground">Release asset</div>
+                <div className="rounded-md border border-border bg-muted p-2 font-mono text-xs [overflow-wrap:anywhere]">
+                  <div>{status.updateAsset.url}</div>
+                  <div>sha256: {status.updateAsset.sha256}</div>
+                </div>
+              </div>
             )}
 
             <div className="grid gap-1">
@@ -7049,8 +7085,10 @@ function SettingsDialog() {
   const [permissionAllowRules, setPermissionAllowRules] = useState<PermissionAllowRule[]>(settings.permissionAllowRules || []);
   const [agentControlProjectPath, setAgentHeroProjectPath] = useState(settings.agentControlProjectPath || "");
   const [agentControlProjectBrowserOpen, setAgentHeroProjectBrowserOpen] = useState(false);
+  const [installMode, setInstallMode] = useState<AppInstallMode>(settings.installMode || "checkout");
   const [updateChecksEnabled, setUpdateChecksEnabled] = useState(settings.updateChecksEnabled !== false);
   const [updateCommandsText, setUpdateCommandsText] = useState((settings.updateCommands || []).join("\n"));
+  const [updateManifestUrl, setUpdateManifestUrl] = useState(settings.updateManifestUrl || "");
   const [checkingUpdates, setCheckingUpdates] = useState(false);
   const [settingsUpdateStatus, setSettingsUpdateStatus] = useState<AppUpdateStatus | undefined>();
   const [windowsServiceStatus, setWindowsServiceStatus] = useState("");
@@ -7096,8 +7134,10 @@ function SettingsDialog() {
     setNotificationPermission(typeof Notification === "undefined" ? "unsupported" : Notification.permission);
     setPermissionAllowRules(settings.permissionAllowRules || []);
     setAgentHeroProjectPath(settings.agentControlProjectPath || "");
+    setInstallMode(settings.installMode || "checkout");
     setUpdateChecksEnabled(settings.updateChecksEnabled !== false);
     setUpdateCommandsText((settings.updateCommands || []).join("\n"));
+    setUpdateManifestUrl(settings.updateManifestUrl || "");
     setSettingsUpdateStatus(undefined);
     setWindowsServiceStatus("");
   }, [open, settings]);
@@ -7145,7 +7185,9 @@ function SettingsDialog() {
         accessToken: accessToken.trim() || undefined,
         permissionAllowRules,
         agentControlProjectPath,
+        installMode,
         updateChecksEnabled,
+        updateManifestUrl,
         updateCommands: updateCommandsText.split(/\r?\n/).map((command) => command.trim()).filter(Boolean)
       } as SettingsState;
       const next = await api.saveSettings(submittedSettings);
@@ -7420,7 +7462,9 @@ function SettingsDialog() {
       Boolean(accessToken.trim()) ||
       permissionAllowRules.map(permissionAllowRuleKey).join("\n") !== (settings.permissionAllowRules || []).map(permissionAllowRuleKey).join("\n") ||
       agentControlProjectPath !== (settings.agentControlProjectPath || "") ||
+      installMode !== (settings.installMode || "checkout") ||
       updateChecksEnabled !== (settings.updateChecksEnabled !== false) ||
+      updateManifestUrl !== (settings.updateManifestUrl || "") ||
       updateCommandsText !== (settings.updateCommands || []).join("\n"),
     [
       anthropicApiKey,
@@ -7447,6 +7491,7 @@ function SettingsDialog() {
       inputNotificationsEnabled,
       accessToken,
       accessTokenEnabled,
+      installMode,
       menuDisplay,
       openaiAgentDir,
       openaiApiKey,
@@ -7460,6 +7505,7 @@ function SettingsDialog() {
       tileColumns,
       tileHeight,
       updateChecksEnabled,
+      updateManifestUrl,
       updateCommandsText
     ]
   );
@@ -7586,6 +7632,10 @@ function SettingsDialog() {
               isWindowsClient={isWindowsClient}
               onRunWindowsServiceScript={runWindowsServiceScript}
               windowsServiceStatus={windowsServiceStatus}
+              installMode={installMode}
+              setInstallMode={setInstallMode}
+              updateManifestUrl={updateManifestUrl}
+              setUpdateManifestUrl={setUpdateManifestUrl}
               updateCommandsText={updateCommandsText}
               setUpdateCommandsText={setUpdateCommandsText}
             />

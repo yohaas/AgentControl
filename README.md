@@ -217,9 +217,30 @@ If you already built the app and only want to start the server, use:
 npm run start:server
 ```
 
+## Windows Installed Mode
+
+Developer checkouts can keep using `git pull` updates. For a normal Windows install, build a release bundle and install from a release manifest instead:
+
+```powershell
+npm run bundle:windows
+.\scripts\windows\install-agent-hero.ps1 -ManifestUrl "https://example.com/agent-hero/manifest.json"
+```
+
+The bundle script creates `artifacts\agent-hero-<version>-windows-<arch>.zip`, writes `version.json` into the bundle, and emits a `manifest.json` with the Windows asset URL, SHA256 checksum, version, release tag, commit SHA, platform, architecture, and build timestamp.
+
+The installer downloads the manifest asset, verifies its checksum, installs to `%LocalAppData%\Programs\AgentHero` by default, registers a per-user Scheduled Task named `AgentHero` at logon, creates a desktop URL shortcut, and writes an uninstall entry under the current user. The Scheduled Task runs AgentHero as the interactive Windows user, which is required for the folder selector, OneDrive paths, user-scoped PATH entries, and Claude/Codex credentials to resolve correctly.
+
+Installed mode uses these scripts:
+
+- `scripts/windows/start-installed-agent-hero.ps1`: starts the bundled server with `AGENTHERO_INSTALL_MODE=installed`.
+- `scripts/windows/start-installed-update.ps1`: launches the installed updater through UAC.
+- `scripts/windows/update-installed-agent-hero.ps1`: downloads the latest bundle, verifies SHA256, stages it, stops AgentHero, swaps files, restarts, checks `/api/health`, and rolls back if startup fails.
+
+Set the release manifest URL with `AGENTHERO_UPDATE_MANIFEST_URL` or Settings > Updates > Release manifest URL. Settings > Updates also shows the install mode, current version/SHA, latest manifest version, matching release asset, and the configured update commands.
+
 ## Install As A Service
 
-Installing AgentHero as a service is optional, but it makes self-updates and restarts more predictable. Build once before installing the service:
+Installing AgentHero as a WinSW service is optional and mainly useful for advanced checkout installs. The polished Windows install path above should use the per-user Scheduled Task so AgentHero runs in the same Windows profile that owns your projects and CLI credentials. Build once before installing the service:
 
 ```bash
 npm install
@@ -351,11 +372,17 @@ For a system-wide Linux service, place the unit in `/etc/systemd/system/AgentHer
 
 ## App Updates
 
-AgentHero can check its GitHub repository on startup and show the update icon in the top bar. The update dialog runs the configured command list from the AgentHero project location in Settings.
+AgentHero has two update modes:
+
+- `checkout`: developer installs update from Git.
+- `installed`: release-bundle installs update from a manifest and local `version.json`.
+
+AgentHero can check for updates on startup and show the update icon in the top bar. The update dialog runs the configured command list from the AgentHero folder in Settings.
 
 Default update behavior is OS-specific:
 
-- Windows runs `scripts/windows/start-update.ps1`. If the `AgentHeroUpdate` scheduled task exists, the script starts that task so update output appears in the logged-in user's desktop session. If the task is missing, it falls back to an elevated PowerShell/UAC handoff. The updater runs `git pull`, stops the `AgentHero` service, runs `npm ci` and `npm run build`, then starts the service. This avoids Windows file locks on native modules such as `node-pty`.
+- Windows checkout mode runs `scripts/windows/start-update.ps1`. If the `AgentHeroUpdate` scheduled task exists, the script starts that task so update output appears in the logged-in user's desktop session. If the task is missing, it falls back to an elevated PowerShell/UAC handoff. The updater runs `git pull`, stops the `AgentHero` service, runs `npm ci` and `npm run build`, then starts the service. This avoids Windows file locks on native modules such as `node-pty`.
+- Windows installed mode runs `scripts/windows/start-installed-update.ps1`, then the installed updater downloads the manifest asset, verifies the SHA256 checksum, swaps the installed bundle, restarts the per-user Scheduled Task, health-checks `http://127.0.0.1:4317/api/health`, and rolls back if the health check fails.
 - macOS and Linux run `bash ./scripts/update-agent-hero.sh`. Unix filesystems generally allow replacing loaded files, so the script runs `git pull`, `npm ci`, and `npm run build`, then attempts to restart a detected service.
 
 Both updater scripts write logs to the system temp directory:

@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type {
   AgentSnapshot,
   AgentPermissionMode,
+  AppInstallMode,
   AutoApproveMode,
   Capabilities,
   ModelProfile,
@@ -52,8 +53,10 @@ export interface SettingsState {
   fileExplorerDock: FileExplorerDockPosition;
   themeMode: ThemeMode;
   agentControlProjectPath?: string;
+  installMode: AppInstallMode;
   updateChecksEnabled: boolean;
   updateCommands: string[];
+  updateManifestUrl?: string;
   inputNotificationsEnabled: boolean;
   externalEditor: ExternalEditor;
   externalEditorUrlTemplate?: string;
@@ -124,6 +127,9 @@ const REMOVED_QUEUE_TOMBSTONE_TTL_MS = 5 * 60 * 1000;
 const removedQueueMessageIds = new Map<string, number>();
 const WINDOWS_UPDATE_COMMANDS = [
   "powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\windows\\start-update.ps1"
+];
+const WINDOWS_INSTALLED_UPDATE_COMMANDS = [
+  "powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\windows\\start-installed-update.ps1"
 ];
 const PREVIOUS_WINDOWS_UPDATE_COMMANDS = [
   "$script = Join-Path (Get-Location) 'scripts\\update-agent-hero.ps1'; $command = \"Write-Host 'Starting AgentHero updater...'; & `\"$script`\"\"; Start-Process powershell -Verb RunAs -WorkingDirectory (Get-Location).Path -ArgumentList @('-NoExit', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', $command)"
@@ -409,8 +415,10 @@ const defaultSettings: SettingsState = {
   fileExplorerDock: "left",
   themeMode: "auto",
   agentControlProjectPath: "",
+  installMode: "checkout",
   updateChecksEnabled: true,
   updateCommands: defaultUpdateCommands(),
+  updateManifestUrl: "",
   inputNotificationsEnabled: false,
   externalEditor: "none",
   externalEditorUrlTemplate: "",
@@ -518,6 +526,8 @@ function normalizeSettings(settings: SettingsState): SettingsState {
     accessTokenSaved: settings.accessTokenSaved === true,
     gitFetchIntervalMinutes: clampNumber(settings.gitFetchIntervalMinutes, defaultSettings.gitFetchIntervalMinutes, 0, 1440),
     agentControlProjectPath: typeof settings.agentControlProjectPath === "string" ? settings.agentControlProjectPath : "",
+    installMode: settings.installMode === "installed" ? "installed" : "checkout",
+    updateManifestUrl: typeof settings.updateManifestUrl === "string" ? settings.updateManifestUrl : "",
     externalEditor,
     externalEditorUrlTemplate: typeof settings.externalEditorUrlTemplate === "string" ? settings.externalEditorUrlTemplate : "",
     updateCommands: (() => {

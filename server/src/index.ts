@@ -14,7 +14,9 @@ import type {
   Capabilities,
   AgentDef,
   AgentSnapshot,
+  AppUpdateAsset,
   AppUpdateStatus,
+  AppVersionMetadata,
   DirectoryEntry,
   GitChangedFile,
   GitStatus,
@@ -53,6 +55,7 @@ import {
   resolveFileExplorerDock,
   resolveGitFetchIntervalMinutes,
   resolveInputNotificationsEnabled,
+  resolveInstallMode,
   resolveModelProfiles,
   resolveModels,
   resolveMenuDisplay,
@@ -66,6 +69,7 @@ import {
   resolveTileHeight,
   resolveUpdateChecksEnabled,
   resolveUpdateCommands,
+  resolveUpdateManifestUrl,
   writeConfig,
   writeSecrets
 } from "./config.js";
@@ -842,6 +846,84 @@ async function fetchLatestGithubRelease(repo: string): Promise<AppUpdateStatus["
   };
 }
 
+interface AppUpdateManifest {
+  version?: string;
+  releaseTag?: string;
+  commitSha?: string;
+  platform?: string;
+  arch?: string;
+  builtAt?: string;
+  latest?: AppVersionMetadata;
+  releaseNotesUrl?: string;
+  assets?: AppUpdateAsset[];
+}
+
+function normalizeUpdatePlatform(platform = process.platform): string {
+  if (platform === "win32") return "windows";
+  if (platform === "darwin") return "macos";
+  return platform;
+}
+
+function compareVersionStrings(left: string, right: string): number {
+  const leftParts = left.replace(/^v/i, "").split(/[.-]/).map((part) => Number(part) || 0);
+  const rightParts = right.replace(/^v/i, "").split(/[.-]/).map((part) => Number(part) || 0);
+  const length = Math.max(leftParts.length, rightParts.length);
+  for (let index = 0; index < length; index += 1) {
+    const delta = (leftParts[index] || 0) - (rightParts[index] || 0);
+    if (delta !== 0) return delta;
+  }
+  return 0;
+}
+
+function manifestVersion(manifest: AppUpdateManifest): AppVersionMetadata | undefined {
+  if (manifest.latest?.version) return manifest.latest;
+  if (!manifest.version) return undefined;
+  return {
+    version: manifest.version,
+    releaseTag: manifest.releaseTag,
+    commitSha: manifest.commitSha,
+    platform: manifest.platform,
+    arch: manifest.arch,
+    builtAt: manifest.builtAt
+  };
+}
+
+async function readLocalVersionMetadata(): Promise<AppVersionMetadata | undefined> {
+  const versionPath = path.join(appRoot, "version.json");
+  const rawVersion = await readFile(versionPath, "utf8").catch(() => "");
+  if (rawVersion.trim()) {
+    const parsed = JSON.parse(rawVersion) as AppVersionMetadata;
+    if (parsed.version) return parsed;
+  }
+
+  const packagePath = path.join(appRoot, "package.json");
+  const rawPackage = await readFile(packagePath, "utf8").catch(() => "");
+  if (!rawPackage.trim()) return undefined;
+  const parsedPackage = JSON.parse(rawPackage) as { version?: string };
+  return parsedPackage.version ? { version: parsedPackage.version } : undefined;
+}
+
+async function fetchUpdateManifest(manifestUrl: string): Promise<AppUpdateManifest> {
+  const response = await fetch(manifestUrl, {
+    headers: {
+      Accept: "application/json",
+      "User-Agent": "AgentHero update checker"
+    }
+  });
+  if (!response.ok) throw new Error(`Update manifest returned ${response.status}.`);
+  return (await response.json()) as AppUpdateManifest;
+}
+
+function selectUpdateAsset(assets: AppUpdateAsset[] | undefined): AppUpdateAsset | undefined {
+  const expectedPlatform = normalizeUpdatePlatform();
+  const expectedArch = process.arch;
+  return assets?.find((asset) => {
+    const platform = asset.platform.toLowerCase();
+    const arch = asset.arch?.toLowerCase();
+    return platform === expectedPlatform && (!arch || arch === expectedArch);
+  });
+}
+
 async function gitRefExists(target: string, ref: string): Promise<boolean> {
   return gitCommand(target, ["rev-parse", "--verify", "--quiet", ref])
     .then(() => true)
@@ -856,10 +938,64 @@ async function gitRefIsAncestor(target: string, ancestor: string, descendant: st
 
 async function appUpdateStatus(): Promise<AppUpdateStatus> {
   const checkedAt = new Date().toISOString();
+  const installMode = resolveInstallMode(config);
+  const localVersion = await readLocalVersionMetadata().catch(() => undefined);
+
+  if (installMode === "installed") {
+    const manifestUrl = resolveUpdateManifestUrl(config);
+    if (!manifestUrl) {
+      return {
+        installMode,
+        isRepo: false,
+        checkedAt,
+        localVersion,
+        releaseAvailable: false,
+        updateAvailable: false,
+        commits: [],
+        message: "Installed update checks need AGENTHERO_UPDATE_MANIFEST_URL or an update manifest URL in Settings."
+      };
+    }
+
+    try {
+      const manifest = await fetchUpdateManifest(manifestUrl);
+      const latestVersion = manifestVersion(manifest);
+      const updateAsset = selectUpdateAsset(manifest.assets);
+      const releaseAvailable = Boolean(
+        latestVersion?.version &&
+          localVersion?.version &&
+          compareVersionStrings(latestVersion.version, localVersion.version) > 0
+      );
+      return {
+        installMode,
+        isRepo: false,
+        checkedAt,
+        localVersion,
+        latestVersion,
+        updateAsset,
+        releaseNotesUrl: manifest.releaseNotesUrl,
+        releaseAvailable,
+        updateAvailable: releaseAvailable && Boolean(updateAsset),
+        commits: [],
+        message: updateAsset || !releaseAvailable ? undefined : "A newer release exists, but this platform has no matching update asset."
+      };
+    } catch (error) {
+      return {
+        installMode,
+        isRepo: false,
+        checkedAt,
+        localVersion,
+        releaseAvailable: false,
+        updateAvailable: false,
+        commits: [],
+        message: error instanceof Error ? error.message : String(error)
+      };
+    }
+  }
+
   try {
     const isRepo = (await gitCommand(appRoot, ["rev-parse", "--is-inside-work-tree"])).trim() === "true";
     if (!isRepo) {
-      return { isRepo: false, checkedAt, releaseAvailable: false, updateAvailable: false, commits: [], message: "AgentHero is not running from a Git repository." };
+      return { installMode, isRepo: false, checkedAt, localVersion, releaseAvailable: false, updateAvailable: false, commits: [], message: "AgentHero is not running from a Git repository." };
     }
 
     const remoteUrl = (await gitCommand(appRoot, ["remote", "get-url", "origin"])).trim();
@@ -876,8 +1012,10 @@ async function appUpdateStatus(): Promise<AppUpdateStatus> {
     const latestRelease = githubRepo ? await fetchLatestGithubRelease(githubRepo) : undefined;
     const releaseAvailable = latestRelease ? !(await gitRefIsAncestor(appRoot, latestRelease.tagName, "HEAD")) : false;
     return {
+      installMode,
       isRepo: true,
       checkedAt,
+      localVersion,
       currentHash,
       branch,
       upstream: compareRef,
@@ -890,8 +1028,10 @@ async function appUpdateStatus(): Promise<AppUpdateStatus> {
     };
   } catch (error) {
     return {
+      installMode,
       isRepo: false,
       checkedAt,
+      localVersion,
       releaseAvailable: false,
       updateAvailable: false,
       commits: [],
@@ -2165,8 +2305,10 @@ app.get("/api/settings", (_request, response) => {
     fileExplorerDock: resolveFileExplorerDock(config),
     themeMode: resolveThemeMode(config),
     agentControlProjectPath: resolveAgentHeroProjectPath(config),
+    installMode: resolveInstallMode(config),
     updateChecksEnabled: resolveUpdateChecksEnabled(config),
     updateCommands: resolveUpdateCommands(config),
+    updateManifestUrl: resolveUpdateManifestUrl(config) || "",
     inputNotificationsEnabled: resolveInputNotificationsEnabled(config),
     externalEditor: resolveExternalEditor(config),
     externalEditorUrlTemplate: config.externalEditorUrlTemplate || "",
@@ -2284,8 +2426,10 @@ app.put("/api/settings", async (request, response) => {
     themeMode: resolveThemeMode(body.themeMode ? body : config),
     agentControlProjectPath:
       typeof body.agentControlProjectPath === "string" ? body.agentControlProjectPath.trim() : resolveAgentHeroProjectPath(config),
+    installMode: body.installMode === "installed" || body.installMode === "checkout" ? body.installMode : resolveInstallMode(config),
     updateChecksEnabled: typeof body.updateChecksEnabled === "boolean" ? body.updateChecksEnabled : resolveUpdateChecksEnabled(config),
     updateCommands: Array.isArray(body.updateCommands) ? body.updateCommands.map((command) => command.trim()).filter(Boolean) : config.updateCommands,
+    updateManifestUrl: typeof body.updateManifestUrl === "string" ? body.updateManifestUrl.trim() : resolveUpdateManifestUrl(config),
     inputNotificationsEnabled:
       typeof body.inputNotificationsEnabled === "boolean" ? body.inputNotificationsEnabled : resolveInputNotificationsEnabled(config),
     externalEditor: resolveExternalEditor(body.externalEditor ? body : config),
@@ -2344,8 +2488,10 @@ app.put("/api/settings", async (request, response) => {
     fileExplorerDock: resolveFileExplorerDock(config),
     themeMode: resolveThemeMode(config),
     agentControlProjectPath: resolveAgentHeroProjectPath(config),
+    installMode: resolveInstallMode(config),
     updateChecksEnabled: resolveUpdateChecksEnabled(config),
     updateCommands: resolveUpdateCommands(config),
+    updateManifestUrl: resolveUpdateManifestUrl(config) || "",
     inputNotificationsEnabled: resolveInputNotificationsEnabled(config),
     externalEditor: resolveExternalEditor(config),
     externalEditorUrlTemplate: config.externalEditorUrlTemplate || "",

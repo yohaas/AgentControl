@@ -214,15 +214,39 @@ export interface AppUpdateRelease {
   publishedAt?: string;
 }
 
+export type AppInstallMode = "checkout" | "installed";
+
+export interface AppVersionMetadata {
+  version: string;
+  releaseTag?: string;
+  commitSha?: string;
+  platform?: string;
+  arch?: string;
+  builtAt?: string;
+}
+
+export interface AppUpdateAsset {
+  platform: string;
+  arch?: string;
+  url: string;
+  sha256: string;
+  size?: number;
+}
+
 export interface AppUpdateStatus {
+  installMode: AppInstallMode;
   isRepo: boolean;
   checkedAt: string;
+  localVersion?: AppVersionMetadata;
   currentHash?: string;
   branch?: string;
   upstream?: string;
   remoteUrl?: string;
   githubRepo?: string;
   latestRelease?: AppUpdateRelease;
+  latestVersion?: AppVersionMetadata;
+  updateAsset?: AppUpdateAsset;
+  releaseNotesUrl?: string;
   releaseAvailable: boolean;
   updateAvailable: boolean;
   commits: AppUpdateCommit[];

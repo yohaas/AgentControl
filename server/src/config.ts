@@ -2,7 +2,7 @@ import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import type { AgentPermissionMode, AutoApproveMode, ModelProfile, PermissionAllowRule } from "@agent-hero/shared";
+import type { AgentPermissionMode, AppInstallMode, AutoApproveMode, ModelProfile, PermissionAllowRule } from "@agent-hero/shared";
 import { migrateLegacyStateDir, statePath } from "./storage.js";
 
 export const DEFAULT_MODELS = [
@@ -65,6 +65,8 @@ export interface DashboardConfig {
   agentControlProjectPath?: string;
   updateChecksEnabled?: boolean;
   updateCommands?: string[];
+  updateManifestUrl?: string;
+  installMode?: AppInstallMode;
   inputNotificationsEnabled?: boolean;
   externalEditor?: ExternalEditor;
   externalEditorUrlTemplate?: string;
@@ -88,6 +90,9 @@ export const DEFAULT_BUILT_IN_AGENT_DIR = path.join(APP_ROOT, ".agent-hero", "bu
 const WINDOWS_UPDATE_COMMANDS = [
   "powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\windows\\start-update.ps1"
 ];
+const WINDOWS_INSTALLED_UPDATE_COMMANDS = [
+  "powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\windows\\start-installed-update.ps1"
+];
 const PREVIOUS_WINDOWS_UPDATE_COMMANDS = [
   "$script = Join-Path (Get-Location) 'scripts\\update-agent-hero.ps1'; $command = \"Write-Host 'Starting AgentHero updater...'; & `\"$script`\"\"; Start-Process powershell -Verb RunAs -WorkingDirectory (Get-Location).Path -ArgumentList @('-NoExit', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', $command)"
 ];
@@ -106,7 +111,8 @@ const LEGACY_UPDATE_COMMANDS = ["git pull", "npm ci", "npm run build", "Restart-
 const LEGACY_BUILT_IN_AGENT_DIR = "~/.agent-control/built-in-agents";
 const LEGACY_REPO_RELATIVE_BUILT_IN_AGENT_DIR = ".agent-control/built-in-agents";
 
-export function defaultUpdateCommands(platform = process.platform): string[] {
+export function defaultUpdateCommands(platform = process.platform, installMode: AppInstallMode = "checkout"): string[] {
+  if (platform === "win32" && installMode === "installed") return WINDOWS_INSTALLED_UPDATE_COMMANDS;
   return platform === "win32" ? WINDOWS_UPDATE_COMMANDS : POSIX_UPDATE_COMMANDS;
 }
 
@@ -299,6 +305,15 @@ export function resolveAgentHeroProjectPath(config: DashboardConfig): string {
   return path.resolve(expandHome(config.agentControlProjectPath?.trim() || process.env.AGENTHERO_PROJECT_PATH || process.env.AGENTCONTROL_PROJECT_PATH || APP_ROOT));
 }
 
+export function resolveInstallMode(config: DashboardConfig): AppInstallMode {
+  const value = (process.env.AGENTHERO_INSTALL_MODE || config.installMode || "").trim().toLowerCase();
+  return value === "installed" ? "installed" : "checkout";
+}
+
+export function resolveUpdateManifestUrl(config: DashboardConfig): string | undefined {
+  return (process.env.AGENTHERO_UPDATE_MANIFEST_URL || config.updateManifestUrl || "").trim() || undefined;
+}
+
 export function resolveUpdateCommands(config: DashboardConfig): string[] {
   const commands = Array.isArray(config.updateCommands) ? config.updateCommands : [];
   const normalized = commands.map((command) => command.trim()).filter(Boolean);
@@ -314,7 +329,7 @@ export function resolveUpdateCommands(config: DashboardConfig): string[] {
   ) {
     return normalized;
   }
-  return defaultUpdateCommands();
+  return defaultUpdateCommands(process.platform, resolveInstallMode(config));
 }
 
 export function resolveUpdateChecksEnabled(config: DashboardConfig): boolean {
