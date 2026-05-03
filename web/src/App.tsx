@@ -4292,9 +4292,13 @@ function AppUpdateNotice({ compact = false, hideWhenNoUpdate = false }: { compac
   const [loading, setLoading] = useState(false);
   const [updateRun, setUpdateRun] = useState<{ requestId: string; commands: string[] }>();
   const installedMode = status?.installMode === "installed" || settings.installMode === "installed";
+  const installedUpdateManifestUrl = (settings.updateManifestUrl || "").trim();
+  const quotePowerShellValue = (value: string) => `"${value.replace(/[`"$]/g, (match) => `\`${match}`)}"`;
   const effectiveUpdateCommands =
-    installedMode && (settings.updateCommands || []).join("\n") === "powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\windows\\start-update.ps1"
-      ? ["powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\windows\\start-installed-update.ps1"]
+    installedMode
+      ? installedUpdateManifestUrl
+        ? [`powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\windows\\start-installed-update.ps1 -ManifestUrl ${quotePowerShellValue(installedUpdateManifestUrl)}`]
+        : []
       : settings.updateCommands || [];
 
   useEffect(() => {
@@ -4339,7 +4343,7 @@ function AppUpdateNotice({ compact = false, hideWhenNoUpdate = false }: { compac
     sendCommand({
       type: "terminalStart",
       requestId,
-      cwd: settings.agentControlProjectPath?.trim() || undefined,
+      cwd: installedMode ? undefined : settings.agentControlProjectPath?.trim() || undefined,
       commands,
       hidden: true,
       title: "Update AgentHero"
@@ -4466,6 +4470,12 @@ function AppUpdateNotice({ compact = false, hideWhenNoUpdate = false }: { compac
 
             {!status?.isRepo && status?.message && (
               <div className="rounded-md border border-border bg-muted p-3 text-sm text-muted-foreground">{status.message}</div>
+            )}
+
+            {installedMode && !installedUpdateManifestUrl && (
+              <div className="rounded-md border border-border bg-muted p-3 text-sm text-muted-foreground">
+                Add a release manifest URL in Settings before running installed updates.
+              </div>
             )}
 
             {status?.installMode === "installed" && status.updateAsset && (

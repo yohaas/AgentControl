@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -311,7 +312,12 @@ export function resolveInstallMode(config: DashboardConfig): AppInstallMode {
 }
 
 export function resolveUpdateManifestUrl(config: DashboardConfig): string | undefined {
-  return (process.env.AGENTHERO_UPDATE_MANIFEST_URL || config.updateManifestUrl || "").trim() || undefined;
+  const value = (process.env.AGENTHERO_UPDATE_MANIFEST_URL || config.updateManifestUrl || "").trim();
+  if (!value) return undefined;
+  if (resolveInstallMode(config) === "installed" && !/^https?:\/\//i.test(value) && !existsSync(expandHome(value))) {
+    return undefined;
+  }
+  return value;
 }
 
 export function resolveUpdateCommands(config: DashboardConfig): string[] {

@@ -117,6 +117,7 @@ if ($manifestIsLocal) {
 }
 $manifest = Get-Content -Raw -Path $manifestPath | ConvertFrom-Json
 Write-InstallDetail "Version: $($manifest.version)"
+$startupManifestUrl = if ($manifestIsLocal) { "" } else { $ManifestUrl.Trim() }
 $asset = $manifest.assets | Where-Object { $_.platform -eq "windows" -and (-not $_.arch -or $_.arch -eq "x64") } | Select-Object -First 1
 if (-not $asset) { throw "Manifest does not contain a Windows update asset." }
 
@@ -159,7 +160,8 @@ Copy-Item -Path (Join-Path $stageDir "*") -Destination $resolvedInstallDir -Recu
 
 Write-InstallStep "Registering startup task"
 $startScript = Join-Path $resolvedInstallDir "scripts\windows\start-installed-agent-hero.ps1"
-$action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$startScript`" -InstallDir `"$resolvedInstallDir`" -ManifestUrl `"$ManifestUrl`" -Port $Port"
+$startupManifestArg = if ($startupManifestUrl) { " -ManifestUrl `"$startupManifestUrl`"" } else { "" }
+$action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$startScript`" -InstallDir `"$resolvedInstallDir`"$startupManifestArg -Port $Port"
 $trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
 $principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive -RunLevel Limited
 $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Hours 0)

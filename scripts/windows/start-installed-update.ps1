@@ -26,8 +26,9 @@ $args = @(
   "-InstallDir",
   $resolvedInstallDir
 )
-if ($ManifestUrl.Trim()) {
-  $args += @("-ManifestUrl", $ManifestUrl.Trim())
+$resolvedManifestUrl = if ($ManifestUrl.Trim()) { $ManifestUrl.Trim() } elseif ($env:AGENTHERO_UPDATE_MANIFEST_URL) { $env:AGENTHERO_UPDATE_MANIFEST_URL.Trim() } else { "" }
+if ($resolvedManifestUrl) {
+  $args += @("-ManifestUrl", $resolvedManifestUrl)
 }
 
 Start-Process powershell -Verb RunAs -WorkingDirectory $tempScriptDir -ArgumentList $args
