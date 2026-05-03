@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-05-03
 
+- [ebbc432](https://github.com/yohaas/AgentHero/commit/ebbc432) Build the Windows setup executable with a graphical Inno Setup wizard.
 - [22a383c](https://github.com/yohaas/AgentHero/commit/22a383c) Open a dedicated visible PowerShell setup progress window from the Windows installer.
 
 ## 2026-05-02
