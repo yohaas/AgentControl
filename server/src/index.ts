@@ -992,7 +992,7 @@ async function appUpdateStatus(): Promise<AppUpdateStatus> {
         updateAvailable: releaseAvailable && Boolean(updateAsset),
         commits: [],
         message: manifestOlder
-          ? "The configured update manifest is older than this install."
+          ? "Your installed version is newer than the update manifest."
           : updateAsset || !releaseAvailable ? undefined : "A newer release exists, but this platform has no matching update asset."
       };
     } catch (error) {
