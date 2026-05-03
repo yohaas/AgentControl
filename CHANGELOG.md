@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-05-03
 
+- [d4095a6](https://github.com/yohaas/AgentHero/commit/d4095a6) Show a clear update availability banner in the update dialog.
 - [867b6be](https://github.com/yohaas/AgentHero/commit/867b6be) Prefer installed update version comparisons over commit SHA once versions are known.
 - [a8f485f](https://github.com/yohaas/AgentHero/commit/a8f485f) Support platform-neutral installed update patches with patch/full manifest assets.
 - [edd5599](https://github.com/yohaas/AgentHero/commit/edd5599) Read installed version metadata from the runtime root and label the update dialog installed version.
