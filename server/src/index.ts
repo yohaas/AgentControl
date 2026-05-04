@@ -1639,6 +1639,58 @@ function openWindowsFileChooser(filePath: string): Promise<void> {
   return spawnDetached("rundll32.exe", ["shell32.dll,OpenAs_RunDLL", filePath]);
 }
 
+function pickNativeDirectory(initialPath?: string): Promise<string | undefined> {
+  const resolvedInitialPath = initialPath ? path.resolve(expandHome(initialPath)) : os.homedir();
+  if (process.platform === "win32") {
+    const script = [
+      "Add-Type -AssemblyName System.Windows.Forms",
+      "$dialog = New-Object System.Windows.Forms.FolderBrowserDialog",
+      "$dialog.Description = 'Select Folder'",
+      "$dialog.ShowNewFolderButton = $true",
+      "$initial = $env:AGENTHERO_PICK_DIRECTORY_INITIAL",
+      "if ($initial -and (Test-Path -LiteralPath $initial -PathType Container)) { $dialog.SelectedPath = $initial }",
+      "if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { [Console]::Out.WriteLine($dialog.SelectedPath) }"
+    ].join("; ");
+    return new Promise((resolve, reject) => {
+      execFile(
+        "powershell.exe",
+        ["-NoProfile", "-STA", "-ExecutionPolicy", "Bypass", "-Command", script],
+        { env: { ...process.env, AGENTHERO_PICK_DIRECTORY_INITIAL: resolvedInitialPath }, windowsHide: false },
+        (error, stdout, stderr) => {
+          if (error) {
+            reject(new Error(stderr.trim() || error.message || "Folder picker failed."));
+            return;
+          }
+          resolve(stdout.trim() || undefined);
+        }
+      );
+    });
+  }
+
+  if (process.platform === "darwin") {
+    const script = `POSIX path of (choose folder default location POSIX file "${resolvedInitialPath.replace(/"/g, '\\"')}")`;
+    return new Promise((resolve, reject) => {
+      execFile("osascript", ["-e", script], { windowsHide: true }, (error, stdout, stderr) => {
+        if (error) {
+          reject(new Error(stderr.trim() || error.message || "Folder picker failed."));
+          return;
+        }
+        resolve(stdout.trim() || undefined);
+      });
+    });
+  }
+
+  return new Promise((resolve, reject) => {
+    execFile("zenity", ["--file-selection", "--directory", "--filename", `${resolvedInitialPath}${path.sep}`], { windowsHide: true }, (error, stdout, stderr) => {
+      if (error) {
+        reject(new Error(stderr.trim() || error.message || "Folder picker failed."));
+        return;
+      }
+      resolve(stdout.trim() || undefined);
+    });
+  });
+}
+
 function openWithDefaultApp(filePath: string, options: { file?: boolean; openWith?: boolean } = {}): Promise<void> {
   if (process.platform === "win32") {
     if (options.openWith) return openWindowsFileChooser(filePath);
@@ -2304,6 +2356,25 @@ app.get("/api/filesystem/directories", async (request, response) => {
       roots,
       entries: directories
     });
+  } catch (error) {
+    response.status(500).json({ error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+app.post("/api/filesystem/pick-directory", async (request, response) => {
+  const initialPath = typeof request.body?.initialPath === "string" ? request.body.initialPath.trim() : "";
+  try {
+    const selectedPath = await pickNativeDirectory(initialPath || undefined);
+    if (!selectedPath) {
+      response.json({});
+      return;
+    }
+    const info = await stat(selectedPath);
+    if (!info.isDirectory()) {
+      response.status(400).json({ error: "Selected path is not a directory." });
+      return;
+    }
+    response.json({ path: selectedPath });
   } catch (error) {
     response.status(500).json({ error: error instanceof Error ? error.message : String(error) });
   }

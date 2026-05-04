@@ -225,6 +225,12 @@ export const api = {
     const query = params.toString();
     return json<DirectoryListing>(`/api/filesystem/directories${query ? `?${query}` : ""}`);
   },
+  pickDirectory: (initialPath?: string) =>
+    json<{ path?: string }>("/api/filesystem/pick-directory", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ initialPath })
+    }),
   wslDistros: () => json<{ defaultDistro: string; distros: string[] }>("/api/wsl/distros"),
   openFile: (path: string, mode?: "containingFolder" | "openWith") =>
     json<{ ok: boolean }>("/api/filesystem/open", {

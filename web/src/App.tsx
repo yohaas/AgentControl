@@ -5042,10 +5042,14 @@ function WorktreesDialog({ projectId }: { projectId?: string }) {
                     }}
                     placeholder={suggestedWorktreePath || "Choose a worktree folder"}
                   />
-                  <Button type="button" variant="outline" onClick={() => setBrowserOpen(true)}>
-                    <FolderOpen className="h-4 w-4" />
-                    Browse
-                  </Button>
+                  <FolderPickerButton
+                    initialPath={effectiveWorktreePath || selectedProject?.path || ""}
+                    onSelect={(selectedPath) => {
+                      setPathEdited(true);
+                      setPathText(selectedPath);
+                    }}
+                    onFallbackOpen={() => setBrowserOpen(true)}
+                  />
                 </div>
                 {effectiveWorktreePath && (
                   <span className="break-all font-mono text-xs text-muted-foreground" title={effectiveWorktreePath}>
@@ -5283,10 +5287,16 @@ function AddProjectDialog({
                         if (event.key === "Enter") void addProject();
                       }}
                     />
-                    <Button type="button" variant="outline" onClick={() => setBrowserOpen(true)}>
-                      <FolderOpen className="h-4 w-4" />
-                      Browse
-                    </Button>
+                    <FolderPickerButton
+                      initialPath={wslPath || "/home"}
+                      runtime="wsl"
+                      wslDistro={wslDistro.trim() || "Ubuntu"}
+                      onSelect={(selectedPath) => {
+                        setWslPath(selectedPath);
+                        setPath("");
+                      }}
+                      onFallbackOpen={() => setBrowserOpen(true)}
+                    />
                   </div>
                 </label>
               </div>
@@ -5304,10 +5314,11 @@ function AddProjectDialog({
                     if (event.key === "Enter") void addProject();
                   }}
                 />
-                <Button type="button" variant="outline" onClick={() => setBrowserOpen(true)}>
-                  <FolderOpen className="h-4 w-4" />
-                  Browse
-                </Button>
+                <FolderPickerButton
+                  initialPath={path}
+                  onSelect={setPath}
+                  onFallbackOpen={() => setBrowserOpen(true)}
+                />
               </div>
             </label>
           )}
@@ -5334,6 +5345,47 @@ function AddProjectDialog({
         }}
       />
     </Dialog>
+  );
+}
+
+function FolderPickerButton({
+  initialPath,
+  runtime = "local",
+  wslDistro,
+  onSelect,
+  onFallbackOpen
+}: {
+  initialPath?: string;
+  runtime?: "local" | "wsl";
+  wslDistro?: string;
+  onSelect: (path: string) => void;
+  onFallbackOpen: () => void;
+}) {
+  const addError = useAppStore((state) => state.addError);
+  const [picking, setPicking] = useState(false);
+
+  async function browse() {
+    if (runtime === "wsl") {
+      onFallbackOpen();
+      return;
+    }
+    setPicking(true);
+    try {
+      const result = await api.pickDirectory(initialPath);
+      if (result.path) onSelect(result.path);
+    } catch (error) {
+      addError(error instanceof Error ? error.message : String(error));
+      onFallbackOpen();
+    } finally {
+      setPicking(false);
+    }
+  }
+
+  return (
+    <Button type="button" variant="outline" onClick={() => void browse()} disabled={picking} title={runtime === "wsl" ? `Browse ${wslDistro || "WSL"} folders` : "Browse folders"}>
+      {picking ? <Loader2 className="h-4 w-4 animate-spin" /> : <FolderOpen className="h-4 w-4" />}
+      Browse
+    </Button>
   );
 }
 
@@ -5576,10 +5628,11 @@ function PluginManagementPanel({ provider }: { provider: Extract<AgentProvider, 
               onChange={(event) => setMarketplaceSource(event.target.value)}
               placeholder="GitHub repo, URL, or local marketplace path"
             />
-            <Button variant="outline" onClick={() => setMarketplaceBrowserOpen(true)}>
-              <FolderOpen className="h-4 w-4" />
-              Browse
-            </Button>
+            <FolderPickerButton
+              initialPath={marketplaceSource}
+              onSelect={setMarketplaceSource}
+              onFallbackOpen={() => setMarketplaceBrowserOpen(true)}
+            />
             <Button disabled={!marketplaceSource.trim() || addingMarketplace} onClick={addMarketplace}>
               <Plus className="h-4 w-4" />
               Add
@@ -7927,7 +7980,14 @@ function SettingsDialog() {
               accessToken={accessToken}
               setAccessToken={setAccessToken}
               importInputRef={importInputRef}
-              onAddProjectFolder={() => setProjectFolderBrowserOpen(true)}
+              onAddProjectFolder={() =>
+                void api.pickDirectory(selectedProject?.path || projectPaths[projectPaths.length - 1] || "").then((result) => {
+                  if (result.path) addProjectPath(result.path);
+                }).catch((error: unknown) => {
+                  addError(error instanceof Error ? error.message : String(error));
+                  setProjectFolderBrowserOpen(true);
+                })
+              }
               onExportConfig={exportConfig}
               onImportConfig={(file) => void importConfig(file)}
             />
@@ -7971,7 +8031,14 @@ function SettingsDialog() {
               onCheckUpdatesNow={() => void checkAppUpdatesNow()}
               agentControlProjectPath={agentControlProjectPath}
               setAgentHeroProjectPath={setAgentHeroProjectPath}
-              onBrowseProjectPath={() => setAgentHeroProjectBrowserOpen(true)}
+              onBrowseProjectPath={() =>
+                void api.pickDirectory(agentControlProjectPath || selectedProject?.path || "").then((result) => {
+                  if (result.path) setAgentHeroProjectPath(result.path);
+                }).catch((error: unknown) => {
+                  addError(error instanceof Error ? error.message : String(error));
+                  setAgentHeroProjectBrowserOpen(true);
+                })
+              }
               isWindowsClient={isWindowsClient}
               onRunWindowsServiceScript={runWindowsServiceScript}
               windowsServiceStatus={windowsServiceStatus}
@@ -7992,10 +8059,11 @@ function SettingsDialog() {
                 </div>
                 <div className="flex gap-2">
                   <Input value={builtInAgentDir} onChange={(event) => setBuiltInAgentDir(event.target.value)} placeholder={DEFAULT_BUILT_IN_AGENT_DIR} />
-                  <Button type="button" variant="outline" onClick={() => setAgentDirBrowser("builtIn")}>
-                    <FolderOpen className="h-4 w-4" />
-                    Browse
-                  </Button>
+                  <FolderPickerButton
+                    initialPath={builtInAgentDir}
+                    onSelect={(selectedPath) => setAgentDir("builtIn", selectedPath)}
+                    onFallbackOpen={() => setAgentDirBrowser("builtIn")}
+                  />
                 </div>
                 {builtInDirectoryDirty && (
                   <p className="rounded-md border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
@@ -8102,10 +8170,11 @@ function SettingsDialog() {
                 Claude agents directory
                 <div className="flex gap-2">
                   <Input value={claudeAgentDir} onChange={(event) => setClaudeAgentDir(event.target.value)} placeholder=".claude/agents" />
-                  <Button type="button" variant="outline" onClick={() => setAgentDirBrowser("claude")}>
-                    <FolderOpen className="h-4 w-4" />
-                    Browse
-                  </Button>
+                  <FolderPickerButton
+                    initialPath={claudeAgentDir.startsWith(".") && selectedProject ? `${selectedProject.path}\\${claudeAgentDir}` : claudeAgentDir}
+                    onSelect={(selectedPath) => setAgentDir("claude", selectedPath)}
+                    onFallbackOpen={() => setAgentDirBrowser("claude")}
+                  />
                 </div>
               </label>
               <section className="grid gap-2 rounded-md border border-border p-3">
@@ -8210,10 +8279,11 @@ function SettingsDialog() {
                 Codex agents directory
                 <div className="flex gap-2">
                   <Input value={codexAgentDir} onChange={(event) => setCodexAgentDir(event.target.value)} placeholder=".codex/agents" />
-                  <Button type="button" variant="outline" onClick={() => setAgentDirBrowser("codex")}>
-                    <FolderOpen className="h-4 w-4" />
-                    Browse
-                  </Button>
+                  <FolderPickerButton
+                    initialPath={codexAgentDir.startsWith(".") && selectedProject ? `${selectedProject.path}\\${codexAgentDir}` : codexAgentDir}
+                    onSelect={(selectedPath) => setAgentDir("codex", selectedPath)}
+                    onFallbackOpen={() => setAgentDirBrowser("codex")}
+                  />
                 </div>
               </label>
               <PluginManagementPanel provider="codex" />
@@ -8234,10 +8304,11 @@ function SettingsDialog() {
                 OpenAI agents directory
                 <div className="flex gap-2">
                   <Input value={openaiAgentDir} onChange={(event) => setOpenaiAgentDir(event.target.value)} placeholder=".agent-hero/openai-agents" />
-                  <Button type="button" variant="outline" onClick={() => setAgentDirBrowser("openai")}>
-                    <FolderOpen className="h-4 w-4" />
-                    Browse
-                  </Button>
+                  <FolderPickerButton
+                    initialPath={openaiAgentDir.startsWith(".") && selectedProject ? `${selectedProject.path}\\${openaiAgentDir}` : openaiAgentDir}
+                    onSelect={(selectedPath) => setAgentDir("openai", selectedPath)}
+                    onFallbackOpen={() => setAgentDirBrowser("openai")}
+                  />
                 </div>
               </label>
               <section className="grid gap-2 rounded-md border border-border p-3">
@@ -8319,6 +8390,8 @@ function SettingsDialog() {
 function ProjectInspectorTile({
   project,
   agents,
+  initialPath,
+  initialMode,
   height = 520,
   width,
   defaultWidth = "min(720px, 100%)",
@@ -8332,6 +8405,8 @@ function ProjectInspectorTile({
 }: {
   project: Project;
   agents: RunningAgent[];
+  initialPath?: string;
+  initialMode?: "preview" | "diff" | "details";
   height?: number;
   width?: number;
   defaultWidth?: string;
@@ -8427,6 +8502,15 @@ function ProjectInspectorTile({
   }, [project.id]);
 
   useEffect(() => {
+    if (!initialPath) return;
+    if (initialMode === "diff") void openDiff(initialPath);
+    else {
+      void openPreview(initialPath, true);
+      if (initialMode === "details") setMode("details");
+    }
+  }, [initialPath, initialMode, project.id]);
+
+  useEffect(() => {
     if (!normalizedFilter) {
       setSearchResults([]);
       return;
@@ -8512,6 +8596,7 @@ function ProjectInspectorTile({
                     selectedPath === entry.relativePath && "bg-accent text-accent-foreground"
                   )}
                   style={{ paddingLeft: 8 + depth * 14 }}
+                  data-file-explorer-path={entry.relativePath}
                   onClick={() => (entry.type === "directory" ? void toggleDirectory(entry) : void openPreview(entry.relativePath))}
                   title={entry.runtimePath}
                 >
@@ -8550,6 +8635,7 @@ function ProjectInspectorTile({
                 selectedPath === file.path && "bg-accent text-accent-foreground"
               )}
               onClick={() => void openPreview(file.path)}
+              data-file-explorer-path={file.path}
               title={file.path}
             >
               <FileIcon className="h-3.5 w-3.5 shrink-0" />
@@ -8574,7 +8660,11 @@ function ProjectInspectorTile({
   }
 
   function openFileExplorerPopout() {
-    const popup = window.open(`/file-explorer-popout?projectId=${encodeURIComponent(project.id)}`, "agent-hero-file-explorer", "popup,width=1100,height=760");
+    const params = new URLSearchParams({ projectId: project.id });
+    if (selectedPath) params.set("path", selectedPath);
+    params.set("mode", mode);
+    if (targetLine) params.set("line", String(targetLine));
+    const popup = window.open(`/file-explorer-popout?${params.toString()}`, "agent-hero-file-explorer", "popup,width=1100,height=760");
     if (popup) {
       window.localStorage.setItem(FILE_EXPLORER_POPOUT_STORAGE_KEY, "true");
       setFileExplorerOpen(false);
@@ -8607,6 +8697,31 @@ function ProjectInspectorTile({
     }
     if (preview && !preview.binary) return { scope: "file" as const, label: preview.relativePath, text: preview.content || "" };
     return { scope: "file" as const, label: selectedPath || "file", text: "" };
+  }
+
+  async function revealSelectedPath() {
+    if (!selectedPath) return;
+    setBrowserCollapsed(false);
+    setFilter("");
+    const parts = selectedPath.split("/").filter(Boolean);
+    const parentPaths = parts.slice(0, -1).map((_, index) => parts.slice(0, index + 1).join("/"));
+    try {
+      const listings = await Promise.all(parentPaths.filter((pathValue) => !tree[pathValue]).map((pathValue) => api.projectTree(project.id, pathValue)));
+      setTree((current) => ({
+        ...current,
+        ...Object.fromEntries(listings.map((listing) => [listing.relativePath, listing.entries]))
+      }));
+      setExpanded((current) => ({
+        ...current,
+        "": true,
+        ...Object.fromEntries(parentPaths.map((pathValue) => [pathValue, true]))
+      }));
+      window.requestAnimationFrame(() => {
+        document.querySelector<HTMLElement>(`[data-file-explorer-path="${CSS.escape(selectedPath)}"]`)?.scrollIntoView({ block: "center" });
+      });
+    } catch (error) {
+      addError(error instanceof Error ? error.message : String(error));
+    }
   }
 
   function sendExplorerTextToAgent(agent: RunningAgent, text: string, label: string) {
@@ -8908,6 +9023,17 @@ function ProjectInspectorTile({
                 </Button>
               )}
               <div className="min-w-0 flex-1 truncate px-2 text-xs text-muted-foreground">{selectedPath || project.path}</div>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                disabled={!selectedPath}
+                title="Reveal in Explorer"
+                aria-label="Reveal selected file in explorer"
+                onClick={() => void revealSelectedPath()}
+              >
+                <FolderTree className="h-4 w-4" />
+              </Button>
               {settings.externalEditor !== "none" && (
                 <Button
                   variant="ghost"
@@ -15256,6 +15382,7 @@ export function FileExplorerPopoutApp() {
   const setCapabilities = useAppStore((state) => state.setCapabilities);
   const setSettings = useAppStore((state) => state.setSettings);
   const setSelectedProject = useAppStore((state) => state.setSelectedProject);
+  const hydrateSnapshot = useAppStore((state) => state.hydrateSnapshot);
   const receiveFilePreview = useAppStore((state) => state.receiveFilePreview);
   const projects = useAppStore((state) => state.projects);
   const selectedProjectId = useAppStore((state) => state.selectedProjectId);
@@ -15264,14 +15391,21 @@ export function FileExplorerPopoutApp() {
   const themeMode = useAppStore((state) => state.settings.themeMode);
   const params = new URLSearchParams(window.location.search);
   const requestedProjectId = params.get("projectId") || undefined;
+  const requestedPath = params.get("path") || undefined;
+  const requestedMode = params.get("mode") === "diff" || params.get("mode") === "details" ? params.get("mode") as "diff" | "details" : "preview";
   useThemeMode(themeMode);
 
   useEffect(() => {
-    void Promise.all([api.projects(), api.capabilities(), api.settings()])
-      .then(([nextProjects, capabilities, settings]) => {
+    const snapshotPromise = api.agentSnapshot().catch(async () => ({
+      agents: await api.agents(),
+      transcripts: {}
+    }));
+    void Promise.all([api.projects(), api.capabilities(), api.settings(), snapshotPromise])
+      .then(([nextProjects, capabilities, settings, snapshot]) => {
         setProjects(nextProjects);
         setCapabilities(capabilities);
         setSettings(settings);
+        hydrateSnapshot(snapshot);
         if (requestedProjectId && nextProjects.some((project) => project.id === requestedProjectId)) {
           setSelectedProject(requestedProjectId);
         } else if (nextProjects[0]) {
@@ -15281,7 +15415,7 @@ export function FileExplorerPopoutApp() {
       .catch((error: unknown) => addError(error instanceof Error ? error.message : String(error)));
     connectWebSocket();
     return () => disconnectWebSocket();
-  }, [addError, requestedProjectId, setCapabilities, setProjects, setSelectedProject, setSettings]);
+  }, [addError, hydrateSnapshot, requestedProjectId, setCapabilities, setProjects, setSelectedProject, setSettings]);
 
   useEffect(() => {
     function handleStorage(event: StorageEvent) {
@@ -15306,10 +15440,11 @@ export function FileExplorerPopoutApp() {
   return (
     <div className="h-screen overflow-hidden bg-background p-3 text-foreground">
       {project ? (
-        <ProjectInspectorTile project={project} agents={agents} fill defaultWidth="100%" onClose={() => window.close()} />
+        <ProjectInspectorTile project={project} agents={agents} initialPath={requestedPath} initialMode={requestedMode} fill defaultWidth="100%" onClose={() => window.close()} />
       ) : (
         <div className="grid h-full place-items-center text-sm text-muted-foreground">No project open.</div>
       )}
+      <LaunchDialog />
       <ErrorStack />
     </div>
   );
