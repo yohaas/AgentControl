@@ -1367,9 +1367,15 @@ function planEventPlainText(event: PlanEvent) {
     .join("\n\n");
 }
 
-function copyToClipboard(text: string, addError: (message: string) => void, confirmation = "Copied to clipboard.") {
+function copyToClipboard(text: string, addError: (message: string) => void, confirmation = "Copied to clipboard.", onCopied?: () => void) {
   void navigator.clipboard.writeText(text).then(
-    () => useAppStore.getState().addToast(confirmation),
+    () => {
+      if (onCopied) {
+        onCopied();
+        return;
+      }
+      useAppStore.getState().addToast(confirmation);
+    },
     (error: unknown) => addError(error instanceof Error ? error.message : String(error))
   );
 }
@@ -12601,10 +12607,22 @@ function reactNodeText(node: ReactNode): string {
 function MarkdownCodeBlock({ children, className, ...props }: ComponentProps<"pre">) {
   const addError = useAppStore((state) => state.addError);
   const codeText = reactNodeText(children).replace(/\n$/, "");
+  const [copied, setCopied] = useState(false);
+  const copiedTimer = useRef<number | undefined>(undefined);
+
+  useEffect(() => {
+    return () => {
+      if (copiedTimer.current) window.clearTimeout(copiedTimer.current);
+    };
+  }, []);
 
   function copyCode(event: ReactMouseEvent<HTMLButtonElement>) {
     event.stopPropagation();
-    copyToClipboard(codeText, addError, "Copied code to clipboard.");
+    copyToClipboard(codeText, addError, "Copied code to clipboard.", () => {
+      setCopied(true);
+      if (copiedTimer.current) window.clearTimeout(copiedTimer.current);
+      copiedTimer.current = window.setTimeout(() => setCopied(false), 1200);
+    });
   }
 
   return (
@@ -12621,6 +12639,11 @@ function MarkdownCodeBlock({ children, className, ...props }: ComponentProps<"pr
       >
         <Copy className="h-3.5 w-3.5" />
       </button>
+      {copied && (
+        <span className="pointer-events-none absolute bottom-2 right-10 rounded-md border border-border bg-background/95 px-2 py-1 text-xs font-medium text-foreground shadow-sm">
+          Copied
+        </span>
+      )}
     </div>
   );
 }
