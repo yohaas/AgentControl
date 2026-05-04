@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-05-04
 
+- [dd7b5d1](https://github.com/yohaas/AgentHero/commit/dd7b5d1) Use absolute release asset URLs so existing macOS installed updaters can download the 0.1.7 patch.
 - [9389d29](https://github.com/yohaas/AgentHero/commit/9389d29) Resolve relative macOS installer and installed-updater asset URLs against the remote release manifest.
 - [f4c71cc](https://github.com/yohaas/AgentHero/commit/f4c71cc) Use the in-app folder browser on Windows to avoid hidden native picker hangs from scheduled-task launches.
 - [97caab4](https://github.com/yohaas/AgentHero/commit/97caab4) Hide the WSL project runtime option on macOS.
