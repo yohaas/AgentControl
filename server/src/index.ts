@@ -1165,19 +1165,25 @@ async function startInstalledUpdate(): Promise<{ pid?: number }> {
   const env = { ...process.env, AGENTHERO_UPDATE_MANIFEST_URL: manifestUrl };
   let command: string;
   let args: string[];
+  let cwd = appRoot;
 
   if (process.platform === "win32") {
     const scriptPath = path.join(appRoot, "scripts", "windows", "update-installed-agent-hero.ps1");
     if (!(await stat(scriptPath).catch(() => undefined))) {
       throw new Error(`Installed update launcher was not found at ${scriptPath}`);
     }
+    const tempScriptDir = path.join(os.tmpdir(), "AgentHeroUpdater");
+    await mkdir(tempScriptDir, { recursive: true });
+    const tempScriptPath = path.join(tempScriptDir, "update-installed-agent-hero.ps1");
+    await cp(scriptPath, tempScriptPath, { force: true });
+    cwd = tempScriptDir;
     command = "powershell.exe";
     args = [
       "-NoProfile",
       "-ExecutionPolicy",
       "Bypass",
       "-File",
-      scriptPath,
+      tempScriptPath,
       "-InstallDir",
       appRoot,
       "-ManifestUrl",
@@ -1201,7 +1207,7 @@ async function startInstalledUpdate(): Promise<{ pid?: number }> {
   try {
     await appendInstalledUpdateLaunchLog(`Starting installed update: ${command} ${args.join(" ")}`);
     const child = spawn(command, args, {
-      cwd: appRoot,
+      cwd,
       detached: true,
       env,
       stdio: ["ignore", stdoutFd, stderrFd],
