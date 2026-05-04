@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-05-04
 
+- [79d1add](https://github.com/yohaas/AgentHero/commit/79d1add) Publish a 0.1.40 platform-neutral patch with the installed update command fix.
 - [1dbfa45](https://github.com/yohaas/AgentHero/commit/1dbfa45) Force installed update commands in installed mode so stale checkout commands cannot run from the update modal.
 - [a1d6739](https://github.com/yohaas/AgentHero/commit/a1d6739) Publish a 0.1.39 platform-neutral patch for testing the embedded Windows update terminal from 0.1.38.
 - [799c80c](https://github.com/yohaas/AgentHero/commit/799c80c) Publish a 0.1.38 platform-neutral patch with the embedded Windows update terminal.
