@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-05-03
 
+- [717f859](https://github.com/yohaas/AgentHero/commit/717f859) Publish a 0.1.25 platform-neutral patch with the installed update API.
 - [52147a4](https://github.com/yohaas/AgentHero/commit/52147a4) Start installed updates through a backend API instead of a hidden terminal session.
 - [6ab675e](https://github.com/yohaas/AgentHero/commit/6ab675e) Publish a 0.1.24 platform-neutral patch for testing the fixed installed updater path.
 - [d89a58b](https://github.com/yohaas/AgentHero/commit/d89a58b) Publish a 0.1.23 platform-neutral patch to test installed updates after the app-root launch fix.
