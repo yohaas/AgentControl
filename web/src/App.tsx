@@ -5361,7 +5361,6 @@ function FolderPickerButton({
   onSelect: (path: string) => void;
   onFallbackOpen: () => void;
 }) {
-  const addError = useAppStore((state) => state.addError);
   const [picking, setPicking] = useState(false);
 
   async function browse() {
@@ -5373,8 +5372,7 @@ function FolderPickerButton({
     try {
       const result = await api.pickDirectory(initialPath);
       if (result.path) onSelect(result.path);
-    } catch (error) {
-      addError(error instanceof Error ? error.message : String(error));
+    } catch {
       onFallbackOpen();
     } finally {
       setPicking(false);
@@ -7983,8 +7981,7 @@ function SettingsDialog() {
               onAddProjectFolder={() =>
                 void api.pickDirectory(selectedProject?.path || projectPaths[projectPaths.length - 1] || "").then((result) => {
                   if (result.path) addProjectPath(result.path);
-                }).catch((error: unknown) => {
-                  addError(error instanceof Error ? error.message : String(error));
+                }).catch(() => {
                   setProjectFolderBrowserOpen(true);
                 })
               }
@@ -8034,8 +8031,7 @@ function SettingsDialog() {
               onBrowseProjectPath={() =>
                 void api.pickDirectory(agentControlProjectPath || selectedProject?.path || "").then((result) => {
                   if (result.path) setAgentHeroProjectPath(result.path);
-                }).catch((error: unknown) => {
-                  addError(error instanceof Error ? error.message : String(error));
+                }).catch(() => {
                   setAgentHeroProjectBrowserOpen(true);
                 })
               }

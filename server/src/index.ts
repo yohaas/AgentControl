@@ -1644,6 +1644,7 @@ function pickNativeDirectory(initialPath?: string): Promise<string | undefined> 
   if (process.platform === "win32") {
     const script = [
       "Add-Type -AssemblyName System.Windows.Forms",
+      "if (-not [Environment]::UserInteractive) { throw 'Native folder picker is unavailable while AgentHero is running as a non-interactive service.' }",
       "$dialog = New-Object System.Windows.Forms.FolderBrowserDialog",
       "$dialog.Description = 'Select Folder'",
       "$dialog.ShowNewFolderButton = $true",
