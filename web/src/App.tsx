@@ -4360,10 +4360,13 @@ function AppUpdateNotice({ compact = false, hideWhenNoUpdate = false }: { compac
   const [updateStarting, setUpdateStarting] = useState(false);
   const [updateProgress, setUpdateProgress] = useState<string>();
   const [updateLogs, setUpdateLogs] = useState<AppUpdateLogs>();
-  const [updateRun, setUpdateRun] = useState<{ requestId: string; commands: string[] }>();
+  const [updateRun, setUpdateRun] = useState<{ requestId: string; commands: string[]; installedTerminal?: boolean }>();
   const installedMode = status?.installMode === "installed" || settings.installMode === "installed";
   const installedUpdateManifestUrl = (settings.updateManifestUrl || "").trim();
   const installedAppRoot = status?.appRoot?.trim();
+  const isWindowsClient =
+    typeof navigator !== "undefined" && /win/i.test(`${navigator.platform || ""} ${navigator.userAgent || ""}`);
+  const useWindowsInstalledTerminalUpdate = installedMode && isWindowsClient;
   const quotePowerShellValue = (value: string) => `"${value.replace(/[`"$]/g, (match) => `\`${match}`)}"`;
   const quoteShellValue = (value: string) => `'${value.replace(/'/g, "'\\''")}'`;
   const effectiveUpdateCommands =
@@ -4475,15 +4478,45 @@ function AppUpdateNotice({ compact = false, hideWhenNoUpdate = false }: { compac
     if (!updateRun || !updateSession || updateSession.status !== "exited") return;
     if ((updateSession.exitCode || 0) !== 0) {
       addError(`AgentHero update command failed with exit code ${updateSession.exitCode ?? "unknown"}.`);
+      if (updateRun.installedTerminal) setUpdateProgress(undefined);
       setUpdateRun(undefined);
       return;
     }
+    if (updateRun.installedTerminal) {
+      setUpdateProgress("Update command finished in the terminal. AgentHero may restart shortly; refresh after it comes back.");
+      addToast("AgentHero update command finished in the terminal.");
+    }
     setUpdateRun(undefined);
-  }, [addError, updateRun, updateSession]);
+  }, [addError, addToast, updateRun, updateSession]);
+
+  function createUpdateRequestId() {
+    return typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : `update-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  }
 
   async function runUpdate() {
     if (!updateAvailable) {
       addError(status?.message || "AgentHero is already up to date.");
+      return;
+    }
+    const commands = effectiveUpdateCommands.map((command) => command.trim()).filter(Boolean);
+    if (installedMode && useWindowsInstalledTerminalUpdate) {
+      if (commands.length === 0) {
+        addError("No Windows installed update command is configured.");
+        return;
+      }
+      const requestId = createUpdateRequestId();
+      setUpdateRun({ requestId, commands, installedTerminal: true });
+      setUpdateProgress("Update command opened in the terminal. AgentHero may restart after the updater launches.");
+      sendCommand({
+        type: "terminalStart",
+        requestId,
+        cwd: installedAppRoot || undefined,
+        commands,
+        hidden: false,
+        title: "Update AgentHero"
+      });
       return;
     }
     if (installedMode) {
@@ -4500,10 +4533,8 @@ function AppUpdateNotice({ compact = false, hideWhenNoUpdate = false }: { compac
       }
       return;
     }
-    const commands = effectiveUpdateCommands.map((command) => command.trim()).filter(Boolean);
     if (commands.length === 0) return;
-    const requestId =
-      typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `update-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const requestId = createUpdateRequestId();
     setUpdateRun({ requestId, commands });
     sendCommand({
       type: "terminalStart",
@@ -4518,7 +4549,12 @@ function AppUpdateNotice({ compact = false, hideWhenNoUpdate = false }: { compac
   const commits = status?.commits || [];
   const logFiles = updateLogs?.files || [];
   const updateAvailable = Boolean(status?.updateAvailable);
-  const canRunUpdate = updateAvailable && (installedMode || effectiveUpdateCommands.length > 0) && !updateRun && !updateStarting && !updateProgress;
+  const canRunUpdate =
+    updateAvailable &&
+    (installedMode ? !useWindowsInstalledTerminalUpdate || effectiveUpdateCommands.length > 0 : effectiveUpdateCommands.length > 0) &&
+    !updateRun &&
+    !updateStarting &&
+    !updateProgress;
   const manifestVersionOlder =
     status?.latestVersion?.version && status.localVersion?.version
       ? compareDottedVersions(status.latestVersion.version, status.localVersion.version) < 0
