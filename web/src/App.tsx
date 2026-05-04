@@ -4516,11 +4516,21 @@ function AppUpdateNotice({ compact = false, hideWhenNoUpdate = false }: { compac
       const targetVersion = status?.latestVersion?.version;
       setUpdateStarting(true);
       try {
-        await api.runInstalledUpdate();
+        const requestId = createUpdateRequestId();
+        setUpdateRun({ requestId, commands, modalTerminal: true });
+        sendCommand({
+          type: "terminalStart",
+          requestId,
+          cwd: installedMode ? installedAppRoot || undefined : settings.agentControlProjectPath?.trim() || undefined,
+          commands,
+          hidden: false,
+          title: "Update AgentHero"
+        });
         void refreshUpdateLogs(false);
         await waitForInstalledUpdate(targetVersion);
       } catch (error) {
         addError(error instanceof Error ? error.message : String(error));
+        setUpdateRun(undefined);
       } finally {
         setUpdateStarting(false);
       }
