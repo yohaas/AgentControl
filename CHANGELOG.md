@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-05-04
 
+- [f463d45](https://github.com/yohaas/AgentHero/commit/f463d45) Publish a 0.1.37 platform-neutral patch for testing backend-launched Windows updates from 0.1.36.
 - [4e2f3b9](https://github.com/yohaas/AgentHero/commit/4e2f3b9) Publish a 0.1.36 platform-neutral patch with the backend Windows updater wrapper launch.
 - [d85dd5a](https://github.com/yohaas/AgentHero/commit/d85dd5a) Launch Windows installed updates through the backend wrapper command and avoid completion polling on Windows.
 - [87c6238](https://github.com/yohaas/AgentHero/commit/87c6238) Publish a 0.1.35 platform-neutral patch for testing Windows terminal-launched updates from 0.1.34.
