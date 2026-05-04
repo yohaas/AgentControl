@@ -4,80 +4,17 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-05-04
 
-- Publish a 0.1.42 platform-neutral patch with manifest fetch cache-busting for the update command.
-- Publish a 0.1.41 platform-neutral patch from 0.1.40.
-- [3bfe786](https://github.com/yohaas/AgentHero/commit/3bfe786) Add a direct 0.1.38 to 0.1.40 platform-neutral patch for installed apps that missed 0.1.39.
-- [79d1add](https://github.com/yohaas/AgentHero/commit/79d1add) Publish a 0.1.40 platform-neutral patch with the installed update command fix.
-- [1dbfa45](https://github.com/yohaas/AgentHero/commit/1dbfa45) Force installed update commands in installed mode so stale checkout commands cannot run from the update modal.
-- [a1d6739](https://github.com/yohaas/AgentHero/commit/a1d6739) Publish a 0.1.39 platform-neutral patch for testing the embedded Windows update terminal from 0.1.38.
-- [799c80c](https://github.com/yohaas/AgentHero/commit/799c80c) Publish a 0.1.38 platform-neutral patch with the embedded Windows update terminal.
-- [3c234fc](https://github.com/yohaas/AgentHero/commit/3c234fc) Show the Windows update command in an embedded update-modal terminal and send it as one line.
-- [f463d45](https://github.com/yohaas/AgentHero/commit/f463d45) Publish a 0.1.37 platform-neutral patch for testing backend-launched Windows updates from 0.1.36.
-- [4e2f3b9](https://github.com/yohaas/AgentHero/commit/4e2f3b9) Publish a 0.1.36 platform-neutral patch with the backend Windows updater wrapper launch.
-- [d85dd5a](https://github.com/yohaas/AgentHero/commit/d85dd5a) Launch Windows installed updates through the backend wrapper command and avoid completion polling on Windows.
-- [87c6238](https://github.com/yohaas/AgentHero/commit/87c6238) Publish a 0.1.35 platform-neutral patch for testing Windows terminal-launched updates from 0.1.34.
-- [092b466](https://github.com/yohaas/AgentHero/commit/092b466) Publish a 0.1.34 platform-neutral patch with the Windows terminal updater launch path.
-- [d2e486e](https://github.com/yohaas/AgentHero/commit/d2e486e) Launch Windows installed updates in a visible AgentHero terminal instead of using the backend polling path.
-- [056d9b7](https://github.com/yohaas/AgentHero/commit/056d9b7) Publish a 0.1.33 platform-neutral patch for another installed updater test from 0.1.32.
-- [1cb7707](https://github.com/yohaas/AgentHero/commit/1cb7707) Publish a 0.1.32 platform-neutral patch for testing the collapsed update modal logs.
-- [5bca8e0](https://github.com/yohaas/AgentHero/commit/5bca8e0) Collapse installed update logs behind a Show logs/Hide logs control in the update modal.
+- [628edb5](https://github.com/yohaas/AgentHero/commit/628edb5) Consolidate the installer and installed-updater release work into clean 0.1.5 Windows and macOS full installers, a full-asset manifest with no patch updates, and hardened bundled asset handling.
 
 ## 2026-05-03
 
-- [c323189](https://github.com/yohaas/AgentHero/commit/c323189) Add a direct 0.1.29 to 0.1.31 platform-neutral patch for installed apps that had not reached 0.1.30.
-- [ab1b2ac](https://github.com/yohaas/AgentHero/commit/ab1b2ac) Publish a 0.1.31 platform-neutral patch with the Windows updater temp-directory launch fix.
-- [eea9e78](https://github.com/yohaas/AgentHero/commit/eea9e78) Run the Windows installed updater from a temporary directory so the updater does not lock the install folder it replaces.
-- [4d15ea8](https://github.com/yohaas/AgentHero/commit/4d15ea8) Publish a 0.1.30 platform-neutral patch to test installed updates from 0.1.29.
-- [6c45667](https://github.com/yohaas/AgentHero/commit/6c45667) Publish a 0.1.29 platform-neutral patch with updater stdout and stderr diagnostics.
-- [030a4b3](https://github.com/yohaas/AgentHero/commit/030a4b3) Capture installed updater stdout and stderr in the update modal logs.
-- [c4b236b](https://github.com/yohaas/AgentHero/commit/c4b236b) Publish a 0.1.28 platform-neutral patch to test installed updates from 0.1.27.
-- [c0c02ee](https://github.com/yohaas/AgentHero/commit/c0c02ee) Publish a 0.1.27 platform-neutral patch with update modal logs and direct Windows updater launch.
-- [7ddb4ef](https://github.com/yohaas/AgentHero/commit/7ddb4ef) Show installed update launcher and updater logs in the update modal.
-- [149405d](https://github.com/yohaas/AgentHero/commit/149405d) Run the Windows installed updater directly from the backend so update logs start immediately.
-- [930bcc8](https://github.com/yohaas/AgentHero/commit/930bcc8) Show installed update progress while waiting for AgentHero to restart and report the target version.
-- [1389fe3](https://github.com/yohaas/AgentHero/commit/1389fe3) Publish a 0.1.26 platform-neutral patch to test the installed update API from 0.1.25.
-- [717f859](https://github.com/yohaas/AgentHero/commit/717f859) Publish a 0.1.25 platform-neutral patch with the installed update API.
-- [52147a4](https://github.com/yohaas/AgentHero/commit/52147a4) Start installed updates through a backend API instead of a hidden terminal session.
-- [6ab675e](https://github.com/yohaas/AgentHero/commit/6ab675e) Publish a 0.1.24 platform-neutral patch for testing the fixed installed updater path.
-- [d89a58b](https://github.com/yohaas/AgentHero/commit/d89a58b) Publish a 0.1.23 platform-neutral patch to test installed updates after the app-root launch fix.
-- [04b9caa](https://github.com/yohaas/AgentHero/commit/04b9caa) Launch installed updates from the installed app root so in-app updates find the updater script.
-- [c840bca](https://github.com/yohaas/AgentHero/commit/c840bca) Publish a 0.1.22 platform-neutral app patch for recent app updates.
-- [cec8636](https://github.com/yohaas/AgentHero/commit/cec8636) Fix macOS installed updater Node lookup and publish a 0.1.21 repair patch.
-- [dcfa31f](https://github.com/yohaas/AgentHero/commit/dcfa31f) Fix the Windows installed update launcher and publish a 0.1.20 repair patch.
-- [fb7673c](https://github.com/yohaas/AgentHero/commit/fb7673c) Publish a 0.1.19 platform-neutral patch for installed update testing.
-- [f0ef8fd](https://github.com/yohaas/AgentHero/commit/f0ef8fd) Fix installed version detection and publish a clean Windows 0.1.18 recovery installer.
-- [abeca5f](https://github.com/yohaas/AgentHero/commit/abeca5f) Publish a small 0.1.17 platform-neutral patch to test installed updates.
-- [53b2353](https://github.com/yohaas/AgentHero/commit/53b2353) Reset release publishing to clean full installers and remove packaged patch updates.
-- [429a0a9](https://github.com/yohaas/AgentHero/commit/429a0a9) Add direct 0.1.16 patch assets for older installed versions.
-- [1b464f7](https://github.com/yohaas/AgentHero/commit/1b464f7) Publish the 0.1.16 platform-neutral app patch and keep full installers on the latest full bundle.
-- [9ae05c4](https://github.com/yohaas/AgentHero/commit/9ae05c4) Disable the update action when the installed app is already current.
-- [f01fb4f](https://github.com/yohaas/AgentHero/commit/f01fb4f) Make fresh installers choose the current full release asset instead of older platform bundles.
-- [1b5e929](https://github.com/yohaas/AgentHero/commit/1b5e929) Publish the Windows 0.1.15 full release bundle and setup installer.
-- [81a6623](https://github.com/yohaas/AgentHero/commit/81a6623) Use the macOS installed updater command instead of checkout or Windows update commands.
-- [d4095a6](https://github.com/yohaas/AgentHero/commit/d4095a6) Show a clear update availability banner in the update dialog.
-- [867b6be](https://github.com/yohaas/AgentHero/commit/867b6be) Prefer installed update version comparisons over commit SHA once versions are known.
-- [a8f485f](https://github.com/yohaas/AgentHero/commit/a8f485f) Support platform-neutral installed update patches with patch/full manifest assets.
-- [edd5599](https://github.com/yohaas/AgentHero/commit/edd5599) Read installed version metadata from the runtime root and label the update dialog installed version.
-- [8faa847](https://github.com/yohaas/AgentHero/commit/8faa847) Harden macOS installed terminal support with Node 20, preserved node-pty helper permissions, and login-shell zsh startup.
-- [0880f8b](https://github.com/yohaas/AgentHero/commit/0880f8b) Clarify update status when the configured manifest is older than the installed app.
-- [48f42d5](https://github.com/yohaas/AgentHero/commit/48f42d5) Improve the macOS installer with user-owned logs, a launchable AgentHero.app, app icon support, and server startup checks.
 - [c1bb447](https://github.com/yohaas/AgentHero/commit/c1bb447) Prevent stale local queued messages from reappearing after another client consumes them.
-- [0ae5802](https://github.com/yohaas/AgentHero/commit/0ae5802) Add a checked-in update manifest and repo-hosted Windows release bundle.
-- [520340d](https://github.com/yohaas/AgentHero/commit/520340d) Default installed update checks to the repo manifest URL.
 - [18eee04](https://github.com/yohaas/AgentHero/commit/18eee04) Replace the collapsed mobile status dot with a compact colored project-name sidebar opener.
 - [94ba042](https://github.com/yohaas/AgentHero/commit/94ba042) Switch busy chat composers back to Send when a draft message is present.
 - [9477cbe](https://github.com/yohaas/AgentHero/commit/9477cbe) Show the active project name under the collapsed mobile connection dot.
-- [38e909e](https://github.com/yohaas/AgentHero/commit/38e909e) Show version and last updated details in the update dialog.
 - [acf1a9a](https://github.com/yohaas/AgentHero/commit/acf1a9a) Use local short-date formatting for older message timestamps.
 - [3bd9418](https://github.com/yohaas/AgentHero/commit/3bd9418) Show compact timestamps on chat messages.
 - [75f17da](https://github.com/yohaas/AgentHero/commit/75f17da) Document mobile and remote access guidance with private-network recommendations.
-- [3d2a46e](https://github.com/yohaas/AgentHero/commit/3d2a46e) Require a configured release manifest URL before running installed updates.
-- [60a09aa](https://github.com/yohaas/AgentHero/commit/60a09aa) Stop the running installed app before installer or updater file replacement.
-- [c10970f](https://github.com/yohaas/AgentHero/commit/c10970f) Hide checkout update details in installed mode and run the installed updater command.
-- [b2df26d](https://github.com/yohaas/AgentHero/commit/b2df26d) Point the README Windows installer link at a direct GitHub download URL.
-- [073f64b](https://github.com/yohaas/AgentHero/commit/073f64b) Write a Windows setup log and run the hidden install step after bundled files are extracted.
-- [ebbc432](https://github.com/yohaas/AgentHero/commit/ebbc432) Build the Windows setup executable with a graphical Inno Setup wizard.
-- [22a383c](https://github.com/yohaas/AgentHero/commit/22a383c) Open a dedicated visible PowerShell setup progress window from the Windows installer.
 
 ## 2026-05-02
 
