@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-05-03
 
+- [149405d](https://github.com/yohaas/AgentHero/commit/149405d) Run the Windows installed updater directly from the backend so update logs start immediately.
 - [930bcc8](https://github.com/yohaas/AgentHero/commit/930bcc8) Show installed update progress while waiting for AgentHero to restart and report the target version.
 - [1389fe3](https://github.com/yohaas/AgentHero/commit/1389fe3) Publish a 0.1.26 platform-neutral patch to test the installed update API from 0.1.25.
 - [717f859](https://github.com/yohaas/AgentHero/commit/717f859) Publish a 0.1.25 platform-neutral patch with the installed update API.
