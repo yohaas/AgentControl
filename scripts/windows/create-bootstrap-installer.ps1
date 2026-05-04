@@ -60,8 +60,8 @@ Copy-Item -LiteralPath $iconPath -Destination $embeddedIcon -Force
 
 $launcherManifestUrl = $ManifestUrl
 $files = @(
-  @{ Source = $embeddedInstaller; DestName = "install-agent-hero.ps1" },
-  @{ Source = $embeddedIcon; DestName = "AgentHero.ico" }
+  @{ Source = $embeddedInstaller; DestDir = "{tmp}"; DestName = "install-agent-hero.ps1" },
+  @{ Source = $embeddedIcon; DestDir = "{tmp}"; DestName = "AgentHero.ico" }
 )
 $appVersion = "0.1.0"
 
@@ -72,20 +72,27 @@ if (Test-Path $ManifestUrl) {
 
   $embeddedManifest = Join-Path $buildDir "manifest.json"
   Copy-Item -LiteralPath $resolvedManifestPath -Destination $embeddedManifest -Force
-  $files += @{ Source = $embeddedManifest; DestName = "manifest.json" }
+  $files += @{ Source = $embeddedManifest; DestDir = "{tmp}"; DestName = "manifest.json" }
   $launcherManifestUrl = "{tmp}\manifest.json"
 
   $manifestDir = Split-Path -Parent $resolvedManifestPath
   $asset = $manifest.assets | Where-Object { $_.platform -eq "windows" } | Select-Object -First 1
   if (-not $asset) { throw "Local manifest does not contain a Windows update asset." }
   $assetPath = [string]$asset.url
+  $assetDestRelative = Split-Path -Leaf $assetPath
   if (-not ([Uri]$assetPath).IsAbsoluteUri) {
+    $assetDestRelative = $assetPath -replace "/", "\"
     $assetPath = Join-Path $manifestDir $assetPath
   }
   if (Test-Path $assetPath) {
-    $embeddedAssetPath = Join-Path $buildDir (Split-Path -Leaf $assetPath)
+    $assetDestName = Split-Path -Leaf $assetDestRelative
+    $assetDestParent = Split-Path -Parent $assetDestRelative
+    $embeddedAssetPath = Join-Path $buildDir $assetDestRelative
+    $embeddedAssetParent = Split-Path -Parent $embeddedAssetPath
+    New-Item -ItemType Directory -Path $embeddedAssetParent -Force | Out-Null
     Copy-Item -LiteralPath $assetPath -Destination $embeddedAssetPath -Force
-    $files += @{ Source = $embeddedAssetPath; DestName = (Split-Path -Leaf $assetPath) }
+    $assetDestDir = if ($assetDestParent) { "{tmp}\$assetDestParent" } else { "{tmp}" }
+    $files += @{ Source = $embeddedAssetPath; DestDir = $assetDestDir; DestName = $assetDestName }
   }
 }
 
@@ -113,7 +120,7 @@ if ($NoStart) {
 }
 
 $fileEntries = foreach ($file in $files) {
-  "Source: ""$((InnoString $file.Source))""; DestDir: ""{tmp}""; DestName: ""$((InnoString $file.DestName))""; Flags: deleteafterinstall"
+  "Source: ""$((InnoString $file.Source))""; DestDir: ""$((InnoString $file.DestDir))""; DestName: ""$((InnoString $file.DestName))""; Flags: deleteafterinstall"
 }
 $runParameters = PascalString ($installerArgs -join " ")
 

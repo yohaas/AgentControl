@@ -53,7 +53,9 @@ if [[ -f "$manifest_url" ]]; then
   if [[ "$asset_url" != http://* && "$asset_url" != https://* ]]; then
     asset_path="$(cd "$(dirname "$manifest_path")" && pwd)/$asset_url"
     [[ -f "$asset_path" ]] || { echo "Local asset not found: $asset_path" >&2; exit 1; }
-    cp "$asset_path" "$scripts_dir/$(basename "$asset_path")"
+    asset_dest="$scripts_dir/$asset_url"
+    mkdir -p "$(dirname "$asset_dest")"
+    cp "$asset_path" "$asset_dest"
   fi
 fi
 
