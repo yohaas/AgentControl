@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-05-04
 
+- [f4c71cc](https://github.com/yohaas/AgentHero/commit/f4c71cc) Use the in-app folder browser on Windows to avoid hidden native picker hangs from scheduled-task launches.
 - [97caab4](https://github.com/yohaas/AgentHero/commit/97caab4) Hide the WSL project runtime option on macOS.
 - [7dac8d5](https://github.com/yohaas/AgentHero/commit/7dac8d5) Publish the 0.1.6 platform-neutral patch for File Explorer popout state, reveal actions, send actions, and native folder picker fallback behavior.
 - [628edb5](https://github.com/yohaas/AgentHero/commit/628edb5) Consolidate the installer and installed-updater release work into clean 0.1.5 Windows and macOS full installers, a full-asset manifest with no patch updates, and hardened bundled asset handling.
