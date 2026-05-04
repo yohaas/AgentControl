@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-05-03
 
+- [eea9e78](https://github.com/yohaas/AgentHero/commit/eea9e78) Run the Windows installed updater from a temporary directory so the updater does not lock the install folder it replaces.
 - [4d15ea8](https://github.com/yohaas/AgentHero/commit/4d15ea8) Publish a 0.1.30 platform-neutral patch to test installed updates from 0.1.29.
 - [6c45667](https://github.com/yohaas/AgentHero/commit/6c45667) Publish a 0.1.29 platform-neutral patch with updater stdout and stderr diagnostics.
 - [030a4b3](https://github.com/yohaas/AgentHero/commit/030a4b3) Capture installed updater stdout and stderr in the update modal logs.
