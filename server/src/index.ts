@@ -935,9 +935,22 @@ async function readLocalVersionMetadata(): Promise<AppVersionMetadata | undefine
 }
 
 async function fetchUpdateManifest(manifestUrl: string): Promise<AppUpdateManifest> {
-  const response = await fetch(manifestUrl, {
+  const requestUrl = (() => {
+    try {
+      const nextUrl = new URL(manifestUrl);
+      nextUrl.searchParams.set("nocache", Date.now().toString());
+      return nextUrl.toString();
+    } catch {
+      return `${manifestUrl}${manifestUrl.includes("?") ? "&" : "?"}nocache=${Date.now()}`;
+    }
+  })();
+
+  const response = await fetch(requestUrl, {
     headers: {
       Accept: "application/json",
+      "Cache-Control": "no-cache",
+      Pragma: "no-cache",
+      Expires: "0",
       "User-Agent": "AgentHero update checker"
     }
   });
