@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-05-04
 
+- [092b466](https://github.com/yohaas/AgentHero/commit/092b466) Publish a 0.1.34 platform-neutral patch with the Windows terminal updater launch path.
 - [d2e486e](https://github.com/yohaas/AgentHero/commit/d2e486e) Launch Windows installed updates in a visible AgentHero terminal instead of using the backend polling path.
 - [056d9b7](https://github.com/yohaas/AgentHero/commit/056d9b7) Publish a 0.1.33 platform-neutral patch for another installed updater test from 0.1.32.
 - [1cb7707](https://github.com/yohaas/AgentHero/commit/1cb7707) Publish a 0.1.32 platform-neutral patch for testing the collapsed update modal logs.
