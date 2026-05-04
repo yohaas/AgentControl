@@ -9180,6 +9180,563 @@ function FileExplorerDockPanel({
   );
 }
 
+type ChatComposerVariant = "tile" | "standard" | "mobile";
+
+function AgentChatComposer({
+  agent,
+  settings,
+  queue,
+  selectedLines = 0,
+  canType,
+  canAttach,
+  isBusy,
+  addError,
+  enqueueMessage,
+  onFocus,
+  onBlur,
+  composerInputRef,
+  variant,
+  wsConnected = false
+}: {
+  agent: RunningAgent;
+  settings: SettingsState;
+  queue: QueuedMessage[];
+  selectedLines?: number;
+  canType: boolean;
+  canAttach: boolean;
+  isBusy: boolean;
+  addError: (message: string) => void;
+  enqueueMessage: (id: string, message: { text: string; attachments: MessageAttachment[] }) => void;
+  onFocus?: () => void;
+  onBlur?: () => void;
+  composerInputRef?: { current: HTMLTextAreaElement | null };
+  variant: ChatComposerVariant;
+  wsConnected?: boolean;
+}) {
+  const persistedDraft = useAppStore((state) => state.drafts[agent.id] || "");
+  const setPersistedDraft = useAppStore((state) => state.setDraft);
+  const hydrateSnapshot = useAppStore((state) => state.hydrateSnapshot);
+  const [draft, setDraft] = useState(persistedDraft);
+  const draftRef = useRef(draft);
+  const persistedDraftRef = useRef(persistedDraft);
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [attachments, setAttachments] = useState<MessageAttachment[]>([]);
+  const [contextOpen, setContextOpen] = useState(false);
+  const [composerDropActive, setComposerDropActive] = useState(false);
+  const [composerCollapsed, setComposerCollapsed] = useState(false);
+  const [activeSlashIndex, setActiveSlashIndex] = useState(0);
+  const [slashMenuOpen, setSlashMenuOpen] = useState(false);
+  const [slashMenuSuppressed, setSlashMenuSuppressed] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [composerWrapped, setComposerWrapped] = useState(false);
+  const composerDragDepthRef = useRef(0);
+  const mobile = variant === "mobile";
+  const compact = variant !== "standard";
+  const collapsedHeight = variant === "standard" ? 76 : variant === "tile" ? 36 : 44;
+  const hasDraftPayload = Boolean(draft.trim() || attachments.length > 0);
+  const showStopButton = isBusy && !hasDraftPayload;
+  const rawSlashSuggestions = useMemo(
+    () => slashCommandSuggestions(draft, modelIdsForProvider(settings, agent.provider || "claude"), agent.slashCommands, agent.provider || "claude"),
+    [agent.provider, agent.slashCommands, draft, settings]
+  );
+  const pickerSlashSuggestions = useMemo(
+    () => slashCommandSuggestions("", modelIdsForProvider(settings, agent.provider || "claude"), agent.slashCommands, agent.provider || "claude", true),
+    [agent.provider, agent.slashCommands, settings]
+  );
+  const slashSuggestions = slashMenuOpen ? pickerSlashSuggestions : slashMenuSuppressed ? [] : rawSlashSuggestions;
+  const draftLines = draftLineCount(draft);
+  const hasMultilineDraft = draftLines > 1 || composerWrapped;
+  const composerExpanded = hasMultilineDraft && !composerCollapsed;
+
+  useEffect(() => {
+    draftRef.current = draft;
+  }, [draft]);
+
+  useEffect(() => {
+    persistedDraftRef.current = persistedDraft;
+  }, [persistedDraft]);
+
+  useEffect(() => {
+    setDraft(persistedDraft);
+    draftRef.current = persistedDraft;
+    setComposerCollapsed(false);
+    setSlashMenuOpen(false);
+    setSlashMenuSuppressed(false);
+    setActiveSlashIndex(0);
+  }, [agent.id, persistedDraft]);
+
+  useEffect(() => {
+    setActiveSlashIndex(0);
+  }, [slashSuggestions.length, draft]);
+
+  useEffect(() => {
+    if (!hasMultilineDraft && composerCollapsed) setComposerCollapsed(false);
+  }, [composerCollapsed, hasMultilineDraft]);
+
+  useEffect(() => {
+    const measure = () => setComposerWrapped(composerNeedsExpansion(inputRef.current, collapsedHeight));
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [collapsedHeight, draft]);
+
+  function commitDraft(value = draftRef.current) {
+    if (persistedDraftRef.current === value) return;
+    persistedDraftRef.current = value;
+    setPersistedDraft(agent.id, value);
+  }
+
+  function updateDraft(value: string) {
+    draftRef.current = value;
+    setDraft(value);
+  }
+
+  function clearDraft() {
+    updateDraft("");
+    persistedDraftRef.current = "";
+    setPersistedDraft(agent.id, "");
+  }
+
+  async function refreshMobileSnapshot() {
+    try {
+      hydrateSnapshot(await api.agentSnapshot());
+    } catch {
+      // The WebSocket will refresh the transcript when connected.
+    }
+  }
+
+  async function send() {
+    const currentDraft = draftRef.current;
+    if ((!currentDraft.trim() && attachments.length === 0) || sending) return;
+    if (!canType) {
+      addError("This chat is not ready to receive messages.");
+      return;
+    }
+    if (agent.remoteControl && attachments.length > 0) {
+      addError("Remote Control stdin bridge does not support attachments yet.");
+      return;
+    }
+    commitDraft(currentDraft);
+    const injectedText = injectedMessageText(agent, currentDraft);
+    if (injectedText) {
+      const sent = mobile
+        ? wsConnected &&
+          (isBusy
+            ? sendCommand({ type: "injectMessage", id: agent.id, text: injectedText, attachments })
+            : sendCommand({ type: "userMessage", id: agent.id, text: injectedText, attachments }))
+        : isBusy
+          ? sendCommand({ type: "injectMessage", id: agent.id, text: injectedText, attachments })
+          : sendCommand({ type: "userMessage", id: agent.id, text: injectedText, attachments });
+      if (!sent) {
+        if (!mobile) return;
+        try {
+          await api.sendAgentMessage(agent.id, injectedText, attachments);
+          await refreshMobileSnapshot();
+        } catch (error) {
+          addError(error instanceof Error ? error.message : String(error));
+          return;
+        }
+      }
+      clearDraft();
+      setComposerCollapsed(false);
+      setAttachments([]);
+      window.requestAnimationFrame(() => (mobile ? inputRef.current?.blur() : inputRef.current?.focus()));
+      return;
+    }
+    const nativeResult = handleNativeSlashCommand(agent, currentDraft);
+    if (nativeResult !== "unhandled") {
+      if (nativeResult === "failed") return;
+      clearDraft();
+      setComposerCollapsed(false);
+      setAttachments([]);
+      return;
+    }
+    if (isBusy && (!mobile || agent.status !== "awaiting-input")) {
+      enqueueMessage(agent.id, { text: currentDraft, attachments });
+      clearDraft();
+      setComposerCollapsed(false);
+      setAttachments([]);
+      window.requestAnimationFrame(() => (mobile ? inputRef.current?.blur() : inputRef.current?.focus()));
+      return;
+    }
+    if (mobile) {
+      setSending(true);
+      try {
+        const sentBySocket = wsConnected && sendCommand({ type: "userMessage", id: agent.id, text: currentDraft, attachments });
+        if (!sentBySocket) {
+          await api.sendAgentMessage(agent.id, currentDraft, attachments);
+          await refreshMobileSnapshot();
+        }
+        clearDraft();
+        setComposerCollapsed(false);
+        setAttachments([]);
+        window.requestAnimationFrame(() => inputRef.current?.blur());
+      } catch (error) {
+        addError(error instanceof Error ? error.message : String(error));
+      } finally {
+        setSending(false);
+      }
+      return;
+    }
+    if (!sendCommand({ type: "userMessage", id: agent.id, text: currentDraft, attachments })) return;
+    clearDraft();
+    setComposerCollapsed(false);
+    setAttachments([]);
+    window.requestAnimationFrame(() => inputRef.current?.focus());
+  }
+
+  async function stopCurrentResponse() {
+    if (!mobile) {
+      sendCommand({ type: "interrupt", id: agent.id });
+      window.requestAnimationFrame(() => inputRef.current?.focus());
+      return;
+    }
+    try {
+      const sentBySocket = wsConnected && sendCommand({ type: "interrupt", id: agent.id });
+      if (!sentBySocket) {
+        await api.interruptAgent(agent.id);
+        await refreshMobileSnapshot();
+      }
+    } catch (error) {
+      addError(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  function selectTypedSlashCommand(value: string) {
+    updateDraft(value);
+    setSlashMenuOpen(false);
+    setSlashMenuSuppressed(false);
+    window.requestAnimationFrame(() => inputRef.current?.focus());
+  }
+
+  function runSlashCommand(value: string) {
+    const commandText = value.trim();
+    setSlashMenuOpen(false);
+    setSlashMenuSuppressed(false);
+    setActiveSlashIndex(0);
+    if (!commandText) {
+      window.requestAnimationFrame(() => inputRef.current?.focus());
+      return;
+    }
+    if (handleNativeSlashCommand(agent, commandText) !== "unhandled") {
+      window.requestAnimationFrame(() => inputRef.current?.focus());
+      return;
+    }
+    if (!canType) {
+      window.requestAnimationFrame(() => inputRef.current?.focus());
+      return;
+    }
+    const injectedText = injectedMessageText(agent, commandText);
+    if (injectedText) {
+      if (mobile) {
+        if (wsConnected && isBusy) sendCommand({ type: "injectMessage", id: agent.id, text: injectedText, attachments: [] });
+        else if (wsConnected) sendCommand({ type: "userMessage", id: agent.id, text: injectedText, attachments: [] });
+        else {
+          void api
+            .sendAgentMessage(agent.id, injectedText, [])
+            .then(refreshMobileSnapshot)
+            .catch((error: unknown) => addError(error instanceof Error ? error.message : String(error)));
+        }
+      } else if (isBusy) sendCommand({ type: "injectMessage", id: agent.id, text: injectedText });
+      else sendCommand({ type: "userMessage", id: agent.id, text: injectedText, attachments: [] });
+    } else if (isBusy) {
+      enqueueMessage(agent.id, { text: commandText, attachments: [] });
+    } else if (mobile && !wsConnected) {
+      void api
+        .sendAgentMessage(agent.id, commandText, [])
+        .then(refreshMobileSnapshot)
+        .catch((error: unknown) => addError(error instanceof Error ? error.message : String(error)));
+    } else {
+      sendCommand({ type: "userMessage", id: agent.id, text: commandText, attachments: [] });
+    }
+    window.requestAnimationFrame(() => inputRef.current?.focus());
+  }
+
+  function toggleSlashMenu() {
+    setSlashMenuOpen((open) => !open);
+    setSlashMenuSuppressed(false);
+    setActiveSlashIndex(0);
+    window.requestAnimationFrame(() => inputRef.current?.focus());
+  }
+
+  function handleComposerKeyDown(event: ReactKeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key === "Tab" && event.shiftKey) {
+      event.preventDefault();
+      sendNextComposerMode(agent, settings);
+      return;
+    }
+    if (slashSuggestions.length > 0) {
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        setActiveSlashIndex((index) => (index + 1) % slashSuggestions.length);
+        return;
+      }
+      if (event.key === "ArrowUp") {
+        event.preventDefault();
+        setActiveSlashIndex((index) => (index - 1 + slashSuggestions.length) % slashSuggestions.length);
+        return;
+      }
+      if (event.key === "Tab") {
+        event.preventDefault();
+        const selected = enabledSlashSuggestion(slashSuggestions[activeSlashIndex]) || slashSuggestions.find((suggestion) => !suggestion.disabled);
+        if (selected) {
+          if (slashMenuOpen) runSlashCommand(selected.value);
+          else selectTypedSlashCommand(selected.value);
+        }
+        return;
+      }
+      if (event.key === "Enter" && !event.shiftKey) {
+        const selected = enabledSlashSuggestion(slashSuggestions[activeSlashIndex]);
+        if (selected && slashMenuOpen) {
+          event.preventDefault();
+          runSlashCommand(selected.value);
+          return;
+        }
+        if (selected && draft.trim() !== selected.value.trim()) {
+          event.preventDefault();
+          selectTypedSlashCommand(selected.value);
+          return;
+        }
+        if (slashSuggestions[activeSlashIndex]?.disabled) {
+          event.preventDefault();
+          return;
+        }
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setSlashMenuOpen(false);
+        setSlashMenuSuppressed(true);
+        return;
+      }
+    }
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      void send();
+    }
+  }
+
+  async function handlePaste(event: ReactClipboardEvent<HTMLTextAreaElement>) {
+    const files = pastedImageFiles(event);
+    const pastedText = event.clipboardData.getData("text/plain");
+    const pastedMultilineText = /\r|\n/.test(pastedText);
+    if (files.length === 0 && !pastedMultilineText) return;
+    event.preventDefault();
+    if (pastedMultilineText) setComposerCollapsed(false);
+    if (pastedText) {
+      const selectionStart = event.currentTarget.selectionStart ?? draftRef.current.length;
+      const nextDraft = insertPastedText(event.currentTarget, draftRef.current, pastedText);
+      const nextCursor = selectionStart + pastedText.length;
+      updateDraft(nextDraft);
+      window.requestAnimationFrame(() => inputRef.current?.setSelectionRange(nextCursor, nextCursor));
+    }
+    if (files.length === 0) return;
+    try {
+      const uploaded = await uploadFiles(files);
+      setAttachments((current) => [...current, ...uploaded]);
+    } catch (error) {
+      addError(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  async function handleFileAttachment(files: FileList | null) {
+    const selectedFiles = Array.from(files || []);
+    if (selectedFiles.length === 0) return;
+    try {
+      const uploaded = await uploadFiles(selectedFiles);
+      setAttachments((current) => [...current, ...uploaded]);
+    } catch (error) {
+      addError(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  async function handleDrop(event: ReactDragEvent<HTMLDivElement>) {
+    composerDragDepthRef.current = 0;
+    setComposerDropActive(false);
+    event.stopPropagation();
+    if (!canType || !canAttach || isAgentReorderDrag(event.dataTransfer)) return;
+    event.preventDefault();
+    try {
+      const dropped = await attachmentsFromDrop(agent, event.dataTransfer);
+      if (dropped.length > 0) setAttachments((current) => [...current, ...dropped]);
+    } catch (error) {
+      addError(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  function handleComposerDragEnter(event: ReactDragEvent<HTMLDivElement>) {
+    if (!canType || !canAttach || isAgentReorderDrag(event.dataTransfer)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    composerDragDepthRef.current += 1;
+    setComposerDropActive(true);
+  }
+
+  function handleComposerDragOver(event: ReactDragEvent<HTMLDivElement>) {
+    if (!canType || !canAttach || isAgentReorderDrag(event.dataTransfer)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = "copy";
+    setComposerDropActive(true);
+  }
+
+  function handleComposerDragLeave(event: ReactDragEvent<HTMLDivElement>) {
+    if (!canType || !canAttach || isAgentReorderDrag(event.dataTransfer)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    composerDragDepthRef.current = Math.max(0, composerDragDepthRef.current - 1);
+    if (composerDragDepthRef.current === 0) setComposerDropActive(false);
+  }
+
+  const textareaClasses =
+    variant === "tile"
+      ? cn(
+          "min-h-9 resize-none border-0 bg-transparent py-2 text-sm leading-5 focus-visible:ring-0",
+          composerExpanded && "pr-10",
+          hasMultilineDraft && "pr-16",
+          composerExpanded ? "h-24 max-h-40 overflow-y-auto" : "h-9 overflow-hidden"
+        )
+      : variant === "mobile"
+        ? cn(
+            "min-h-11 resize-none border-0 bg-transparent py-2 pr-2 text-sm leading-5 focus-visible:ring-0",
+            hasMultilineDraft && "pr-10",
+            composerExpanded ? "h-28 max-h-36 overflow-y-auto" : "h-11 overflow-hidden"
+          )
+        : cn(
+            "min-h-[76px] resize-none border-0 bg-transparent py-2 leading-5 focus-visible:ring-0",
+            composerExpanded && "pr-10",
+            hasMultilineDraft && "pr-16",
+            composerExpanded ? "h-28 max-h-48 overflow-y-auto" : "h-[76px] overflow-hidden"
+          );
+
+  return (
+    <>
+      <AddContextDialog
+        agent={agent}
+        open={contextOpen}
+        onOpenChange={setContextOpen}
+        onSelect={(attachment) => setAttachments((current) => [...current, attachment])}
+        onDone={() => window.requestAnimationFrame(() => inputRef.current?.focus())}
+      />
+      {!mobile && <QueuedMessageList agentId={agent.id} queue={queue} compact={variant === "tile"} />}
+      <div
+        className={cn(
+          "relative rounded-md border border-border bg-background/80",
+          variant === "standard" && "mx-auto w-full min-w-0 max-w-4xl",
+          composerDropActive && "border-primary ring-1 ring-primary/60"
+        )}
+        onDragEnter={mobile ? undefined : handleComposerDragEnter}
+        onDragOver={mobile ? undefined : handleComposerDragOver}
+        onDragLeave={mobile ? undefined : handleComposerDragLeave}
+        onDrop={mobile ? undefined : (event) => void handleDrop(event)}
+      >
+        {composerDropActive && (
+          <div className="pointer-events-none absolute inset-0 z-20 grid place-items-center rounded-md border border-dashed border-primary bg-background/85 text-sm font-medium text-foreground shadow-sm backdrop-blur-sm">
+            Drop here
+          </div>
+        )}
+        <div className="absolute bottom-full left-0 right-0 z-[220] mb-2 px-2">
+          <SlashCommandAutocomplete
+            suggestions={slashSuggestions}
+            activeIndex={activeSlashIndex}
+            compact={compact}
+            onSelect={slashMenuOpen ? runSlashCommand : selectTypedSlashCommand}
+            onActiveIndexChange={setActiveSlashIndex}
+          />
+        </div>
+        <div className="grid gap-2 px-2 pt-2">
+          <AttachmentChips
+            attachments={attachments}
+            onRemove={(id) => setAttachments((current) => current.filter((attachment) => attachment.id !== id))}
+          />
+        </div>
+        <div className="relative">
+          <Textarea
+            ref={(node) => {
+              inputRef.current = node;
+              if (composerInputRef) composerInputRef.current = node;
+            }}
+            className={textareaClasses}
+            rows={variant === "standard" ? 3 : undefined}
+            value={draft}
+            disabled={!canType}
+            onFocus={onFocus}
+            onBlur={() => {
+              commitDraft();
+              onBlur?.();
+            }}
+            onChange={(event) => {
+              setSlashMenuOpen(false);
+              setSlashMenuSuppressed(false);
+              updateDraft(event.target.value);
+              setComposerWrapped(composerNeedsExpansion(event.currentTarget, collapsedHeight));
+            }}
+            onPaste={handlePaste}
+            placeholder={canType ? (isBusy ? "Queue a message..." : variant === "mobile" ? "Message" : `chat with ${providerLabel(agent.provider)}`) : "Chat unavailable"}
+            onKeyDown={handleComposerKeyDown}
+          />
+          {hasMultilineDraft && (
+            <button
+              type="button"
+              className={cn(
+                "absolute top-2 grid h-6 w-6 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground",
+                variant === "mobile" ? "right-2" : "right-6"
+              )}
+              title={composerExpanded ? "Collapse message" : `Expand ${draftLines}-line message`}
+              onClick={() => {
+                setComposerCollapsed(!composerCollapsed);
+                window.requestAnimationFrame(() => inputRef.current?.focus());
+              }}
+            >
+              {composerExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+            </button>
+          )}
+        </div>
+        <div className="flex items-center justify-between border-t border-border px-2 py-1.5">
+          <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              className="hidden"
+              onChange={(event) => {
+                void handleFileAttachment(event.currentTarget.files);
+                event.currentTarget.value = "";
+              }}
+            />
+            <ComposerAddMenu disabled={!canType || !canAttach} onUpload={() => fileInputRef.current?.click()} onAddContext={() => setContextOpen(true)} />
+            <Button variant="ghost" size="icon" className={variant === "mobile" ? "h-8 w-8" : "h-7 w-7"} title="Slash commands" onClick={toggleSlashMenu}>
+              <SquareSlash className="h-4 w-4" />
+            </Button>
+            {variant !== "mobile" && selectedLines > 0 && (
+              <span className="inline-flex min-w-0 items-center gap-1.5">
+                <FileText className="h-3.5 w-3.5" />
+                <span className="truncate">
+                  {selectedLines} {selectedLines === 1 ? "line" : "lines"} selected
+                </span>
+              </span>
+            )}
+          </div>
+          <div className="flex shrink-0 items-center gap-1.5">
+            <ComposerModeMenu agent={agent} compact={compact} inline />
+            <Button
+              type="button"
+              size="icon"
+              className={variant === "mobile" ? "h-9 w-9" : "h-8 w-8"}
+              disabled={showStopButton ? !agentHasProcess(agent) : !canType || sending || !hasDraftPayload}
+              onClick={showStopButton ? () => void stopCurrentResponse() : () => void send()}
+              title={showStopButton ? "Stop response" : "Send"}
+              aria-label={showStopButton ? "Stop response" : "Send message"}
+            >
+              {showStopButton ? <Square className="h-4 w-4" /> : <ArrowUp className="h-4 w-4" />}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
 function AgentTile({
   agent,
   height,
@@ -9208,7 +9765,7 @@ function AgentTile({
   const transcriptItems = useMemo(() => pairedTranscriptItems(transcript), [transcript]);
   const displayedTranscriptItems = useMemo(() => filteredTranscriptItems(transcriptItems, chatTranscriptDetail), [chatTranscriptDetail, transcriptItems]);
   const requiredFeedbackItems = useMemo(() => requiredFeedbackTranscriptItems(transcriptItems), [transcriptItems]);
-  const draft = useAppStore((state) => state.drafts[agent.id] || "");
+  const draft = "";
   const setDraft = useAppStore((state) => state.setDraft);
   const queue = useAppStore((state) => state.messageQueues[agent.id] || EMPTY_QUEUE);
   const enqueueMessage = useAppStore((state) => state.enqueueMessage);
@@ -9974,130 +10531,26 @@ function AgentTile({
               getCachedSelectedText={selection.getCachedSelection}
             />
           </ContextMenu>
-            <div className="shrink-0 border-t border-border p-3">
-          <AddContextDialog
-            agent={agent}
-            open={contextOpen}
-            onOpenChange={setContextOpen}
-            onSelect={(attachment) => setAttachments((current) => [...current, attachment])}
-            onDone={() => window.requestAnimationFrame(() => inputRef.current?.focus())}
-          />
-          <QueuedMessageList agentId={agent.id} queue={queue} compact />
-          <div
-            className={cn(
-              "relative rounded-md border border-border bg-background/80",
-              composerDropActive && "border-primary ring-1 ring-primary/60"
-            )}
-            onDragEnter={handleComposerDragEnter}
-            onDragOver={handleComposerDragOver}
-            onDragLeave={handleComposerDragLeave}
-            onDrop={(event) => void handleDrop(event)}
-          >
-            {composerDropActive && (
-              <div className="pointer-events-none absolute inset-0 z-20 grid place-items-center rounded-md border border-dashed border-primary bg-background/85 text-sm font-medium text-foreground shadow-sm backdrop-blur-sm">
-                Drop here
-              </div>
-            )}
-            <div className="absolute bottom-full left-0 right-0 z-[220] mb-2 px-2">
-              <SlashCommandAutocomplete
-                suggestions={slashSuggestions}
-                activeIndex={activeSlashIndex}
-                compact
-                onSelect={slashMenuOpen ? runSlashCommand : selectTypedSlashCommand}
-                onActiveIndexChange={setActiveSlashIndex}
-              />
-            </div>
-            <div className="grid gap-2 px-2 pt-2">
-              <AttachmentChips
-                attachments={attachments}
-                onRemove={(id) => setAttachments((current) => current.filter((attachment) => attachment.id !== id))}
-              />
-            </div>
-            <div className="relative">
-              <Textarea
-                ref={inputRef}
-                className={cn(
-                  "min-h-9 resize-none border-0 bg-transparent py-2 text-sm leading-5 focus-visible:ring-0",
-                  composerExpanded && "pr-10",
-                  hasMultilineDraft && "pr-16",
-                  composerExpanded ? "h-24 max-h-40 overflow-y-auto" : "h-9 overflow-hidden"
-                )}
-                value={draft}
-                disabled={!canType}
-                onFocus={() => {
-                  activateTile(true);
-                  setChatFocusedAgent(agent.id);
-                }}
-                onBlur={() => setChatFocusedAgent(undefined)}
-                onChange={(event) => {
-                  activateTile(true);
-                  setSlashMenuOpen(false);
-                  setSlashMenuSuppressed(false);
-                  setDraft(agent.id, event.target.value);
-                  setComposerWrapped(composerNeedsExpansion(event.currentTarget, 36));
-                }}
-                onPaste={handlePaste}
-                placeholder={isBusy ? "Queue a message..." : `chat with ${providerLabel(agent.provider)}`}
-                onKeyDown={handleComposerKeyDown}
-              />
-              {hasMultilineDraft && (
-                <button
-                  type="button"
-                  className="absolute right-6 top-2 grid h-6 w-6 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
-                  title={composerExpanded ? "Collapse message" : `Expand ${draftLines}-line message`}
-                  onClick={() => {
-                    setComposerCollapsed(!composerCollapsed);
-                    window.requestAnimationFrame(() => inputRef.current?.focus());
-                  }}
-                >
-                  {composerExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
-                </button>
-              )}
-            </div>
-            <div className="flex items-center justify-between border-t border-border px-2 py-1.5">
-              <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  multiple
-                  className="hidden"
-                  onChange={(event) => {
-                    void handleFileAttachment(event.currentTarget.files);
-                    event.currentTarget.value = "";
-                  }}
-                />
-                <ComposerAddMenu disabled={!canType || !canAttach} onUpload={() => fileInputRef.current?.click()} onAddContext={() => setContextOpen(true)} />
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7"
-                  title="Slash commands"
-                  onClick={toggleSlashMenu}
-                >
-                  <SquareSlash className="h-4 w-4" />
-                </Button>
-                {selectedLines > 0 && (
-                  <span className="inline-flex min-w-0 items-center gap-1.5">
-                    <FileText className="h-3.5 w-3.5" />
-                    <span className="truncate">{selectedLines} {selectedLines === 1 ? "line" : "lines"} selected</span>
-                  </span>
-                )}
-              </div>
-              <div className="flex shrink-0 items-center gap-1.5">
-                <ComposerModeMenu agent={agent} compact inline />
-                <Button
-                  size="icon"
-                  className="h-8 w-8"
-                  disabled={showStopButton ? !agentHasProcess(agent) : !canType || !hasDraftPayload}
-                  onClick={showStopButton ? stopCurrentResponse : send}
-                  title={showStopButton ? "Stop response" : "Send"}
-                >
-                  {showStopButton ? <Square className="h-4 w-4" /> : <ArrowUp className="h-4 w-4" />}
-                </Button>
-              </div>
-            </div>
+          <div className="shrink-0 border-t border-border p-3">
+            <AgentChatComposer
+              agent={agent}
+              settings={settings}
+              queue={queue}
+              selectedLines={selectedLines}
+              canType={Boolean(canType)}
+              canAttach={canAttach}
+              isBusy={isBusy}
+              addError={addError}
+              enqueueMessage={enqueueMessage}
+              composerInputRef={inputRef}
+              variant="tile"
+              onFocus={() => {
+                activateTile(true);
+                setChatFocusedAgent(agent.id);
+              }}
+              onBlur={() => setChatFocusedAgent(undefined)}
+            />
           </div>
-            </div>
           <div
             className="absolute bottom-0 right-0 top-0 w-2 cursor-ew-resize rounded-r-md hover:bg-primary/20"
             onPointerDown={startResize}
@@ -10943,7 +11396,7 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
   const transcriptItems = useMemo(() => pairedTranscriptItems(transcript), [transcript]);
   const displayedTranscriptItems = useMemo(() => filteredTranscriptItems(transcriptItems, chatTranscriptDetail), [chatTranscriptDetail, transcriptItems]);
   const requiredFeedbackItems = useMemo(() => requiredFeedbackTranscriptItems(transcriptItems), [transcriptItems]);
-  const draft = useAppStore((state) => state.drafts[agent.id] || "");
+  const draft = "";
   const setDraft = useAppStore((state) => state.setDraft);
   const queue = useAppStore((state) => state.messageQueues[agent.id] || EMPTY_QUEUE);
   const enqueueMessage = useAppStore((state) => state.enqueueMessage);
@@ -11480,124 +11933,21 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
         />
       </ContextMenu>
       <div className="border-t border-border p-3">
-        <AddContextDialog
+        <AgentChatComposer
           agent={agent}
-          open={contextOpen}
-          onOpenChange={setContextOpen}
-          onSelect={(attachment) => setAttachments((current) => [...current, attachment])}
-          onDone={() => window.requestAnimationFrame(() => inputRef.current?.focus())}
+          settings={settings}
+          queue={queue}
+          selectedLines={selectedLines}
+          canType={Boolean(canType)}
+          canAttach={canAttach}
+          isBusy={isBusy}
+          addError={addError}
+          enqueueMessage={enqueueMessage}
+          composerInputRef={inputRef}
+          variant="standard"
+          onFocus={() => setChatFocusedAgent(agent.id)}
+          onBlur={() => setChatFocusedAgent(undefined)}
         />
-        <QueuedMessageList agentId={agent.id} queue={queue} />
-        <div
-          className={cn(
-            "relative mx-auto w-full min-w-0 max-w-4xl rounded-md border border-border bg-background/80",
-            composerDropActive && "border-primary ring-1 ring-primary/60"
-          )}
-          onDragEnter={handleComposerDragEnter}
-          onDragOver={handleComposerDragOver}
-          onDragLeave={handleComposerDragLeave}
-          onDrop={(event) => void handleDrop(event)}
-        >
-          {composerDropActive && (
-            <div className="pointer-events-none absolute inset-0 z-20 grid place-items-center rounded-md border border-dashed border-primary bg-background/85 text-sm font-medium text-foreground shadow-sm backdrop-blur-sm">
-              Drop here
-            </div>
-          )}
-          <div className="absolute bottom-full left-0 right-0 z-[220] mb-2 px-2">
-            <SlashCommandAutocomplete
-              suggestions={slashSuggestions}
-              activeIndex={activeSlashIndex}
-              onSelect={slashMenuOpen ? runSlashCommand : selectTypedSlashCommand}
-              onActiveIndexChange={setActiveSlashIndex}
-            />
-          </div>
-          <div className="grid gap-2 px-2 pt-2">
-            <AttachmentChips
-              attachments={attachments}
-              onRemove={(id) => setAttachments((current) => current.filter((attachment) => attachment.id !== id))}
-            />
-          </div>
-          <div className="relative">
-            <Textarea
-              ref={inputRef}
-              className={cn(
-                "min-h-[76px] resize-none border-0 bg-transparent py-2 leading-5 focus-visible:ring-0",
-                composerExpanded && "pr-10",
-                hasMultilineDraft && "pr-16",
-                composerExpanded ? "h-28 max-h-48 overflow-y-auto" : "h-[76px] overflow-hidden"
-              )}
-              rows={3}
-              value={draft}
-              disabled={!canType}
-              onFocus={() => setChatFocusedAgent(agent.id)}
-              onBlur={() => setChatFocusedAgent(undefined)}
-              onChange={(event) => {
-                setSlashMenuOpen(false);
-                setSlashMenuSuppressed(false);
-                setDraft(agent.id, event.target.value);
-                setComposerWrapped(composerNeedsExpansion(event.currentTarget, 76));
-              }}
-              onPaste={handlePaste}
-              placeholder={isBusy ? "Queue a message..." : `chat with ${providerLabel(agent.provider)}`}
-              onKeyDown={handleComposerKeyDown}
-            />
-            {hasMultilineDraft && (
-              <button
-                type="button"
-                className="absolute right-6 top-2 grid h-6 w-6 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
-                title={composerExpanded ? "Collapse message" : `Expand ${draftLines}-line message`}
-                onClick={() => {
-                  setComposerCollapsed(!composerCollapsed);
-                  window.requestAnimationFrame(() => inputRef.current?.focus());
-                }}
-              >
-                {composerExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
-              </button>
-            )}
-          </div>
-          <div className="flex items-center justify-between border-t border-border px-2 py-1.5">
-            <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-              <input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                className="hidden"
-                onChange={(event) => {
-                  void handleFileAttachment(event.currentTarget.files);
-                  event.currentTarget.value = "";
-                }}
-              />
-              <ComposerAddMenu disabled={!canType || !canAttach} onUpload={() => fileInputRef.current?.click()} onAddContext={() => setContextOpen(true)} />
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7"
-                title="Slash commands"
-                onClick={toggleSlashMenu}
-              >
-                <SquareSlash className="h-4 w-4" />
-              </Button>
-              {selectedLines > 0 && (
-                <span className="inline-flex min-w-0 items-center gap-1.5">
-                  <FileText className="h-3.5 w-3.5" />
-                  <span className="truncate">{selectedLines} {selectedLines === 1 ? "line" : "lines"} selected</span>
-                </span>
-              )}
-            </div>
-            <div className="flex shrink-0 items-center gap-1.5">
-              <ComposerModeMenu agent={agent} inline />
-              <Button
-                size="icon"
-                className="h-8 w-8"
-                disabled={showStopButton ? !agentHasProcess(agent) : !canType || !hasDraftPayload}
-                onClick={showStopButton ? stopCurrentResponse : send}
-                title={showStopButton ? "Stop response" : "Send"}
-              >
-                {showStopButton ? <Square className="h-4 w-4" /> : <ArrowUp className="h-4 w-4" />}
-              </Button>
-            </div>
-          </div>
-        </div>
       </div>
     </main>
   );
@@ -13795,7 +14145,7 @@ function MobileChatPane({ agent, addError }: { agent: RunningAgent; addError: (m
   const settings = useAppStore((state) => state.settings);
   const chatTranscriptDetailOverride = useAppStore((state) => state.chatTranscriptDetails[agent.id]);
   const chatTranscriptDetail = chatTranscriptDetailOverride || normalizeChatTranscriptDetail(settings.chatTranscriptDetail);
-  const draft = useAppStore((state) => state.drafts[agent.id] || "");
+  const draft = "";
   const setDraft = useAppStore((state) => state.setDraft);
   const queue = useAppStore((state) => state.messageQueues[agent.id] || EMPTY_QUEUE);
   const enqueueMessage = useAppStore((state) => state.enqueueMessage);
@@ -14302,102 +14652,21 @@ function MobileChatPane({ agent, addError }: { agent: RunningAgent; addError: (m
         )}
       </div>
 
-      {queue.length > 0 && (
-        <div className="min-w-0 shrink-0 overflow-x-hidden border-t border-border bg-card p-2">
-          <QueuedMessageList agentId={agent.id} queue={queue} compact />
-        </div>
-      )}
       <div className="min-w-0 shrink-0 border-t border-border bg-card p-2">
-        <AddContextDialog
+        {queue.length > 0 && <QueuedMessageList agentId={agent.id} queue={queue} compact />}
+        <AgentChatComposer
           agent={agent}
-          open={contextOpen}
-          onOpenChange={setContextOpen}
-          onSelect={(attachment) => setAttachments((current) => [...current, attachment])}
-          onDone={() => window.requestAnimationFrame(() => inputRef.current?.focus())}
+          settings={settings}
+          queue={EMPTY_QUEUE}
+          canType={Boolean(canType)}
+          canAttach={canAttach}
+          isBusy={isBusy}
+          addError={addError}
+          enqueueMessage={enqueueMessage}
+          composerInputRef={inputRef}
+          variant="mobile"
+          wsConnected={wsConnected}
         />
-        <div className="relative rounded-md border border-border bg-background/80">
-          <div className="absolute bottom-full left-0 right-0 z-[220] mb-2 px-2">
-            <SlashCommandAutocomplete
-              suggestions={slashSuggestions}
-              activeIndex={activeSlashIndex}
-              compact
-              onSelect={slashMenuOpen ? runSlashCommand : selectTypedSlashCommand}
-              onActiveIndexChange={setActiveSlashIndex}
-            />
-          </div>
-          <div className="grid gap-2 px-2 pt-2">
-            <AttachmentChips
-              attachments={attachments}
-              onRemove={(id) => setAttachments((current) => current.filter((attachment) => attachment.id !== id))}
-            />
-          </div>
-          <div className="relative">
-            <Textarea
-              ref={inputRef}
-              value={draft}
-              onChange={(event) => {
-                setSlashMenuOpen(false);
-                setSlashMenuSuppressed(false);
-                setDraft(agent.id, event.target.value);
-                setComposerWrapped(composerNeedsExpansion(event.currentTarget, 44));
-              }}
-              onKeyDown={handleComposerKeyDown}
-              onPaste={handlePaste}
-              className={cn(
-                "min-h-11 resize-none border-0 bg-transparent py-2 pr-2 text-sm leading-5 focus-visible:ring-0",
-                hasMultilineDraft && "pr-10",
-                composerExpanded ? "h-28 max-h-36 overflow-y-auto" : "h-11 overflow-hidden"
-              )}
-              placeholder={canType ? (isBusy ? "Queue a message..." : "Message") : "Chat unavailable"}
-              disabled={!canType}
-            />
-            {hasMultilineDraft && (
-              <button
-                type="button"
-                className="absolute right-2 top-2 grid h-6 w-6 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
-                title={composerExpanded ? "Collapse message" : `Expand ${draftLines}-line message`}
-                onClick={() => {
-                  setComposerCollapsed(!composerCollapsed);
-                  window.requestAnimationFrame(() => inputRef.current?.focus());
-                }}
-              >
-                {composerExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
-              </button>
-            )}
-          </div>
-          <div className="flex items-center justify-between border-t border-border px-2 py-1.5">
-            <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-              <input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                className="hidden"
-                onChange={(event) => {
-                  void handleFileAttachment(event.currentTarget.files);
-                  event.currentTarget.value = "";
-                }}
-              />
-              <ComposerAddMenu disabled={!canType || !canAttach} onUpload={() => fileInputRef.current?.click()} onAddContext={() => setContextOpen(true)} />
-              <Button variant="ghost" size="icon" className="h-8 w-8" title="Slash commands" onClick={toggleSlashMenu}>
-                <SquareSlash className="h-4 w-4" />
-              </Button>
-            </div>
-            <div className="flex shrink-0 items-center gap-1.5">
-              <ComposerModeMenu agent={agent} compact inline />
-              <Button
-                type="button"
-                size="icon"
-                className="h-9 w-9"
-                disabled={showStopButton ? !agentHasProcess(agent) : !canType || sending || !hasDraftPayload}
-                onClick={showStopButton ? () => void stopCurrentResponse() : () => void send()}
-                title={showStopButton ? "Stop response" : "Send"}
-                aria-label={showStopButton ? "Stop response" : "Send message"}
-              >
-                {showStopButton ? <Square className="h-4 w-4" /> : <ArrowUp className="h-4 w-4" />}
-              </Button>
-            </div>
-          </div>
-        </div>
       </div>
     </section>
   );
