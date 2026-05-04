@@ -11,6 +11,16 @@
       "type": "patch",
       "platform": "any",
       "arch": "any",
+      "fromVersion": "0.1.29",
+      "version": "0.1.31",
+      "url": "https://github.com/yohaas/AgentHero/raw/main/installer/updates/v0.1.31/agent-hero-0.1.29-to-0.1.31-app-patch.zip",
+      "sha256": "34a70b47d0602bcffb1d22013716db4949bbe9e0aaf5840a945f4f3f9b659d65",
+      "size": 635892
+    },
+    {
+      "type": "patch",
+      "platform": "any",
+      "arch": "any",
       "fromVersion": "0.1.30",
       "version": "0.1.31",
       "url": "https://github.com/yohaas/AgentHero/raw/main/installer/updates/v0.1.31/agent-hero-0.1.30-to-0.1.31-app-patch.zip",
