@@ -110,6 +110,7 @@ import type {
   AgentPermissionMode,
   AgentProvider,
   AppInstallMode,
+  AppUpdateLogs,
   AppUpdateStatus,
   ClaudePluginCatalog,
   DirectoryEntry,
@@ -4354,8 +4355,10 @@ function AppUpdateNotice({ compact = false, hideWhenNoUpdate = false }: { compac
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [status, setStatus] = useState<AppUpdateStatus | undefined>();
   const [loading, setLoading] = useState(false);
+  const [logsLoading, setLogsLoading] = useState(false);
   const [updateStarting, setUpdateStarting] = useState(false);
   const [updateProgress, setUpdateProgress] = useState<string>();
+  const [updateLogs, setUpdateLogs] = useState<AppUpdateLogs>();
   const [updateRun, setUpdateRun] = useState<{ requestId: string; commands: string[] }>();
   const installedMode = status?.installMode === "installed" || settings.installMode === "installed";
   const installedUpdateManifestUrl = (settings.updateManifestUrl || "").trim();
@@ -4392,6 +4395,13 @@ function AppUpdateNotice({ compact = false, hideWhenNoUpdate = false }: { compac
     return () => window.clearInterval(timer);
   }, [settings.updateChecksEnabled]);
 
+  useEffect(() => {
+    if (!detailsOpen || !installedMode) return;
+    void refreshUpdateLogs(false);
+    const timer = window.setInterval(() => void refreshUpdateLogs(false), updateProgress ? 2500 : 10000);
+    return () => window.clearInterval(timer);
+  }, [detailsOpen, installedMode, updateProgress]);
+
   async function refresh(reportErrors = true) {
     if (settings.updateChecksEnabled === false) return;
     setLoading(true);
@@ -4401,6 +4411,18 @@ function AppUpdateNotice({ compact = false, hideWhenNoUpdate = false }: { compac
       if (reportErrors) addError(error instanceof Error ? error.message : String(error));
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function refreshUpdateLogs(reportErrors = true) {
+    if (!installedMode) return;
+    setLogsLoading(true);
+    try {
+      setUpdateLogs(await api.appUpdateLogs());
+    } catch (error) {
+      if (reportErrors) addError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setLogsLoading(false);
     }
   }
 
@@ -4467,6 +4489,7 @@ function AppUpdateNotice({ compact = false, hideWhenNoUpdate = false }: { compac
       setUpdateStarting(true);
       try {
         await api.runInstalledUpdate();
+        void refreshUpdateLogs(false);
         await waitForInstalledUpdate(targetVersion);
       } catch (error) {
         addError(error instanceof Error ? error.message : String(error));
@@ -4491,6 +4514,7 @@ function AppUpdateNotice({ compact = false, hideWhenNoUpdate = false }: { compac
   }
 
   const commits = status?.commits || [];
+  const logFiles = updateLogs?.files || [];
   const updateAvailable = Boolean(status?.updateAvailable);
   const canRunUpdate = updateAvailable && (installedMode || effectiveUpdateCommands.length > 0) && !updateRun && !updateStarting && !updateProgress;
   const manifestVersionOlder =
@@ -4658,6 +4682,39 @@ function AppUpdateNotice({ compact = false, hideWhenNoUpdate = false }: { compac
             {updateProgress && (
               <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
                 {updateProgress}
+              </div>
+            )}
+
+            {installedMode && (
+              <div className="grid gap-2 rounded-md border border-border p-2">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="text-xs font-medium text-muted-foreground">Update activity</div>
+                  <Button variant="outline" size="sm" onClick={() => void refreshUpdateLogs(true)} disabled={logsLoading}>
+                    <RefreshCw className={cn("h-4 w-4", logsLoading && "animate-spin")} />
+                    Logs
+                  </Button>
+                </div>
+                {logFiles.length === 0 ? (
+                  <div className="rounded-md border border-dashed border-border px-2 py-3 text-center text-xs text-muted-foreground">
+                    No update logs loaded.
+                  </div>
+                ) : (
+                  <div className="grid gap-2">
+                    {logFiles.map((file) => (
+                      <div key={file.path} className="grid gap-1">
+                        <div className="flex min-w-0 items-center justify-between gap-2 text-[11px]">
+                          <span className="font-medium text-muted-foreground">{file.name}</span>
+                          <span className="min-w-0 truncate font-mono text-muted-foreground" title={file.path}>
+                            {file.exists && file.updatedAt ? formatShortDateTime(file.updatedAt) : "No entries"}
+                          </span>
+                        </div>
+                        <pre className="max-h-32 overflow-auto rounded-md bg-muted p-2 text-[11px] leading-relaxed text-muted-foreground">
+                          {file.content || "No log entries yet."}
+                        </pre>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 

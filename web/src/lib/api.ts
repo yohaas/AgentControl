@@ -1,5 +1,6 @@
 import type {
   Capabilities,
+  AppUpdateLogs,
   AppUpdateStatus,
   AgentSnapshot,
   ClaudePlugin,
@@ -247,6 +248,7 @@ export const api = {
     }>(`/api/models/latest${provider ? `?provider=${encodeURIComponent(provider)}` : ""}`),
   adminStatus: () => json<{ supervised: boolean; pid: number }>("/api/admin/status"),
   appUpdates: () => json<AppUpdateStatus>("/api/admin/updates"),
+  appUpdateLogs: () => json<AppUpdateLogs>("/api/admin/updates/logs"),
   runInstalledUpdate: () => json<{ ok: boolean; pid?: number }>("/api/admin/updates/run", { method: "POST" }),
   restartApp: () => json<{ ok: boolean }>("/api/admin/restart", { method: "POST" }),
   shutdownApp: () => json<{ ok: boolean }>("/api/admin/shutdown", { method: "POST" }),

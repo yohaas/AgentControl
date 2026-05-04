@@ -257,6 +257,19 @@ export interface AppUpdateStatus {
   message?: string;
 }
 
+export interface AppUpdateLogFile {
+  name: string;
+  path: string;
+  exists: boolean;
+  updatedAt?: string;
+  content: string;
+}
+
+export interface AppUpdateLogs {
+  checkedAt: string;
+  files: AppUpdateLogFile[];
+}
+
 export interface RunningAgent {
   id: string;
   provider?: AgentProvider;

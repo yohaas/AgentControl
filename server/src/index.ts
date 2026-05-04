@@ -1110,6 +1110,45 @@ async function appendInstalledUpdateLaunchLog(message: string): Promise<void> {
   await appendFile(logPath, `[${new Date().toISOString()}] ${message}\n`);
 }
 
+function installedUpdateLogPaths(): Array<{ name: string; path: string }> {
+  const stateLogsDir = statePath("logs");
+  const installedLogsDir =
+    process.platform === "darwin"
+      ? path.join(os.homedir(), "Library", "Logs", "AgentHero")
+      : stateLogsDir;
+  return [
+    { name: "Launcher", path: path.join(stateLogsDir, "installed-update-launch.log") },
+    { name: "Updater", path: path.join(installedLogsDir, "installed-update.log") }
+  ];
+}
+
+async function readInstalledUpdateLogs() {
+  const files = await Promise.all(
+    installedUpdateLogPaths().map(async (entry) => {
+      const info = await stat(entry.path).catch(() => undefined);
+      if (!info) {
+        return {
+          ...entry,
+          exists: false,
+          content: ""
+        };
+      }
+      const content = await readFile(entry.path, "utf8").catch(() => "");
+      const lines = content.split(/\r?\n/).slice(-160).join("\n").trim();
+      return {
+        ...entry,
+        exists: true,
+        updatedAt: info.mtime.toISOString(),
+        content: lines
+      };
+    })
+  );
+  return {
+    checkedAt: new Date().toISOString(),
+    files
+  };
+}
+
 async function startInstalledUpdate(): Promise<{ pid?: number }> {
   const installMode = resolveInstallMode(config);
   if (installMode !== "installed") {
@@ -2386,6 +2425,10 @@ app.get("/api/admin/status", (_request, response) => {
 
 app.get("/api/admin/updates", async (_request, response) => {
   response.json(await appUpdateStatus());
+});
+
+app.get("/api/admin/updates/logs", async (_request, response) => {
+  response.json(await readInstalledUpdateLogs());
 });
 
 app.post("/api/admin/updates/run", async (_request, response) => {
