@@ -98,6 +98,11 @@ interface FilePreviewRequest {
   line?: number;
 }
 
+export interface ToastMessage {
+  id: string;
+  message: string;
+}
+
 interface TerminalProjectUiState {
   open: boolean;
   inFileExplorer: boolean;
@@ -299,6 +304,7 @@ interface AppState {
   settings: SettingsState;
   wsConnected: boolean;
   errors: string[];
+  toasts: ToastMessage[];
   drafts: Record<string, string>;
   messageQueues: Record<string, QueuedMessage[]>;
   chatTranscriptDetails: Record<string, ChatTranscriptDetailMode>;
@@ -332,6 +338,8 @@ interface AppState {
   setWsConnected: (connected: boolean) => void;
   addError: (message: string) => void;
   dismissError: (index: number) => void;
+  addToast: (message: string) => void;
+  dismissToast: (id: string) => void;
   hydrateSnapshot: (snapshot: AgentSnapshot) => void;
   handleServerEvent: (event: WsServerEvent) => void;
   setDraft: (id: string, text: string) => void;
@@ -657,6 +665,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   settings: defaultSettings,
   wsConnected: false,
   errors: [],
+  toasts: [],
   drafts: {},
   messageQueues: readStoredMessageQueues(),
   chatTranscriptDetails: {},
@@ -762,6 +771,15 @@ export const useAppStore = create<AppState>((set, get) => ({
       };
     }),
   dismissError: (index) => set((state) => ({ errors: state.errors.filter((_, candidateIndex) => candidateIndex !== index) })),
+  addToast: (message) =>
+    set((state) => {
+      const normalized = message.trim();
+      if (!normalized) return state;
+      return {
+        toasts: [{ id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, message: normalized }, ...state.toasts].slice(0, 5)
+      };
+    }),
+  dismissToast: (id) => set((state) => ({ toasts: state.toasts.filter((toast) => toast.id !== id) })),
   hydrateSnapshot: (snapshot) =>
     set((state) => {
       const agentIds = new Set(snapshot.agents.map((agent) => agent.id));

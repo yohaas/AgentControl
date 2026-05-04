@@ -1364,6 +1364,13 @@ function planEventPlainText(event: PlanEvent) {
     .join("\n\n");
 }
 
+function copyToClipboard(text: string, addError: (message: string) => void, confirmation = "Copied to clipboard.") {
+  void navigator.clipboard.writeText(text).then(
+    () => useAppStore.getState().addToast(confirmation),
+    (error: unknown) => addError(error instanceof Error ? error.message : String(error))
+  );
+}
+
 function contextCopyTargetFromEvent(
   event: ReactMouseEvent<HTMLElement>,
   root: HTMLElement | null,
@@ -8401,7 +8408,7 @@ function ProjectInspectorTile({
   }
 
   function copyText(text: string) {
-    void navigator.clipboard.writeText(text).catch((error: unknown) => addError(error instanceof Error ? error.message : String(error)));
+    copyToClipboard(text, addError);
   }
 
   async function sendFileToAgent(pathValue: string, agent: RunningAgent) {
@@ -8711,7 +8718,7 @@ function ProjectInspectorTile({
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => selectedPath && void navigator.clipboard.writeText(selectedPath)}>
+                  <DropdownMenuItem onClick={() => selectedPath && copyText(selectedPath)}>
                     <Clipboard className="mr-2 h-4 w-4" /> Copy relative path
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => copyText(preview?.hostOpenPath || diff?.hostOpenPath || selectedPath)}>
@@ -12021,9 +12028,7 @@ function SendToMenu({
         onClick={() => {
           const target = currentCopyTarget();
           if (!target.text) return;
-          void navigator.clipboard.writeText(target.text).catch((error: unknown) => {
-            addError(error instanceof Error ? error.message : String(error));
-          });
+          copyToClipboard(target.text, addError);
         }}
       >
         <Clipboard className="mr-2 h-4 w-4" />
@@ -12397,9 +12402,7 @@ function MarkdownCodeBlock({ children, className, ...props }: ComponentProps<"pr
 
   function copyCode(event: ReactMouseEvent<HTMLButtonElement>) {
     event.stopPropagation();
-    void navigator.clipboard.writeText(codeText).catch((error: unknown) => {
-      addError(error instanceof Error ? error.message : String(error));
-    });
+    copyToClipboard(codeText, addError, "Copied code to clipboard.");
   }
 
   return (
@@ -12599,9 +12602,7 @@ function ChatBlockPopoutButton({
   }
 
   function copyText() {
-    void navigator.clipboard.writeText(actionText()).catch((error: unknown) => {
-      addError(error instanceof Error ? error.message : String(error));
-    });
+    copyToClipboard(actionText(), addError);
   }
 
   return (
@@ -12720,9 +12721,7 @@ function ChatBlockPopoutButton({
               <ContextMenuItem
                 disabled={!text.trim()}
                 onClick={() => {
-                  void navigator.clipboard.writeText(actionText()).catch((error: unknown) => {
-                    addError(error instanceof Error ? error.message : String(error));
-                  });
+                  copyToClipboard(actionText(), addError);
                 }}
               >
                 <Clipboard className="mr-2 h-4 w-4" />
@@ -12840,9 +12839,7 @@ function ToolCard({
 
   function copyText(text: string) {
     if (!text) return;
-    void navigator.clipboard.writeText(text).catch((error: unknown) => {
-      addError(error instanceof Error ? error.message : String(error));
-    });
+    copyToClipboard(text, addError);
   }
 
   async function alwaysAllowAndApprove() {
@@ -13653,10 +13650,36 @@ function TerminalMinimizedDock({ poppedOutTerminalIds }: { poppedOutTerminalIds:
 
 function ErrorStack() {
   const errors = useAppStore((state) => state.errors);
+  const toasts = useAppStore((state) => state.toasts);
   const dismissError = useAppStore((state) => state.dismissError);
-  if (errors.length === 0) return null;
+  const dismissToast = useAppStore((state) => state.dismissToast);
+  useEffect(() => {
+    if (toasts.length === 0) return;
+    const timers = toasts.map((toast) => window.setTimeout(() => dismissToast(toast.id), 2500));
+    return () => timers.forEach((timer) => window.clearTimeout(timer));
+  }, [dismissToast, toasts]);
+  if (errors.length === 0 && toasts.length === 0) return null;
   return (
     <div className="fixed bottom-4 right-4 z-50 grid max-h-[min(60vh,28rem)] max-w-[calc(100vw-2rem)] justify-items-end gap-2 overflow-y-auto overflow-x-hidden">
+      {toasts.map((toast) => (
+        <div
+          key={toast.id}
+          className="inline-flex w-fit max-w-[min(34rem,calc(100vw-2rem))] min-w-0 items-start gap-2 overflow-x-hidden rounded-md border border-emerald-500/45 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-800 shadow-lg backdrop-blur dark:border-emerald-400/40 dark:bg-emerald-500/15 dark:text-emerald-100"
+          role="status"
+        >
+          <Check className="mt-0.5 h-4 w-4 shrink-0" />
+          <span className="min-w-0 max-w-[min(28rem,calc(100vw-5rem))] overflow-x-hidden whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+            {toast.message}
+          </span>
+          <button
+            className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-emerald-800/80 hover:bg-emerald-500/15 hover:text-emerald-900 dark:text-emerald-100/80 dark:hover:bg-emerald-500/20 dark:hover:text-emerald-100"
+            onClick={() => dismissToast(toast.id)}
+            title="Dismiss notification"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      ))}
       {errors.map((error, index) => (
         <div
           key={`${error}-${index}`}
