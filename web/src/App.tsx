@@ -4348,9 +4348,11 @@ function AppUpdateNotice({ compact = false, hideWhenNoUpdate = false }: { compac
   const settings = useAppStore((state) => state.settings);
   const terminalSessions = useAppStore((state) => state.terminalSessions);
   const addError = useAppStore((state) => state.addError);
+  const addToast = useAppStore((state) => state.addToast);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [status, setStatus] = useState<AppUpdateStatus | undefined>();
   const [loading, setLoading] = useState(false);
+  const [updateStarting, setUpdateStarting] = useState(false);
   const [updateRun, setUpdateRun] = useState<{ requestId: string; commands: string[] }>();
   const installedMode = status?.installMode === "installed" || settings.installMode === "installed";
   const installedUpdateManifestUrl = (settings.updateManifestUrl || "").trim();
@@ -4413,9 +4415,22 @@ function AppUpdateNotice({ compact = false, hideWhenNoUpdate = false }: { compac
     setUpdateRun(undefined);
   }, [addError, updateRun, updateSession]);
 
-  function runUpdate() {
+  async function runUpdate() {
     if (!updateAvailable) {
       addError(status?.message || "AgentHero is already up to date.");
+      return;
+    }
+    if (installedMode) {
+      setUpdateStarting(true);
+      try {
+        await api.runInstalledUpdate();
+        addToast("AgentHero update started.");
+        setDetailsOpen(false);
+      } catch (error) {
+        addError(error instanceof Error ? error.message : String(error));
+      } finally {
+        setUpdateStarting(false);
+      }
       return;
     }
     const commands = effectiveUpdateCommands.map((command) => command.trim()).filter(Boolean);
@@ -4435,7 +4450,7 @@ function AppUpdateNotice({ compact = false, hideWhenNoUpdate = false }: { compac
 
   const commits = status?.commits || [];
   const updateAvailable = Boolean(status?.updateAvailable);
-  const canRunUpdate = updateAvailable && effectiveUpdateCommands.length > 0 && !updateRun;
+  const canRunUpdate = updateAvailable && (installedMode || effectiveUpdateCommands.length > 0) && !updateRun && !updateStarting;
   const manifestVersionOlder =
     status?.latestVersion?.version && status.localVersion?.version
       ? compareDottedVersions(status.latestVersion.version, status.localVersion.version) < 0
@@ -4634,9 +4649,9 @@ function AppUpdateNotice({ compact = false, hideWhenNoUpdate = false }: { compac
               <Button variant="outline" onClick={() => setDetailsOpen(false)}>
                 Close
               </Button>
-              <Button onClick={runUpdate} disabled={!canRunUpdate}>
+              <Button onClick={() => void runUpdate()} disabled={!canRunUpdate}>
                 <SquareTerminal className="h-4 w-4" />
-                {updateRun ? "Running" : updateAvailable ? "Run Update" : "Up to date"}
+                {updateRun || updateStarting ? "Running" : updateAvailable ? "Run Update" : "Up to date"}
               </Button>
             </div>
           </div>

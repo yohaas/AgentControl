@@ -1104,6 +1104,65 @@ async function appUpdateStatus(): Promise<AppUpdateStatus> {
   }
 }
 
+async function appendInstalledUpdateLaunchLog(message: string): Promise<void> {
+  const logPath = statePath("logs", "installed-update-launch.log");
+  await mkdir(path.dirname(logPath), { recursive: true });
+  await appendFile(logPath, `[${new Date().toISOString()}] ${message}\n`);
+}
+
+async function startInstalledUpdate(): Promise<{ pid?: number }> {
+  const installMode = resolveInstallMode(config);
+  if (installMode !== "installed") {
+    throw new Error("Installed update launch requires installed mode.");
+  }
+  const manifestUrl = resolveUpdateManifestUrl(config);
+  if (!manifestUrl) {
+    throw new Error("Manifest URL is required before running installed updates.");
+  }
+
+  const env = { ...process.env, AGENTHERO_UPDATE_MANIFEST_URL: manifestUrl };
+  let command: string;
+  let args: string[];
+
+  if (process.platform === "win32") {
+    const scriptPath = path.join(appRoot, "scripts", "windows", "start-installed-update.ps1");
+    if (!(await stat(scriptPath).catch(() => undefined))) {
+      throw new Error(`Installed update launcher was not found at ${scriptPath}`);
+    }
+    command = "powershell.exe";
+    args = [
+      "-NoProfile",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-File",
+      scriptPath,
+      "-InstallDir",
+      appRoot,
+      "-ManifestUrl",
+      manifestUrl
+    ];
+  } else {
+    const scriptPath = path.join(appRoot, "scripts", "macos", "update-installed-agent-hero.sh");
+    if (!(await stat(scriptPath).catch(() => undefined))) {
+      throw new Error(`Installed update launcher was not found at ${scriptPath}`);
+    }
+    command = "bash";
+    args = [scriptPath, "--install-dir", appRoot, "--manifest-url", manifestUrl];
+  }
+
+  await appendInstalledUpdateLaunchLog(`Starting installed update: ${command} ${args.join(" ")}`);
+  const child = spawn(command, args, {
+    cwd: appRoot,
+    detached: true,
+    env,
+    stdio: "ignore",
+    windowsHide: true
+  });
+  child.unref();
+  await appendInstalledUpdateLaunchLog(`Started installed update process pid=${child.pid || "unknown"}`);
+  return { pid: child.pid };
+}
+
 function parseGitWorktrees(output: string, currentPath: string): GitWorktree[] {
   const worktrees: GitWorktree[] = [];
   let current: GitWorktree | undefined;
@@ -2327,6 +2386,14 @@ app.get("/api/admin/status", (_request, response) => {
 
 app.get("/api/admin/updates", async (_request, response) => {
   response.json(await appUpdateStatus());
+});
+
+app.post("/api/admin/updates/run", async (_request, response) => {
+  try {
+    response.json({ ok: true, ...(await startInstalledUpdate()) });
+  } catch (error) {
+    response.status(400).json({ error: error instanceof Error ? error.message : String(error) });
+  }
 });
 
 app.post("/api/admin/restart", async (_request, response) => {

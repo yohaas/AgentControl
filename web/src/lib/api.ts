@@ -247,6 +247,7 @@ export const api = {
     }>(`/api/models/latest${provider ? `?provider=${encodeURIComponent(provider)}` : ""}`),
   adminStatus: () => json<{ supervised: boolean; pid: number }>("/api/admin/status"),
   appUpdates: () => json<AppUpdateStatus>("/api/admin/updates"),
+  runInstalledUpdate: () => json<{ ok: boolean; pid?: number }>("/api/admin/updates/run", { method: "POST" }),
   restartApp: () => json<{ ok: boolean }>("/api/admin/restart", { method: "POST" }),
   shutdownApp: () => json<{ ok: boolean }>("/api/admin/shutdown", { method: "POST" }),
   settings: () => json<SettingsState>("/api/settings"),
