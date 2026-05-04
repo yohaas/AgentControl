@@ -859,6 +859,11 @@ interface AppUpdateManifest {
   assets?: AppUpdateAsset[];
 }
 
+interface GithubContentsManifest {
+  content?: string;
+  encoding?: string;
+}
+
 function normalizeUpdatePlatform(platform = process.platform): string {
   if (platform === "win32") return "windows";
   if (platform === "darwin") return "macos";
@@ -934,28 +939,83 @@ async function readLocalVersionMetadata(): Promise<AppVersionMetadata | undefine
   return undefined;
 }
 
-async function fetchUpdateManifest(manifestUrl: string): Promise<AppUpdateManifest> {
-  const requestUrl = (() => {
-    try {
-      const nextUrl = new URL(manifestUrl);
-      nextUrl.searchParams.set("nocache", Date.now().toString());
-      return nextUrl.toString();
-    } catch {
-      return `${manifestUrl}${manifestUrl.includes("?") ? "&" : "?"}nocache=${Date.now()}`;
-    }
-  })();
+function withCacheBusting(url: string): string {
+  try {
+    const nextUrl = new URL(url);
+    nextUrl.searchParams.set("cacheBust", `${Date.now()}-${Math.random().toString(16).slice(2, 10)}`);
+    return nextUrl.toString();
+  } catch {
+    return `${url}${url.includes("?") ? "&" : "?"}cacheBust=${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
+  }
+}
 
-  const response = await fetch(requestUrl, {
-    headers: {
-      Accept: "application/json",
-      "Cache-Control": "no-cache",
-      Pragma: "no-cache",
-      Expires: "0",
-      "User-Agent": "AgentHero update checker"
+function manifestApiUrl(rawManifestUrl: string): string | undefined {
+  try {
+    const parsed = new URL(rawManifestUrl);
+    if (!/^raw\.githubusercontent\.com$/i.test(parsed.hostname)) return undefined;
+    const match = parsed.pathname.match(/^\/yohaas\/AgentHero\/main\/(installer\/manifest\.json)$/i);
+    if (!match) return undefined;
+    return `https://api.github.com/repos/yohaas/AgentHero/contents/${match[1]}?ref=main`;
+  } catch {
+    return undefined;
+  }
+}
+
+function parseManifestPayload(payload: unknown): AppUpdateManifest {
+  if (
+    typeof payload === "object" &&
+    payload !== null &&
+    "content" in payload &&
+    "encoding" in payload &&
+    typeof (payload as GithubContentsManifest).content === "string" &&
+    typeof (payload as GithubContentsManifest).encoding === "string" &&
+    (payload as GithubContentsManifest).encoding === "base64"
+  ) {
+    const contentPayload = payload as GithubContentsManifest;
+    const rawContent = contentPayload.content;
+    if (!rawContent) return payload as AppUpdateManifest;
+    const manifestText = Buffer.from(rawContent.replace(/\s/g, ""), "base64").toString("utf8");
+    return JSON.parse(manifestText) as AppUpdateManifest;
+  }
+  return payload as AppUpdateManifest;
+}
+
+async function fetchUpdateManifest(manifestUrl: string): Promise<AppUpdateManifest> {
+  const candidates = (() => {
+    const baseCandidates = [manifestUrl];
+    const apiFallback = manifestApiUrl(manifestUrl);
+    if (apiFallback) baseCandidates.push(apiFallback);
+    const seen = new Set<string>();
+    return baseCandidates.filter((candidate) => {
+      if (seen.has(candidate)) return false;
+      seen.add(candidate);
+      return true;
+    });
+  })().map(withCacheBusting);
+  const failures: string[] = [];
+
+  for (const candidate of candidates) {
+    const response = await fetch(candidate, {
+      headers: {
+        Accept: "application/json",
+        "Cache-Control": "no-cache",
+        Pragma: "no-cache",
+        Expires: "0",
+        "User-Agent": "AgentHero update checker"
+      }
+    });
+    if (!response.ok) {
+      failures.push(`${candidate}: ${response.status}`);
+      continue;
     }
-  });
-  if (!response.ok) throw new Error(`Update manifest returned ${response.status}.`);
-  return (await response.json()) as AppUpdateManifest;
+    try {
+      return parseManifestPayload(await response.json());
+    } catch (error) {
+      failures.push(`${candidate}: failed to parse (${error instanceof Error ? error.message : String(error)})`);
+    }
+  }
+
+  throw new Error(`Update manifest failed from all candidates. ${failures.join("; ")}`);
 }
 
 function assetMatchesRuntime(asset: AppUpdateAsset): boolean {
