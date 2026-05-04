@@ -685,6 +685,7 @@ export class AgentRuntimeManager {
     if (!trimmed) throw new Error("Chat name cannot be blank.");
     state.agent.displayName = this.uniqueDisplayName(state.agent.projectId, trimmed, state.agent.id);
     state.agent.updatedAt = now();
+    this.syncSavedChat(state);
     this.broadcast({ type: "agent.snapshot", snapshot: this.snapshot() });
     this.persist();
   }
