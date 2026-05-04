@@ -1,18 +1,29 @@
-﻿{
-    "version":  "0.1.5",
-    "releaseTag":  "v0.1.5",
-    "commitSha":  "7f496b050194edabc2009b09a2041a85efc7f3c9",
-    "platform":  "windows",
-    "arch":  "x64",
-    "builtAt":  "2026-05-04T10:41:13.4273222Z",
-    "releaseNotesUrl":  "",
-    "assets":  [
-                   {
-                       "platform":  "windows",
-                       "arch":  "x64",
-                       "url":  "releases/v0.1.5/agent-hero-0.1.5-windows-x64.zip",
-                       "sha256":  "60c6c49d09c057d55bbbb209f2f10153e0db50db9a84ec854855bb76280d8d27",
-                       "size":  18644939
-                   }
-               ]
+{
+  "version": "0.1.5",
+  "releaseTag": "v0.1.5",
+  "commitSha": "7f496b050194edabc2009b09a2041a85efc7f3c9",
+  "platform": "any",
+  "arch": "any",
+  "builtAt": "2026-05-04T13:43:25Z",
+  "releaseNotesUrl": "",
+  "assets": [
+    {
+      "type": "full",
+      "platform": "windows",
+      "arch": "x64",
+      "version": "0.1.5",
+      "url": "releases/v0.1.5/agent-hero-0.1.5-windows-x64.zip",
+      "sha256": "60c6c49d09c057d55bbbb209f2f10153e0db50db9a84ec854855bb76280d8d27",
+      "size": 18644939
+    },
+    {
+      "type": "full",
+      "platform": "macos",
+      "arch": "arm64",
+      "version": "0.1.5",
+      "url": "releases/v0.1.5/agent-hero-0.1.5-macos-arm64.zip",
+      "sha256": "6efb5096c18c8b193e9bf2c7fb00b1c6a496198930b73dc4d906be82340a694f",
+      "size": 18144742
+    }
+  ]
 }
