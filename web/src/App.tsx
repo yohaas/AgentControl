@@ -12398,7 +12398,6 @@ function reactNodeText(node: ReactNode): string {
 function MarkdownCodeBlock({ children, className, ...props }: ComponentProps<"pre">) {
   const addError = useAppStore((state) => state.addError);
   const codeText = reactNodeText(children).replace(/\n$/, "");
-  const multiline = codeText.includes("\n");
 
   function copyCode(event: ReactMouseEvent<HTMLButtonElement>) {
     event.stopPropagation();
@@ -12410,17 +12409,15 @@ function MarkdownCodeBlock({ children, className, ...props }: ComponentProps<"pr
       <pre className={className} {...props}>
         {children}
       </pre>
-      {multiline && (
-        <button
-          type="button"
-          className="absolute bottom-2 right-2 grid h-7 w-7 place-items-center rounded-md border border-border bg-background/90 text-foreground opacity-80 shadow-sm hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          title="Copy code"
-          aria-label="Copy code"
-          onClick={copyCode}
-        >
-          <Copy className="h-3.5 w-3.5" />
-        </button>
-      )}
+      <button
+        type="button"
+        className="absolute bottom-2 right-2 grid h-7 w-7 place-items-center rounded-md border border-border bg-background/90 text-foreground opacity-80 shadow-sm hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        title="Copy code"
+        aria-label="Copy code"
+        onClick={copyCode}
+      >
+        <Copy className="h-3.5 w-3.5" />
+      </button>
     </div>
   );
 }
