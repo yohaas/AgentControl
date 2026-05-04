@@ -9773,10 +9773,10 @@ function AgentTile({
   const setSelectedAgent = useAppStore((state) => state.setSelectedAgent);
   const setFocusedAgent = useAppStore((state) => state.setFocusedAgent);
   const setChatFocusedAgent = useAppStore((state) => state.setChatFocusedAgent);
-  const selectedAgentId = useAppStore((state) => state.selectedAgentId);
-  const focusedAgentId = useAppStore((state) => state.focusedAgentId);
-  const chatFocusedAgentId = useAppStore((state) => state.chatFocusedAgentId);
-  const searchOpen = useAppStore((state) => state.searchOpen);
+  const tileFocused = useAppStore((state) => state.focusedAgentId === agent.id);
+  const searchActive = useAppStore(
+    (state) => state.searchOpen && !state.selectedAgentId && (state.chatFocusedAgentId === agent.id || state.focusedAgentId === agent.id)
+  );
   const searchQuery = useAppStore((state) => state.searchQuery);
   const setSearchOpen = useAppStore((state) => state.setSearchOpen);
   const setSearchQuery = useAppStore((state) => state.setSearchQuery);
@@ -9836,7 +9836,6 @@ function AgentTile({
 
   const hasMultilineDraft = draftLines > 1 || composerWrapped;
   const composerExpanded = hasMultilineDraft && !composerCollapsed;
-  const searchActive = searchOpen && !selectedAgentId && (chatFocusedAgentId === agent.id || focusedAgentId === agent.id);
   const searchOptions = useMemo<ChatSearchOptions>(
     () => ({ matchCase: searchMatchCase, wholeWord: searchWholeWord }),
     [searchMatchCase, searchWholeWord]
@@ -9884,7 +9883,7 @@ function AgentTile({
   }
 
   useEffect(() => {
-    if (focusedAgentId !== agent.id) return;
+    if (!tileFocused) return;
     if (suppressScrollIntoViewRef.current) {
       suppressScrollIntoViewRef.current = false;
     } else {
@@ -9897,7 +9896,7 @@ function AgentTile({
     if (canType) {
       window.requestAnimationFrame(() => inputRef.current?.focus());
     }
-  }, [agent.id, canType, focusedAgentId]);
+  }, [agent.id, canType, tileFocused]);
 
   useEffect(() => {
     const onFocusTile = (event: Event) => {
@@ -9973,6 +9972,7 @@ function AgentTile({
   }
 
   function activateTile(focusInput = false, scrollIntoView = true) {
+    if (tileFocused) return;
     suppressAutoFocusRef.current = !focusInput;
     suppressScrollIntoViewRef.current = !scrollIntoView;
     setSelectedAgent(undefined);
@@ -10283,12 +10283,12 @@ function AgentTile({
       ref={tileRef}
       className={cn(
         "relative flex min-h-0 min-w-0 max-w-full flex-col overflow-hidden rounded-md border border-border bg-card/70",
-        focusedAgentId === agent.id && "ring-2 ring-primary/60"
+        tileFocused && "ring-2 ring-primary/60"
       )}
       style={{ height: tileMinimized ? undefined : height, flex: `0 0 ${width ? `${width}px` : defaultWidth}` }}
       onDragOver={(event) => event.preventDefault()}
       onPointerDown={(event) => {
-        activateTile(false, false);
+        if (!tileFocused) activateTile(false, false);
         if (event.button === 0) selection.clearSelection();
       }}
       onDrop={(event) => {

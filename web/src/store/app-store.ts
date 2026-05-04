@@ -718,6 +718,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     }),
   setSelectedProject: (id) =>
     set((state) => {
+      if (state.selectedProjectId === id) return state;
       writeStoredSelectedProjectId(id);
       const terminalProjectUi = saveCurrentProjectTerminalUi(state);
       const terminalUi = terminalUiForProject(state, id, terminalProjectUi);
@@ -734,13 +735,17 @@ export const useAppStore = create<AppState>((set, get) => ({
         ...fileExplorerUi
       };
     }),
-  setSelectedAgent: (id) => set({ selectedAgentId: id }),
-  setFocusedAgent: (id) => set({ focusedAgentId: id }),
+  setSelectedAgent: (id) => set((state) => (state.selectedAgentId === id ? state : { selectedAgentId: id })),
+  setFocusedAgent: (id) => set((state) => (state.focusedAgentId === id ? state : { focusedAgentId: id })),
   setChatFocusedAgent: (id) =>
-    set((state) => ({
-      chatFocusedAgentId: id,
-      doneAgentIds: id ? { ...state.doneAgentIds, [id]: false } : state.doneAgentIds
-    })),
+    set((state) => {
+      const doneAgentIds = id && state.doneAgentIds[id] !== false ? { ...state.doneAgentIds, [id]: false } : state.doneAgentIds;
+      if (state.chatFocusedAgentId === id && doneAgentIds === state.doneAgentIds) return state;
+      return {
+        chatFocusedAgentId: id,
+        doneAgentIds
+      };
+    }),
   setCapabilities: (capabilities) => set({ capabilities }),
   setSettings: (settings) => set({ settings: normalizeSettings(settings) }),
   setWsConnected: (connected) =>
@@ -1144,6 +1149,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     }),
   setTileMinimized: (id, minimized) =>
     set((state) => {
+      if (Boolean(state.minimizedTiles[id]) === minimized) return state;
       const minimizedTiles = { ...state.minimizedTiles };
       if (minimized) minimizedTiles[id] = true;
       else delete minimizedTiles[id];
@@ -1325,7 +1331,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   openSendDialog: (dialog) => set({ sendDialog: { open: true, ...dialog } }),
   closeSendDialog: () => set({ sendDialog: { open: false } }),
   setSendFraming: (framing) => set((state) => ({ sendDialog: { ...state.sendDialog, framing } })),
-  setSearchOpen: (open) => set({ searchOpen: open }),
+  setSearchOpen: (open) => set((state) => (state.searchOpen === open ? state : { searchOpen: open })),
   setSearchQuery: (query) => set({ searchQuery: query })
 }));
 
