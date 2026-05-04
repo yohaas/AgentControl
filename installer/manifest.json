@@ -1,10 +1,10 @@
 {
-  "version": "0.1.6",
-  "releaseTag": "v0.1.6",
-  "commitSha": "f4c71ccc1cb6da507366d030cd747153758f4b48",
+  "version": "0.1.7",
+  "releaseTag": "v0.1.7",
+  "commitSha": "251d639d66592adb20f9a8d2e312f0c35a1b8fdb",
   "platform": "any",
   "arch": "any",
-  "builtAt": "2026-05-04T19:29:24Z",
+  "builtAt": "2026-05-04T19:33:49Z",
   "releaseNotesUrl": "",
   "assets": [
     {
@@ -12,10 +12,20 @@
       "platform": "any",
       "arch": "any",
       "fromVersion": "0.1.5",
-      "version": "0.1.6",
-      "url": "releases/v0.1.6/agent-hero-0.1.5-to-0.1.6-app-patch.zip",
-      "sha256": "72fb23f14274f15378e8d1fe4ccfcca149b41d8f3e25e65522f61a849beb06a0",
-      "size": 639303
+      "version": "0.1.7",
+      "url": "releases/v0.1.7/agent-hero-0.1.5-to-0.1.7-app-patch.zip",
+      "sha256": "2de06d111607933fd35c5b6d352390667766798bb307fda522409f071436b673",
+      "size": 639435
+    },
+    {
+      "type": "patch",
+      "platform": "any",
+      "arch": "any",
+      "fromVersion": "0.1.6",
+      "version": "0.1.7",
+      "url": "releases/v0.1.7/agent-hero-0.1.6-to-0.1.7-app-patch.zip",
+      "sha256": "e350542f6d3ea1ed659bbda0cc1fc5c0bbe3cb0c2a4a1c834833b377dae36f65",
+      "size": 639435
     },
     {
       "type": "full",
