@@ -1125,7 +1125,7 @@ async function startInstalledUpdate(): Promise<{ pid?: number }> {
   let args: string[];
 
   if (process.platform === "win32") {
-    const scriptPath = path.join(appRoot, "scripts", "windows", "start-installed-update.ps1");
+    const scriptPath = path.join(appRoot, "scripts", "windows", "update-installed-agent-hero.ps1");
     if (!(await stat(scriptPath).catch(() => undefined))) {
       throw new Error(`Installed update launcher was not found at ${scriptPath}`);
     }
