@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-05-04
 
+- [799c80c](https://github.com/yohaas/AgentHero/commit/799c80c) Publish a 0.1.38 platform-neutral patch with the embedded Windows update terminal.
 - [3c234fc](https://github.com/yohaas/AgentHero/commit/3c234fc) Show the Windows update command in an embedded update-modal terminal and send it as one line.
 - [f463d45](https://github.com/yohaas/AgentHero/commit/f463d45) Publish a 0.1.37 platform-neutral patch for testing backend-launched Windows updates from 0.1.36.
 - [4e2f3b9](https://github.com/yohaas/AgentHero/commit/4e2f3b9) Publish a 0.1.36 platform-neutral patch with the backend Windows updater wrapper launch.
