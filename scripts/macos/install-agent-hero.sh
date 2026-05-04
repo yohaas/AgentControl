@@ -60,6 +60,31 @@ resolve_node_path() {
   exit 1
 }
 
+resolve_asset_url() {
+  local url="$1"
+  if [[ "$url" == http://* || "$url" == https://* || "$url" == /* || -f "$url" ]]; then
+    echo "$url"
+    return 0
+  fi
+  if [[ -n "${manifest_base:-}" ]]; then
+    echo "$manifest_base/$url"
+    return 0
+  fi
+  "$node_path" -e "process.stdout.write(new URL(process.argv[2], process.argv[1]).toString());" "$manifest_url" "$url"
+}
+
+asset_file_name() {
+  "$node_path" -e "
+const path = require('path');
+const value = process.argv[1];
+try {
+  process.stdout.write(path.basename(new URL(value).pathname));
+} catch {
+  process.stdout.write(path.basename(value));
+}
+" "$1"
+}
+
 echo "AgentHero install started at $(date '+%Y-%m-%d %H:%M:%S')"
 echo "Log: $install_log_path"
 node_path="$(resolve_node_path)"
@@ -105,14 +130,13 @@ asset_url="$("$node_path" -e "const a=JSON.parse(process.argv[1]); console.log(a
 expected_sha="$("$node_path" -e "const a=JSON.parse(process.argv[1]); console.log(a.sha256);" "$asset_json")"
 version="$("$node_path" -e "const fs=require('fs'); const m=JSON.parse(fs.readFileSync(process.argv[1], 'utf8')); console.log(m.version || '');" "$manifest_path")"
 
-if [[ -n "$manifest_base" && "$asset_url" != http://* && "$asset_url" != https://* ]]; then
-  asset_url="$manifest_base/$asset_url"
-fi
+asset_url="$(resolve_asset_url "$asset_url")"
 
-zip_path="$download_dir/$(basename "$asset_url")"
+zip_path="$download_dir/$(asset_file_name "$asset_url")"
 if [[ -f "$asset_url" ]]; then
   cp "$asset_url" "$zip_path"
 else
+  echo "Downloading $asset_url"
   curl -fsSL "$asset_url" -o "$zip_path"
 fi
 

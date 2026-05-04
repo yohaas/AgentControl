@@ -61,6 +61,31 @@ log() {
   echo "$line" >> "$log_path"
 }
 
+resolve_asset_url() {
+  local url="$1"
+  if [[ "$url" == http://* || "$url" == https://* || "$url" == /* || -f "$url" ]]; then
+    echo "$url"
+    return 0
+  fi
+  if [[ -n "${manifest_base:-}" ]]; then
+    echo "$manifest_base/$url"
+    return 0
+  fi
+  "$node_path" -e "process.stdout.write(new URL(process.argv[2], process.argv[1]).toString());" "$manifest_url" "$url"
+}
+
+asset_file_name() {
+  "$node_path" -e "
+const path = require('path');
+const value = process.argv[1];
+try {
+  process.stdout.write(path.basename(new URL(value).pathname));
+} catch {
+  process.stdout.write(path.basename(value));
+}
+" "$1"
+}
+
 health_check() {
   local deadline=$((SECONDS + 45))
   while [[ $SECONDS -lt $deadline ]]; do
@@ -146,14 +171,13 @@ expected_sha="$("$node_path" -e "const a=JSON.parse(process.argv[1]); console.lo
 asset_type="$("$node_path" -e "const a=JSON.parse(process.argv[1]); console.log(a.type || 'full');" "$asset_json")"
 log "Selected $asset_type update asset for installed version $installed_version"
 
-if [[ -n "$manifest_base" && "$asset_url" != http://* && "$asset_url" != https://* ]]; then
-  asset_url="$manifest_base/$asset_url"
-fi
+asset_url="$(resolve_asset_url "$asset_url")"
 
-zip_path="$download_dir/$(basename "$asset_url")"
+zip_path="$download_dir/$(asset_file_name "$asset_url")"
 if [[ -f "$asset_url" ]]; then
   cp "$asset_url" "$zip_path"
 else
+  log "Downloading $asset_url"
   curl -fsSL "$asset_url" -o "$zip_path"
 fi
 
