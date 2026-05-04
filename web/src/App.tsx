@@ -5367,9 +5367,10 @@ function FolderPickerButton({
   onFallbackOpen: () => void;
 }) {
   const [picking, setPicking] = useState(false);
+  const isWindowsClient = typeof navigator !== "undefined" && /win/i.test(`${navigator.platform || ""} ${navigator.userAgent || ""}`);
 
   async function browse() {
-    if (runtime === "wsl") {
+    if (runtime === "wsl" || isWindowsClient) {
       onFallbackOpen();
       return;
     }
@@ -7983,13 +7984,17 @@ function SettingsDialog() {
               accessToken={accessToken}
               setAccessToken={setAccessToken}
               importInputRef={importInputRef}
-              onAddProjectFolder={() =>
+              onAddProjectFolder={() => {
+                if (isWindowsClient) {
+                  setProjectFolderBrowserOpen(true);
+                  return;
+                }
                 void api.pickDirectory(selectedProject?.path || projectPaths[projectPaths.length - 1] || "").then((result) => {
                   if (result.path) addProjectPath(result.path);
                 }).catch(() => {
                   setProjectFolderBrowserOpen(true);
-                })
-              }
+                });
+              }}
               onExportConfig={exportConfig}
               onImportConfig={(file) => void importConfig(file)}
             />
@@ -8033,13 +8038,17 @@ function SettingsDialog() {
               onCheckUpdatesNow={() => void checkAppUpdatesNow()}
               agentControlProjectPath={agentControlProjectPath}
               setAgentHeroProjectPath={setAgentHeroProjectPath}
-              onBrowseProjectPath={() =>
+              onBrowseProjectPath={() => {
+                if (isWindowsClient) {
+                  setAgentHeroProjectBrowserOpen(true);
+                  return;
+                }
                 void api.pickDirectory(agentControlProjectPath || selectedProject?.path || "").then((result) => {
                   if (result.path) setAgentHeroProjectPath(result.path);
                 }).catch(() => {
                   setAgentHeroProjectBrowserOpen(true);
-                })
-              }
+                });
+              }}
               isWindowsClient={isWindowsClient}
               onRunWindowsServiceScript={runWindowsServiceScript}
               windowsServiceStatus={windowsServiceStatus}
