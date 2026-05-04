@@ -1,6 +1,7 @@
 import http from "node:http";
 import { execFile, spawn } from "node:child_process";
 import { timingSafeEqual } from "node:crypto";
+import { closeSync, openSync } from "node:fs";
 import { appendFile, chmod, cp, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -1118,7 +1119,9 @@ function installedUpdateLogPaths(): Array<{ name: string; path: string }> {
       : stateLogsDir;
   return [
     { name: "Launcher", path: path.join(stateLogsDir, "installed-update-launch.log") },
-    { name: "Updater", path: path.join(installedLogsDir, "installed-update.log") }
+    { name: "Updater", path: path.join(installedLogsDir, "installed-update.log") },
+    { name: "Updater stdout", path: path.join(stateLogsDir, "installed-update-stdout.log") },
+    { name: "Updater stderr", path: path.join(stateLogsDir, "installed-update-stderr.log") }
   ];
 }
 
@@ -1189,17 +1192,28 @@ async function startInstalledUpdate(): Promise<{ pid?: number }> {
     args = [scriptPath, "--install-dir", appRoot, "--manifest-url", manifestUrl];
   }
 
-  await appendInstalledUpdateLaunchLog(`Starting installed update: ${command} ${args.join(" ")}`);
-  const child = spawn(command, args, {
-    cwd: appRoot,
-    detached: true,
-    env,
-    stdio: "ignore",
-    windowsHide: true
-  });
-  child.unref();
-  await appendInstalledUpdateLaunchLog(`Started installed update process pid=${child.pid || "unknown"}`);
-  return { pid: child.pid };
+  const logDir = statePath("logs");
+  await mkdir(logDir, { recursive: true });
+  const stdoutPath = path.join(logDir, "installed-update-stdout.log");
+  const stderrPath = path.join(logDir, "installed-update-stderr.log");
+  const stdoutFd = openSync(stdoutPath, "a");
+  const stderrFd = openSync(stderrPath, "a");
+  try {
+    await appendInstalledUpdateLaunchLog(`Starting installed update: ${command} ${args.join(" ")}`);
+    const child = spawn(command, args, {
+      cwd: appRoot,
+      detached: true,
+      env,
+      stdio: ["ignore", stdoutFd, stderrFd],
+      windowsHide: true
+    });
+    child.unref();
+    await appendInstalledUpdateLaunchLog(`Started installed update process pid=${child.pid || "unknown"}`);
+    return { pid: child.pid };
+  } finally {
+    closeSync(stdoutFd);
+    closeSync(stderrFd);
+  }
 }
 
 function parseGitWorktrees(output: string, currentPath: string): GitWorktree[] {
