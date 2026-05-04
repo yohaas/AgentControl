@@ -2,6 +2,10 @@
 
 All notable repository changes are listed newest-first and grouped by commit date.
 
+## 2026-05-04
+
+- [5bca8e0](https://github.com/yohaas/AgentHero/commit/5bca8e0) Collapse installed update logs behind a Show logs/Hide logs control in the update modal.
+
 ## 2026-05-03
 
 - [c323189](https://github.com/yohaas/AgentHero/commit/c323189) Add a direct 0.1.29 to 0.1.31 platform-neutral patch for installed apps that had not reached 0.1.30.
