@@ -4356,6 +4356,7 @@ function AppUpdateNotice({ compact = false, hideWhenNoUpdate = false }: { compac
   const [status, setStatus] = useState<AppUpdateStatus | undefined>();
   const [loading, setLoading] = useState(false);
   const [logsLoading, setLogsLoading] = useState(false);
+  const [showUpdateLogs, setShowUpdateLogs] = useState(false);
   const [updateStarting, setUpdateStarting] = useState(false);
   const [updateProgress, setUpdateProgress] = useState<string>();
   const [updateLogs, setUpdateLogs] = useState<AppUpdateLogs>();
@@ -4397,10 +4398,11 @@ function AppUpdateNotice({ compact = false, hideWhenNoUpdate = false }: { compac
 
   useEffect(() => {
     if (!detailsOpen || !installedMode) return;
+    if (!showUpdateLogs && !updateProgress) return;
     void refreshUpdateLogs(false);
     const timer = window.setInterval(() => void refreshUpdateLogs(false), updateProgress ? 2500 : 10000);
     return () => window.clearInterval(timer);
-  }, [detailsOpen, installedMode, updateProgress]);
+  }, [detailsOpen, installedMode, showUpdateLogs, updateProgress]);
 
   async function refresh(reportErrors = true) {
     if (settings.updateChecksEnabled === false) return;
@@ -4689,31 +4691,50 @@ function AppUpdateNotice({ compact = false, hideWhenNoUpdate = false }: { compac
               <div className="grid gap-2 rounded-md border border-border p-2">
                 <div className="flex items-center justify-between gap-2">
                   <div className="text-xs font-medium text-muted-foreground">Update activity</div>
-                  <Button variant="outline" size="sm" onClick={() => void refreshUpdateLogs(true)} disabled={logsLoading}>
-                    <RefreshCw className={cn("h-4 w-4", logsLoading && "animate-spin")} />
-                    Logs
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    {showUpdateLogs && (
+                      <Button variant="outline" size="sm" onClick={() => void refreshUpdateLogs(true)} disabled={logsLoading}>
+                        <RefreshCw className={cn("h-4 w-4", logsLoading && "animate-spin")} />
+                        Refresh
+                      </Button>
+                    )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const nextValue = !showUpdateLogs;
+                        setShowUpdateLogs(nextValue);
+                        if (nextValue) void refreshUpdateLogs(true);
+                      }}
+                    >
+                      {showUpdateLogs ? "Hide logs" : "Show logs"}
+                    </Button>
+                  </div>
                 </div>
-                {logFiles.length === 0 ? (
-                  <div className="rounded-md border border-dashed border-border px-2 py-3 text-center text-xs text-muted-foreground">
-                    No update logs loaded.
-                  </div>
-                ) : (
-                  <div className="grid gap-2">
-                    {logFiles.map((file) => (
-                      <div key={file.path} className="grid gap-1">
-                        <div className="flex min-w-0 items-center justify-between gap-2 text-[11px]">
-                          <span className="font-medium text-muted-foreground">{file.name}</span>
-                          <span className="min-w-0 truncate font-mono text-muted-foreground" title={file.path}>
-                            {file.exists && file.updatedAt ? formatShortDateTime(file.updatedAt) : "No entries"}
-                          </span>
-                        </div>
-                        <pre className="max-h-32 overflow-auto rounded-md bg-muted p-2 text-[11px] leading-relaxed text-muted-foreground">
-                          {file.content || "No log entries yet."}
-                        </pre>
+                {showUpdateLogs && (
+                  <>
+                    {logFiles.length === 0 ? (
+                      <div className="rounded-md border border-dashed border-border px-2 py-3 text-center text-xs text-muted-foreground">
+                        No update logs loaded.
                       </div>
-                    ))}
-                  </div>
+                    ) : (
+                      <div className="grid gap-2">
+                        {logFiles.map((file) => (
+                          <div key={file.path} className="grid gap-1">
+                            <div className="flex min-w-0 items-center justify-between gap-2 text-[11px]">
+                              <span className="font-medium text-muted-foreground">{file.name}</span>
+                              <span className="min-w-0 truncate font-mono text-muted-foreground" title={file.path}>
+                                {file.exists && file.updatedAt ? formatShortDateTime(file.updatedAt) : "No entries"}
+                              </span>
+                            </div>
+                            <pre className="max-h-32 overflow-auto rounded-md bg-muted p-2 text-[11px] leading-relaxed text-muted-foreground">
+                              {file.content || "No log entries yet."}
+                            </pre>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             )}
