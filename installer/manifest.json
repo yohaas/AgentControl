@@ -4,7 +4,7 @@
   "commitSha": "7f496b050194edabc2009b09a2041a85efc7f3c9",
   "platform": "any",
   "arch": "any",
-  "builtAt": "2026-05-04T13:43:25Z",
+  "builtAt": "2026-05-04T13:59:14Z",
   "releaseNotesUrl": "",
   "assets": [
     {
@@ -13,8 +13,8 @@
       "arch": "x64",
       "version": "0.1.5",
       "url": "releases/v0.1.5/agent-hero-0.1.5-windows-x64.zip",
-      "sha256": "60c6c49d09c057d55bbbb209f2f10153e0db50db9a84ec854855bb76280d8d27",
-      "size": 18644939
+      "sha256": "b90de52ba5ab6f6413029a90a18095a6b659141bff2dbc8384d663ecdce189fd",
+      "size": 18645217
     },
     {
       "type": "full",
