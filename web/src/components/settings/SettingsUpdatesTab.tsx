@@ -191,7 +191,7 @@ export function SettingsUpdatesTab({
             onChange={(event) => setUpdateCommandsText(event.target.value)}
             rows={5}
             className="font-mono text-xs"
-            placeholder="powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\start-update.ps1"
+            placeholder="powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\windows\\start-installed-update.ps1"
           />
         </label>
       </section>

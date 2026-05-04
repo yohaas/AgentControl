@@ -4366,7 +4366,6 @@ function AppUpdateNotice({ compact = false, hideWhenNoUpdate = false }: { compac
   const installedAppRoot = status?.appRoot?.trim();
   const isWindowsClient =
     typeof navigator !== "undefined" && /win/i.test(`${navigator.platform || ""} ${navigator.userAgent || ""}`);
-  const useWindowsInstalledLaunchOnly = installedMode && isWindowsClient;
   const quotePowerShellValue = (value: string) => `"${value.replace(/[`"$]/g, (match) => `\`${match}`)}"`;
   const quoteShellValue = (value: string) => `'${value.replace(/'/g, "'\\''")}'`;
   const windowsInstalledUpdateCommand = installedUpdateManifestUrl
@@ -4513,23 +4512,6 @@ function AppUpdateNotice({ compact = false, hideWhenNoUpdate = false }: { compac
       return;
     }
     const commands = effectiveUpdateCommands.map((command) => command.trim()).filter(Boolean);
-    if (installedMode && useWindowsInstalledLaunchOnly) {
-      if (commands.length === 0) {
-        addError("No Windows installed update command is configured.");
-        return;
-      }
-      const requestId = createUpdateRequestId();
-      setUpdateRun({ requestId, commands, modalTerminal: true });
-      setUpdateProgress("Opening update terminal...");
-      sendCommand({
-        type: "terminalStart",
-        requestId,
-        cwd: installedAppRoot || undefined,
-        hidden: true,
-        title: "Update AgentHero"
-      });
-      return;
-    }
     if (installedMode) {
       const targetVersion = status?.latestVersion?.version;
       setUpdateStarting(true);
