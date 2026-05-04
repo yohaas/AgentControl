@@ -190,6 +190,8 @@ const FOCUS_AGENT_TILE_EVENT = "agent-hero:focus-agent-tile";
 const MOBILE_SELECTED_AGENT_STORAGE_KEY = "agent-hero-mobile-selected-agent";
 const DEFAULT_BUILT_IN_AGENT_DIR = ".agent-hero/built-in-agents";
 const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
+const INSTALLED_UPDATE_RECHECK_MS = 2500;
+const INSTALLED_UPDATE_RECHECK_ATTEMPTS = 48;
 const INPUT_NOTIFICATION_DEDUPE_MS = 30_000;
 const INPUT_NOTIFICATION_STORAGE_PREFIX = "agent-hero-input-notification:";
 const recentInputNotificationKeys = new Map<string, number>();
@@ -4353,6 +4355,7 @@ function AppUpdateNotice({ compact = false, hideWhenNoUpdate = false }: { compac
   const [status, setStatus] = useState<AppUpdateStatus | undefined>();
   const [loading, setLoading] = useState(false);
   const [updateStarting, setUpdateStarting] = useState(false);
+  const [updateProgress, setUpdateProgress] = useState<string>();
   const [updateRun, setUpdateRun] = useState<{ requestId: string; commands: string[] }>();
   const installedMode = status?.installMode === "installed" || settings.installMode === "installed";
   const installedUpdateManifestUrl = (settings.updateManifestUrl || "").trim();
@@ -4401,6 +4404,45 @@ function AppUpdateNotice({ compact = false, hideWhenNoUpdate = false }: { compac
     }
   }
 
+  async function waitForInstalledUpdate(targetVersion?: string) {
+    setUpdateProgress(
+      targetVersion
+        ? `Update started. Waiting for AgentHero to restart on ${targetVersion}...`
+        : "Update started. Waiting for AgentHero to restart..."
+    );
+    for (let attempt = 0; attempt < INSTALLED_UPDATE_RECHECK_ATTEMPTS; attempt += 1) {
+      await new Promise((resolve) => window.setTimeout(resolve, INSTALLED_UPDATE_RECHECK_MS));
+      try {
+        const nextStatus = await api.appUpdates();
+        setStatus(nextStatus);
+        const installedVersion = nextStatus.localVersion?.version;
+        if (targetVersion && installedVersion === targetVersion) {
+          setUpdateProgress(undefined);
+          addToast(`AgentHero updated to ${targetVersion}.`);
+          return;
+        }
+        if (!targetVersion && !nextStatus.updateAvailable) {
+          setUpdateProgress(undefined);
+          addToast("AgentHero update complete.");
+          return;
+        }
+        setUpdateProgress(
+          targetVersion
+            ? `AgentHero is running; waiting for installed version ${targetVersion}...`
+            : "AgentHero is running; checking update status..."
+        );
+      } catch {
+        setUpdateProgress(
+          targetVersion
+            ? `AgentHero is restarting; waiting for ${targetVersion}...`
+            : "AgentHero is restarting..."
+        );
+      }
+    }
+    setUpdateProgress(undefined);
+    addError("Update started, but AgentHero did not report completion. Check the installed update logs.");
+  }
+
   const updateSession = updateRun
     ? Object.values(terminalSessions).find((session) => session.requestId === updateRun.requestId)
     : undefined;
@@ -4421,11 +4463,11 @@ function AppUpdateNotice({ compact = false, hideWhenNoUpdate = false }: { compac
       return;
     }
     if (installedMode) {
+      const targetVersion = status?.latestVersion?.version;
       setUpdateStarting(true);
       try {
         await api.runInstalledUpdate();
-        addToast("AgentHero update started.");
-        setDetailsOpen(false);
+        await waitForInstalledUpdate(targetVersion);
       } catch (error) {
         addError(error instanceof Error ? error.message : String(error));
       } finally {
@@ -4450,7 +4492,7 @@ function AppUpdateNotice({ compact = false, hideWhenNoUpdate = false }: { compac
 
   const commits = status?.commits || [];
   const updateAvailable = Boolean(status?.updateAvailable);
-  const canRunUpdate = updateAvailable && (installedMode || effectiveUpdateCommands.length > 0) && !updateRun && !updateStarting;
+  const canRunUpdate = updateAvailable && (installedMode || effectiveUpdateCommands.length > 0) && !updateRun && !updateStarting && !updateProgress;
   const manifestVersionOlder =
     status?.latestVersion?.version && status.localVersion?.version
       ? compareDottedVersions(status.latestVersion.version, status.localVersion.version) < 0
@@ -4613,6 +4655,12 @@ function AppUpdateNotice({ compact = false, hideWhenNoUpdate = false }: { compac
               </div>
             )}
 
+            {updateProgress && (
+              <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+                {updateProgress}
+              </div>
+            )}
+
             {status?.installMode === "installed" && status.updateAsset && (
               <div className="grid gap-1">
                 <div className="text-xs font-medium text-muted-foreground">Release asset</div>
@@ -4651,7 +4699,7 @@ function AppUpdateNotice({ compact = false, hideWhenNoUpdate = false }: { compac
               </Button>
               <Button onClick={() => void runUpdate()} disabled={!canRunUpdate}>
                 <SquareTerminal className="h-4 w-4" />
-                {updateRun || updateStarting ? "Running" : updateAvailable ? "Run Update" : "Up to date"}
+                {updateRun || updateStarting || updateProgress ? "Running" : updateAvailable ? "Run Update" : "Up to date"}
               </Button>
             </div>
           </div>
