@@ -2235,6 +2235,17 @@ app.get("/api/agent-snapshot", (_request, response) => {
   response.json(agentSnapshot());
 });
 
+app.post("/api/agents/launch", async (request, response) => {
+  try {
+    const launchRequest = request.body as LaunchRequest;
+    await ensureLaunchPluginsEnabled(launchRequest);
+    const agent = await runtime.launch(launchRequest);
+    response.json({ agent, snapshot: agentSnapshot() });
+  } catch (error) {
+    response.status(500).json({ error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
 app.post("/api/agents/:id/message", (request, response) => {
   const text = typeof request.body?.text === "string" ? request.body.text : "";
   const attachments = Array.isArray(request.body?.attachments) ? (request.body.attachments as MessageAttachment[]) : [];

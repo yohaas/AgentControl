@@ -2165,6 +2165,18 @@ function duplicateAgentRequest(agent: RunningAgent, settings: SettingsState): La
   };
 }
 
+async function launchAgentRequest(request: LaunchRequest): Promise<RunningAgent> {
+  const result = await api.launchAgent(request);
+  useAppStore.getState().hydrateSnapshot(result.snapshot);
+  return result.agent;
+}
+
+function launchAgent(request: LaunchRequest, addError: (message: string) => void, onLaunched?: (agent: RunningAgent) => void) {
+  void launchAgentRequest(request).then(onLaunched).catch((error: unknown) => {
+    addError(error instanceof Error ? error.message : String(error));
+  });
+}
+
 function renameAgent(agent: RunningAgent) {
   const nextName = window.prompt("Rename chat", agent.displayName);
   if (nextName === null) return;
@@ -2223,7 +2235,7 @@ function AgentActionsMenu({
   const isBusy = isAgentBusy(agent);
 
   function duplicateAgent() {
-    sendCommand({ type: "launch", request: duplicateAgentRequest(agent, settings) });
+    launchAgent(duplicateAgentRequest(agent, settings), addError);
   }
 
   function openSearch() {
@@ -2294,12 +2306,13 @@ function AgentActionsMenu({
 }
 
 function MobileAgentActionsMenu({ agent }: { agent: RunningAgent }) {
+  const addError = useAppStore((state) => state.addError);
   const settings = useAppStore((state) => state.settings);
   const hasSavedCopy = useAppStore((state) => state.savedChats.some((chat) => chat.id === agent.id));
   const setSearchOpen = useAppStore((state) => state.setSearchOpen);
 
   function duplicateAgent() {
-    sendCommand({ type: "launch", request: duplicateAgentRequest(agent, settings) });
+    launchAgent(duplicateAgentRequest(agent, settings), addError);
   }
 
   return (
@@ -5539,18 +5552,15 @@ function Sidebar({ topSlot }: { topSlot?: ReactNode }) {
   function launchAllDefinitions() {
     if (!project || availableAgentDefs.length === 0) return;
     availableAgentDefs.forEach((agent) => {
-      sendCommand({
-        type: "launch",
-        request: {
-          projectId: project.id,
-          defName: agent.name,
-          agentSource: agentTab,
-          provider: agent.provider,
-          model: agent.defaultModel || settings.models[0] || DEFAULT_MODEL,
-          permissionMode: settings.defaultAgentMode,
-          autoApprove: settings.autoApprove
-        }
-      });
+      launchAgent({
+        projectId: project.id,
+        defName: agent.name,
+        agentSource: agentTab,
+        provider: agent.provider,
+        model: agent.defaultModel || settings.models[0] || DEFAULT_MODEL,
+        permissionMode: settings.defaultAgentMode,
+        autoApprove: settings.autoApprove
+      }, addError);
     });
     setSelectedAgent(undefined);
   }
@@ -6747,7 +6757,8 @@ function LaunchDialog({ onLaunchRequested }: { onLaunchRequested?: (request: Lau
         permissionMode: settings.defaultAgentMode,
         autoApprove: settings.autoApprove
       };
-      if (sendCommand({ type: "launch", request })) onLaunchRequested?.(request);
+      await launchAgentRequest(request);
+      onLaunchRequested?.(request);
       closeLaunchModal();
     } catch (error) {
       addError(error instanceof Error ? error.message : String(error));
@@ -10924,6 +10935,7 @@ function QuestionCard({ event, agent, compact = false }: { event: QuestionsEvent
 function PlanNextSteps({ event, agent, steps }: { event: PlanEvent; agent: RunningAgent; steps: PlanNextStep[] }) {
   const agentsById = useAppStore((state) => state.agents);
   const settings = useAppStore((state) => state.settings);
+  const addError = useAppStore((state) => state.addError);
   const setSelectedAgent = useAppStore((state) => state.setSelectedAgent);
   const setFocusedAgent = useAppStore((state) => state.setFocusedAgent);
   const [state, setState] = usePlanNextStepState(event.id);
@@ -10944,21 +10956,18 @@ function PlanNextSteps({ event, agent, steps }: { event: PlanEvent; agent: Runni
 
   function launchNew(step: PlanNextStep) {
     const provider = step.def.provider || "claude";
-    sendCommand({
-      type: "launch",
-      request: {
-        projectId: agent.projectId,
-        defName: step.def.name,
-        agentSource: step.source,
-        displayName: "",
-        provider,
-        model: defaultModelForAgentDef(settings, step.def),
-        initialPrompt: planNextStepPrompt(event, step),
-        remoteControl: false,
-        permissionMode: settings.defaultAgentMode,
-        autoApprove: settings.autoApprove
-      }
-    });
+    launchAgent({
+      projectId: agent.projectId,
+      defName: step.def.name,
+      agentSource: step.source,
+      displayName: "",
+      provider,
+      model: defaultModelForAgentDef(settings, step.def),
+      initialPrompt: planNextStepPrompt(event, step),
+      remoteControl: false,
+      permissionMode: settings.defaultAgentMode,
+      autoApprove: settings.autoApprove
+    }, addError);
   }
 
   return (
@@ -11071,21 +11080,18 @@ function PlanCard({ event, agent, compact = false }: { event: PlanEvent; agent: 
       event.plan
     ].join("\n");
     setActiveDecision("other");
-    sendCommand({
-      type: "launch",
-      request: {
-        projectId: project.id,
-        defName: target.def.name,
-        agentSource: target.source,
-        displayName: "",
-        provider,
-        model: defaultModelForAgentDef(settings, target.def),
-        initialPrompt: prompt,
-        remoteControl: false,
-        permissionMode: settings.defaultAgentMode,
-        autoApprove: settings.autoApprove
-      }
-    });
+    launchAgent({
+      projectId: project.id,
+      defName: target.def.name,
+      agentSource: target.source,
+      displayName: "",
+      provider,
+      model: defaultModelForAgentDef(settings, target.def),
+      initialPrompt: prompt,
+      remoteControl: false,
+      permissionMode: settings.defaultAgentMode,
+      autoApprove: settings.autoApprove
+    }, addError);
     sendCommand({
       type: "answerPlan",
       id: agent.id,

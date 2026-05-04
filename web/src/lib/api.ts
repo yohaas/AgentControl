@@ -10,6 +10,7 @@ import type {
   GitWorktreeList,
   GitWorktreeMergeRequest,
   GitWorktreeRemoveRequest,
+  LaunchRequest,
   MessageAttachment,
   ModelProfile,
   Project,
@@ -133,6 +134,12 @@ export const api = {
   projects: () => json<Project[]>("/api/projects"),
   agents: () => json<RunningAgent[]>("/api/agents"),
   agentSnapshot: () => json<AgentSnapshot>("/api/agent-snapshot"),
+  launchAgent: (request: LaunchRequest) =>
+    json<{ agent: RunningAgent; snapshot: AgentSnapshot }>("/api/agents/launch", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request)
+    }),
   sendAgentMessage: (id: string, text: string, attachments: MessageAttachment[] = []) =>
     json<{ ok: boolean }>(`/api/agents/${encodeURIComponent(id)}/message`, {
       method: "POST",
