@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-05-03
 
+- [d89a58b](https://github.com/yohaas/AgentHero/commit/d89a58b) Publish a 0.1.23 platform-neutral patch to test installed updates after the app-root launch fix.
 - [04b9caa](https://github.com/yohaas/AgentHero/commit/04b9caa) Launch installed updates from the installed app root so in-app updates find the updater script.
 - [c840bca](https://github.com/yohaas/AgentHero/commit/c840bca) Publish a 0.1.22 platform-neutral app patch for recent app updates.
 - [cec8636](https://github.com/yohaas/AgentHero/commit/cec8636) Fix macOS installed updater Node lookup and publish a 0.1.21 repair patch.
