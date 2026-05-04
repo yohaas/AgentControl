@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-05-03
 
+- [dcfa31f](https://github.com/yohaas/AgentHero/commit/dcfa31f) Fix the Windows installed update launcher and publish a 0.1.20 repair patch.
 - [fb7673c](https://github.com/yohaas/AgentHero/commit/fb7673c) Publish a 0.1.19 platform-neutral patch for installed update testing.
 - [f0ef8fd](https://github.com/yohaas/AgentHero/commit/f0ef8fd) Fix installed version detection and publish a clean Windows 0.1.18 recovery installer.
 - [abeca5f](https://github.com/yohaas/AgentHero/commit/abeca5f) Publish a small 0.1.17 platform-neutral patch to test installed updates.
