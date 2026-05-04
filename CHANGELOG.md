@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-05-04
 
+- Publish a 0.1.41 platform-neutral patch from 0.1.40.
 - [3bfe786](https://github.com/yohaas/AgentHero/commit/3bfe786) Add a direct 0.1.38 to 0.1.40 platform-neutral patch for installed apps that missed 0.1.39.
 - [79d1add](https://github.com/yohaas/AgentHero/commit/79d1add) Publish a 0.1.40 platform-neutral patch with the installed update command fix.
 - [1dbfa45](https://github.com/yohaas/AgentHero/commit/1dbfa45) Force installed update commands in installed mode so stale checkout commands cannot run from the update modal.
