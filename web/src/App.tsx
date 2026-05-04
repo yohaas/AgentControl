@@ -5184,8 +5184,13 @@ function AddProjectDialog({
   const [path, setPath] = useState("");
   const open = controlledOpen ?? internalOpen;
   const setOpen = onOpenChange ?? setInternalOpen;
+  const isMacClient = typeof navigator !== "undefined" && /mac/i.test(`${navigator.platform || ""} ${navigator.userAgent || ""}`);
   const wslDistroOptions = [...new Set([wslDistro, ...wslDistros].filter(Boolean))];
   const normalizedRequestedWslPath = normalizeWslInputPath(wslPath);
+
+  useEffect(() => {
+    if (isMacClient && runtime === "wsl") setRuntime("local");
+  }, [isMacClient, runtime]);
 
   useEffect(() => {
     if (!open || runtime !== "wsl") return;
@@ -5253,7 +5258,7 @@ function AddProjectDialog({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="local">Local</SelectItem>
-                <SelectItem value="wsl">WSL</SelectItem>
+                {!isMacClient && <SelectItem value="wsl">WSL</SelectItem>}
               </SelectContent>
             </Select>
           </label>
