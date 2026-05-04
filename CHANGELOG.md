@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-05-03
 
+- [cec8636](https://github.com/yohaas/AgentHero/commit/cec8636) Fix macOS installed updater Node lookup and publish a 0.1.21 repair patch.
 - [dcfa31f](https://github.com/yohaas/AgentHero/commit/dcfa31f) Fix the Windows installed update launcher and publish a 0.1.20 repair patch.
 - [fb7673c](https://github.com/yohaas/AgentHero/commit/fb7673c) Publish a 0.1.19 platform-neutral patch for installed update testing.
 - [f0ef8fd](https://github.com/yohaas/AgentHero/commit/f0ef8fd) Fix installed version detection and publish a clean Windows 0.1.18 recovery installer.
