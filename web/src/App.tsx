@@ -4360,7 +4360,7 @@ function AppUpdateNotice({ compact = false, hideWhenNoUpdate = false }: { compac
   const [updateStarting, setUpdateStarting] = useState(false);
   const [updateProgress, setUpdateProgress] = useState<string>();
   const [updateLogs, setUpdateLogs] = useState<AppUpdateLogs>();
-  const [updateRun, setUpdateRun] = useState<{ requestId: string; commands: string[] }>();
+  const [updateRun, setUpdateRun] = useState<{ requestId: string; commands: string[]; modalTerminal?: boolean; inputSent?: boolean }>();
   const installedMode = status?.installMode === "installed" || settings.installMode === "installed";
   const installedUpdateManifestUrl = (settings.updateManifestUrl || "").trim();
   const installedAppRoot = status?.appRoot?.trim();
@@ -4481,8 +4481,23 @@ function AppUpdateNotice({ compact = false, hideWhenNoUpdate = false }: { compac
       setUpdateRun(undefined);
       return;
     }
+    if (updateRun.modalTerminal) {
+      setUpdateProgress("Update terminal exited. Refresh after AgentHero comes back up.");
+      addToast("AgentHero update terminal exited.");
+    }
     setUpdateRun(undefined);
-  }, [addError, updateRun, updateSession]);
+  }, [addError, addToast, updateRun, updateSession]);
+
+  useEffect(() => {
+    if (!updateRun?.modalTerminal || updateRun.inputSent || !updateSession || updateSession.status !== "running") return;
+    const command = updateRun.commands[0]?.trim();
+    if (!command) return;
+    sendCommand({ type: "terminalInput", id: updateSession.id, input: `${command}\r` });
+    setUpdateProgress("Update command sent in the terminal. AgentHero may restart shortly; refresh after it comes back.");
+    setUpdateRun((current) =>
+      current && current.requestId === updateRun.requestId ? { ...current, inputSent: true } : current
+    );
+  }, [updateRun, updateSession]);
 
   function createUpdateRequestId() {
     return typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -4496,18 +4511,30 @@ function AppUpdateNotice({ compact = false, hideWhenNoUpdate = false }: { compac
       return;
     }
     const commands = effectiveUpdateCommands.map((command) => command.trim()).filter(Boolean);
+    if (installedMode && useWindowsInstalledLaunchOnly) {
+      if (commands.length === 0) {
+        addError("No Windows installed update command is configured.");
+        return;
+      }
+      const requestId = createUpdateRequestId();
+      setUpdateRun({ requestId, commands, modalTerminal: true });
+      setUpdateProgress("Opening update terminal...");
+      sendCommand({
+        type: "terminalStart",
+        requestId,
+        cwd: installedAppRoot || undefined,
+        hidden: true,
+        title: "Update AgentHero"
+      });
+      return;
+    }
     if (installedMode) {
       const targetVersion = status?.latestVersion?.version;
       setUpdateStarting(true);
       try {
         await api.runInstalledUpdate();
         void refreshUpdateLogs(false);
-        if (useWindowsInstalledLaunchOnly) {
-          setUpdateProgress("Update command launched. AgentHero may restart shortly; refresh after it comes back.");
-          addToast("AgentHero update command launched.");
-        } else {
-          await waitForInstalledUpdate(targetVersion);
-        }
+        await waitForInstalledUpdate(targetVersion);
       } catch (error) {
         addError(error instanceof Error ? error.message : String(error));
       } finally {
@@ -4702,6 +4729,29 @@ function AppUpdateNotice({ compact = false, hideWhenNoUpdate = false }: { compac
             {updateProgress && (
               <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
                 {updateProgress}
+              </div>
+            )}
+
+            {updateRun?.modalTerminal && (
+              <div className="grid gap-2 rounded-md border border-border p-2">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="text-xs font-medium text-muted-foreground">Windows update terminal</div>
+                  <Badge className="font-mono text-[10px]">
+                    {updateSession?.status || "starting"}
+                  </Badge>
+                </div>
+                <div className="rounded-md border border-border bg-muted p-2 font-mono text-[11px] [overflow-wrap:anywhere]">
+                  {updateRun.commands[0]}
+                </div>
+                <div className="h-44 min-h-0 overflow-hidden rounded-md">
+                  {updateSession ? (
+                    <TerminalPane session={updateSession} active onActivate={() => undefined} />
+                  ) : (
+                    <div className="flex h-full items-center justify-center rounded-md border border-dashed border-border text-xs text-muted-foreground">
+                      Starting terminal...
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
