@@ -4558,9 +4558,12 @@ function AppUpdateNotice({ compact = false, hideWhenNoUpdate = false }: { compac
   const commits = status?.commits || [];
   const logFiles = updateLogs?.files || [];
   const updateAvailable = Boolean(status?.updateAvailable);
+  const downloadAssetUrl = installedMode ? status?.updateAsset?.url : undefined;
+  const canDownloadUpdate = updateAvailable && Boolean(downloadAssetUrl);
   const canRunUpdate =
+    !installedMode &&
     updateAvailable &&
-    (installedMode || effectiveUpdateCommands.length > 0) &&
+    effectiveUpdateCommands.length > 0 &&
     !updateRun &&
     !updateStarting &&
     !updateProgress;
@@ -4809,7 +4812,7 @@ function AppUpdateNotice({ compact = false, hideWhenNoUpdate = false }: { compac
 
             {status?.installMode === "installed" && status.updateAsset && (
               <div className="grid gap-1">
-                <div className="text-xs font-medium text-muted-foreground">Release asset</div>
+                <div className="text-xs font-medium text-muted-foreground">Download asset</div>
                 <div className="rounded-md border border-border bg-muted p-2 font-mono text-xs [overflow-wrap:anywhere]">
                   <div>type: {status.updateAsset.type || "full"}</div>
                   <div>{status.updateAsset.url}</div>
@@ -4843,10 +4846,26 @@ function AppUpdateNotice({ compact = false, hideWhenNoUpdate = false }: { compac
               <Button variant="outline" onClick={() => setDetailsOpen(false)}>
                 Close
               </Button>
-              <Button onClick={() => void runUpdate()} disabled={!canRunUpdate}>
-                <SquareTerminal className="h-4 w-4" />
-                {updateRun || updateStarting || updateProgress ? "Running" : updateAvailable ? "Run Update" : "Up to date"}
-              </Button>
+              {installedMode ? (
+                canDownloadUpdate ? (
+                  <Button asChild>
+                    <a href={downloadAssetUrl} target="_blank" rel="noreferrer">
+                      <ExternalLink className="h-4 w-4" />
+                      Download Update
+                    </a>
+                  </Button>
+                ) : (
+                  <Button disabled>
+                    <ExternalLink className="h-4 w-4" />
+                    {updateAvailable ? "No Download" : "Up to date"}
+                  </Button>
+                )
+              ) : (
+                <Button onClick={() => void runUpdate()} disabled={!canRunUpdate}>
+                  <SquareTerminal className="h-4 w-4" />
+                  {updateRun || updateStarting || updateProgress ? "Running" : updateAvailable ? "Run Update" : "Up to date"}
+                </Button>
+              )}
             </div>
           </div>
         </DialogContent>
