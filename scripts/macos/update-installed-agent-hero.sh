@@ -29,6 +29,31 @@ log_path="$log_dir/installed-update.log"
 
 mkdir -p "$download_dir" "$backup_dir" "$log_dir"
 
+resolve_node_path() {
+  for candidate in /opt/homebrew/opt/node@20/bin/node /usr/local/opt/node@20/bin/node /opt/homebrew/bin/node /usr/local/bin/node /usr/bin/node; do
+    if [[ -x "$candidate" ]]; then
+      local major
+      major="$("$candidate" -p "process.versions.node.split('.')[0]" 2>/dev/null || true)"
+      if [[ "$major" == "20" ]]; then
+        echo "$candidate"
+        return 0
+      fi
+    fi
+  done
+  if command -v node >/dev/null 2>&1; then
+    local candidate
+    candidate="$(command -v node)"
+    local major
+    major="$("$candidate" -p "process.versions.node.split('.')[0]" 2>/dev/null || true)"
+    if [[ "$major" == "20" ]]; then
+      echo "$candidate"
+      return 0
+    fi
+  fi
+  echo "Node.js 20 LTS was not found. Install it with: brew install node@20" >&2
+  return 1
+}
+
 log() {
   local line
   line="[$(date '+%Y-%m-%d %H:%M:%S')] $*"
@@ -57,7 +82,7 @@ start_agenthero() {
 }
 
 local_version() {
-  node -e "
+  "$node_path" -e "
 const fs = require('fs');
 const path = require('path');
 const root = process.argv[1];
@@ -74,6 +99,8 @@ for (const file of ['version.json', 'package.json']) {
 }
 
 log "AgentHero installed update started in $install_dir"
+node_path="$(resolve_node_path)"
+log "Node: $node_path"
 
 if [[ -f "$manifest_url" ]]; then
   cp "$manifest_url" "$manifest_path"
@@ -84,7 +111,7 @@ else
 fi
 
 installed_version="$(local_version)"
-asset_json="$(node -e "
+asset_json="$("$node_path" -e "
 const fs = require('fs');
 const m = JSON.parse(fs.readFileSync(process.argv[1], 'utf8'));
 const localVersion = process.argv[2] || '';
@@ -114,9 +141,9 @@ process.stdout.write(JSON.stringify(selected));
   echo "Manifest does not contain a matching macOS asset." >&2
   exit 1
 }
-asset_url="$(node -e "const a=JSON.parse(process.argv[1]); console.log(a.url);" "$asset_json")"
-expected_sha="$(node -e "const a=JSON.parse(process.argv[1]); console.log(a.sha256);" "$asset_json")"
-asset_type="$(node -e "const a=JSON.parse(process.argv[1]); console.log(a.type || 'full');" "$asset_json")"
+asset_url="$("$node_path" -e "const a=JSON.parse(process.argv[1]); console.log(a.url);" "$asset_json")"
+expected_sha="$("$node_path" -e "const a=JSON.parse(process.argv[1]); console.log(a.sha256);" "$asset_json")"
+asset_type="$("$node_path" -e "const a=JSON.parse(process.argv[1]); console.log(a.type || 'full');" "$asset_json")"
 log "Selected $asset_type update asset for installed version $installed_version"
 
 if [[ -n "$manifest_base" && "$asset_url" != http://* && "$asset_url" != https://* ]]; then

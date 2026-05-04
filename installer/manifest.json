@@ -1,10 +1,10 @@
 {
-  "version": "0.1.20",
-  "releaseTag": "v0.1.20",
-  "commitSha": "d0763f0827889cf723813b7272d80615897cc003",
+  "version": "0.1.21",
+  "releaseTag": "v0.1.21",
+  "commitSha": "37dc4be235cb9b2edaf1adfcbdefa8982239b19c",
   "platform": "any",
   "arch": "any",
-  "builtAt": "2026-05-04T00:01:40.3097023Z",
+  "builtAt": "2026-05-04T00:09:52.6527487Z",
   "releaseNotesUrl": "",
   "assets": [
     {
@@ -12,20 +12,30 @@
       "platform": "any",
       "arch": "any",
       "fromVersion": "0.1.18",
-      "version": "0.1.20",
-      "url": "https://github.com/yohaas/AgentHero/raw/main/installer/updates/v0.1.20/agent-hero-0.1.18-to-0.1.20-app-patch.zip",
-      "sha256": "b943ca4365255b0306df24d14d621abb6292a4432ef40231fa37eee474b5ba35",
-      "size": 635316
+      "version": "0.1.21",
+      "url": "https://github.com/yohaas/AgentHero/raw/main/installer/updates/v0.1.21/agent-hero-0.1.18-to-0.1.21-app-patch.zip",
+      "sha256": "8e35ac5c8d6c64accf8e3a7dee6282db3e2655f2e1386e3341cc11d6d33695e7",
+      "size": 632631
     },
     {
       "type": "patch",
       "platform": "any",
       "arch": "any",
       "fromVersion": "0.1.19",
-      "version": "0.1.20",
-      "url": "https://github.com/yohaas/AgentHero/raw/main/installer/updates/v0.1.20/agent-hero-0.1.19-to-0.1.20-app-patch.zip",
-      "sha256": "ce530130a4f4977e5e295fb5266e7494d879754834ffb9397e88b0838deb08cd",
-      "size": 635317
+      "version": "0.1.21",
+      "url": "https://github.com/yohaas/AgentHero/raw/main/installer/updates/v0.1.21/agent-hero-0.1.19-to-0.1.21-app-patch.zip",
+      "sha256": "5180d6abc06ecb603e2db1c4092e828f52c9a1f5bfe6c040ba50fa9529b9baed",
+      "size": 632632
+    },
+    {
+      "type": "patch",
+      "platform": "any",
+      "arch": "any",
+      "fromVersion": "0.1.20",
+      "version": "0.1.21",
+      "url": "https://github.com/yohaas/AgentHero/raw/main/installer/updates/v0.1.21/agent-hero-0.1.20-to-0.1.21-app-patch.zip",
+      "sha256": "8c265f7eebaf9cdab915f2147e833d0a88c435a92abacc820efbaf37280fc5f0",
+      "size": 632632
     },
     {
       "type": "full",
