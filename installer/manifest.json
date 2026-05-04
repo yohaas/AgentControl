@@ -1,31 +1,20 @@
 {
-  "version": "0.1.7",
-  "releaseTag": "v0.1.7",
-  "commitSha": "251d639d66592adb20f9a8d2e312f0c35a1b8fdb",
+  "version": "0.1.8",
+  "releaseTag": "v0.1.8",
+  "commitSha": "5b363a25447c4538a36388cfb3d9ed5d36ba5340",
   "platform": "any",
   "arch": "any",
-  "builtAt": "2026-05-04T19:33:49Z",
+  "builtAt": "2026-05-04T20:11:12.1073818Z",
   "releaseNotesUrl": "",
   "assets": [
     {
-      "type": "patch",
-      "platform": "any",
-      "arch": "any",
-      "fromVersion": "0.1.5",
-      "version": "0.1.7",
-      "url": "https://raw.githubusercontent.com/yohaas/AgentHero/main/installer/releases/v0.1.7/agent-hero-0.1.5-to-0.1.7-app-patch.zip",
-      "sha256": "2de06d111607933fd35c5b6d352390667766798bb307fda522409f071436b673",
-      "size": 639435
-    },
-    {
-      "type": "patch",
-      "platform": "any",
-      "arch": "any",
-      "fromVersion": "0.1.6",
-      "version": "0.1.7",
-      "url": "https://raw.githubusercontent.com/yohaas/AgentHero/main/installer/releases/v0.1.7/agent-hero-0.1.6-to-0.1.7-app-patch.zip",
-      "sha256": "e350542f6d3ea1ed659bbda0cc1fc5c0bbe3cb0c2a4a1c834833b377dae36f65",
-      "size": 639435
+      "type": "full",
+      "platform": "windows",
+      "arch": "x64",
+      "version": "0.1.8",
+      "url": "https://raw.githubusercontent.com/yohaas/AgentHero/main/installer/releases/v0.1.8/agent-hero-0.1.8-windows-x64.zip",
+      "sha256": "620c8e6ccd7ebf280f4f62c7b49daf00407bf010d61644eb922cce0589a1eb66",
+      "size": 18647065
     },
     {
       "type": "full",
