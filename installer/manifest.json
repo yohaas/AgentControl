@@ -1,10 +1,10 @@
 {
-  "version": "0.1.26",
-  "releaseTag": "v0.1.26",
-  "commitSha": "998b044f9f5f9be3256714205d0e1738ddad57f1",
+  "version": "0.1.27",
+  "releaseTag": "v0.1.27",
+  "commitSha": "e7a4bab3dccd3d47915d7f9994dd1c54c1a6df15",
   "platform": "any",
   "arch": "any",
-  "builtAt": "2026-05-04T03:09:58.0705444Z",
+  "builtAt": "2026-05-04T03:21:25.8217786Z",
   "releaseNotesUrl": "",
   "assets": [
     {
@@ -12,10 +12,20 @@
       "platform": "any",
       "arch": "any",
       "fromVersion": "0.1.25",
-      "version": "0.1.26",
-      "url": "https://github.com/yohaas/AgentHero/raw/main/installer/updates/v0.1.26/agent-hero-0.1.25-to-0.1.26-app-patch.zip",
-      "sha256": "00f90fde6a8697ffad8830de35434314f77051ffb891c54d4b8dd04b989bafbf",
-      "size": 634327
+      "version": "0.1.27",
+      "url": "https://github.com/yohaas/AgentHero/raw/main/installer/updates/v0.1.27/agent-hero-0.1.25-to-0.1.27-app-patch.zip",
+      "sha256": "c29a123336f42ec9072399b66c491e32856f98dc0260aa90b00e2f08ee02822e",
+      "size": 635526
+    },
+    {
+      "type": "patch",
+      "platform": "any",
+      "arch": "any",
+      "fromVersion": "0.1.26",
+      "version": "0.1.27",
+      "url": "https://github.com/yohaas/AgentHero/raw/main/installer/updates/v0.1.27/agent-hero-0.1.26-to-0.1.27-app-patch.zip",
+      "sha256": "c8f790ee030bd6ec8330e94eb08012ca529a74a4b410d42007d34c7be659053f",
+      "size": 635525
     },
     {
       "type": "full",
