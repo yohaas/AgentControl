@@ -4347,6 +4347,7 @@ function AppUpdateNotice({ compact = false, hideWhenNoUpdate = false }: { compac
   const [updateRun, setUpdateRun] = useState<{ requestId: string; commands: string[] }>();
   const installedMode = status?.installMode === "installed" || settings.installMode === "installed";
   const installedUpdateManifestUrl = (settings.updateManifestUrl || "").trim();
+  const installedAppRoot = status?.appRoot?.trim();
   const quotePowerShellValue = (value: string) => `"${value.replace(/[`"$]/g, (match) => `\`${match}`)}"`;
   const quoteShellValue = (value: string) => `'${value.replace(/'/g, "'\\''")}'`;
   const effectiveUpdateCommands =
@@ -4354,10 +4355,18 @@ function AppUpdateNotice({ compact = false, hideWhenNoUpdate = false }: { compac
       ? installedUpdateManifestUrl
         ? (settings.updateCommands || []).map((command) => {
             if (command.includes("start-installed-update.ps1")) {
-              return `powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\windows\\start-installed-update.ps1 -ManifestUrl ${quotePowerShellValue(installedUpdateManifestUrl)}`;
+              const scriptPath = installedAppRoot
+                ? `${installedAppRoot}\\scripts\\windows\\start-installed-update.ps1`
+                : ".\\scripts\\windows\\start-installed-update.ps1";
+              const installDirArg = installedAppRoot ? ` -InstallDir ${quotePowerShellValue(installedAppRoot)}` : "";
+              return `powershell.exe -NoProfile -ExecutionPolicy Bypass -File ${quotePowerShellValue(scriptPath)}${installDirArg} -ManifestUrl ${quotePowerShellValue(installedUpdateManifestUrl)}`;
             }
             if (command.includes("update-installed-agent-hero.sh")) {
-              return `bash ./scripts/macos/update-installed-agent-hero.sh --manifest-url ${quoteShellValue(installedUpdateManifestUrl)}`;
+              const scriptPath = installedAppRoot
+                ? `${installedAppRoot}/scripts/macos/update-installed-agent-hero.sh`
+                : "./scripts/macos/update-installed-agent-hero.sh";
+              const installDirArg = installedAppRoot ? ` --install-dir ${quoteShellValue(installedAppRoot)}` : "";
+              return `bash ${quoteShellValue(scriptPath)}${installDirArg} --manifest-url ${quoteShellValue(installedUpdateManifestUrl)}`;
             }
             return command;
           })
@@ -4410,7 +4419,7 @@ function AppUpdateNotice({ compact = false, hideWhenNoUpdate = false }: { compac
     sendCommand({
       type: "terminalStart",
       requestId,
-      cwd: installedMode ? undefined : settings.agentControlProjectPath?.trim() || undefined,
+      cwd: installedMode ? installedAppRoot || undefined : settings.agentControlProjectPath?.trim() || undefined,
       commands,
       hidden: true,
       title: "Update AgentHero"

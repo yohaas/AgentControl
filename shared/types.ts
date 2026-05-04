@@ -238,6 +238,7 @@ export interface AppUpdateAsset {
 
 export interface AppUpdateStatus {
   installMode: AppInstallMode;
+  appRoot?: string;
   isRepo: boolean;
   checkedAt: string;
   localVersion?: AppVersionMetadata;

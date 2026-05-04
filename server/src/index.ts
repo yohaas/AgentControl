@@ -1002,6 +1002,7 @@ async function appUpdateStatus(): Promise<AppUpdateStatus> {
     if (!manifestUrl) {
       return {
         installMode,
+        appRoot,
         isRepo: false,
         checkedAt,
         localVersion,
@@ -1020,6 +1021,7 @@ async function appUpdateStatus(): Promise<AppUpdateStatus> {
       const manifestOlder = manifestIsOlderThanLocal(localVersion, latestVersion);
       return {
         installMode,
+        appRoot,
         isRepo: false,
         checkedAt,
         localVersion,
@@ -1040,6 +1042,7 @@ async function appUpdateStatus(): Promise<AppUpdateStatus> {
     } catch (error) {
       return {
         installMode,
+        appRoot,
         isRepo: false,
         checkedAt,
         localVersion,
@@ -1054,7 +1057,7 @@ async function appUpdateStatus(): Promise<AppUpdateStatus> {
   try {
     const isRepo = (await gitCommand(appRoot, ["rev-parse", "--is-inside-work-tree"])).trim() === "true";
     if (!isRepo) {
-      return { installMode, isRepo: false, checkedAt, localVersion, releaseAvailable: false, updateAvailable: false, commits: [], message: "AgentHero is not running from a Git repository." };
+      return { installMode, appRoot, isRepo: false, checkedAt, localVersion, releaseAvailable: false, updateAvailable: false, commits: [], message: "AgentHero is not running from a Git repository." };
     }
 
     const remoteUrl = (await gitCommand(appRoot, ["remote", "get-url", "origin"])).trim();
@@ -1072,6 +1075,7 @@ async function appUpdateStatus(): Promise<AppUpdateStatus> {
     const releaseAvailable = latestRelease ? !(await gitRefIsAncestor(appRoot, latestRelease.tagName, "HEAD")) : false;
     return {
       installMode,
+      appRoot,
       isRepo: true,
       checkedAt,
       localVersion,
@@ -1088,6 +1092,7 @@ async function appUpdateStatus(): Promise<AppUpdateStatus> {
   } catch (error) {
     return {
       installMode,
+      appRoot,
       isRepo: false,
       checkedAt,
       localVersion,
