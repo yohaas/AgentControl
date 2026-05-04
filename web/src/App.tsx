@@ -12419,7 +12419,7 @@ function CollapsibleText({
         <button
           type="button"
           className={cn(
-            "absolute top-0 z-10 grid place-items-center rounded-md text-muted-foreground opacity-70 hover:bg-accent hover:text-foreground hover:opacity-100",
+            "absolute top-0 z-10 grid place-items-center rounded-md text-current opacity-70 hover:bg-accent hover:text-accent-foreground hover:opacity-100",
             compact ? "-right-8 h-6 w-6" : "-right-9 h-7 w-7"
           )}
           title={expanded ? "Collapse response" : "Expand response"}
