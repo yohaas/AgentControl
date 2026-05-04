@@ -1,12 +1,22 @@
 {
-  "version": "0.1.5",
-  "releaseTag": "v0.1.5",
-  "commitSha": "7f496b050194edabc2009b09a2041a85efc7f3c9",
+  "version": "0.1.6",
+  "releaseTag": "v0.1.6",
+  "commitSha": "c7f79e108bb77f3de4bc7a2bf82253f8dc292f9b",
   "platform": "any",
   "arch": "any",
-  "builtAt": "2026-05-04T13:59:14Z",
+  "builtAt": "2026-05-04T19:17:23Z",
   "releaseNotesUrl": "",
   "assets": [
+    {
+      "type": "patch",
+      "platform": "any",
+      "arch": "any",
+      "fromVersion": "0.1.5",
+      "version": "0.1.6",
+      "url": "releases/v0.1.6/agent-hero-0.1.5-to-0.1.6-app-patch.zip",
+      "sha256": "21861cb868be322ff9a31aa10e394ab498ce0efd93f58cda709d9f5d7ac675a8",
+      "size": 639232
+    },
     {
       "type": "full",
       "platform": "windows",
