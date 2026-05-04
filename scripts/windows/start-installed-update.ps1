@@ -17,7 +17,6 @@ $tempScript = Join-Path $tempScriptDir "update-installed-agent-hero.ps1"
 Copy-Item -LiteralPath $updateScript -Destination $tempScript -Force
 
 $args = @(
-  "-NoExit",
   "-NoProfile",
   "-ExecutionPolicy",
   "Bypass",
@@ -31,4 +30,5 @@ if ($resolvedManifestUrl) {
   $args += @("-ManifestUrl", $resolvedManifestUrl)
 }
 
-Start-Process powershell -Verb RunAs -WorkingDirectory $tempScriptDir -ArgumentList $args
+Start-Process powershell -WorkingDirectory $tempScriptDir -ArgumentList $args
+Write-Host "Started AgentHero updater in $tempScriptDir"
