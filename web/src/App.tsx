@@ -6559,7 +6559,7 @@ function LaunchDialog({ onLaunchRequested }: { onLaunchRequested?: (request: Lau
   const [agentFileOpen, setAgentFileOpen] = useState(false);
   const [launching, setLaunching] = useState(false);
 
-  const projectId = selectedProjectId || "";
+  const projectId = modal.projectId || selectedProjectId || "";
   const project = projects.find((candidate) => candidate.id === projectId);
   const agentOptionGroups = useMemo(() => groupedAgentDefsWithBuiltIns(project), [project]);
   const agentOptions = useMemo(

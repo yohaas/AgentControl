@@ -361,20 +361,20 @@ export class AgentRuntimeManager {
     void this.refreshSlashCommands(state, project, def, provider);
 
     if (provider === "openai") {
-      this.setStatus(state, process.env.OPENAI_API_KEY ? "idle" : "error", process.env.OPENAI_API_KEY ? undefined : "OPENAI_API_KEY is not set.");
+      const ready = Boolean(process.env.OPENAI_API_KEY);
+      this.setStatus(state, ready ? "idle" : "error", ready ? undefined : "OPENAI_API_KEY is not set.");
+      if (ready) this.sendPendingInitialPrompt(state);
     } else if (provider === "codex") {
       this.setStatus(state, "idle");
+      this.sendPendingInitialPrompt(state);
     } else if (this.isClaudeApi(state)) {
+      const ready = Boolean(process.env.ANTHROPIC_API_KEY);
       this.setStatus(
         state,
-        process.env.ANTHROPIC_API_KEY ? "idle" : "error",
-        process.env.ANTHROPIC_API_KEY ? undefined : "ANTHROPIC_API_KEY is not set."
+        ready ? "idle" : "error",
+        ready ? undefined : "ANTHROPIC_API_KEY is not set."
       );
-      if (process.env.ANTHROPIC_API_KEY && state.pendingInitialPrompt) {
-        const initial = state.pendingInitialPrompt;
-        state.pendingInitialPrompt = undefined;
-        this.userMessage(state.agent.id, initial);
-      }
+      if (ready) this.sendPendingInitialPrompt(state);
     } else {
       this.spawnStandard(state);
     }
@@ -1822,11 +1822,14 @@ export class AgentRuntimeManager {
     });
 
     this.setStatus(state, "idle");
-    if (state.pendingInitialPrompt) {
-      const initial = state.pendingInitialPrompt;
-      state.pendingInitialPrompt = undefined;
-      this.userMessage(state.agent.id, initial);
-    }
+    this.sendPendingInitialPrompt(state);
+  }
+
+  private sendPendingInitialPrompt(state: AgentProcessState): void {
+    if (!state.pendingInitialPrompt) return;
+    const initial = state.pendingInitialPrompt;
+    state.pendingInitialPrompt = undefined;
+    this.userMessage(state.agent.id, initial);
   }
 
   private async spawnRemoteControl(state: AgentProcessState): Promise<void> {
