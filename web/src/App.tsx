@@ -4369,26 +4369,28 @@ function AppUpdateNotice({ compact = false, hideWhenNoUpdate = false }: { compac
   const useWindowsInstalledLaunchOnly = installedMode && isWindowsClient;
   const quotePowerShellValue = (value: string) => `"${value.replace(/[`"$]/g, (match) => `\`${match}`)}"`;
   const quoteShellValue = (value: string) => `'${value.replace(/'/g, "'\\''")}'`;
+  const windowsInstalledUpdateCommand = installedUpdateManifestUrl
+    ? (() => {
+        const scriptPath = installedAppRoot
+          ? `${installedAppRoot}\\scripts\\windows\\start-installed-update.ps1`
+          : ".\\scripts\\windows\\start-installed-update.ps1";
+        const installDirArg = installedAppRoot ? ` -InstallDir ${quotePowerShellValue(installedAppRoot)}` : "";
+        return `powershell.exe -NoProfile -ExecutionPolicy Bypass -File ${quotePowerShellValue(scriptPath)}${installDirArg} -ManifestUrl ${quotePowerShellValue(installedUpdateManifestUrl)}`;
+      })()
+    : "";
+  const macosInstalledUpdateCommand = installedUpdateManifestUrl
+    ? (() => {
+        const scriptPath = installedAppRoot
+          ? `${installedAppRoot}/scripts/macos/update-installed-agent-hero.sh`
+          : "./scripts/macos/update-installed-agent-hero.sh";
+        const installDirArg = installedAppRoot ? ` --install-dir ${quoteShellValue(installedAppRoot)}` : "";
+        return `bash ${quoteShellValue(scriptPath)}${installDirArg} --manifest-url ${quoteShellValue(installedUpdateManifestUrl)}`;
+      })()
+    : "";
   const effectiveUpdateCommands =
     installedMode
       ? installedUpdateManifestUrl
-        ? (settings.updateCommands || []).map((command) => {
-            if (command.includes("start-installed-update.ps1")) {
-              const scriptPath = installedAppRoot
-                ? `${installedAppRoot}\\scripts\\windows\\start-installed-update.ps1`
-                : ".\\scripts\\windows\\start-installed-update.ps1";
-              const installDirArg = installedAppRoot ? ` -InstallDir ${quotePowerShellValue(installedAppRoot)}` : "";
-              return `powershell.exe -NoProfile -ExecutionPolicy Bypass -File ${quotePowerShellValue(scriptPath)}${installDirArg} -ManifestUrl ${quotePowerShellValue(installedUpdateManifestUrl)}`;
-            }
-            if (command.includes("update-installed-agent-hero.sh")) {
-              const scriptPath = installedAppRoot
-                ? `${installedAppRoot}/scripts/macos/update-installed-agent-hero.sh`
-                : "./scripts/macos/update-installed-agent-hero.sh";
-              const installDirArg = installedAppRoot ? ` --install-dir ${quoteShellValue(installedAppRoot)}` : "";
-              return `bash ${quoteShellValue(scriptPath)}${installDirArg} --manifest-url ${quoteShellValue(installedUpdateManifestUrl)}`;
-            }
-            return command;
-          })
+        ? [isWindowsClient ? windowsInstalledUpdateCommand : macosInstalledUpdateCommand].filter(Boolean)
         : []
       : settings.updateCommands || [];
 
