@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-05-05
 
+- [2397483](https://github.com/yohaas/AgentHero/commit/2397483) Filter Codex Windows sandbox runner diagnostics from normal chat output.
 - [c4c006e](https://github.com/yohaas/AgentHero/commit/c4c006e) Enable chat search highlighting and match navigation in raw transcript view.
 - [fcfaf7e](https://github.com/yohaas/AgentHero/commit/fcfaf7e) Show context usage percentages with one decimal place.
 - [432308b](https://github.com/yohaas/AgentHero/commit/432308b) Allow provider model settings to be reordered by dragging rows.
