@@ -14,24 +14,24 @@ export const DEFAULT_MODELS = [
 ];
 
 export const DEFAULT_MODEL_PROFILES: ModelProfile[] = [
-  { id: "claude-opus-4-7", provider: "claude", default: false, supportsThinking: true, supportedEfforts: ["low", "medium", "high", "xhigh", "max"] },
-  { id: "claude-opus-4-6", provider: "claude", supportsThinking: true, supportedEfforts: ["low", "medium", "high", "xhigh", "max"] },
-  { id: "claude-sonnet-4-6", provider: "claude", default: true, supportsThinking: true, supportedEfforts: ["low", "medium", "high", "xhigh", "max"] },
-  { id: "claude-haiku-4-5", provider: "claude", supportsThinking: true, supportedEfforts: ["low", "medium", "high", "xhigh", "max"] },
-  { id: "gpt-5.5", provider: "openai", default: true, supportedEfforts: ["low", "medium", "high", "xhigh"] },
-  { id: "gpt-5.4", provider: "openai", supportedEfforts: ["low", "medium", "high", "xhigh"] },
-  { id: "gpt-5.4-mini", provider: "openai", supportedEfforts: ["low", "medium", "high", "xhigh"] },
-  { id: "gpt-5.4-nano", provider: "openai", supportedEfforts: ["low", "medium", "high", "xhigh"] },
-  { id: "gpt-5", provider: "openai", supportedEfforts: ["low", "medium", "high", "xhigh"] },
-  { id: "o3-deep-research", provider: "openai", supportedEfforts: ["low", "medium", "high"] },
-  { id: "o4-mini-deep-research", provider: "openai", supportedEfforts: ["low", "medium", "high"] },
-  { id: "gpt-5.3-codex", provider: "codex", default: true, supportedEfforts: ["low", "medium", "high", "xhigh"] },
-  { id: "gpt-5.3-codex-spark", provider: "codex", supportedEfforts: ["low", "medium", "high", "xhigh"] },
-  { id: "gpt-5.2-codex", provider: "codex", supportedEfforts: ["low", "medium", "high", "xhigh"] },
-  { id: "gpt-5.1-codex", provider: "codex", supportedEfforts: ["low", "medium", "high", "xhigh"] },
-  { id: "gpt-5.1-codex-max", provider: "codex", supportedEfforts: ["low", "medium", "high", "xhigh"] },
-  { id: "gpt-5.1-codex-mini", provider: "codex", supportedEfforts: ["low", "medium", "high", "xhigh"] },
-  { id: "gpt-5-codex", provider: "codex", supportedEfforts: ["low", "medium", "high", "xhigh"] }
+  { id: "claude-opus-4-7", provider: "claude", contextWindow: 200000, default: false, supportsThinking: true, supportedEfforts: ["low", "medium", "high", "xhigh", "max"] },
+  { id: "claude-opus-4-6", provider: "claude", contextWindow: 200000, supportsThinking: true, supportedEfforts: ["low", "medium", "high", "xhigh", "max"] },
+  { id: "claude-sonnet-4-6", provider: "claude", contextWindow: 200000, default: true, supportsThinking: true, supportedEfforts: ["low", "medium", "high", "xhigh", "max"] },
+  { id: "claude-haiku-4-5", provider: "claude", contextWindow: 200000, supportsThinking: true, supportedEfforts: ["low", "medium", "high", "xhigh", "max"] },
+  { id: "gpt-5.5", provider: "openai", contextWindow: 200000, default: true, supportedEfforts: ["low", "medium", "high", "xhigh"] },
+  { id: "gpt-5.4", provider: "openai", contextWindow: 200000, supportedEfforts: ["low", "medium", "high", "xhigh"] },
+  { id: "gpt-5.4-mini", provider: "openai", contextWindow: 200000, supportedEfforts: ["low", "medium", "high", "xhigh"] },
+  { id: "gpt-5.4-nano", provider: "openai", contextWindow: 200000, supportedEfforts: ["low", "medium", "high", "xhigh"] },
+  { id: "gpt-5", provider: "openai", contextWindow: 200000, supportedEfforts: ["low", "medium", "high", "xhigh"] },
+  { id: "o3-deep-research", provider: "openai", contextWindow: 200000, supportedEfforts: ["low", "medium", "high"] },
+  { id: "o4-mini-deep-research", provider: "openai", contextWindow: 200000, supportedEfforts: ["low", "medium", "high"] },
+  { id: "gpt-5.3-codex", provider: "codex", contextWindow: 200000, default: true, supportedEfforts: ["low", "medium", "high", "xhigh"] },
+  { id: "gpt-5.3-codex-spark", provider: "codex", contextWindow: 200000, supportedEfforts: ["low", "medium", "high", "xhigh"] },
+  { id: "gpt-5.2-codex", provider: "codex", contextWindow: 200000, supportedEfforts: ["low", "medium", "high", "xhigh"] },
+  { id: "gpt-5.1-codex", provider: "codex", contextWindow: 200000, supportedEfforts: ["low", "medium", "high", "xhigh"] },
+  { id: "gpt-5.1-codex-max", provider: "codex", contextWindow: 200000, supportedEfforts: ["low", "medium", "high", "xhigh"] },
+  { id: "gpt-5.1-codex-mini", provider: "codex", contextWindow: 200000, supportedEfforts: ["low", "medium", "high", "xhigh"] },
+  { id: "gpt-5-codex", provider: "codex", contextWindow: 200000, supportedEfforts: ["low", "medium", "high", "xhigh"] }
 ];
 
 export interface DashboardConfig {
@@ -193,13 +193,26 @@ export function resolveModelProfiles(config: DashboardConfig): ModelProfile[] {
           profile.id.trim().length > 0 &&
           (profile.provider === "claude" || profile.provider === "codex" || profile.provider === "openai")
         )
-        .map((profile) => ({ ...profile, id: profile.id.trim(), label: profile.label?.trim() || undefined }))
+        .map((profile) => {
+          const id = profile.id.trim();
+          const defaultProfile = DEFAULT_MODEL_PROFILES.find((candidate) => candidate.provider === profile.provider && candidate.id === id);
+          return {
+            ...profile,
+            id,
+            label: profile.label?.trim() || undefined,
+            contextWindow:
+              typeof profile.contextWindow === "number" && Number.isFinite(profile.contextWindow) && profile.contextWindow > 0
+                ? Math.round(profile.contextWindow)
+                : defaultProfile?.contextWindow
+          };
+        })
     : [];
   if (profiles.length) return profiles;
   if (!config.models?.length) return DEFAULT_MODEL_PROFILES;
   return resolveModels(config).map((model, index) => ({
     id: model,
     provider: "claude",
+    contextWindow: 200000,
     default: index === 0,
     supportsThinking: true,
     supportedEfforts: ["low", "medium", "high", "xhigh", "max"]

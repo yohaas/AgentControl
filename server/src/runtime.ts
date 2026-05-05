@@ -290,6 +290,12 @@ function formatProviderSpawnError(provider: AgentProvider, command: SpawnCommand
   return error.message;
 }
 
+function providerLabel(provider: AgentProvider): string {
+  if (provider === "codex") return "Codex";
+  if (provider === "openai") return "OpenAI";
+  return "Claude";
+}
+
 function providerForModel(model: string): AgentProvider {
   const lower = model.toLowerCase();
   if (lower.includes("codex")) return "codex";
@@ -1230,6 +1236,27 @@ export class AgentRuntimeManager {
       });
       child.stdin.end(this.codexPromptWithSystemInstructions(state, prompt));
     });
+  }
+
+  async compact(id: string): Promise<void> {
+    const state = this.requiredState(id);
+    if (state.agent.remoteControl) throw new Error("Remote Control chats cannot be compacted from the dashboard.");
+    if (state.activeTurn) throw new Error("Wait for the current response to finish before compacting.");
+    if (state.agent.provider === "openai" || this.isClaudeApi(state)) {
+      throw new Error(`${providerLabel(state.agent.provider || "claude")} compact is not available for this runtime.`);
+    }
+
+    if (state.agent.provider === "codex") {
+      state.activeTurn = true;
+      this.setStatus(state, "running", "Compacting context...");
+      await this.runCodexTurn(state, "/compact");
+      this.pushCompactTranscript(state);
+      return;
+    }
+
+    this.ensureStandardProcess(state, "Reconnecting Claude before compacting...");
+    this.sendCliSlashCommand(state, "/compact");
+    this.pushCompactTranscript(state);
   }
 
   private addWindowsCodexSandboxCompatibility(args: string[]): void {
@@ -2957,6 +2984,17 @@ export class AgentRuntimeManager {
     this.syncSavedChat(state);
     this.broadcast({ type: "agent.transcript", id: state.agent.id, event });
     this.persist();
+  }
+
+  private pushCompactTranscript(state: AgentProcessState): void {
+    const compactedAt = new Date();
+    this.pushTranscript(state, {
+      ...eventBase(state.agent.id, state.agent.currentModel),
+      kind: "system",
+      text: `Compacted at ${compactedAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`,
+      alwaysVisible: true,
+      contextCompacted: true
+    });
   }
 
   private updateTranscript(state: AgentProcessState, event: TranscriptEvent): void {

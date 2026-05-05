@@ -187,6 +187,7 @@ function modelProfiles(ids: string[], provider: "codex" | "openai"): ModelProfil
   return ids.map((id, index) => ({
     id,
     provider,
+    contextWindow: 200000,
     default: index === 0,
     supportedEfforts: ["low", "medium", "high", "xhigh"]
   }));
@@ -196,6 +197,7 @@ function claudeModelProfiles(ids: string[]): ModelProfile[] {
   return ids.map((id, index) => ({
     id,
     provider: "claude",
+    contextWindow: 200000,
     default: index === 0,
     supportsThinking: /\b(opus|sonnet)\b/.test(id),
     supportedEfforts: ["low", "medium", "high", "xhigh", "max"]
@@ -2544,6 +2546,15 @@ app.post("/api/agents/:id/interrupt", (request, response) => {
   response.json({ ok: true });
 });
 
+app.post("/api/agents/:id/compact", async (request, response) => {
+  try {
+    await runtime.compact(request.params.id);
+    response.json({ ok: true });
+  } catch (error) {
+    response.status(500).json({ error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
 app.post("/api/agents/:id/handoff-summary", async (request, response) => {
   try {
     response.json({ summary: await runtime.handoffSummary(request.params.id) });
@@ -2970,6 +2981,11 @@ wss.on("connection", (ws) => {
           break;
         case "nativeStatus":
           runtime.nativeStatus(command.id);
+          break;
+        case "compact":
+          void runtime.compact(command.id).catch((error: unknown) => {
+            send(ws, { type: "agent.error", message: error instanceof Error ? error.message : String(error) });
+          });
           break;
         case "enablePlugin":
           void enablePlugin(command.plugin).catch((error: unknown) => {

@@ -377,24 +377,24 @@ const defaultSettings: SettingsState = {
   projectsRoot: "",
   models: ["claude-opus-4-7", "claude-opus-4-6", "claude-sonnet-4-6", "claude-haiku-4-5"],
   modelProfiles: [
-    { id: "claude-opus-4-7", provider: "claude" },
-    { id: "claude-opus-4-6", provider: "claude" },
-    { id: "claude-sonnet-4-6", provider: "claude", default: true },
-    { id: "claude-haiku-4-5", provider: "claude" },
-    { id: "gpt-5.5", provider: "openai", default: true, supportedEfforts: ["low", "medium", "high", "xhigh"] },
-    { id: "gpt-5.4", provider: "openai", supportedEfforts: ["low", "medium", "high", "xhigh"] },
-    { id: "gpt-5.4-mini", provider: "openai", supportedEfforts: ["low", "medium", "high", "xhigh"] },
-    { id: "gpt-5.4-nano", provider: "openai", supportedEfforts: ["low", "medium", "high", "xhigh"] },
-    { id: "gpt-5", provider: "openai", supportedEfforts: ["low", "medium", "high", "xhigh"] },
-    { id: "o3-deep-research", provider: "openai", supportedEfforts: ["low", "medium", "high"] },
-    { id: "o4-mini-deep-research", provider: "openai", supportedEfforts: ["low", "medium", "high"] },
-    { id: "gpt-5.3-codex", provider: "codex", default: true, supportedEfforts: ["low", "medium", "high", "xhigh"] },
-    { id: "gpt-5.3-codex-spark", provider: "codex", supportedEfforts: ["low", "medium", "high", "xhigh"] },
-    { id: "gpt-5.2-codex", provider: "codex", supportedEfforts: ["low", "medium", "high", "xhigh"] },
-    { id: "gpt-5.1-codex", provider: "codex", supportedEfforts: ["low", "medium", "high", "xhigh"] },
-    { id: "gpt-5.1-codex-max", provider: "codex", supportedEfforts: ["low", "medium", "high", "xhigh"] },
-    { id: "gpt-5.1-codex-mini", provider: "codex", supportedEfforts: ["low", "medium", "high", "xhigh"] },
-    { id: "gpt-5-codex", provider: "codex", supportedEfforts: ["low", "medium", "high", "xhigh"] }
+    { id: "claude-opus-4-7", provider: "claude", contextWindow: 200000 },
+    { id: "claude-opus-4-6", provider: "claude", contextWindow: 200000 },
+    { id: "claude-sonnet-4-6", provider: "claude", contextWindow: 200000, default: true },
+    { id: "claude-haiku-4-5", provider: "claude", contextWindow: 200000 },
+    { id: "gpt-5.5", provider: "openai", contextWindow: 200000, default: true, supportedEfforts: ["low", "medium", "high", "xhigh"] },
+    { id: "gpt-5.4", provider: "openai", contextWindow: 200000, supportedEfforts: ["low", "medium", "high", "xhigh"] },
+    { id: "gpt-5.4-mini", provider: "openai", contextWindow: 200000, supportedEfforts: ["low", "medium", "high", "xhigh"] },
+    { id: "gpt-5.4-nano", provider: "openai", contextWindow: 200000, supportedEfforts: ["low", "medium", "high", "xhigh"] },
+    { id: "gpt-5", provider: "openai", contextWindow: 200000, supportedEfforts: ["low", "medium", "high", "xhigh"] },
+    { id: "o3-deep-research", provider: "openai", contextWindow: 200000, supportedEfforts: ["low", "medium", "high"] },
+    { id: "o4-mini-deep-research", provider: "openai", contextWindow: 200000, supportedEfforts: ["low", "medium", "high"] },
+    { id: "gpt-5.3-codex", provider: "codex", contextWindow: 200000, default: true, supportedEfforts: ["low", "medium", "high", "xhigh"] },
+    { id: "gpt-5.3-codex-spark", provider: "codex", contextWindow: 200000, supportedEfforts: ["low", "medium", "high", "xhigh"] },
+    { id: "gpt-5.2-codex", provider: "codex", contextWindow: 200000, supportedEfforts: ["low", "medium", "high", "xhigh"] },
+    { id: "gpt-5.1-codex", provider: "codex", contextWindow: 200000, supportedEfforts: ["low", "medium", "high", "xhigh"] },
+    { id: "gpt-5.1-codex-max", provider: "codex", contextWindow: 200000, supportedEfforts: ["low", "medium", "high", "xhigh"] },
+    { id: "gpt-5.1-codex-mini", provider: "codex", contextWindow: 200000, supportedEfforts: ["low", "medium", "high", "xhigh"] },
+    { id: "gpt-5-codex", provider: "codex", contextWindow: 200000, supportedEfforts: ["low", "medium", "high", "xhigh"] }
   ],
   autoApprove: "off",
   permissionAllowRules: [],
@@ -520,7 +520,18 @@ function normalizeSettings(settings: SettingsState): SettingsState {
   return {
     ...defaultSettings,
     ...settings,
-    modelProfiles: Array.isArray(settings.modelProfiles) && settings.modelProfiles.length ? settings.modelProfiles : defaultSettings.modelProfiles,
+    modelProfiles: Array.isArray(settings.modelProfiles) && settings.modelProfiles.length
+      ? settings.modelProfiles.map((profile) => {
+          const defaultProfile = defaultSettings.modelProfiles?.find((candidate) => candidate.provider === profile.provider && candidate.id === profile.id);
+          return {
+            ...profile,
+            contextWindow:
+              typeof profile.contextWindow === "number" && Number.isFinite(profile.contextWindow) && profile.contextWindow > 0
+                ? Math.round(profile.contextWindow)
+                : defaultProfile?.contextWindow
+          };
+        })
+      : defaultSettings.modelProfiles,
     permissionAllowRules: Array.isArray(settings.permissionAllowRules) ? settings.permissionAllowRules : defaultSettings.permissionAllowRules,
     updateChecksEnabled: settings.updateChecksEnabled !== false,
     inputNotificationsEnabled: settings.inputNotificationsEnabled === true,

@@ -389,6 +389,8 @@ export type TranscriptEvent =
   | (TranscriptBase & {
       kind: "system";
       text: string;
+      alwaysVisible?: boolean;
+      contextCompacted?: boolean;
     });
 
 export interface LaunchRequest {
@@ -452,6 +454,7 @@ export interface ModelProfile {
   id: string;
   label?: string;
   provider: AgentProvider;
+  contextWindow?: number;
   default?: boolean;
   supportsThinking?: boolean;
   supportedEfforts?: AgentEffort[];
@@ -749,6 +752,10 @@ export type WsClientCommand =
     }
   | {
       type: "nativeStatus";
+      id: string;
+    }
+  | {
+      type: "compact";
       id: string;
     }
   | {

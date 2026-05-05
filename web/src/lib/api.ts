@@ -148,6 +148,7 @@ export const api = {
       body: JSON.stringify({ text, attachments })
     }),
   interruptAgent: (id: string) => json<{ ok: boolean }>(`/api/agents/${encodeURIComponent(id)}/interrupt`, { method: "POST" }),
+  compactAgent: (id: string) => json<{ ok: boolean }>(`/api/agents/${encodeURIComponent(id)}/compact`, { method: "POST" }),
   handoffSummary: (id: string) => json<{ summary: string }>(`/api/agents/${encodeURIComponent(id)}/handoff-summary`, { method: "POST" }),
   rawAgentStream: async (id: string) => {
     const response = await authedFetch(`/api/agents/${encodeURIComponent(id)}/raw-stream`);

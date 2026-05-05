@@ -559,6 +559,7 @@ const CLAUDE_SLASH_COMMANDS: SlashCommandSuggestion[] = [
 ];
 
 const CODEX_SLASH_COMMANDS: SlashCommandSuggestion[] = [
+  { value: "/compact", label: "/compact", description: "Compact conversation context", source: "builtin" },
   { value: "/intelligence", label: "/intelligence", description: "Use the most capable Codex model", source: "agenthero" },
   { value: "/speed", label: "/speed", description: "Use the fastest Codex model available", source: "agenthero" },
   { value: "/plan ", label: "/plan", description: "Switch Codex to plan mode", argumentHint: "[prompt]", source: "agenthero" },
@@ -853,6 +854,38 @@ function formatTokenUsage(usage?: TokenUsage) {
     usage.totalTokens !== undefined ? `total ${formatTokenCount(usage.totalTokens)}` : ""
   ].filter(Boolean);
   return parts.join(" / ");
+}
+
+function transcriptEventTokenText(event: TranscriptEvent): string {
+  if (event.kind === "user" || event.kind === "assistant_text" || event.kind === "system") return event.text;
+  if (event.kind === "plan") return event.plan;
+  if (event.kind === "questions") return event.questions.map((question) => `${question.header || "Question"}: ${question.question}`).join("\n");
+  if (event.kind === "model_switch") return `${event.from || ""} ${event.to}`;
+  if (event.kind === "tool_use") return `${event.name}\n${JSON.stringify(event.input)}`;
+  if (event.kind === "tool_result") return JSON.stringify(event.output);
+  return "";
+}
+
+function estimateTokens(text: string): number {
+  if (!text) return 0;
+  return Math.ceil(text.length / 4);
+}
+
+function contextUsageForChat(transcript: TranscriptEvent[], model?: string, settings?: { models: string[]; modelProfiles?: ModelProfile[] }) {
+  let compactIndex = -1;
+  for (let index = transcript.length - 1; index >= 0; index -= 1) {
+    const event = transcript[index];
+    if (event.kind === "system" && event.contextCompacted) {
+      compactIndex = index;
+      break;
+    }
+  }
+  const currentContextEvents = compactIndex >= 0 ? transcript.slice(compactIndex + 1) : transcript;
+  const usedTokens = currentContextEvents.reduce((total, event) => total + estimateTokens(transcriptEventTokenText(event)), 0);
+  const profile = settings && model ? modelProfilesForSettings(settings).find((candidate) => candidate.id === model) : undefined;
+  const contextWindow = normalizeModelContextWindow(profile?.contextWindow);
+  const percentage = contextWindow ? Math.min(999, Math.round((usedTokens / contextWindow) * 100)) : undefined;
+  return { usedTokens, contextWindow, percentage };
 }
 
 function ThinkingText({ agent, prefix, startedAt, usage }: { agent: RunningAgent; prefix?: string; startedAt?: string; usage?: TokenUsage }) {
@@ -1441,6 +1474,7 @@ function filteredTranscriptItems(items: ToolTranscriptItem[], detail: ChatTransc
   return items.filter((item) => {
     const event = item.kind === "tool_pair" ? item.event : item.event;
     if (transcriptItemNeedsFeedback(item)) return true;
+    if (event.kind === "system" && event.alwaysVisible) return true;
     if (event.kind === "user" || event.kind === "assistant_text" || event.kind === "questions" || event.kind === "plan") return true;
     if (detail === "actions") return event.kind === "tool_use" || event.kind === "tool_result";
     return false;
@@ -2218,6 +2252,92 @@ async function handoffChat(agent: RunningAgent, transcripts: TranscriptEvent[], 
   }
 }
 
+function ContextUsageButton({
+  agent,
+  transcript,
+  settings,
+  compact = false
+}: {
+  agent: RunningAgent;
+  transcript: TranscriptEvent[];
+  settings: SettingsState;
+  compact?: boolean;
+}) {
+  const addError = useAppStore((state) => state.addError);
+  const [handoffPending, setHandoffPending] = useState(false);
+  const usage = useMemo(() => contextUsageForChat(transcript, agent.currentModel, settings), [agent.currentModel, settings, transcript]);
+  const percentageLabel = usage.percentage === undefined ? "--%" : `${usage.percentage}%`;
+  const compactDisabled = isAgentBusy(agent) || agent.provider === "openai" || (agent.provider === "claude" && settings.claudeRuntime === "api");
+
+  async function prepareHandoff() {
+    if (handoffPending) return;
+    setHandoffPending(true);
+    try {
+      await handoffChat(agent, transcript, settings, addError);
+    } finally {
+      setHandoffPending(false);
+    }
+  }
+
+  function compactChat() {
+    if (sendCommand({ type: "compact", id: agent.id })) return;
+    void api.compactAgent(agent.id).catch((error: unknown) => addError(error instanceof Error ? error.message : String(error)));
+  }
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          className={cn(
+            "shrink-0 gap-1 px-2 font-mono tabular-nums text-muted-foreground hover:text-foreground",
+            compact ? "h-7 text-[11px]" : "h-8 text-xs"
+          )}
+          title="Context usage"
+        >
+          <Gauge className="h-3.5 w-3.5" />
+          {percentageLabel}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-72">
+        <div className="grid gap-3 text-sm">
+          <div>
+            <div className="font-medium">Context usage</div>
+            <div className="text-xs text-muted-foreground">Updates after transcript changes and compaction.</div>
+          </div>
+          <div className="grid gap-1.5 rounded-md border border-border bg-muted/30 p-2 text-xs">
+            <div className="flex justify-between gap-3">
+              <span className="text-muted-foreground">Model</span>
+              <span className="min-w-0 truncate text-right" title={agent.currentModel}>{agent.currentModel}</span>
+            </div>
+            <div className="flex justify-between gap-3">
+              <span className="text-muted-foreground">Used</span>
+              <span>{formatTokenCount(usage.usedTokens) || "0"} tokens</span>
+            </div>
+            <div className="flex justify-between gap-3">
+              <span className="text-muted-foreground">Window</span>
+              <span>{usage.contextWindow ? `${formatTokenCount(usage.contextWindow)} tokens` : "Not set"}</span>
+            </div>
+            <div className="flex justify-between gap-3">
+              <span className="text-muted-foreground">Usage</span>
+              <span>{percentageLabel}</span>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" size="sm" disabled={compactDisabled} onClick={compactChat}>
+              Compact
+            </Button>
+            <Button type="button" size="sm" disabled={handoffPending || transcript.length === 0} onClick={() => void prepareHandoff()}>
+              {handoffPending ? "Handoff..." : "Handoff"}
+            </Button>
+          </div>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 async function launchAgentRequest(request: LaunchRequest): Promise<RunningAgent> {
   const result = await api.launchAgent(request);
   useAppStore.getState().hydrateSnapshot(result.snapshot);
@@ -2496,6 +2616,9 @@ function handleNativeSlashCommand(agent: RunningAgent, text: string): NativeSlas
   }
   if (command === "status") {
     return nativeSlashResult(sendCommand({ type: "nativeStatus", id: agent.id }));
+  }
+  if (command === "compact") {
+    return nativeSlashResult(sendCommand({ type: "compact", id: agent.id }));
   }
   if (command === "model" && arg) {
     return nativeSlashResult(sendCommand({ type: "setModel", id: agent.id, model: arg }));
@@ -3272,30 +3395,30 @@ function providerLabel(provider?: AgentProvider) {
 }
 
 const CURRENT_OPENAI_MODEL_PROFILES = [
-  { id: "gpt-5.5", provider: "openai", default: true, supportedEfforts: ["low", "medium", "high", "xhigh"] },
-  { id: "gpt-5.4", provider: "openai", supportedEfforts: ["low", "medium", "high", "xhigh"] },
-  { id: "gpt-5.4-mini", provider: "openai", supportedEfforts: ["low", "medium", "high", "xhigh"] },
-  { id: "gpt-5.4-nano", provider: "openai", supportedEfforts: ["low", "medium", "high", "xhigh"] },
-  { id: "gpt-5", provider: "openai", supportedEfforts: ["low", "medium", "high", "xhigh"] },
-  { id: "o3-deep-research", provider: "openai", supportedEfforts: ["low", "medium", "high"] },
-  { id: "o4-mini-deep-research", provider: "openai", supportedEfforts: ["low", "medium", "high"] }
+  { id: "gpt-5.5", provider: "openai", contextWindow: 200000, default: true, supportedEfforts: ["low", "medium", "high", "xhigh"] },
+  { id: "gpt-5.4", provider: "openai", contextWindow: 200000, supportedEfforts: ["low", "medium", "high", "xhigh"] },
+  { id: "gpt-5.4-mini", provider: "openai", contextWindow: 200000, supportedEfforts: ["low", "medium", "high", "xhigh"] },
+  { id: "gpt-5.4-nano", provider: "openai", contextWindow: 200000, supportedEfforts: ["low", "medium", "high", "xhigh"] },
+  { id: "gpt-5", provider: "openai", contextWindow: 200000, supportedEfforts: ["low", "medium", "high", "xhigh"] },
+  { id: "o3-deep-research", provider: "openai", contextWindow: 200000, supportedEfforts: ["low", "medium", "high"] },
+  { id: "o4-mini-deep-research", provider: "openai", contextWindow: 200000, supportedEfforts: ["low", "medium", "high"] }
 ] satisfies ModelProfile[];
 
 const CURRENT_CODEX_MODEL_PROFILES = [
-  { id: "gpt-5.3-codex", provider: "codex", default: true, supportedEfforts: ["low", "medium", "high", "xhigh"] },
-  { id: "gpt-5.3-codex-spark", provider: "codex", supportedEfforts: ["low", "medium", "high", "xhigh"] },
-  { id: "gpt-5.2-codex", provider: "codex", supportedEfforts: ["low", "medium", "high", "xhigh"] },
-  { id: "gpt-5.1-codex", provider: "codex", supportedEfforts: ["low", "medium", "high", "xhigh"] },
-  { id: "gpt-5.1-codex-max", provider: "codex", supportedEfforts: ["low", "medium", "high", "xhigh"] },
-  { id: "gpt-5.1-codex-mini", provider: "codex", supportedEfforts: ["low", "medium", "high", "xhigh"] },
-  { id: "gpt-5-codex", provider: "codex", supportedEfforts: ["low", "medium", "high", "xhigh"] }
+  { id: "gpt-5.3-codex", provider: "codex", contextWindow: 200000, default: true, supportedEfforts: ["low", "medium", "high", "xhigh"] },
+  { id: "gpt-5.3-codex-spark", provider: "codex", contextWindow: 200000, supportedEfforts: ["low", "medium", "high", "xhigh"] },
+  { id: "gpt-5.2-codex", provider: "codex", contextWindow: 200000, supportedEfforts: ["low", "medium", "high", "xhigh"] },
+  { id: "gpt-5.1-codex", provider: "codex", contextWindow: 200000, supportedEfforts: ["low", "medium", "high", "xhigh"] },
+  { id: "gpt-5.1-codex-max", provider: "codex", contextWindow: 200000, supportedEfforts: ["low", "medium", "high", "xhigh"] },
+  { id: "gpt-5.1-codex-mini", provider: "codex", contextWindow: 200000, supportedEfforts: ["low", "medium", "high", "xhigh"] },
+  { id: "gpt-5-codex", provider: "codex", contextWindow: 200000, supportedEfforts: ["low", "medium", "high", "xhigh"] }
 ] satisfies ModelProfile[];
 
 const CURRENT_CLAUDE_MODEL_PROFILES = [
-  { id: "claude-opus-4-7", provider: "claude", supportsThinking: true, supportedEfforts: ["low", "medium", "high", "xhigh", "max"] },
-  { id: "claude-opus-4-6", provider: "claude", supportsThinking: true, supportedEfforts: ["low", "medium", "high", "xhigh", "max"] },
-  { id: "claude-sonnet-4-6", provider: "claude", default: true, supportsThinking: true, supportedEfforts: ["low", "medium", "high", "xhigh", "max"] },
-  { id: "claude-haiku-4-5", provider: "claude", supportsThinking: true, supportedEfforts: ["low", "medium", "high", "xhigh", "max"] }
+  { id: "claude-opus-4-7", provider: "claude", contextWindow: 200000, supportsThinking: true, supportedEfforts: ["low", "medium", "high", "xhigh", "max"] },
+  { id: "claude-opus-4-6", provider: "claude", contextWindow: 200000, supportsThinking: true, supportedEfforts: ["low", "medium", "high", "xhigh", "max"] },
+  { id: "claude-sonnet-4-6", provider: "claude", contextWindow: 200000, default: true, supportsThinking: true, supportedEfforts: ["low", "medium", "high", "xhigh", "max"] },
+  { id: "claude-haiku-4-5", provider: "claude", contextWindow: 200000, supportsThinking: true, supportedEfforts: ["low", "medium", "high", "xhigh", "max"] }
 ] satisfies ModelProfile[];
 
 function currentModelProfilesForProvider(provider: AgentProvider) {
@@ -3308,6 +3431,17 @@ function currentModelText(provider: AgentProvider) {
   return currentModelProfilesForProvider(provider)
     .map((profile) => profile.id)
     .join("\n");
+}
+
+function currentModelProfilesWithContext(provider: AgentProvider, existing: ModelProfile[] = []) {
+  return currentModelProfilesForProvider(provider).map((profile, index) => {
+    const current = existing.find((candidate) => candidate.provider === provider && candidate.id === profile.id);
+    return {
+      ...profile,
+      contextWindow: current?.contextWindow || profile.contextWindow || 200000,
+      default: index === 0
+    };
+  });
 }
 
 function modelProfilesForSettings(settings: { models: string[]; modelProfiles?: ModelProfile[] }): ModelProfile[] {
@@ -3331,6 +3465,34 @@ function providerModelsText(settings: { models: string[]; modelProfiles?: ModelP
   return modelProfilesForSettings(settings)
     .filter((profile) => profile.provider === provider)
     .map((profile) => profile.id)
+    .join("\n");
+}
+
+function providerProfilesForSettings(settings: { models: string[]; modelProfiles?: ModelProfile[] }, provider: AgentProvider) {
+  return modelProfilesForSettings(settings).filter((profile) => profile.provider === provider);
+}
+
+function normalizeModelContextWindow(value: unknown): number | undefined {
+  const parsed = typeof value === "number" ? value : Number(String(value || "").replace(/,/g, ""));
+  if (!Number.isFinite(parsed) || parsed <= 0) return undefined;
+  return Math.round(parsed);
+}
+
+function normalizeProviderProfiles(profiles: ModelProfile[], provider: AgentProvider): ModelProfile[] {
+  return profiles
+    .map((profile, index) => ({
+      ...profile,
+      id: profile.id.trim(),
+      provider,
+      contextWindow: normalizeModelContextWindow(profile.contextWindow),
+      default: index === 0
+    }))
+    .filter((profile) => profile.id);
+}
+
+function modelProfilesKey(profiles: ModelProfile[]) {
+  return profiles
+    .map((profile) => `${profile.provider}:${profile.id}:${profile.contextWindow || ""}:${profile.default ? "1" : "0"}`)
     .join("\n");
 }
 
@@ -6571,6 +6733,90 @@ interface PermissionModeOption {
   icon: ComponentType<{ className?: string }>;
 }
 
+function ProviderModelProfilesField({
+  label,
+  provider,
+  value,
+  onChange,
+  onGetCurrentModels,
+  gettingCurrentModels,
+  updateNote
+}: {
+  label: string;
+  provider: AgentProvider;
+  value: ModelProfile[];
+  onChange: (value: ModelProfile[]) => void;
+  onGetCurrentModels?: () => void;
+  gettingCurrentModels?: boolean;
+  updateNote?: string;
+}) {
+  function updateProfile(index: number, patch: Partial<ModelProfile>) {
+    onChange(value.map((profile, profileIndex) => (profileIndex === index ? { ...profile, ...patch } : profile)));
+  }
+
+  return (
+    <section className="grid gap-2 rounded-md border border-border p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-medium">{label}</h3>
+          <p className="text-xs text-muted-foreground">The first row is the provider default. Context window is used for chat usage percentages.</p>
+        </div>
+        {onGetCurrentModels && (
+          <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={onGetCurrentModels} disabled={gettingCurrentModels}>
+            <RefreshCw className={cn("h-4 w-4", gettingCurrentModels && "animate-spin")} />
+            {gettingCurrentModels ? "Getting..." : "Get Current Models"}
+          </Button>
+        )}
+      </div>
+      <div className="grid gap-1.5">
+        <div className="grid grid-cols-[minmax(0,1fr)_8rem_2rem] gap-2 px-1 text-[11px] uppercase tracking-normal text-muted-foreground">
+          <span>Model name</span>
+          <span>Context</span>
+          <span />
+        </div>
+        {value.map((profile, index) => (
+          <div key={`${profile.provider}-${index}`} className="grid grid-cols-[minmax(0,1fr)_8rem_2rem] gap-2">
+            <Input
+              value={profile.id}
+              onChange={(event) => updateProfile(index, { id: event.target.value })}
+              placeholder="model-id"
+            />
+            <Input
+              type="number"
+              min={1}
+              value={profile.contextWindow || ""}
+              onChange={(event) => updateProfile(index, { contextWindow: normalizeModelContextWindow(event.target.value) })}
+              placeholder="200000"
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-9 w-9 text-muted-foreground hover:text-destructive"
+              title="Remove model"
+              onClick={() => onChange(value.filter((_, profileIndex) => profileIndex !== index))}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        ))}
+      </div>
+      <div className="flex items-center justify-between gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => onChange([...value, { id: "", provider, contextWindow: 200000 }])}
+        >
+          <Plus className="h-4 w-4" />
+          Add Model
+        </Button>
+        {updateNote && <span className="text-xs text-muted-foreground">{updateNote}</span>}
+      </div>
+    </section>
+  );
+}
+
 const COMPOSER_MODE_OPTIONS = [
   {
     mode: "default",
@@ -7824,9 +8070,9 @@ function SettingsDialog() {
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const [projectPaths, setProjectPaths] = useState(settings.projectPaths || []);
   const [settingsTab, setSettingsTab] = useState<"general" | "appearance" | "builtIn" | "claude" | "codex" | "openai" | "updates">("general");
-  const [claudeModelsText, setClaudeModelsText] = useState(providerModelsText(settings, "claude"));
-  const [codexModelsText, setCodexModelsText] = useState(providerModelsText(settings, "codex"));
-  const [openaiModelsText, setOpenaiModelsText] = useState(providerModelsText(settings, "openai"));
+  const [claudeProfiles, setClaudeProfiles] = useState(providerProfilesForSettings(settings, "claude"));
+  const [codexProfiles, setCodexProfiles] = useState(providerProfilesForSettings(settings, "codex"));
+  const [openaiProfiles, setOpenaiProfiles] = useState(providerProfilesForSettings(settings, "openai"));
   const [gitPath, setGitPath] = useState(settings.gitPath || "");
   const [gitFetchIntervalMinutes, setGitFetchIntervalMinutes] = useState(settings.gitFetchIntervalMinutes ?? 15);
   const [claudePath, setClaudePath] = useState(settings.claudePath || "");
@@ -7881,9 +8127,9 @@ function SettingsDialog() {
   useEffect(() => {
     if (!open) return;
     setProjectPaths(settings.projectPaths || []);
-    setClaudeModelsText(providerModelsText(settings, "claude"));
-    setCodexModelsText(providerModelsText(settings, "codex"));
-    setOpenaiModelsText(providerModelsText(settings, "openai"));
+    setClaudeProfiles(providerProfilesForSettings(settings, "claude"));
+    setCodexProfiles(providerProfilesForSettings(settings, "codex"));
+    setOpenaiProfiles(providerProfilesForSettings(settings, "openai"));
     setGitPath(settings.gitPath || "");
     setGitFetchIntervalMinutes(settings.gitFetchIntervalMinutes ?? 15);
     setClaudePath(settings.claudePath || "");
@@ -7935,9 +8181,9 @@ function SettingsDialog() {
         ...settings,
         projectPaths,
         modelProfiles: [
-          ...parseProviderModels(claudeModelsText, "claude"),
-          ...parseProviderModels(codexModelsText, "codex"),
-          ...parseProviderModels(openaiModelsText, "openai")
+          ...normalizeProviderProfiles(claudeProfiles, "claude"),
+          ...normalizeProviderProfiles(codexProfiles, "codex"),
+          ...normalizeProviderProfiles(openaiProfiles, "openai")
         ],
         gitPath,
         gitFetchIntervalMinutes: Number.isFinite(Number(gitFetchIntervalMinutes))
@@ -8001,10 +8247,14 @@ function SettingsDialog() {
     try {
       const latest = await api.latestModels(provider);
       const profiles = latest.providers[provider] || [];
-      const nextText = profiles.length > 0 ? profiles.map((profile) => profile.id).join("\n") : currentModelText(provider);
-      if (provider === "claude") setClaudeModelsText(nextText);
-      else if (provider === "codex") setCodexModelsText(nextText);
-      else setOpenaiModelsText(nextText);
+      const existing = provider === "claude" ? claudeProfiles : provider === "codex" ? codexProfiles : openaiProfiles;
+      const nextProfiles = (profiles.length > 0 ? profiles : currentModelProfilesForProvider(provider)).map((profile, index) => {
+        const current = existing.find((candidate) => candidate.id === profile.id);
+        return { ...profile, contextWindow: current?.contextWindow || profile.contextWindow || 200000, default: index === 0 };
+      });
+      if (provider === "claude") setClaudeProfiles(nextProfiles);
+      else if (provider === "codex") setCodexProfiles(nextProfiles);
+      else setOpenaiProfiles(nextProfiles);
       const source = provider === "claude" ? "Anthropic" : "OpenAI docs";
       setModelUpdateNote(`Updated ${providerLabel(provider)} models from ${source} at ${new Date(latest.fetchedAt).toLocaleString()}. Save settings to keep this list.`);
       setModelUpdateNoteProvider(provider);
@@ -8053,9 +8303,9 @@ function SettingsDialog() {
         ...settings,
         projectPaths,
         modelProfiles: [
-          ...parseProviderModels(claudeModelsText, "claude"),
-          ...parseProviderModels(codexModelsText, "codex"),
-          ...parseProviderModels(openaiModelsText, "openai")
+          ...normalizeProviderProfiles(claudeProfiles, "claude"),
+          ...normalizeProviderProfiles(codexProfiles, "codex"),
+          ...normalizeProviderProfiles(openaiProfiles, "openai")
         ],
         gitPath,
         gitFetchIntervalMinutes,
@@ -8101,9 +8351,9 @@ function SettingsDialog() {
       setSettings(next);
       setProjects(await api.refresh());
       setProjectPaths(next.projectPaths || []);
-      setClaudeModelsText(providerModelsText(next, "claude"));
-      setCodexModelsText(providerModelsText(next, "codex"));
-      setOpenaiModelsText(providerModelsText(next, "openai"));
+      setClaudeProfiles(providerProfilesForSettings(next, "claude"));
+      setCodexProfiles(providerProfilesForSettings(next, "codex"));
+      setOpenaiProfiles(providerProfilesForSettings(next, "openai"));
       setGitPath(next.gitPath || "");
       setGitFetchIntervalMinutes(next.gitFetchIntervalMinutes ?? 15);
       setClaudePath(next.claudePath || "");
@@ -8220,9 +8470,9 @@ function SettingsDialog() {
   const settingsDirty = useMemo(
     () =>
       projectPaths.join("\n") !== (settings.projectPaths || []).join("\n") ||
-      claudeModelsText !== providerModelsText(settings, "claude") ||
-      codexModelsText !== providerModelsText(settings, "codex") ||
-      openaiModelsText !== providerModelsText(settings, "openai") ||
+      modelProfilesKey(normalizeProviderProfiles(claudeProfiles, "claude")) !== modelProfilesKey(providerProfilesForSettings(settings, "claude")) ||
+      modelProfilesKey(normalizeProviderProfiles(codexProfiles, "codex")) !== modelProfilesKey(providerProfilesForSettings(settings, "codex")) ||
+      modelProfilesKey(normalizeProviderProfiles(openaiProfiles, "openai")) !== modelProfilesKey(providerProfilesForSettings(settings, "openai")) ||
       gitPath !== (settings.gitPath || "") ||
       gitFetchIntervalMinutes !== (settings.gitFetchIntervalMinutes ?? 15) ||
       claudePath !== (settings.claudePath || "") ||
@@ -8265,7 +8515,7 @@ function SettingsDialog() {
       autoApprove,
       builtInAgentDir,
       claudeAgentDir,
-      claudeModelsText,
+      claudeProfiles,
       claudePath,
       claudeRuntime,
       chatFontFamily,
@@ -8275,7 +8525,7 @@ function SettingsDialog() {
       clearOpenaiApiKey,
       codexAgentDir,
       codexDefaultAgentMode,
-      codexModelsText,
+      codexProfiles,
       codexPath,
       defaultAgentMode,
       externalEditor,
@@ -8289,7 +8539,7 @@ function SettingsDialog() {
       menuDisplay,
       openaiAgentDir,
       openaiApiKey,
-      openaiModelsText,
+      openaiProfiles,
       pinLastSentMessage,
       permissionAllowRules,
       projectPaths,
@@ -8561,11 +8811,11 @@ function SettingsDialog() {
                 Claude path
                 <Input value={claudePath} onChange={(event) => setClaudePath(event.target.value)} placeholder="claude" disabled={claudeRuntime === "api"} />
               </label>
-              <ProviderModelsField
+              <ProviderModelProfilesField
                 label="Claude provider models"
-                value={claudeModelsText}
-                onChange={setClaudeModelsText}
-                placeholder="One Claude model id per line"
+                provider="claude"
+                value={claudeProfiles}
+                onChange={setClaudeProfiles}
                 onGetCurrentModels={() => void getCurrentModels("claude")}
                 gettingCurrentModels={updatingModelsProvider === "claude"}
                 updateNote={modelUpdateNoteProvider === "claude" ? modelUpdateNote : undefined}
@@ -8670,11 +8920,11 @@ function SettingsDialog() {
                 Codex path
                 <Input value={codexPath} onChange={(event) => setCodexPath(event.target.value)} placeholder="codex" />
               </label>
-              <ProviderModelsField
+              <ProviderModelProfilesField
                 label="Codex provider models"
-                value={codexModelsText}
-                onChange={setCodexModelsText}
-                placeholder="One Codex model id per line"
+                provider="codex"
+                value={codexProfiles}
+                onChange={setCodexProfiles}
                 onGetCurrentModels={() => void getCurrentModels("codex")}
                 gettingCurrentModels={updatingModelsProvider === "codex"}
                 updateNote={modelUpdateNoteProvider === "codex" ? modelUpdateNote : undefined}
@@ -8713,11 +8963,11 @@ function SettingsDialog() {
           )}
           {settingsTab === "openai" && (
             <>
-              <ProviderModelsField
+              <ProviderModelProfilesField
                 label="OpenAI provider models"
-                value={openaiModelsText}
-                onChange={setOpenaiModelsText}
-                placeholder="One OpenAI model id per line"
+                provider="openai"
+                value={openaiProfiles}
+                onChange={setOpenaiProfiles}
                 onGetCurrentModels={() => void getCurrentModels("openai")}
                 gettingCurrentModels={updatingModelsProvider === "openai"}
                 updateNote={modelUpdateNoteProvider === "openai" ? modelUpdateNote : undefined}
@@ -9998,6 +10248,7 @@ function AgentChatComposer({
   wsConnected?: boolean;
 }) {
   const persistedDraft = useAppStore((state) => state.drafts[agent.id] || "");
+  const transcript = useAppStore((state) => state.transcripts[agent.id] || EMPTY_TRANSCRIPT);
   const setPersistedDraft = useAppStore((state) => state.setDraft);
   const hydrateSnapshot = useAppStore((state) => state.hydrateSnapshot);
   const [draft, setDraft] = useState(persistedDraft);
@@ -10516,6 +10767,7 @@ function AgentChatComposer({
             <Button variant="ghost" size="icon" className={variant === "mobile" ? "h-8 w-8" : "h-7 w-7"} title="Slash commands" onClick={toggleSlashMenu}>
               <SquareSlash className="h-4 w-4" />
             </Button>
+            <ContextUsageButton agent={agent} transcript={transcript} settings={settings} compact={compact} />
             {variant !== "mobile" && selectedLines > 0 && (
               <span className="inline-flex min-w-0 items-center gap-1.5">
                 <FileText className="h-3.5 w-3.5" />
