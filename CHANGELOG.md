@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-05-05
 
+- [6f513ad](https://github.com/yohaas/AgentHero/commit/6f513ad) Show mobile attention alerts in the collapsed left nav and highlight alerting projects in the mobile selector.
 - [c8bf3f6](https://github.com/yohaas/AgentHero/commit/c8bf3f6) Fix the mobile chat alert icon so awaiting-input indicators are not clipped in the left menu.
 - [40e8464](https://github.com/yohaas/AgentHero/commit/40e8464) Add chat context usage tracking with per-model context windows and compact/handoff controls.
 - [79ce8ec](https://github.com/yohaas/AgentHero/commit/79ce8ec) Align long message footer controls with top text block actions.
