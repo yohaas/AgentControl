@@ -19,6 +19,7 @@ import type {
   AppUpdateStatus,
   AppVersionMetadata,
   DirectoryEntry,
+  DirectoryListing,
   GitChangedFile,
   GitStatus,
   GitWorktree,
@@ -1639,12 +1640,49 @@ function openWindowsFileChooser(filePath: string): Promise<void> {
   return spawnDetached("rundll32.exe", ["shell32.dll,OpenAs_RunDLL", filePath]);
 }
 
-function pickNativeDirectory(initialPath?: string): Promise<string | undefined> {
-  const resolvedInitialPath = initialPath ? path.resolve(expandHome(initialPath)) : os.homedir();
+async function existingDirectoryOrFallback(initialPath?: string, fallbackPath?: string): Promise<string> {
+  for (const candidate of [initialPath, fallbackPath, os.homedir()]) {
+    if (!candidate?.trim()) continue;
+    const resolved = path.resolve(expandHome(candidate));
+    try {
+      const info = await stat(resolved);
+      if (info.isDirectory()) return resolved;
+    } catch {
+      // Try the next candidate.
+    }
+  }
+  return os.homedir();
+}
+
+async function localDirectoryListing(directoryPath: string, roots: DirectoryEntry[]): Promise<DirectoryListing> {
+  const info = await stat(directoryPath);
+  if (!info.isDirectory()) throw new Error("Selected path is not a directory.");
+
+  const entries = await readdir(directoryPath, { withFileTypes: true });
+  const directories = entries
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => ({
+      name: entry.name,
+      path: path.join(directoryPath, entry.name)
+    }))
+    .sort((left, right) => left.name.localeCompare(right.name, undefined, { sensitivity: "base" }));
+  const parentPath = path.dirname(directoryPath);
+
+  return {
+    path: directoryPath,
+    parentPath: parentPath !== directoryPath && isAllowedDirectoryPath(parentPath, roots) ? parentPath : undefined,
+    homePath: os.homedir(),
+    roots,
+    entries: directories
+  };
+}
+
+async function pickNativeDirectory(initialPath?: string, fallbackPath?: string): Promise<string | undefined> {
+  const resolvedInitialPath = await existingDirectoryOrFallback(initialPath, fallbackPath);
   if (process.platform === "win32") {
     const script = [
       "Add-Type -AssemblyName System.Windows.Forms",
-      "if (-not [Environment]::UserInteractive) { throw 'Native folder picker is unavailable while AgentHero is running as a non-interactive service.' }",
+      "if (-not [Environment]::UserInteractive) { exit 0 }",
       "$dialog = New-Object System.Windows.Forms.FolderBrowserDialog",
       "$dialog.Description = 'Select Folder'",
       "$dialog.ShowNewFolderButton = $true",
@@ -2327,36 +2365,15 @@ app.get("/api/filesystem/directories", async (request, response) => {
 
   const roots = await allowedDirectoryRoots();
   const requestedPath = typeof request.query.path === "string" && request.query.path.trim() ? request.query.path.trim() : roots[0]?.path || projectsRoot;
-  const directoryPath = path.resolve(expandHome(requestedPath));
+  const fallbackPath = typeof request.query.fallbackPath === "string" && request.query.fallbackPath.trim() ? request.query.fallbackPath.trim() : "";
+  const directoryPath = await existingDirectoryOrFallback(requestedPath, fallbackPath || undefined);
   if (!isAllowedDirectoryPath(directoryPath, roots)) {
     response.status(403).json({ error: "Folder browsing is limited to your home folder, configured projects, and agent directories." });
     return;
   }
 
   try {
-    const info = await stat(directoryPath);
-    if (!info.isDirectory()) {
-      response.status(400).json({ error: "Selected path is not a directory." });
-      return;
-    }
-
-    const entries = await readdir(directoryPath, { withFileTypes: true });
-    const directories = entries
-      .filter((entry) => entry.isDirectory())
-      .map((entry) => ({
-        name: entry.name,
-        path: path.join(directoryPath, entry.name)
-      }))
-      .sort((left, right) => left.name.localeCompare(right.name, undefined, { sensitivity: "base" }));
-    const parentPath = path.dirname(directoryPath);
-
-    response.json({
-      path: directoryPath,
-      parentPath: parentPath !== directoryPath && isAllowedDirectoryPath(parentPath, roots) ? parentPath : undefined,
-      homePath: os.homedir(),
-      roots,
-      entries: directories
-    });
+    response.json(await localDirectoryListing(directoryPath, roots));
   } catch (error) {
     response.status(500).json({ error: error instanceof Error ? error.message : String(error) });
   }
@@ -2364,8 +2381,9 @@ app.get("/api/filesystem/directories", async (request, response) => {
 
 app.post("/api/filesystem/pick-directory", async (request, response) => {
   const initialPath = typeof request.body?.initialPath === "string" ? request.body.initialPath.trim() : "";
+  const fallbackPath = typeof request.body?.fallbackPath === "string" ? request.body.fallbackPath.trim() : "";
   try {
-    const selectedPath = await pickNativeDirectory(initialPath || undefined);
+    const selectedPath = await pickNativeDirectory(initialPath || undefined, fallbackPath || undefined);
     if (!selectedPath) {
       response.json({});
       return;

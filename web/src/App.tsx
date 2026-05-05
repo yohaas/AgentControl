@@ -5072,6 +5072,8 @@ function WorktreesDialog({ projectId }: { projectId?: string }) {
                   />
                   <FolderPickerButton
                     initialPath={effectiveWorktreePath || selectedProject?.path || ""}
+                    fallbackPath={selectedProject?.path || ""}
+                    forceFallback
                     onSelect={(selectedPath) => {
                       setPathEdited(true);
                       setPathText(selectedPath);
@@ -5175,6 +5177,7 @@ function WorktreesDialog({ projectId }: { projectId?: string }) {
       <FolderBrowserDialog
         open={browserOpen}
         initialPath={effectiveWorktreePath || selectedProject?.path || ""}
+        fallbackPath={selectedProject?.path || ""}
         onOpenChange={setBrowserOpen}
         onSelect={(selectedPath) => {
           setPathEdited(true);
@@ -5383,12 +5386,16 @@ function AddProjectDialog({
 
 function FolderPickerButton({
   initialPath,
+  fallbackPath,
+  forceFallback = false,
   runtime = "local",
   wslDistro,
   onSelect,
   onFallbackOpen
 }: {
   initialPath?: string;
+  fallbackPath?: string;
+  forceFallback?: boolean;
   runtime?: "local" | "wsl";
   wslDistro?: string;
   onSelect: (path: string) => void;
@@ -5398,13 +5405,13 @@ function FolderPickerButton({
   const isWindowsClient = typeof navigator !== "undefined" && /win/i.test(`${navigator.platform || ""} ${navigator.userAgent || ""}`);
 
   async function browse() {
-    if (runtime === "wsl" || isWindowsClient) {
+    if (forceFallback || runtime === "wsl" || isWindowsClient) {
       onFallbackOpen();
       return;
     }
     setPicking(true);
     try {
-      const result = await api.pickDirectory(initialPath);
+      const result = await api.pickDirectory(initialPath, fallbackPath);
       if (result.path) onSelect(result.path);
     } catch {
       onFallbackOpen();
@@ -5424,6 +5431,7 @@ function FolderPickerButton({
 function FolderBrowserDialog({
   open,
   initialPath,
+  fallbackPath,
   runtime = "local",
   wslDistro,
   onOpenChange,
@@ -5431,6 +5439,7 @@ function FolderBrowserDialog({
 }: {
   open: boolean;
   initialPath: string;
+  fallbackPath?: string;
   runtime?: "local" | "wsl";
   wslDistro?: string;
   onOpenChange: (open: boolean) => void;
@@ -5443,7 +5452,12 @@ function FolderBrowserDialog({
   async function load(path?: string) {
     setLoading(true);
     try {
-      setListing(await api.directories(path, runtime === "wsl" ? { runtime, distro: wslDistro || "Ubuntu" } : undefined));
+      setListing(
+        await api.directories(
+          path,
+          runtime === "wsl" ? { runtime, distro: wslDistro || "Ubuntu" } : { fallbackPath }
+        )
+      );
     } catch (error) {
       addError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -5454,7 +5468,7 @@ function FolderBrowserDialog({
   useEffect(() => {
     if (!open) return;
     void load(initialPath.trim() || undefined);
-  }, [open, initialPath, runtime, wslDistro]);
+  }, [open, initialPath, fallbackPath, runtime, wslDistro]);
 
   function DirectoryButton({ entry, root = false }: { entry: DirectoryEntry; root?: boolean }) {
     return (

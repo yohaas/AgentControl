@@ -217,19 +217,20 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ path })
     }),
-  directories: (path?: string, options?: { runtime?: "local" | "wsl"; distro?: string }) => {
+  directories: (path?: string, options?: { runtime?: "local" | "wsl"; distro?: string; fallbackPath?: string }) => {
     const params = new URLSearchParams();
     if (path) params.set("path", path);
     if (options?.runtime) params.set("runtime", options.runtime);
     if (options?.distro) params.set("distro", options.distro);
+    if (options?.fallbackPath) params.set("fallbackPath", options.fallbackPath);
     const query = params.toString();
     return json<DirectoryListing>(`/api/filesystem/directories${query ? `?${query}` : ""}`);
   },
-  pickDirectory: (initialPath?: string) =>
+  pickDirectory: (initialPath?: string, fallbackPath?: string) =>
     json<{ path?: string }>("/api/filesystem/pick-directory", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ initialPath })
+      body: JSON.stringify({ initialPath, fallbackPath })
     }),
   wslDistros: () => json<{ defaultDistro: string; distros: string[] }>("/api/wsl/distros"),
   openFile: (path: string, mode?: "containingFolder" | "openWith") =>
