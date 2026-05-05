@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-05-05
 
+- [51bca48](https://github.com/yohaas/AgentHero/commit/51bca48) Separate Codex launch modes from permission presets.
 - [3e7e169](https://github.com/yohaas/AgentHero/commit/3e7e169) Show a toast while preparing a handoff chat.
 - [80238bf](https://github.com/yohaas/AgentHero/commit/80238bf) Add a launch dialog mode selector alongside provider and model.
 - [1c02a1b](https://github.com/yohaas/AgentHero/commit/1c02a1b) Improve Codex sandbox compatibility on Windows by disabling private desktop isolation for sandboxed runs.
