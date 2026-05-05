@@ -281,11 +281,9 @@ export function resolveDefaultAgentMode(config: DashboardConfig): AgentPermissio
 }
 
 export function resolveCodexDefaultAgentMode(config: DashboardConfig): AgentPermissionMode {
-  return config.codexDefaultAgentMode === "default" ||
-    config.codexDefaultAgentMode === "acceptEdits" ||
-    config.codexDefaultAgentMode === "bypassPermissions"
-    ? config.codexDefaultAgentMode
-    : "default";
+  if (config.codexDefaultAgentMode === "acceptEdits" || config.codexDefaultAgentMode === "bypassPermissions") return "bypassPermissions";
+  if (config.codexDefaultAgentMode === "autoReview") return "autoReview";
+  return "default";
 }
 
 export function resolveClaudeRuntime(config: DashboardConfig): ClaudeRuntime {

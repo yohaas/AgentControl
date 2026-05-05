@@ -93,6 +93,7 @@ import {
   Puzzle,
   RefreshCw,
   Search,
+  SearchCheck,
   Save,
   Settings,
   Sparkles,
@@ -6553,23 +6554,23 @@ const COMPOSER_MODE_OPTIONS = [
 const CODEX_PERMISSION_MODE_OPTIONS = [
   {
     mode: "default",
-    label: "Default permissions",
+    label: "Default",
     compactLabel: "Default",
-    description: "Use Codex's normal review and approval behavior.",
+    description: "Run commands in Codex's sandbox and ask you for elevated access when needed.",
     icon: Hand
   },
   {
-    mode: "acceptEdits",
-    label: "Full permissions",
-    compactLabel: "Full",
-    description: "Launch Codex with full workspace access for edits and commands.",
-    icon: Code2
+    mode: "autoReview",
+    label: "Auto-review",
+    compactLabel: "Review",
+    description: "Run in the sandbox and let Codex automatically review elevated requests before asking you.",
+    icon: SearchCheck
   },
   {
     mode: "bypassPermissions",
-    label: "Bypass permissions",
-    compactLabel: "Bypass",
-    description: "Launch Codex with full workspace access and no approval prompts.",
+    label: "Full access",
+    compactLabel: "Full",
+    description: "Run without Codex sandboxing or approval prompts. Use only for trusted projects.",
     icon: Waypoints
   }
 ] satisfies {
@@ -6582,6 +6583,10 @@ const CODEX_PERMISSION_MODE_OPTIONS = [
 
 function permissionModeOptionsForProvider(provider: AgentProvider) {
   return provider === "codex" ? CODEX_PERMISSION_MODE_OPTIONS : COMPOSER_MODE_OPTIONS;
+}
+
+function displayPermissionModeForProvider(provider: AgentProvider, permissionMode: AgentPermissionMode): AgentPermissionMode {
+  return provider === "codex" && permissionMode === "acceptEdits" ? "bypassPermissions" : permissionMode;
 }
 
 function defaultPermissionModeForProvider(settings: SettingsState, provider?: AgentProvider): AgentPermissionMode {
@@ -6760,7 +6765,8 @@ function ComposerModeMenu({
   const availableEffortOptions = effortOptionsForAgent(agent);
   const activeEffortLabel = availableEffortOptions.find((option) => option.effort === activeEffort)?.label || "Medium";
   const activeOption = COMPOSER_MODE_OPTIONS.find((option) => option.mode === activeMode) || COMPOSER_MODE_OPTIONS[0];
-  const activePermissionOption = permissionModeOptionsForProvider(provider).find((option) => option.mode === activeMode) || activeOption;
+  const displayedPermissionMode = displayPermissionModeForProvider(provider, activeMode);
+  const activePermissionOption = permissionModeOptionsForProvider(provider).find((option) => option.mode === displayedPermissionMode) || activeOption;
   const ActiveIcon = provider === "claude" ? activeOption.icon : activeProviderOption?.icon || Sparkles;
 
   function setPermissionMode(permissionMode: AgentPermissionMode) {
@@ -8535,7 +8541,7 @@ function SettingsDialog() {
                   </SelectContent>
                 </Select>
                 <span className="text-xs text-muted-foreground">
-                  Default permissions use Codex's normal review behavior. Full permissions launches Codex with full workspace access.
+                  Default runs sandboxed. Auto-review evaluates elevated requests first. Full access disables sandboxing and approval prompts.
                 </span>
               </label>
               <PluginManagementPanel provider="codex" />

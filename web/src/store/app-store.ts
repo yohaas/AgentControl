@@ -501,9 +501,12 @@ function normalizeSettings(settings: SettingsState): SettingsState {
   const defaultAgentMode = ["default", "acceptEdits", "plan", "bypassPermissions"].includes(settings.defaultAgentMode)
     ? settings.defaultAgentMode
     : defaultSettings.defaultAgentMode;
-  const codexDefaultAgentMode = ["default", "acceptEdits", "bypassPermissions"].includes(settings.codexDefaultAgentMode)
-    ? settings.codexDefaultAgentMode
-    : defaultSettings.codexDefaultAgentMode;
+  const codexDefaultAgentMode =
+    settings.codexDefaultAgentMode === "acceptEdits" || settings.codexDefaultAgentMode === "bypassPermissions"
+      ? "bypassPermissions"
+      : settings.codexDefaultAgentMode === "autoReview"
+        ? "autoReview"
+        : defaultSettings.codexDefaultAgentMode;
   const themeMode = ["auto", "light", "dark"].includes(settings.themeMode) ? settings.themeMode : defaultSettings.themeMode;
   const claudeRuntime = settings.claudeRuntime === "api" ? "api" : "cli";
   const menuDisplay = settings.menuDisplay === "iconText" ? "iconText" : "iconOnly";

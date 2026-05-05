@@ -876,8 +876,8 @@ export class AgentRuntimeManager {
       ...eventBase(state.agent.id, state.agent.currentModel),
       kind: "system",
       text: restarted && deferredRestart
-        ? `Mode changed to ${this.permissionModeLabel(permissionMode)}. Claude will apply it after the current response.`
-        : `Mode changed to ${this.permissionModeLabel(permissionMode)}.`
+        ? `Mode changed to ${this.permissionModeLabel(permissionMode, state.agent.provider)}. Claude will apply it after the current response.`
+        : `Mode changed to ${this.permissionModeLabel(permissionMode, state.agent.provider)}.`
     });
     this.broadcast({
       type: "agent.permission_mode_changed",
@@ -948,7 +948,7 @@ export class AgentRuntimeManager {
     const lines = [
       `Status: ${this.statusLabel(agent.status)}`,
       `Model: ${agent.currentModel}`,
-      `Mode: ${this.permissionModeLabel(this.permissionMode(state))}`,
+      `Mode: ${this.permissionModeLabel(this.permissionMode(state), agent.provider)}`,
       `Effort: ${agent.effort || "medium"}`,
       `Thinking: ${agent.thinking === false ? "off" : "on"}`,
       `Project: ${agent.projectName}`,
@@ -1127,8 +1127,18 @@ export class AgentRuntimeManager {
       ? ["exec", "resume", "--json", "-m", state.agent.currentModel]
       : ["exec", "--json", "-m", state.agent.currentModel];
     const permissionMode = this.permissionMode(state);
+    if (permissionMode === "default") {
+      args.push("-c", `sandbox_mode=${tomlBasicString("workspace-write")}`);
+      args.push("-c", `approval_policy=${tomlBasicString("on-request")}`);
+    }
+    if (permissionMode === "autoReview") {
+      args.push("-c", `sandbox_mode=${tomlBasicString("workspace-write")}`);
+      args.push("-c", `approval_policy=${tomlBasicString("on-request")}`);
+      args.push("-c", `approvals_reviewer=${tomlBasicString("auto_review")}`);
+    }
     if (permissionMode === "acceptEdits" || permissionMode === "bypassPermissions") {
       args.push("-c", `sandbox_mode=${tomlBasicString("danger-full-access")}`);
+      args.push("-c", `approval_policy=${tomlBasicString("never")}`);
     }
     if (permissionMode === "plan") {
       args.push("-c", `collaboration_modes=[${tomlBasicString("plan")}]`);
@@ -1957,7 +1967,7 @@ export class AgentRuntimeManager {
 
     args.push(
       "--permission-mode",
-      this.permissionMode(state),
+      this.claudePermissionMode(state),
       "--effort",
       state.agent.effort || "medium",
       "--settings",
@@ -2049,7 +2059,7 @@ export class AgentRuntimeManager {
       "--spawn",
       "session"
     ];
-    if (this.permissionMode(state) === "bypassPermissions") args.push("--permission-mode", "bypassPermissions");
+    if (this.claudePermissionMode(state) === "bypassPermissions") args.push("--permission-mode", "bypassPermissions");
 
     const command = this.spawnCommand(state, resolveClaudeCommand(), args);
     const child = spawn(command.command, command.args, {
@@ -2168,11 +2178,23 @@ export class AgentRuntimeManager {
     return "default";
   }
 
-  private permissionModeLabel(permissionMode: AgentPermissionMode): string {
+  private permissionModeLabel(permissionMode: AgentPermissionMode, provider?: AgentProvider): string {
+    if (provider === "codex") {
+      if (permissionMode === "autoReview") return "Auto-review";
+      if (permissionMode === "acceptEdits" || permissionMode === "bypassPermissions") return "Full access";
+      if (permissionMode === "plan") return "Plan mode";
+      return "Default";
+    }
     if (permissionMode === "acceptEdits") return "Edit automatically";
+    if (permissionMode === "autoReview") return "Auto-review";
     if (permissionMode === "plan") return "Plan mode";
     if (permissionMode === "bypassPermissions") return "Bypass permissions";
     return "Ask before edits";
+  }
+
+  private claudePermissionMode(state: AgentProcessState): AgentPermissionMode {
+    const permissionMode = this.permissionMode(state);
+    return permissionMode === "autoReview" ? "default" : permissionMode;
   }
 
   private statusLabel(status: AgentStatus): string {
