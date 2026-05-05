@@ -6515,6 +6515,14 @@ function ModelMenu({
   );
 }
 
+interface PermissionModeOption {
+  mode: AgentPermissionMode;
+  label: string;
+  compactLabel: string;
+  description: string;
+  icon: ComponentType<{ className?: string }>;
+}
+
 const COMPOSER_MODE_OPTIONS = [
   {
     mode: "default",
@@ -6544,13 +6552,7 @@ const COMPOSER_MODE_OPTIONS = [
     description: "Claude will not ask for approval before running potentially dangerous commands.",
     icon: Waypoints
   }
-] satisfies {
-  mode: AgentPermissionMode;
-  label: string;
-  compactLabel: string;
-  description: string;
-  icon: ComponentType<{ className?: string }>;
-}[];
+] satisfies PermissionModeOption[];
 
 const CODEX_PERMISSION_MODE_OPTIONS = [
   {
@@ -6574,13 +6576,7 @@ const CODEX_PERMISSION_MODE_OPTIONS = [
     description: "Run without Codex sandboxing or approval prompts. Use only for trusted projects.",
     icon: ShieldAlert
   }
-] satisfies {
-  mode: AgentPermissionMode;
-  label: string;
-  compactLabel: string;
-  description: string;
-  icon: ComponentType<{ className?: string }>;
-}[];
+] satisfies PermissionModeOption[];
 
 function permissionModeOptionsForProvider(provider: AgentProvider) {
   return provider === "codex" ? CODEX_PERMISSION_MODE_OPTIONS : COMPOSER_MODE_OPTIONS;
@@ -6592,6 +6588,28 @@ function displayPermissionModeForProvider(provider: AgentProvider, permissionMod
 
 function defaultPermissionModeForProvider(settings: SettingsState, provider?: AgentProvider): AgentPermissionMode {
   return provider === "codex" ? settings.codexDefaultAgentMode : settings.defaultAgentMode;
+}
+
+function launchPermissionModeOptionsForProvider(provider: AgentProvider): PermissionModeOption[] {
+  if (provider === "codex") return CODEX_PERMISSION_MODE_OPTIONS;
+  if (provider === "openai") {
+    return [
+      {
+        mode: "default",
+        label: "Default",
+        compactLabel: "Default",
+        description: "OpenAI API sessions use the provider default.",
+        icon: Hand
+      }
+    ];
+  }
+  return COMPOSER_MODE_OPTIONS;
+}
+
+function launchPermissionModeForProvider(provider: AgentProvider, permissionMode: AgentPermissionMode): AgentPermissionMode {
+  const options = launchPermissionModeOptionsForProvider(provider);
+  const displayedMode = displayPermissionModeForProvider(provider, permissionMode);
+  return options.some((option) => option.mode === displayedMode) ? displayedMode : options[0].mode;
 }
 
 const EFFORT_OPTIONS = [
@@ -7063,6 +7081,7 @@ function LaunchDialog({ onLaunchRequested }: { onLaunchRequested?: (request: Lau
   const [displayName, setDisplayName] = useState("");
   const [provider, setProvider] = useState<AgentProvider>("claude");
   const [model, setModel] = useState(DEFAULT_MODEL);
+  const [permissionMode, setPermissionMode] = useState<AgentPermissionMode>("acceptEdits");
   const [initialPrompt, setInitialPrompt] = useState("");
   const [pluginIds, setPluginIds] = useState<string[]>([]);
   const [pluginCatalog, setPluginCatalog] = useState<ClaudePluginCatalog>({ installed: [], available: [], marketplaces: [] });
@@ -7122,6 +7141,7 @@ function LaunchDialog({ onLaunchRequested }: { onLaunchRequested?: (request: Lau
     },
     [def, modelProfiles, provider, settings.models]
   );
+  const permissionModeOptions = launchPermissionModeOptionsForProvider(provider);
   const restorableSessions = useMemo(
     () =>
       Object.values(agents)
@@ -7151,11 +7171,13 @@ function LaunchDialog({ onLaunchRequested }: { onLaunchRequested?: (request: Lau
     }
     const nextDefName = nextDef?.name || "";
     const nextProvider = nextDef?.provider || "claude";
+    const nextPermissionMode = defaultPermissionModeForProvider(settings, nextProvider);
     setDefName(nextDefName);
     setAgentSource(nextSource || "builtIn");
     setDisplayName("");
     setProvider(nextProvider);
     setModel(defaultModelForProvider(nextProvider, nextDef));
+    setPermissionMode(launchPermissionModeForProvider(nextProvider, nextPermissionMode));
     setInitialPrompt(modal.initialPrompt || "");
     setPluginIds(nextDef?.plugins || []);
     setPluginQuery("");
@@ -7163,13 +7185,14 @@ function LaunchDialog({ onLaunchRequested }: { onLaunchRequested?: (request: Lau
     setPluginPickerExpanded(false);
     setAgentFileOpen(false);
     setLaunching(false);
-  }, [modal, modelProfiles, projectId, projects, settings.models]);
+  }, [modal, modelProfiles, projectId, projects, settings]);
 
   useEffect(() => {
     if (!def) return;
     const nextProvider = def.provider || provider;
     setProvider(nextProvider);
     setModel(defaultModelForProvider(nextProvider, def));
+    setPermissionMode((current) => launchPermissionModeForProvider(nextProvider, current));
     setPluginIds(def.plugins || []);
     setPluginCatalog({ installed: [], available: [], marketplaces: [] });
     setPluginPickerExpanded(false);
@@ -7179,10 +7202,12 @@ function LaunchDialog({ onLaunchRequested }: { onLaunchRequested?: (request: Lau
     const { source: nextSource, name: nextDefName } = parseAgentOptionKey(nextValue);
     const nextDef = findAgentOption(agentOptionGroups, nextSource, nextDefName);
     const nextProvider = nextDef?.provider || provider;
+    const nextPermissionMode = defaultPermissionModeForProvider(settings, nextProvider);
     setDefName(nextDefName);
     setAgentSource(nextSource);
     setProvider(nextProvider);
     setModel(defaultModelForProvider(nextProvider, nextDef));
+    setPermissionMode(launchPermissionModeForProvider(nextProvider, nextPermissionMode));
     setPluginIds(nextDef?.plugins || []);
     setPluginQuery("");
     setPluginCatalog({ installed: [], available: [], marketplaces: [] });
@@ -7260,7 +7285,7 @@ function LaunchDialog({ onLaunchRequested }: { onLaunchRequested?: (request: Lau
         model,
         initialPrompt,
         remoteControl: false,
-        permissionMode: defaultPermissionModeForProvider(settings, provider),
+        permissionMode: launchPermissionModeForProvider(provider, permissionMode),
         autoApprove: settings.autoApprove
       };
       const launchedAgent = await launchAgentRequest(request);
@@ -7406,28 +7431,62 @@ function LaunchDialog({ onLaunchRequested }: { onLaunchRequested?: (request: Lau
             Display name
             <Input value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder={def?.name || "Agent"} />
           </label>
-          <label className="grid gap-1.5 text-sm">
-            Provider
-            <Select
-              value={provider}
-              onValueChange={(value) => {
-                const nextProvider = value as AgentProvider;
-                setProvider(nextProvider);
-                setModel(defaultModelForProvider(nextProvider));
-                setPluginCatalog({ installed: [], available: [], marketplaces: [] });
-                setPluginPickerExpanded(false);
-              }}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="claude">Claude Code</SelectItem>
-                <SelectItem value="codex">Codex CLI</SelectItem>
-                <SelectItem value="openai">OpenAI API</SelectItem>
-              </SelectContent>
-            </Select>
-          </label>
+          <div className="grid gap-3 sm:grid-cols-[160px_minmax(0,1fr)_160px]">
+            <label className="grid min-w-0 gap-1.5 text-sm">
+              Provider
+              <Select
+                value={provider}
+                onValueChange={(value) => {
+                  const nextProvider = value as AgentProvider;
+                  const nextPermissionMode = defaultPermissionModeForProvider(settings, nextProvider);
+                  setProvider(nextProvider);
+                  setModel(defaultModelForProvider(nextProvider));
+                  setPermissionMode(launchPermissionModeForProvider(nextProvider, nextPermissionMode));
+                  setPluginCatalog({ installed: [], available: [], marketplaces: [] });
+                  setPluginPickerExpanded(false);
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="claude">Claude Code</SelectItem>
+                  <SelectItem value="codex">Codex CLI</SelectItem>
+                  <SelectItem value="openai">OpenAI API</SelectItem>
+                </SelectContent>
+              </Select>
+            </label>
+            <label className="grid min-w-0 gap-1.5 text-sm">
+              Model
+              <Select value={model} onValueChange={setModel}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {modelOptions.map((item) => (
+                    <SelectItem key={item.id} value={item.id}>
+                      {item.label || item.id}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </label>
+            <label className="grid min-w-0 gap-1.5 text-sm">
+              Mode
+              <Select value={permissionMode} onValueChange={(value) => setPermissionMode(value as AgentPermissionMode)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {permissionModeOptions.map((option) => (
+                    <SelectItem key={option.mode} value={option.mode}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </label>
+          </div>
           {restorableSessions.length > 0 && (
             <section className="grid gap-2 rounded-md border border-border p-3">
               <div>
@@ -7457,21 +7516,6 @@ function LaunchDialog({ onLaunchRequested }: { onLaunchRequested?: (request: Lau
               </div>
             </section>
           )}
-          <label className="grid gap-1.5 text-sm">
-            Model
-            <Select value={model} onValueChange={setModel}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {modelOptions.map((item) => (
-                  <SelectItem key={item.id} value={item.id}>
-                    {item.label || item.id}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </label>
           {provider !== "claude" && (
             <div className="rounded-md border border-border px-3 py-2 text-xs text-muted-foreground">
               {provider === "codex"
