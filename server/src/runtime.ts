@@ -459,7 +459,8 @@ export class AgentRuntimeManager {
 
     const displayName = this.uniqueDisplayName(project.id, request.displayName?.trim() || def.name);
     const timestamp = now();
-    const permissionMode = this.initialPermissionMode(request);
+    const requestedPermissionMode = this.initialPermissionMode(request);
+    const permissionMode = provider === "codex" && requestedPermissionMode === "plan" ? "default" : requestedPermissionMode;
     const currentModel = isSyntheticModel(request.model) ? this.defaultModelForDefinition(def, provider) : request.model;
     const agent: RunningAgent = {
       id: nanoid(),
@@ -479,7 +480,7 @@ export class AgentRuntimeManager {
       permissionMode,
       effort: request.effort || "medium",
       thinking: request.thinking ?? true,
-      planMode: permissionMode === "plan",
+      planMode: provider === "codex" ? Boolean(request.planMode || requestedPermissionMode === "plan") : permissionMode === "plan",
       slashCommands: [],
       activePlugins: supportsPluginProvider(provider) ? def.plugins || [] : []
     };
@@ -860,15 +861,38 @@ export class AgentRuntimeManager {
   }
 
   setPlanMode(id: string, planMode: boolean): void {
-    this.setPermissionMode(id, planMode ? "plan" : "default");
+    const state = this.requiredState(id);
+    if (state.agent.remoteControl) throw new Error("Remote Control agents cannot change mode from the dashboard.");
+    if (state.agent.provider !== "codex") {
+      this.setPermissionMode(id, planMode ? "plan" : "default");
+      return;
+    }
+
+    state.agent.planMode = planMode;
+    state.agent.updatedAt = now();
+    this.pushTranscript(state, {
+      ...eventBase(state.agent.id, state.agent.currentModel),
+      kind: "system",
+      text: `Mode changed to ${planMode ? "Plan mode" : "Codex coding mode"}.`
+    });
+    this.broadcast({
+      type: "agent.plan_mode_changed",
+      id: state.agent.id,
+      planMode: Boolean(state.agent.planMode),
+      updatedAt: state.agent.updatedAt
+    });
+    this.persist();
   }
 
   setPermissionMode(id: string, permissionMode: AgentPermissionMode): void {
     const state = this.requiredState(id);
     if (state.agent.remoteControl) throw new Error("Remote Control agents cannot change mode from the dashboard.");
 
-    state.agent.permissionMode = permissionMode;
-    state.agent.planMode = permissionMode === "plan";
+    const nextPermissionMode = state.agent.provider === "codex" && permissionMode === "plan" ? "default" : permissionMode;
+    state.agent.permissionMode = nextPermissionMode;
+    if (state.agent.provider !== "codex" || permissionMode === "plan") {
+      state.agent.planMode = permissionMode === "plan";
+    }
     state.agent.updatedAt = now();
     const deferredRestart = Boolean(state.activeTurn);
     const restarted = state.agent.provider === "claude" ? this.requestConfigRestart(state) : false;
@@ -876,20 +900,20 @@ export class AgentRuntimeManager {
       ...eventBase(state.agent.id, state.agent.currentModel),
       kind: "system",
       text: restarted && deferredRestart
-        ? `Mode changed to ${this.permissionModeLabel(permissionMode, state.agent.provider)}. Claude will apply it after the current response.`
-        : `Mode changed to ${this.permissionModeLabel(permissionMode, state.agent.provider)}.`
+        ? `Mode changed to ${this.permissionModeLabel(nextPermissionMode, state.agent.provider)}. Claude will apply it after the current response.`
+        : `Mode changed to ${this.permissionModeLabel(nextPermissionMode, state.agent.provider)}.`
     });
     this.broadcast({
       type: "agent.permission_mode_changed",
       id: state.agent.id,
-      permissionMode,
-      planMode: state.agent.planMode,
+      permissionMode: nextPermissionMode,
+      planMode: Boolean(state.agent.planMode),
       updatedAt: state.agent.updatedAt
     });
     this.broadcast({
       type: "agent.plan_mode_changed",
       id: state.agent.id,
-      planMode: state.agent.planMode,
+      planMode: Boolean(state.agent.planMode),
       updatedAt: state.agent.updatedAt
     });
     this.persist();
@@ -1142,7 +1166,7 @@ export class AgentRuntimeManager {
       args.push("-c", `sandbox_mode=${tomlBasicString("danger-full-access")}`);
       args.push("-c", `approval_policy=${tomlBasicString("never")}`);
     }
-    if (permissionMode === "plan") {
+    if (state.agent.planMode || permissionMode === "plan") {
       args.push("-c", `collaboration_modes=[${tomlBasicString("plan")}]`);
     }
     args.push("-c", `model_reasoning_effort=${tomlBasicString(this.providerReasoningEffort(state))}`);
@@ -2179,8 +2203,11 @@ export class AgentRuntimeManager {
   }
 
   private permissionMode(state: AgentProcessState): AgentPermissionMode {
-    if (state.agent.permissionMode) return state.agent.permissionMode;
-    if (state.agent.planMode) return "plan";
+    if (state.agent.permissionMode) {
+      if (state.agent.provider === "codex" && state.agent.permissionMode === "plan") return "default";
+      return state.agent.permissionMode;
+    }
+    if (state.agent.provider !== "codex" && state.agent.planMode) return "plan";
     if (state.autoApprove === "always") return "bypassPermissions";
     return "default";
   }

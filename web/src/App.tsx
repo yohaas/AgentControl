@@ -6622,6 +6622,7 @@ const EFFORT_OPTIONS = [
 ] satisfies { effort: AgentEffort; label: string }[];
 
 function currentPermissionMode(agent: RunningAgent): AgentPermissionMode {
+  if (agent.provider === "codex") return agent.permissionMode === "plan" ? "default" : agent.permissionMode || "default";
   return agent.permissionMode || (agent.planMode ? "plan" : "default");
 }
 
@@ -6653,7 +6654,14 @@ function providerComposerModeOptions(
   agent: RunningAgent,
   settings: { models: string[]; modelProfiles?: ModelProfile[] }
 ): ProviderComposerModeOption[] {
-  if (agent.provider === "codex") {
+  return providerModeOptionsForProvider(agent.provider || "claude", settings);
+}
+
+function providerModeOptionsForProvider(
+  provider: AgentProvider,
+  settings: { models: string[]; modelProfiles?: ModelProfile[] }
+): ProviderComposerModeOption[] {
+  if (provider === "codex") {
     return [
       {
         id: "intelligence",
@@ -6681,7 +6689,7 @@ function providerComposerModeOptions(
       }
     ];
   }
-  if (agent.provider === "openai") {
+  if (provider === "openai") {
     return [
       {
         id: "standard",
@@ -6722,7 +6730,7 @@ function providerComposerModeOptions(
 
 function activeProviderMode(agent: RunningAgent, options: ProviderComposerModeOption[]) {
   if (agent.provider === "codex") {
-    if (currentPermissionMode(agent) === "plan") return options.find((option) => option.id === "plan") || options[0];
+    if (agent.planMode || agent.permissionMode === "plan") return options.find((option) => option.id === "plan") || options[0];
     const speedSelected = /spark|mini|codex-mini/i.test(agent.currentModel);
     return options.find((option) => option.id === (speedSelected ? "speed" : "intelligence")) || options[0];
   }
@@ -6738,6 +6746,16 @@ function activeProviderMode(agent: RunningAgent, options: ProviderComposerModeOp
     return options.find((option) => option.id === id) || options[0];
   }
   return options[0];
+}
+
+function defaultProviderModeForProvider(provider: AgentProvider, model: string) {
+  if (provider === "codex") return /spark|mini|codex-mini/i.test(model) ? "speed" : "intelligence";
+  if (provider === "openai") {
+    const normalized = model.toLowerCase();
+    if (normalized.includes("deep-research")) return normalized.includes("mini") ? "fastResearch" : "deepResearch";
+    return /mini|nano/.test(normalized) ? "fast" : "standard";
+  }
+  return "";
 }
 
 function effortOptionsForAgent(agent: RunningAgent) {
@@ -6806,11 +6824,15 @@ function ComposerModeMenu({
 
   function setProviderMode(option: ProviderComposerModeOption) {
     if (option.permissionMode) {
+      if (provider === "codex" && option.permissionMode === "plan") {
+        sendCommand({ type: "setPlanMode", id: agent.id, planMode: true });
+        return;
+      }
       setPermissionMode(option.permissionMode);
       return;
     }
-    if (provider === "codex" && activeMode === "plan") {
-      sendCommand({ type: "setPermissionMode", id: agent.id, permissionMode: "default" });
+    if (provider === "codex" && agent.planMode) {
+      sendCommand({ type: "setPlanMode", id: agent.id, planMode: false });
     }
     if (option.model && agent.currentModel !== option.model) {
       sendCommand({ type: "setModel", id: agent.id, model: option.model });
@@ -6820,11 +6842,11 @@ function ComposerModeMenu({
   if (provider !== "claude") {
     const buttonLabel = activeProviderOption || providerModeOptions[0];
     const codexButtonLabel =
-      provider === "codex" && activeMode !== "plan"
+      provider === "codex"
         ? `${buttonLabel?.label || "Codex"} · ${activePermissionOption.compactLabel}`
         : buttonLabel?.label;
     const codexCompactLabel =
-      provider === "codex" && activeMode !== "plan"
+      provider === "codex"
         ? `${buttonLabel?.compactLabel || "Codex"} · ${activePermissionOption.compactLabel}`
         : buttonLabel?.compactLabel;
     return (
@@ -7083,6 +7105,7 @@ function LaunchDialog({ onLaunchRequested }: { onLaunchRequested?: (request: Lau
   const [provider, setProvider] = useState<AgentProvider>("claude");
   const [model, setModel] = useState(DEFAULT_MODEL);
   const [permissionMode, setPermissionMode] = useState<AgentPermissionMode>("acceptEdits");
+  const [providerMode, setProviderMode] = useState("intelligence");
   const [initialPrompt, setInitialPrompt] = useState("");
   const [pluginIds, setPluginIds] = useState<string[]>([]);
   const [pluginCatalog, setPluginCatalog] = useState<ClaudePluginCatalog>({ installed: [], available: [], marketplaces: [] });
@@ -7143,6 +7166,8 @@ function LaunchDialog({ onLaunchRequested }: { onLaunchRequested?: (request: Lau
     [def, modelProfiles, provider, settings.models]
   );
   const permissionModeOptions = launchPermissionModeOptionsForProvider(provider);
+  const providerModeOptions = providerModeOptionsForProvider(provider, settings);
+  const showProviderMode = provider === "codex";
   const restorableSessions = useMemo(
     () =>
       Object.values(agents)
@@ -7173,12 +7198,14 @@ function LaunchDialog({ onLaunchRequested }: { onLaunchRequested?: (request: Lau
     const nextDefName = nextDef?.name || "";
     const nextProvider = nextDef?.provider || "claude";
     const nextPermissionMode = defaultPermissionModeForProvider(settings, nextProvider);
+    const nextModel = defaultModelForProvider(nextProvider, nextDef);
     setDefName(nextDefName);
     setAgentSource(nextSource || "builtIn");
     setDisplayName("");
     setProvider(nextProvider);
-    setModel(defaultModelForProvider(nextProvider, nextDef));
+    setModel(nextModel);
     setPermissionMode(launchPermissionModeForProvider(nextProvider, nextPermissionMode));
+    setProviderMode(defaultProviderModeForProvider(nextProvider, nextModel));
     setInitialPrompt(modal.initialPrompt || "");
     setPluginIds(nextDef?.plugins || []);
     setPluginQuery("");
@@ -7191,9 +7218,11 @@ function LaunchDialog({ onLaunchRequested }: { onLaunchRequested?: (request: Lau
   useEffect(() => {
     if (!def) return;
     const nextProvider = def.provider || provider;
+    const nextModel = defaultModelForProvider(nextProvider, def);
     setProvider(nextProvider);
-    setModel(defaultModelForProvider(nextProvider, def));
+    setModel(nextModel);
     setPermissionMode((current) => launchPermissionModeForProvider(nextProvider, current));
+    setProviderMode((current) => (providerModeOptionsForProvider(nextProvider, settings).some((option) => option.id === current) ? current : defaultProviderModeForProvider(nextProvider, nextModel)));
     setPluginIds(def.plugins || []);
     setPluginCatalog({ installed: [], available: [], marketplaces: [] });
     setPluginPickerExpanded(false);
@@ -7204,11 +7233,13 @@ function LaunchDialog({ onLaunchRequested }: { onLaunchRequested?: (request: Lau
     const nextDef = findAgentOption(agentOptionGroups, nextSource, nextDefName);
     const nextProvider = nextDef?.provider || provider;
     const nextPermissionMode = defaultPermissionModeForProvider(settings, nextProvider);
+    const nextModel = defaultModelForProvider(nextProvider, nextDef);
     setDefName(nextDefName);
     setAgentSource(nextSource);
     setProvider(nextProvider);
-    setModel(defaultModelForProvider(nextProvider, nextDef));
+    setModel(nextModel);
     setPermissionMode(launchPermissionModeForProvider(nextProvider, nextPermissionMode));
+    setProviderMode(defaultProviderModeForProvider(nextProvider, nextModel));
     setPluginIds(nextDef?.plugins || []);
     setPluginQuery("");
     setPluginCatalog({ installed: [], available: [], marketplaces: [] });
@@ -7287,6 +7318,7 @@ function LaunchDialog({ onLaunchRequested }: { onLaunchRequested?: (request: Lau
         initialPrompt,
         remoteControl: false,
         permissionMode: launchPermissionModeForProvider(provider, permissionMode),
+        planMode: provider === "codex" && providerMode === "plan",
         autoApprove: settings.autoApprove
       };
       const launchedAgent = await launchAgentRequest(request);
@@ -7432,7 +7464,7 @@ function LaunchDialog({ onLaunchRequested }: { onLaunchRequested?: (request: Lau
             Display name
             <Input value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder={def?.name || "Agent"} />
           </label>
-          <div className="grid gap-3 sm:grid-cols-[160px_minmax(0,1fr)_160px]">
+          <div className={cn("grid gap-3", showProviderMode ? "sm:grid-cols-[140px_minmax(0,1fr)_140px_150px]" : "sm:grid-cols-[160px_minmax(0,1fr)_160px]")}>
             <label className="grid min-w-0 gap-1.5 text-sm">
               Provider
               <Select
@@ -7440,9 +7472,11 @@ function LaunchDialog({ onLaunchRequested }: { onLaunchRequested?: (request: Lau
                 onValueChange={(value) => {
                   const nextProvider = value as AgentProvider;
                   const nextPermissionMode = defaultPermissionModeForProvider(settings, nextProvider);
+                  const nextModel = defaultModelForProvider(nextProvider);
                   setProvider(nextProvider);
-                  setModel(defaultModelForProvider(nextProvider));
+                  setModel(nextModel);
                   setPermissionMode(launchPermissionModeForProvider(nextProvider, nextPermissionMode));
+                  setProviderMode(defaultProviderModeForProvider(nextProvider, nextModel));
                   setPluginCatalog({ installed: [], available: [], marketplaces: [] });
                   setPluginPickerExpanded(false);
                 }}
@@ -7459,7 +7493,15 @@ function LaunchDialog({ onLaunchRequested }: { onLaunchRequested?: (request: Lau
             </label>
             <label className="grid min-w-0 gap-1.5 text-sm">
               Model
-              <Select value={model} onValueChange={setModel}>
+              <Select
+                value={model}
+                onValueChange={(value) => {
+                  setModel(value);
+                  if (provider !== "codex" || providerMode !== "plan") {
+                    setProviderMode(defaultProviderModeForProvider(provider, value));
+                  }
+                }}
+              >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -7472,8 +7514,32 @@ function LaunchDialog({ onLaunchRequested }: { onLaunchRequested?: (request: Lau
                 </SelectContent>
               </Select>
             </label>
+            {showProviderMode && (
+              <label className="grid min-w-0 gap-1.5 text-sm">
+                Mode
+                <Select
+                  value={providerMode}
+                  onValueChange={(value) => {
+                    setProviderMode(value);
+                    const option = providerModeOptions.find((candidate) => candidate.id === value);
+                    if (option?.model) setModel(option.model);
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {providerModeOptions.map((option) => (
+                      <SelectItem key={option.id} value={option.id}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </label>
+            )}
             <label className="grid min-w-0 gap-1.5 text-sm">
-              Mode
+              {showProviderMode ? "Permissions" : "Mode"}
               <Select value={permissionMode} onValueChange={(value) => setPermissionMode(value as AgentPermissionMode)}>
                 <SelectTrigger>
                   <SelectValue />
