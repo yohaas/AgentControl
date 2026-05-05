@@ -190,6 +190,7 @@ const TERMINAL_POPOUT_EXPLICIT_HIDE_STORAGE_KEY = "agent-hero-terminal-popout-ex
 const FILE_EXPLORER_POPOUT_STORAGE_KEY = "agent-hero-file-explorer-popout";
 const FILE_EXPLORER_PREVIEW_STORAGE_KEY = "agent-hero-file-explorer-preview-request";
 const FOCUS_AGENT_TILE_EVENT = "agent-hero:focus-agent-tile";
+const FOCUS_AGENT_COMPOSER_EVENT = "agent-hero:focus-agent-composer";
 const MOBILE_SELECTED_AGENT_STORAGE_KEY = "agent-hero-mobile-selected-agent";
 const DEFAULT_BUILT_IN_AGENT_DIR = ".agent-hero/built-in-agents";
 const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -752,6 +753,18 @@ function notifyTerminalDock(terminalId?: string, focusOpener = false, dock = fal
 
 function notifyAgentTileFocus(agentId: string) {
   window.dispatchEvent(new CustomEvent(FOCUS_AGENT_TILE_EVENT, { detail: { agentId } }));
+}
+
+function notifyAgentComposerFocus(agentId: string) {
+  window.dispatchEvent(new CustomEvent(FOCUS_AGENT_COMPOSER_EVENT, { detail: { agentId } }));
+}
+
+function requestAgentComposerFocus(agentId: string) {
+  notifyAgentComposerFocus(agentId);
+  window.requestAnimationFrame(() => notifyAgentComposerFocus(agentId));
+  [50, 150, 400, 1000, 2000].forEach((delay) => {
+    window.setTimeout(() => notifyAgentComposerFocus(agentId), delay);
+  });
 }
 
 function hashString(value: string) {
@@ -2224,6 +2237,7 @@ function focusLaunchedAgent(agent: RunningAgent) {
   store.setSelectedAgent(undefined);
   store.setTileMinimized(agent.id, false);
   store.setFocusedAgent(agent.id);
+  requestAgentComposerFocus(agent.id);
 }
 
 function renameAgent(agent: RunningAgent) {
@@ -9989,6 +10003,7 @@ function AgentChatComposer({
   const persistedDraftRef = useRef(persistedDraft);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const pendingComposerFocusRef = useRef(false);
   const [attachments, setAttachments] = useState<MessageAttachment[]>([]);
   const [contextOpen, setContextOpen] = useState(false);
   const [composerDropActive, setComposerDropActive] = useState(false);
@@ -10016,6 +10031,10 @@ function AgentChatComposer({
   const draftLines = draftLineCount(draft);
   const hasMultilineDraft = draftLines > 1 || composerWrapped;
   const composerExpanded = hasMultilineDraft && !composerCollapsed;
+
+  function focusComposerInput() {
+    window.requestAnimationFrame(() => inputRef.current?.focus());
+  }
 
   useEffect(() => {
     draftRef.current = draft;
@@ -10048,6 +10067,25 @@ function AgentChatComposer({
     window.addEventListener("resize", measure);
     return () => window.removeEventListener("resize", measure);
   }, [collapsedHeight, draft]);
+
+  useEffect(() => {
+    const onFocusComposer = (event: Event) => {
+      const agentId = (event as CustomEvent<{ agentId?: string }>).detail?.agentId;
+      if (agentId !== agent.id) return;
+      pendingComposerFocusRef.current = true;
+      if (!canType) return;
+      pendingComposerFocusRef.current = false;
+      focusComposerInput();
+    };
+    window.addEventListener(FOCUS_AGENT_COMPOSER_EVENT, onFocusComposer);
+    return () => window.removeEventListener(FOCUS_AGENT_COMPOSER_EVENT, onFocusComposer);
+  }, [agent.id, canType]);
+
+  useEffect(() => {
+    if (!pendingComposerFocusRef.current || !canType) return;
+    pendingComposerFocusRef.current = false;
+    focusComposerInput();
+  }, [agent.id, canType]);
 
   function commitDraft(value = draftRef.current) {
     if (persistedDraftRef.current === value) return;
