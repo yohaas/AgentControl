@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-05-05
 
+- [f7158a9](https://github.com/yohaas/AgentHero/commit/f7158a9) Keep Codex plan mode in modes only instead of duplicating it under permissions.
 - [320ab44](https://github.com/yohaas/AgentHero/commit/320ab44) Separate Codex default permissions from Claude and surface Codex permission modes in chat.
 
 ## 2026-05-04
