@@ -11297,6 +11297,7 @@ function TranscriptPreview({
         className={cn(
           "relative box-border min-w-0 max-w-[86%] overflow-hidden whitespace-pre-wrap break-words [overflow-wrap:anywhere] rounded-md border border-border px-3 py-2 text-sm leading-5",
           isUser ? "user-question bg-primary text-primary-foreground" : "bg-background/60",
+          showPopout && "w-full",
           showPopout && "pr-16"
         )}
         data-copy-block="true"
@@ -11313,6 +11314,7 @@ function TranscriptPreview({
           query={query}
           searchOptions={searchOptions}
           compact
+          inlineToggle={showPopout}
           defaultExpanded={defaultExpanded}
           renderFooter={({ collapsible, expanded, toggleExpanded }) => (
             <MessageFooter
@@ -12835,6 +12837,7 @@ function TranscriptItem({
         className={cn(
           "relative box-border min-w-0 max-w-[78%] overflow-hidden whitespace-pre-wrap break-words [overflow-wrap:anywhere] rounded-lg border border-border px-3 py-2 text-sm leading-6",
           isUser ? "user-question bg-primary text-primary-foreground" : "bg-card",
+          showPopout && "w-full",
           showPopout && "pr-16"
         )}
         data-copy-block="true"
@@ -12855,6 +12858,7 @@ function TranscriptItem({
           agent={agent}
           query={query}
           searchOptions={searchOptions}
+          inlineToggle={showPopout}
           defaultExpanded={defaultExpanded}
           renderFooter={({ collapsible, expanded, toggleExpanded }) => (
             <MessageFooter
@@ -12920,7 +12924,7 @@ function CollapsibleText({
 
   if (!shouldCollapse) {
     return (
-      <div className="grid gap-1">
+      <div className="grid w-full gap-1">
         <ChatMarkdown text={text} query={query} searchOptions={searchOptions} agent={agent} />
         {renderFooter?.({ collapsible: false, expanded: true, toggleExpanded })}
       </div>
@@ -12932,15 +12936,16 @@ function CollapsibleText({
   }
 
   return (
-    <div className="relative grid gap-2">
+    <div className="relative grid w-full gap-2">
       {inlineToggle && (
         <button
           type="button"
           className={cn(
             "absolute top-0 z-10 grid place-items-center rounded-md text-current opacity-70 hover:bg-accent hover:text-accent-foreground hover:opacity-100",
-            compact ? "-right-8 h-6 w-6" : "-right-9 h-7 w-7"
+            compact ? "-right-9 h-6 w-6" : "-right-8 h-7 w-7"
           )}
           title={expanded ? "Collapse response" : "Expand response"}
+          aria-label={expanded ? "Collapse response" : "Expand response"}
           onClick={toggleExpanded}
         >
           <ChevronDown className={cn(compact ? "h-3.5 w-3.5" : "h-4 w-4", "transition-transform", expanded && "rotate-180")} />
