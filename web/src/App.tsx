@@ -1078,7 +1078,7 @@ function ActiveAgentDot({ agent, className }: { agent: RunningAgent; className?:
   return (
     <span
       className={cn(
-        "relative h-3 w-3 shrink-0 overflow-hidden rounded-full",
+        "relative h-3 w-3 shrink-0 overflow-visible rounded-full",
         busy && "animate-pulse",
         className,
         needsContrast && "border border-neutral-950 dark:border-border"
