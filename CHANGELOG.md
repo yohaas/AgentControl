@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-05-05
 
+- [c4c006e](https://github.com/yohaas/AgentHero/commit/c4c006e) Enable chat search highlighting and match navigation in raw transcript view.
 - [fcfaf7e](https://github.com/yohaas/AgentHero/commit/fcfaf7e) Show context usage percentages with one decimal place.
 - [432308b](https://github.com/yohaas/AgentHero/commit/432308b) Allow provider model settings to be reordered by dragging rows.
 - [6f513ad](https://github.com/yohaas/AgentHero/commit/6f513ad) Show mobile attention alerts in the collapsed left nav and highlight alerting projects in the mobile selector.
