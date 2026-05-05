@@ -1441,7 +1441,7 @@ export class AgentRuntimeManager {
   }
 
   private codexSandboxRunnerFailureMessage(): string {
-    return "Codex could not start a sandboxed shell command on Windows. Switch this chat to Full access or fix the local Codex Windows sandbox setup, then retry.";
+    return "Codex could not start a sandboxed shell command on Windows. Change this chat to Full access, then retry.";
   }
 
   private isCodexSandboxRunnerDiagnostic(value: string): boolean {
