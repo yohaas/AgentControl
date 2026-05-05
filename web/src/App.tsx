@@ -7714,6 +7714,7 @@ function SettingsDialog() {
   const [updateChecksEnabled, setUpdateChecksEnabled] = useState(settings.updateChecksEnabled !== false);
   const [updateCommandsText, setUpdateCommandsText] = useState((settings.updateCommands || []).join("\n"));
   const [updateManifestUrl, setUpdateManifestUrl] = useState(settings.updateManifestUrl || "");
+  const [settingsSaving, setSettingsSaving] = useState(false);
   const [checkingUpdates, setCheckingUpdates] = useState(false);
   const [settingsUpdateStatus, setSettingsUpdateStatus] = useState<AppUpdateStatus | undefined>();
   const [windowsServiceStatus, setWindowsServiceStatus] = useState("");
@@ -7769,6 +7770,8 @@ function SettingsDialog() {
   }, [open, settings]);
 
   async function save() {
+    if (settingsSaving) return;
+    setSettingsSaving(true);
     try {
       const submittedSettings = {
         ...settings,
@@ -7828,6 +7831,8 @@ function SettingsDialog() {
       setOpen(false);
     } catch (error) {
       addError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setSettingsSaving(false);
     }
   }
 
@@ -8594,8 +8599,8 @@ function SettingsDialog() {
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            <Button type="button" onClick={save} disabled={!settingsDirty}>
-              Save
+            <Button type="button" onClick={save} disabled={!settingsDirty || settingsSaving} aria-busy={settingsSaving}>
+              {settingsSaving ? "Saving..." : "Save"}
             </Button>
           </div>
           </div>
