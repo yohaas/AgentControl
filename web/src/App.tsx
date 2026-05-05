@@ -2184,6 +2184,7 @@ function duplicateAgentRequest(agent: RunningAgent, settings: SettingsState): La
 async function launchAgentRequest(request: LaunchRequest): Promise<RunningAgent> {
   const result = await api.launchAgent(request);
   useAppStore.getState().hydrateSnapshot(result.snapshot);
+  focusLaunchedAgent(result.agent);
   return result.agent;
 }
 
@@ -2191,6 +2192,14 @@ function launchAgent(request: LaunchRequest, addError: (message: string) => void
   void launchAgentRequest(request).then(onLaunched).catch((error: unknown) => {
     addError(error instanceof Error ? error.message : String(error));
   });
+}
+
+function focusLaunchedAgent(agent: RunningAgent) {
+  const store = useAppStore.getState();
+  store.setSelectedProject(agent.projectId);
+  store.setSelectedAgent(undefined);
+  store.setTileMinimized(agent.id, false);
+  store.setFocusedAgent(agent.id);
 }
 
 function renameAgent(agent: RunningAgent) {
@@ -6844,7 +6853,7 @@ function ComposerModeMenu({
   );
 }
 
-function LaunchDialog({ onLaunchRequested }: { onLaunchRequested?: (request: LaunchRequest) => void }) {
+function LaunchDialog({ onLaunchRequested }: { onLaunchRequested?: (request: LaunchRequest, agent: RunningAgent) => void }) {
   const projects = useAppStore((state) => state.projects);
   const selectedProjectId = useAppStore((state) => state.selectedProjectId);
   const modal = useAppStore((state) => state.launchModal);
@@ -7058,8 +7067,8 @@ function LaunchDialog({ onLaunchRequested }: { onLaunchRequested?: (request: Lau
         permissionMode: settings.defaultAgentMode,
         autoApprove: settings.autoApprove
       };
-      await launchAgentRequest(request);
-      onLaunchRequested?.(request);
+      const launchedAgent = await launchAgentRequest(request);
+      onLaunchRequested?.(request, launchedAgent);
       closeLaunchModal();
     } catch (error) {
       addError(error instanceof Error ? error.message : String(error));
@@ -14146,11 +14155,6 @@ function isMobileOpenChat(agent: RunningAgent, transcript: TranscriptEvent[]) {
   return MOBILE_CHAT_STATUSES.has(agent.status) || transcript.length > 0 || agent.restorable;
 }
 
-type PendingMobileLaunch = {
-  projectId: string;
-  existingAgentIds: Set<string>;
-};
-
 export function MobileApp() {
   const setProjects = useAppStore((state) => state.setProjects);
   const setCapabilities = useAppStore((state) => state.setCapabilities);
@@ -14164,7 +14168,6 @@ export function MobileApp() {
   const wsConnected = useAppStore((state) => state.wsConnected);
   const themeMode = useAppStore((state) => state.settings.themeMode);
   const addError = useAppStore((state) => state.addError);
-  const pendingLaunchRef = useRef<PendingMobileLaunch | undefined>(undefined);
   const [selectedAgentId, setSelectedAgentIdState] = useState<string | undefined>(() =>
     readLocalStorageWithLegacy(MOBILE_SELECTED_AGENT_STORAGE_KEY)
   );
@@ -14179,13 +14182,11 @@ export function MobileApp() {
   }, []);
 
   const trackMobileLaunch = useCallback(
-    (request: LaunchRequest) => {
-      pendingLaunchRef.current = {
-        projectId: request.projectId,
-        existingAgentIds: new Set(Object.keys(agentsById))
-      };
+    (request: LaunchRequest, launchedAgent: RunningAgent) => {
+      setSelectedProject(request.projectId);
+      setSelectedAgentId(launchedAgent.id);
     },
-    [agentsById]
+    [setSelectedAgentId, setSelectedProject]
   );
 
   useEffect(() => {
@@ -14228,22 +14229,6 @@ export function MobileApp() {
     if (!selectedAgent || selectedAgent.id === selectedAgentId) return;
     setSelectedAgentId(selectedAgent.id);
   }, [selectedAgent, selectedAgentId]);
-
-  useEffect(() => {
-    const pendingLaunch = pendingLaunchRef.current;
-    if (!pendingLaunch) return;
-    const launchedAgent = Object.values(agentsById)
-      .filter(
-        (agent) =>
-          agent.projectId === pendingLaunch.projectId &&
-          !pendingLaunch.existingAgentIds.has(agent.id) &&
-          isMobileOpenChat(agent, transcripts[agent.id] || EMPTY_TRANSCRIPT)
-      )
-      .sort((left, right) => timestampValue(right.launchedAt) - timestampValue(left.launchedAt))[0];
-    if (!launchedAgent) return;
-    pendingLaunchRef.current = undefined;
-    setSelectedAgentId(launchedAgent.id);
-  }, [agentsById, setSelectedAgentId, transcripts]);
 
   if (serverStartupError) {
     return <ServerOfflinePage error={serverStartupError} onRetry={() => setServerRetryCount((count) => count + 1)} />;
