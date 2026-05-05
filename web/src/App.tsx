@@ -93,9 +93,10 @@ import {
   Puzzle,
   RefreshCw,
   Search,
-  SearchCheck,
   Save,
   Settings,
+  ShieldAlert,
+  ShieldEllipsis,
   Sparkles,
   Square,
   SquareSlash,
@@ -6564,14 +6565,14 @@ const CODEX_PERMISSION_MODE_OPTIONS = [
     label: "Auto-review",
     compactLabel: "Review",
     description: "Run in the sandbox and let Codex automatically review elevated requests before asking you.",
-    icon: SearchCheck
+    icon: ShieldEllipsis
   },
   {
     mode: "bypassPermissions",
     label: "Full access",
     compactLabel: "Full",
     description: "Run without Codex sandboxing or approval prompts. Use only for trusted projects.",
-    icon: Waypoints
+    icon: ShieldAlert
   }
 ] satisfies {
   mode: AgentPermissionMode;
