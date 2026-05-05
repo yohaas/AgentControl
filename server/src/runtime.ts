@@ -146,6 +146,31 @@ function stringifyUnknown(value: unknown): string {
   }
 }
 
+function spawnErrorCode(error: Error): string | undefined {
+  return typeof (error as NodeJS.ErrnoException).code === "string" ? (error as NodeJS.ErrnoException).code : undefined;
+}
+
+function formatProviderSpawnError(provider: AgentProvider, command: SpawnCommand, error: Error): string {
+  const code = spawnErrorCode(error);
+  const providerName = provider === "codex" ? "Codex" : provider === "openai" ? "OpenAI" : "Claude Code";
+  if (code === "ENOENT") {
+    if (provider === "claude") {
+      return [
+        "Claude Code CLI was not found.",
+        `AgentHero tried to start: ${command.command}`,
+        "Install Claude Code, make sure the claude command is on PATH, or set the full Claude Path in Settings > Claude.",
+        "After changing PATH or settings, restart AgentHero so the server picks up the new environment."
+      ].join(" ");
+    }
+    return [
+      `${providerName} CLI was not found.`,
+      `AgentHero tried to start: ${command.command}`,
+      `Install the ${providerName} CLI or update its configured path, then restart AgentHero.`
+    ].join(" ");
+  }
+  return error.message;
+}
+
 function providerForModel(model: string): AgentProvider {
   const lower = model.toLowerCase();
   if (lower.includes("codex")) return "codex";
@@ -1792,7 +1817,7 @@ export class AgentRuntimeManager {
     });
 
     child.on("error", (error) => {
-      this.setStatus(state, "error", error.message);
+      this.setStatus(state, "error", formatProviderSpawnError("claude", command, error));
     });
 
     child.on("exit", (code, signal) => {
@@ -1893,8 +1918,9 @@ export class AgentRuntimeManager {
       });
     });
     child.on("error", (error) => {
-      this.updateRemoteControlState(state, "error", error.message);
-      this.setStatus(state, "error", error.message);
+      const message = formatProviderSpawnError("claude", command, error);
+      this.updateRemoteControlState(state, "error", message);
+      this.setStatus(state, "error", message);
     });
     child.on("exit", (code, signal) => {
       this.updateRemoteControlState(state, "closed", code === 0 || code === null ? "Remote Control closed." : `Remote Control exited with code ${code}.`);
