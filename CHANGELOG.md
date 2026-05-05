@@ -2,6 +2,10 @@
 
 All notable repository changes are listed newest-first and grouped by commit date.
 
+## 2026-05-05
+
+- [320ab44](https://github.com/yohaas/AgentHero/commit/320ab44) Separate Codex default permissions from Claude and surface Codex permission modes in chat.
+
 ## 2026-05-04
 
 - [5b363a2](https://github.com/yohaas/AgentHero/commit/5b363a2) Replace installed update execution with manual release download links and bump the app to 0.1.8.
