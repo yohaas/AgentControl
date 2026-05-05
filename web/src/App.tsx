@@ -8200,7 +8200,7 @@ function SettingsDialog() {
             )}
           </nav>
           <div className="flex min-h-0 min-w-0 flex-col">
-            <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pr-1">
+            <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-1">
           {settingsTab === "general" && (
             <SettingsGeneralTab
               settings={settings}
