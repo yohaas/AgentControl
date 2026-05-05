@@ -42,6 +42,7 @@ export interface SettingsState {
   autoApprove: AutoApproveMode;
   permissionAllowRules?: PermissionAllowRule[];
   defaultAgentMode: AgentPermissionMode;
+  codexDefaultAgentMode: AgentPermissionMode;
   tileHeight: number;
   tileColumns: number;
   tileScrolling: TileScrollingMode;
@@ -398,6 +399,7 @@ const defaultSettings: SettingsState = {
   autoApprove: "off",
   permissionAllowRules: [],
   defaultAgentMode: "acceptEdits",
+  codexDefaultAgentMode: "default",
   tileHeight: 460,
   tileColumns: 2,
   tileScrolling: "vertical",
@@ -499,6 +501,9 @@ function normalizeSettings(settings: SettingsState): SettingsState {
   const defaultAgentMode = ["default", "acceptEdits", "plan", "bypassPermissions"].includes(settings.defaultAgentMode)
     ? settings.defaultAgentMode
     : defaultSettings.defaultAgentMode;
+  const codexDefaultAgentMode = ["default", "acceptEdits", "plan", "bypassPermissions"].includes(settings.codexDefaultAgentMode)
+    ? settings.codexDefaultAgentMode
+    : defaultSettings.codexDefaultAgentMode;
   const themeMode = ["auto", "light", "dark"].includes(settings.themeMode) ? settings.themeMode : defaultSettings.themeMode;
   const claudeRuntime = settings.claudeRuntime === "api" ? "api" : "cli";
   const menuDisplay = settings.menuDisplay === "iconText" ? "iconText" : "iconOnly";
@@ -542,6 +547,7 @@ function normalizeSettings(settings: SettingsState): SettingsState {
         : defaultSettings.updateCommands;
     })(),
     defaultAgentMode,
+    codexDefaultAgentMode,
     tileHeight: resolveTileHeight(settings.tileHeight),
     tileColumns: clampNumber(settings.tileColumns, defaultSettings.tileColumns, 1, 6),
     sidebarWidth: clampNumber(settings.sidebarWidth, defaultSettings.sidebarWidth, 240, 420),

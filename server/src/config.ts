@@ -51,6 +51,7 @@ export interface DashboardConfig {
   autoApprove?: AutoApproveMode;
   permissionAllowRules?: PermissionAllowRule[];
   defaultAgentMode?: AgentPermissionMode;
+  codexDefaultAgentMode?: AgentPermissionMode;
   tileHeight?: number;
   tileColumns?: number;
   tileScrolling?: TileScrollingMode;
@@ -277,6 +278,15 @@ export function resolveDefaultAgentMode(config: DashboardConfig): AgentPermissio
     config.defaultAgentMode === "bypassPermissions"
     ? config.defaultAgentMode
     : "acceptEdits";
+}
+
+export function resolveCodexDefaultAgentMode(config: DashboardConfig): AgentPermissionMode {
+  return config.codexDefaultAgentMode === "default" ||
+    config.codexDefaultAgentMode === "acceptEdits" ||
+    config.codexDefaultAgentMode === "plan" ||
+    config.codexDefaultAgentMode === "bypassPermissions"
+    ? config.codexDefaultAgentMode
+    : "default";
 }
 
 export function resolveClaudeRuntime(config: DashboardConfig): ClaudeRuntime {

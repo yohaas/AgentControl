@@ -2174,7 +2174,7 @@ function duplicateAgentRequest(agent: RunningAgent, settings: SettingsState): La
     provider: agent.provider,
     model: agent.currentModel,
     remoteControl: false,
-    permissionMode: agent.permissionMode || settings.defaultAgentMode,
+    permissionMode: agent.permissionMode || defaultPermissionModeForProvider(settings, agent.provider),
     effort: agent.effort,
     thinking: agent.thinking,
     autoApprove: settings.autoApprove
@@ -5982,7 +5982,7 @@ function Sidebar({ topSlot }: { topSlot?: ReactNode }) {
         agentSource: agentTab,
         provider: agent.provider,
         model: agent.defaultModel || settings.models[0] || DEFAULT_MODEL,
-        permissionMode: settings.defaultAgentMode,
+        permissionMode: defaultPermissionModeForProvider(settings, agent.provider),
         autoApprove: settings.autoApprove
       }, addError);
     });
@@ -6550,6 +6550,51 @@ const COMPOSER_MODE_OPTIONS = [
   icon: ComponentType<{ className?: string }>;
 }[];
 
+const CODEX_PERMISSION_MODE_OPTIONS = [
+  {
+    mode: "default",
+    label: "Default permissions",
+    compactLabel: "Default",
+    description: "Use Codex's normal review and approval behavior.",
+    icon: Hand
+  },
+  {
+    mode: "acceptEdits",
+    label: "Full permissions",
+    compactLabel: "Full",
+    description: "Launch Codex with full workspace access for edits and commands.",
+    icon: Code2
+  },
+  {
+    mode: "plan",
+    label: "Plan mode",
+    compactLabel: "Plan",
+    description: "Codex will explore the code and present a plan before editing.",
+    icon: ClipboardList
+  },
+  {
+    mode: "bypassPermissions",
+    label: "Bypass permissions",
+    compactLabel: "Bypass",
+    description: "Launch Codex with full workspace access and no approval prompts.",
+    icon: Waypoints
+  }
+] satisfies {
+  mode: AgentPermissionMode;
+  label: string;
+  compactLabel: string;
+  description: string;
+  icon: ComponentType<{ className?: string }>;
+}[];
+
+function permissionModeOptionsForProvider(provider: AgentProvider) {
+  return provider === "codex" ? CODEX_PERMISSION_MODE_OPTIONS : COMPOSER_MODE_OPTIONS;
+}
+
+function defaultPermissionModeForProvider(settings: SettingsState, provider?: AgentProvider): AgentPermissionMode {
+  return provider === "codex" ? settings.codexDefaultAgentMode : settings.defaultAgentMode;
+}
+
 const EFFORT_OPTIONS = [
   { effort: "low", label: "Low" },
   { effort: "medium", label: "Medium" },
@@ -6722,6 +6767,7 @@ function ComposerModeMenu({
   const availableEffortOptions = effortOptionsForAgent(agent);
   const activeEffortLabel = availableEffortOptions.find((option) => option.effort === activeEffort)?.label || "Medium";
   const activeOption = COMPOSER_MODE_OPTIONS.find((option) => option.mode === activeMode) || COMPOSER_MODE_OPTIONS[0];
+  const activePermissionOption = permissionModeOptionsForProvider(provider).find((option) => option.mode === activeMode) || activeOption;
   const ActiveIcon = provider === "claude" ? activeOption.icon : activeProviderOption?.icon || Sparkles;
 
   function setPermissionMode(permissionMode: AgentPermissionMode) {
@@ -6754,6 +6800,14 @@ function ComposerModeMenu({
 
   if (provider !== "claude") {
     const buttonLabel = activeProviderOption || providerModeOptions[0];
+    const codexButtonLabel =
+      provider === "codex" && activeMode !== "plan"
+        ? `${buttonLabel?.label || "Codex"} · ${activePermissionOption.compactLabel}`
+        : buttonLabel?.label;
+    const codexCompactLabel =
+      provider === "codex" && activeMode !== "plan"
+        ? `${buttonLabel?.compactLabel || "Codex"} · ${activePermissionOption.compactLabel}`
+        : buttonLabel?.compactLabel;
     return (
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -6765,12 +6819,12 @@ function ComposerModeMenu({
               compact ? "w-24 text-[11px]" : "w-full",
               inline && "h-8 w-auto rounded-md border-0 bg-transparent px-2 text-xs"
             )}
-            title={buttonLabel?.label}
+            title={provider === "codex" ? `${buttonLabel?.label}: ${activePermissionOption.label}` : buttonLabel?.label}
             disabled={agent.remoteControl}
           >
             <span className="flex min-w-0 items-center gap-1.5">
               <ActiveIcon className="h-3.5 w-3.5 shrink-0" />
-              <span className="truncate">{compact ? buttonLabel?.compactLabel : buttonLabel?.label}</span>
+              <span className="truncate">{compact ? codexCompactLabel : codexButtonLabel}</span>
             </span>
             <ChevronDown className="h-3.5 w-3.5 shrink-0" />
           </Button>
@@ -6809,6 +6863,34 @@ function ComposerModeMenu({
               );
             })}
           </div>
+          {provider === "codex" && (
+            <div className="mt-2 border-t border-border pt-2">
+              <div className="px-2 pb-1 text-xs text-muted-foreground">Codex permissions</div>
+              <div className="grid gap-1">
+                {CODEX_PERMISSION_MODE_OPTIONS.map((option) => {
+                  const Icon = option.icon;
+                  const selected = option.mode === activeMode;
+                  return (
+                    <DropdownMenuItem
+                      key={option.mode}
+                      onClick={() => setPermissionMode(option.mode)}
+                      className={cn(
+                        "items-start gap-3 rounded-md px-2 py-2.5",
+                        selected && "bg-primary/20 text-foreground focus:bg-primary/25"
+                      )}
+                    >
+                      <Icon className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm font-medium leading-none">{option.label}</span>
+                        <span className="mt-1 block text-xs leading-snug text-muted-foreground">{option.description}</span>
+                      </span>
+                      <Check className={cn("mt-1 h-4 w-4 shrink-0", selected ? "opacity-100" : "opacity-0")} />
+                    </DropdownMenuItem>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           <div className="mt-2 flex items-center gap-3 border-t border-border px-2 pt-2 text-xs text-muted-foreground">
             <Brain className="h-4 w-4" />
             <span className="flex-1">
@@ -7178,7 +7260,7 @@ function LaunchDialog({ onLaunchRequested }: { onLaunchRequested?: (request: Lau
         model,
         initialPrompt,
         remoteControl: false,
-        permissionMode: settings.defaultAgentMode,
+        permissionMode: defaultPermissionModeForProvider(settings, provider),
         autoApprove: settings.autoApprove
       };
       const launchedAgent = await launchAgentRequest(request);
@@ -7606,6 +7688,7 @@ function SettingsDialog() {
   const [modelUpdateNoteProvider, setModelUpdateNoteProvider] = useState<AgentProvider | undefined>();
   const [autoApprove, setAutoApprove] = useState(settings.autoApprove);
   const [defaultAgentMode, setDefaultAgentMode] = useState<AgentPermissionMode>(settings.defaultAgentMode);
+  const [codexDefaultAgentMode, setCodexDefaultAgentMode] = useState<AgentPermissionMode>(settings.codexDefaultAgentMode);
   const [themeMode, setThemeMode] = useState<ThemeMode>(settings.themeMode);
   const [menuDisplay, setMenuDisplay] = useState<MenuDisplayMode>(settings.menuDisplay);
   const [tileScrolling, setTileScrolling] = useState<TileScrollingMode>(settings.tileScrolling);
@@ -7658,6 +7741,7 @@ function SettingsDialog() {
     setModelUpdateNoteProvider(undefined);
     setAutoApprove(settings.autoApprove);
     setDefaultAgentMode(settings.defaultAgentMode);
+    setCodexDefaultAgentMode(settings.codexDefaultAgentMode);
     setThemeMode(settings.themeMode);
     setMenuDisplay(settings.menuDisplay);
     setTileScrolling(settings.tileScrolling);
@@ -7710,6 +7794,7 @@ function SettingsDialog() {
         clearOpenaiApiKey,
         autoApprove,
         defaultAgentMode,
+        codexDefaultAgentMode,
         themeMode,
         menuDisplay,
         tileScrolling,
@@ -7819,6 +7904,7 @@ function SettingsDialog() {
         builtInAgentDir,
         autoApprove,
         defaultAgentMode,
+        codexDefaultAgentMode,
         themeMode,
         menuDisplay,
         tileScrolling,
@@ -7865,6 +7951,7 @@ function SettingsDialog() {
       setBuiltInAgentDir(next.builtInAgentDir || DEFAULT_BUILT_IN_AGENT_DIR);
       setAutoApprove(next.autoApprove);
       setDefaultAgentMode(next.defaultAgentMode);
+      setCodexDefaultAgentMode(next.codexDefaultAgentMode);
       setThemeMode(next.themeMode);
       setMenuDisplay(next.menuDisplay);
       setTileScrolling(next.tileScrolling);
@@ -7987,6 +8074,7 @@ function SettingsDialog() {
       clearOpenaiApiKey ||
       autoApprove !== settings.autoApprove ||
       defaultAgentMode !== settings.defaultAgentMode ||
+      codexDefaultAgentMode !== settings.codexDefaultAgentMode ||
       themeMode !== settings.themeMode ||
       menuDisplay !== settings.menuDisplay ||
       tileScrolling !== settings.tileScrolling ||
@@ -8023,6 +8111,7 @@ function SettingsDialog() {
       clearAnthropicApiKey,
       clearOpenaiApiKey,
       codexAgentDir,
+      codexDefaultAgentMode,
       codexModelsText,
       codexPath,
       defaultAgentMode,
@@ -8437,6 +8526,24 @@ function SettingsDialog() {
                     onFallbackOpen={() => setAgentDirBrowser("codex")}
                   />
                 </div>
+              </label>
+              <label className="grid gap-1.5 text-sm">
+                Default permissions for new Codex agents
+                <Select value={codexDefaultAgentMode} onValueChange={(value) => setCodexDefaultAgentMode(value as AgentPermissionMode)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CODEX_PERMISSION_MODE_OPTIONS.map((option) => (
+                      <SelectItem key={option.mode} value={option.mode}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <span className="text-xs text-muted-foreground">
+                  Default permissions use Codex's normal review behavior. Full permissions launches Codex with full workspace access.
+                </span>
               </label>
               <PluginManagementPanel provider="codex" />
             </>
@@ -11486,7 +11593,7 @@ function PlanNextSteps({ event, agent, steps }: { event: PlanEvent; agent: Runni
       model: defaultModelForAgentDef(settings, step.def),
       initialPrompt: planNextStepPrompt(event, step),
       remoteControl: false,
-      permissionMode: settings.defaultAgentMode,
+      permissionMode: defaultPermissionModeForProvider(settings, provider),
       autoApprove: settings.autoApprove
     }, addError);
   }
@@ -11610,7 +11717,7 @@ function PlanCard({ event, agent, compact = false }: { event: PlanEvent; agent: 
       model: defaultModelForAgentDef(settings, target.def),
       initialPrompt: prompt,
       remoteControl: false,
-      permissionMode: settings.defaultAgentMode,
+      permissionMode: defaultPermissionModeForProvider(settings, provider),
       autoApprove: settings.autoApprove
     }, addError);
     sendCommand({

@@ -299,6 +299,7 @@ Important settings:
 - Project folders and open projects.
 - Built-in agent directory.
 - Claude, Codex, and OpenAI provider settings.
+- Separate default permission modes for new Claude and Codex sessions.
 - Access token requirement for browser/API/WebSocket control.
 - Update mode, update manifest URL, and update commands.
 - Theme, layout, file explorer dock, terminal dock, and chat display options.
