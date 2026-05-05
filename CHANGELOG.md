@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-05-05
 
+- [086dd0f](https://github.com/yohaas/AgentHero/commit/086dd0f) Focus the chat textbox after launching a chat.
 - [12ed6ae](https://github.com/yohaas/AgentHero/commit/12ed6ae) Add native Codex slash shortcuts for plan, permissions, review, and diff.
 - [51bca48](https://github.com/yohaas/AgentHero/commit/51bca48) Separate Codex launch modes from permission presets.
 - [3e7e169](https://github.com/yohaas/AgentHero/commit/3e7e169) Show a toast while preparing a handoff chat.
