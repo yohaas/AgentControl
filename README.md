@@ -21,7 +21,7 @@ For the best desktop experience, install AgentHero as a browser PWA from Chrome 
 
 The installers run AgentHero as the current desktop user so local project folders, PATH entries, Claude credentials, and Codex credentials come from your normal user profile. For source checkout setup, see [Manual Checkout Run](#manual-checkout-run).
 
-See [CHANGELOG.md](CHANGELOG.md) for release history.
+See [RELEASES.md](RELEASES.md) for version summaries and [CHANGELOG.md](CHANGELOG.md) for commit-level history.
 
 ## Top Features
 

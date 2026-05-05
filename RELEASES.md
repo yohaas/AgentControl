@@ -1,0 +1,24 @@
+# Releases
+
+Release summaries are listed newest-first. Use this page for human-facing release notes by version, and keep [CHANGELOG.md](CHANGELOG.md) for commit-level repository history.
+
+## 0.1.8
+
+AgentHero 0.1.8 improved installed update handling by replacing automatic installed update execution with manual release download links. The app now surfaces update choices more clearly and ships as a full macOS release asset when platform-specific packaging is needed.
+
+## 0.1.7
+
+AgentHero 0.1.7 focused on macOS installed updater reliability. Release asset URLs are resolved against the remote manifest so installed macOS builds can download the correct update package even when manifests contain relative asset paths.
+
+## 0.1.6
+
+AgentHero 0.1.6 shipped as a platform-neutral patch for day-to-day app behavior:
+
+- File Explorer popout state is preserved more consistently.
+- Reveal and send actions were refined for project file workflows.
+- Native folder picker fallback behavior was hardened, especially for Windows launches where the native picker can be hidden by scheduled-task startup behavior.
+- macOS-specific UI behavior was tightened by hiding unsupported WSL runtime choices.
+
+## 0.1.5
+
+AgentHero 0.1.5 was the first major release, consolidating the local dashboard, agent launch workflows, project-aware file tools, mobile access, and Windows/macOS installer and update foundations into a complete installable app.
