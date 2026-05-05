@@ -146,7 +146,7 @@ export function SettingsAppearanceTab({
           </label>
           <label className="grid min-w-0 gap-1.5 text-sm">
             <span>
-              Tile height <span className="text-xs text-muted-foreground">(0 = full height)</span>
+              Tile height <span className="text-xs text-muted-foreground">(0 = full)</span>
             </span>
             <Input
               type="number"

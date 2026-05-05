@@ -2298,10 +2298,6 @@ function AgentActionsMenu({
           <Search className="mr-2 h-4 w-4" />
           Search
         </DropdownMenuItem>
-        <DropdownMenuItem disabled={transcripts.length === 0} onClick={() => sendCommand({ type: "saveChat", id: agent.id })}>
-          <Save className="mr-2 h-4 w-4" />
-          Save Chat
-        </DropdownMenuItem>
         <DropdownMenuItem onClick={() => renameAgent(agent)}>
           <Pencil className="mr-2 h-4 w-4" />
           Rename
@@ -2313,6 +2309,19 @@ function AgentActionsMenu({
         <DropdownMenuItem disabled={transcripts.length === 0} onClick={() => sendCommand({ type: "forkChat", id: agent.id })}>
           <GitFork className="mr-2 h-4 w-4" />
           Fork Chat
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          disabled={!hasSavedCopy && transcripts.length === 0}
+          onClick={() => {
+            if (hasSavedCopy) {
+              if (window.confirm(`Delete saved chat "${agent.displayName}"?`)) sendCommand({ type: "deleteSavedChat", savedChatId: agent.id });
+              return;
+            }
+            sendCommand({ type: "saveChat", id: agent.id });
+          }}
+        >
+          {hasSavedCopy ? <Trash2 className="mr-2 h-4 w-4" /> : <Save className="mr-2 h-4 w-4" />}
+          {hasSavedCopy ? "Delete Chat" : "Save Chat"}
         </DropdownMenuItem>
         <DropdownMenuItem title={hasSavedCopy ? "Clears the open chat and its saved copy." : undefined} onClick={() => sendCommand({ type: "clear", id: agent.id })}>
           <Trash2 className="mr-2 h-4 w-4" />
@@ -2353,10 +2362,6 @@ function MobileAgentActionsMenu({ agent }: { agent: RunningAgent }) {
           <Search className="mr-2 h-4 w-4" />
           Search
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => sendCommand({ type: "saveChat", id: agent.id })}>
-          <Save className="mr-2 h-4 w-4" />
-          Save Chat
-        </DropdownMenuItem>
         <DropdownMenuItem onClick={() => renameAgent(agent)}>
           <Pencil className="mr-2 h-4 w-4" />
           Rename
@@ -2368,6 +2373,18 @@ function MobileAgentActionsMenu({ agent }: { agent: RunningAgent }) {
         <DropdownMenuItem onClick={() => sendCommand({ type: "forkChat", id: agent.id })}>
           <GitFork className="mr-2 h-4 w-4" />
           Fork Chat
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onClick={() => {
+            if (hasSavedCopy) {
+              if (window.confirm(`Delete saved chat "${agent.displayName}"?`)) sendCommand({ type: "deleteSavedChat", savedChatId: agent.id });
+              return;
+            }
+            sendCommand({ type: "saveChat", id: agent.id });
+          }}
+        >
+          {hasSavedCopy ? <Trash2 className="mr-2 h-4 w-4" /> : <Save className="mr-2 h-4 w-4" />}
+          {hasSavedCopy ? "Delete Chat" : "Save Chat"}
         </DropdownMenuItem>
         <DropdownMenuItem title={hasSavedCopy ? "Clears the open chat and its saved copy." : undefined} onClick={() => sendCommand({ type: "clear", id: agent.id })}>
           <Trash2 className="mr-2 h-4 w-4" />
@@ -3092,8 +3109,43 @@ function MessageTimestamp({ timestamp, className }: { timestamp?: string; classN
   const value = timestampValue(timestamp);
   if (!value) return null;
   return (
-    <div className={cn("mt-1 text-right text-[10px] leading-none opacity-70", className)} title={new Date(value).toLocaleString()}>
+    <div className={cn("text-right text-[10px] leading-none opacity-70", className)} title={new Date(value).toLocaleString()}>
       {formatMessageTimestamp(timestamp)}
+    </div>
+  );
+}
+
+function MessageFooter({
+  timestamp,
+  className,
+  expanded,
+  collapsible,
+  onToggle
+}: {
+  timestamp?: string;
+  className?: string;
+  expanded?: boolean;
+  collapsible?: boolean;
+  onToggle?: () => void;
+}) {
+  if (!timestampValue(timestamp)) return null;
+  return (
+    <div className="mt-1 flex w-full items-center justify-end gap-1">
+      {collapsible && (
+        <button
+          type="button"
+          className={cn(
+            "grid h-5 w-5 shrink-0 place-items-center rounded-sm opacity-70 hover:bg-accent hover:text-accent-foreground hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            className
+          )}
+          title={expanded ? "Collapse response" : "Expand response"}
+          aria-label={expanded ? "Collapse response" : "Expand response"}
+          onClick={onToggle}
+        >
+          <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", expanded && "rotate-180")} />
+        </button>
+      )}
+      <MessageTimestamp timestamp={timestamp} className={className} />
     </div>
   );
 }
@@ -10757,6 +10809,9 @@ function AgentTile({
         <Button variant="ghost" size="icon" onClick={() => setSelectedAgent(agent.id)} title="Maximize">
           <Maximize2 className="h-4 w-4" />
         </Button>
+        <Button variant="ghost" size="icon" onClick={() => sendCommand({ type: "kill", id: agent.id })} title="Close chat">
+          <X className="h-4 w-4" />
+        </Button>
       </div>
       {!tileMinimized && (
         <>
@@ -11048,7 +11103,23 @@ function TranscriptPreview({
         }}
       >
         {showPopout && <ChatBlockPopoutButton source={agent} text={event.text} compact />}
-        <CollapsibleText text={event.text} agent={agent} query={query} searchOptions={searchOptions} compact inlineToggle={showPopout} defaultExpanded={defaultExpanded} />
+        <CollapsibleText
+          text={event.text}
+          agent={agent}
+          query={query}
+          searchOptions={searchOptions}
+          compact
+          defaultExpanded={defaultExpanded}
+          renderFooter={({ collapsible, expanded, toggleExpanded }) => (
+            <MessageFooter
+              timestamp={event.timestamp}
+              className={isUser ? "text-primary-foreground" : "text-muted-foreground"}
+              collapsible={collapsible}
+              expanded={expanded}
+              onToggle={toggleExpanded}
+            />
+          )}
+        />
         {event.kind === "user" && event.attachments && event.attachments.length > 0 && (
           <span className="mt-2 flex flex-wrap gap-2">
             {event.attachments.map((attachment) =>
@@ -11064,7 +11135,6 @@ function TranscriptPreview({
             <ThinkingText agent={agent} prefix="Streaming" startedAt={agent.turnStartedAt} usage={agent.lastTokenUsage} />
           </span>
         )}
-        <MessageTimestamp timestamp={event.timestamp} className={isUser ? "text-primary-foreground" : "text-muted-foreground"} />
       </div>
     </div>
   );
@@ -11115,7 +11185,7 @@ function PinnedUserMessage({
         {event.attachments && event.attachments.length > 0 && (
           <div className="mt-1 text-[11px] opacity-80">{event.attachments.length} attachment(s)</div>
         )}
-        <MessageTimestamp timestamp={event.timestamp} className="text-primary-foreground" />
+        <MessageTimestamp timestamp={event.timestamp} className="mt-1 text-primary-foreground" />
       </div>
       <div
         className={cn(
@@ -11792,6 +11862,17 @@ function AgentPanelHeader({ agent }: { agent: RunningAgent }) {
       <AgentActionsMenu agent={agent} transcripts={transcripts} />
       <Button variant="ghost" size="icon" onClick={() => setSelectedAgent(undefined)} title="Show tiles">
         <Minimize2 className="h-4 w-4" />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={() => {
+          sendCommand({ type: "kill", id: agent.id });
+          setSelectedAgent(undefined);
+        }}
+        title="Close chat"
+      >
+        <X className="h-4 w-4" />
       </Button>
     </div>
   );
@@ -12565,7 +12646,22 @@ function TranscriptItem({
             from {event.sourceAgent.displayName}
           </Badge>
         )}
-        <CollapsibleText text={event.text} agent={agent} query={query} searchOptions={searchOptions} inlineToggle={showPopout} defaultExpanded={defaultExpanded} />
+        <CollapsibleText
+          text={event.text}
+          agent={agent}
+          query={query}
+          searchOptions={searchOptions}
+          defaultExpanded={defaultExpanded}
+          renderFooter={({ collapsible, expanded, toggleExpanded }) => (
+            <MessageFooter
+              timestamp={event.timestamp}
+              className={isUser ? "text-primary-foreground" : "text-muted-foreground"}
+              collapsible={collapsible}
+              expanded={expanded}
+              onToggle={toggleExpanded}
+            />
+          )}
+        />
         {event.kind === "assistant_text" && event.streaming && (
           <span className="mt-2 grid gap-1">
             {phaseLabel && <span className="text-[11px] font-medium uppercase tracking-normal text-muted-foreground">{phaseLabel}</span>}
@@ -12583,7 +12679,6 @@ function TranscriptItem({
             )}
           </div>
         )}
-        <MessageTimestamp timestamp={event.timestamp} className={isUser ? "text-primary-foreground" : "text-muted-foreground"} />
       </div>
     </div>
   );
@@ -12596,7 +12691,8 @@ function CollapsibleText({
   searchOptions = { matchCase: false, wholeWord: false },
   compact = false,
   inlineToggle = false,
-  defaultExpanded = false
+  defaultExpanded = false,
+  renderFooter
 }: {
   text: string;
   agent?: RunningAgent;
@@ -12605,6 +12701,7 @@ function CollapsibleText({
   compact?: boolean;
   inlineToggle?: boolean;
   defaultExpanded?: boolean;
+  renderFooter?: (state: { collapsible: boolean; expanded: boolean; toggleExpanded: () => void }) => ReactNode;
 }) {
   const shouldCollapse = isLongTextBlock(text, compact);
   const [expanded, setExpanded] = useState(defaultExpanded);
@@ -12617,7 +12714,14 @@ function CollapsibleText({
     if (defaultExpanded) setExpanded(true);
   }, [defaultExpanded]);
 
-  if (!shouldCollapse) return <ChatMarkdown text={text} query={query} searchOptions={searchOptions} agent={agent} />;
+  if (!shouldCollapse) {
+    return (
+      <div className="grid gap-1">
+        <ChatMarkdown text={text} query={query} searchOptions={searchOptions} agent={agent} />
+        {renderFooter?.({ collapsible: false, expanded: true, toggleExpanded })}
+      </div>
+    );
+  }
 
   function toggleExpanded() {
     setExpanded((value) => !value);
@@ -12659,6 +12763,7 @@ function CollapsibleText({
           <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", expanded && "rotate-180")} />
         </button>
       )}
+      {renderFooter?.({ collapsible: shouldCollapse, expanded, toggleExpanded })}
     </div>
   );
 }
@@ -13319,11 +13424,12 @@ function ToolCard({
       )}
       {open && (
         <div className="border-t border-border">
-          <div className="flex flex-wrap gap-2 px-3 py-2">
+          <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
             <Button size="sm" variant="outline" onClick={() => copyText(detail)}>
               <Clipboard className="h-3.5 w-3.5" />
               Copy details
             </Button>
+            <MessageTimestamp timestamp={result?.timestamp || event.timestamp} className="text-muted-foreground" />
           </div>
           <pre className="max-h-80 overflow-y-auto overflow-x-hidden whitespace-pre-wrap break-words [overflow-wrap:anywhere] border-t border-border p-3 text-xs text-muted-foreground">{detail}</pre>
         </div>
@@ -14961,6 +15067,9 @@ function MobileChatPane({ agent, addError }: { agent: RunningAgent; addError: (m
         </div>
         <StatusPill status={agent.status} />
         <MobileAgentActionsMenu agent={agent} />
+        <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => sendCommand({ type: "kill", id: agent.id })} title="Close chat">
+          <X className="h-4 w-4" />
+        </Button>
       </div>
       {searchOpen && (
         <div className="flex flex-wrap items-center gap-2 border-b border-border bg-background/95 px-3 py-2">
