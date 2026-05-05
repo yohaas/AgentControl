@@ -68,6 +68,7 @@ interface AgentProcessState {
   pendingQuestions?: Map<string, PendingQuestionRequest>;
   pendingPlans?: Map<string, PendingPlanRequest>;
   reportedModelWarnings?: Set<string>;
+  reportedCodexSandboxRunnerFailure?: boolean;
   rcLastDiagnostic?: string;
   apiAbort?: AbortController;
 }
@@ -1153,6 +1154,7 @@ export class AgentRuntimeManager {
   }
 
   private async runCodexTurn(state: AgentProcessState, prompt: string): Promise<void> {
+    state.reportedCodexSandboxRunnerFailure = false;
     const args = state.agent.sessionId
       ? ["exec", "resume", "--json", "-m", state.agent.currentModel]
       : ["exec", "--json", "-m", state.agent.currentModel];
@@ -1300,6 +1302,7 @@ export class AgentRuntimeManager {
       this.updateTokenUsage(state, this.usageFromPayload(payload));
       const text = this.extractCodexText(payload);
       if (text) {
+        if (this.handleCodexSandboxRunnerDiagnostic(state, text)) return;
         const completedItem = this.isCodexCompletedItem(payload);
         this.appendAssistantText(state, text, completedItem, !completedItem);
         return;
@@ -1368,7 +1371,7 @@ export class AgentRuntimeManager {
     if (type === "item.completed") {
       const exitCode = typeof item.exit_code === "number" ? item.exit_code : undefined;
       const status = this.trimmedStringField(item.status);
-      const output = this.textField(item.aggregated_output);
+      const output = this.codexDisplayOutput(state, this.textField(item.aggregated_output));
       const existingResult = state.transcript.find((event) => event.kind === "tool_result" && event.toolUseId === toolUseId);
       if (!existingResult) {
         this.pushTranscript(state, {
@@ -1414,6 +1417,42 @@ export class AgentRuntimeManager {
     return String(payload.type || "") === "item.completed";
   }
 
+  private codexDisplayOutput(state: AgentProcessState, output: string | undefined): string | undefined {
+    if (!output) return output;
+    if (!this.isCodexSandboxRunnerDiagnostic(output)) return output;
+    this.noteCodexSandboxRunnerFailure(state);
+    return this.codexSandboxRunnerFailureMessage();
+  }
+
+  private handleCodexSandboxRunnerDiagnostic(state: AgentProcessState, text: string): boolean {
+    if (!this.isCodexSandboxRunnerDiagnostic(text)) return false;
+    this.noteCodexSandboxRunnerFailure(state);
+    return true;
+  }
+
+  private noteCodexSandboxRunnerFailure(state: AgentProcessState): void {
+    if (state.reportedCodexSandboxRunnerFailure) return;
+    state.reportedCodexSandboxRunnerFailure = true;
+    this.pushTranscript(state, {
+      ...eventBase(state.agent.id, state.agent.currentModel),
+      kind: "system",
+      text: this.codexSandboxRunnerFailureMessage()
+    });
+  }
+
+  private codexSandboxRunnerFailureMessage(): string {
+    return "Codex could not start a sandboxed shell command on Windows. Switch this chat to Full access or fix the local Codex Windows sandbox setup, then retry.";
+  }
+
+  private isCodexSandboxRunnerDiagnostic(value: string): boolean {
+    const lower = value.toLowerCase();
+    return (
+      lower.includes("windows sandbox: timed out after 15000ms connecting runner pipe-in") ||
+      lower.includes("failed to create unified exec process: timed out after 15000ms connecting runner pipe-in") ||
+      lower.includes("the parallel shell runner did not attach cleanly")
+    );
+  }
+
   private shouldShowCodexStderrLine(line: string): boolean {
     const lower = line.toLowerCase();
     if (
@@ -1424,7 +1463,8 @@ export class AgentRuntimeManager {
       lower.includes("startup remote plugin sync failed") ||
       lower.includes("failed to record rollout items") ||
       lower.includes("/backend-api/plugins/") ||
-      lower.includes("/backend-api/codex/analytics-events/")
+      lower.includes("/backend-api/codex/analytics-events/") ||
+      this.isCodexSandboxRunnerDiagnostic(line)
     ) {
       return false;
     }
