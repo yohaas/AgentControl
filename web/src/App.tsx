@@ -14938,6 +14938,34 @@ export function MobileApp() {
   }, [hydrateSnapshot, serverRetryCount, setCapabilities, setProjects, setSettings]);
 
   const selectedProject = projects.find((project) => project.id === selectedProjectId) || projects[0];
+  const projectRows = useMemo(() => projectSelectorRows(projects), [projects]);
+  const inputNeededProjectAlertLabels = useMemo(() => {
+    const labelsByProjectId = new Map<string, string[]>();
+    for (const agent of Object.values(agentsById)) {
+      if (!agentNeedsInput(agent)) continue;
+      const projectName = projects.find((candidate) => candidate.id === agent.projectId)?.name || agent.projectName;
+      const need = agent.status === "awaiting-permission" ? "needs approval" : "needs an answer";
+      const current = labelsByProjectId.get(agent.projectId) || [];
+      labelsByProjectId.set(agent.projectId, [...current, `${projectName}: ${agent.displayName} ${need}`]);
+    }
+    return labelsByProjectId;
+  }, [agentsById, projects]);
+  const attentionAlerts = useMemo(
+    () =>
+      Object.values(agentsById)
+        .filter(agentNeedsInput)
+        .sort((left, right) => timestampValue(right.updatedAt) - timestampValue(left.updatedAt))
+        .map((agent) => {
+          const projectName = projects.find((project) => project.id === agent.projectId)?.name || agent.projectName;
+          const need = agent.status === "awaiting-permission" ? "needs approval" : "needs an answer";
+          return {
+            agentId: agent.id,
+            projectId: agent.projectId,
+            label: `${projectName}: ${agent.displayName} ${need}`
+          };
+        }),
+    [agentsById, projects]
+  );
   const openChats = useMemo(
     () =>
       agentsForProject(agentsById, selectedProject?.id)
@@ -14960,11 +14988,13 @@ export function MobileApp() {
   return (
     <div className="flex h-dvh w-full max-w-full overflow-hidden bg-background text-foreground">
       <MobileSidebar
-        projects={projects}
+        projectRows={projectRows}
         selectedProject={selectedProject}
         openChats={openChats}
         selectedAgentId={selectedAgent?.id}
         wsConnected={wsConnected}
+        inputNeededProjectAlertLabels={inputNeededProjectAlertLabels}
+        attentionAlerts={attentionAlerts}
         onSelectProject={setSelectedProject}
         onSelectAgent={setSelectedAgentId}
       />
@@ -14984,19 +15014,23 @@ export function MobileApp() {
 }
 
 function MobileSidebar({
-  projects,
+  projectRows,
   selectedProject,
   openChats,
   selectedAgentId,
   wsConnected,
+  inputNeededProjectAlertLabels,
+  attentionAlerts,
   onSelectProject,
   onSelectAgent
 }: {
-  projects: Project[];
+  projectRows: ReturnType<typeof projectSelectorRows>;
   selectedProject?: Project;
   openChats: RunningAgent[];
   selectedAgentId?: string;
   wsConnected: boolean;
+  inputNeededProjectAlertLabels: Map<string, string[]>;
+  attentionAlerts: { agentId: string; projectId: string; label: string }[];
   onSelectProject: (id?: string) => void;
   onSelectAgent: (id: string) => void;
 }) {
@@ -15031,6 +15065,14 @@ function MobileSidebar({
   function restoreSavedChat(savedChatId: string, agentId: string) {
     if (!sendCommand({ type: "restoreSavedChat", savedChatId })) return;
     onSelectAgent(agentId);
+    setCollapsed(true);
+  }
+
+  function selectAttentionAlert() {
+    const alert = attentionAlerts[0];
+    if (!alert) return;
+    onSelectProject(alert.projectId);
+    onSelectAgent(alert.agentId);
     setCollapsed(true);
   }
 
@@ -15078,6 +15120,17 @@ function MobileSidebar({
             contentClassName="w-[min(calc(100vw-1rem),20rem)]"
             hideWhenNoPendingPushes
           />
+          {attentionAlerts.length > 0 && (
+            <button
+              type="button"
+              className="grid h-9 w-9 shrink-0 place-items-center rounded-md text-amber-500 hover:bg-accent hover:text-amber-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:hover:text-amber-300"
+              title={[...attentionAlerts.map((alert) => alert.label), "Tap to open"].join("\n")}
+              aria-label={attentionAlerts.map((alert) => alert.label).join("; ")}
+              onClick={selectAttentionAlert}
+            >
+              <TriangleAlert className="h-5 w-5" aria-hidden="true" />
+            </button>
+          )}
           <div className="h-px w-8 bg-border" />
           <div className="flex min-h-0 flex-1 flex-col items-center gap-2 overflow-y-auto overflow-x-hidden px-1" data-mobile-nav-empty-toggle>
             {openChats.map((agent) => (
@@ -15131,17 +15184,49 @@ function MobileSidebar({
 
       <section className="border-b border-border p-3">
         <Select value={selectedProject?.id || ""} onValueChange={(value) => onSelectProject(value)}>
-          <SelectTrigger className="h-10 min-w-0">
+          <SelectTrigger
+            className={cn(
+              "h-10 min-w-0",
+              selectedProjectId && inputNeededProjectAlertLabels.has(selectedProjectId) && "border-amber-500/70 bg-amber-500/10"
+            )}
+          >
             <SelectValue placeholder="Project" />
           </SelectTrigger>
           <SelectContent>
             <SelectGroup>
               <SelectLabel>Projects</SelectLabel>
-              {projects.map((project) => (
-                <SelectItem key={project.id} value={project.id}>
-                  {project.name}
-                </SelectItem>
-              ))}
+              {projectRows.map(({ project, parent, depth }) => {
+                const inputAlertLabels = inputNeededProjectAlertLabels.get(project.id) || [];
+                const inputAlertLabel = inputAlertLabels.join("; ");
+                return (
+                  <SelectItem
+                    key={project.id}
+                    value={project.id}
+                    title={inputAlertLabel || undefined}
+                    className={cn(
+                      "pr-8",
+                      depth > 0 && "pl-11",
+                      inputAlertLabels.length > 0 && "bg-amber-500/10 text-amber-900 focus:bg-amber-500/15 dark:text-amber-100"
+                    )}
+                  >
+                    <span className="flex min-w-0 items-center gap-2">
+                      {depth > 0 && <FolderTree className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
+                      <span className="min-w-0">
+                        <span className="flex min-w-0 items-center gap-2">
+                          <span className="truncate">{project.name}</span>
+                          <ProjectRuntimeBadge project={project} />
+                        </span>
+                        {parent && <span className="block truncate text-xs text-muted-foreground">{projectRelativePath(project, parent)}</span>}
+                      </span>
+                      {inputAlertLabels.length > 0 && (
+                        <span className="ml-auto shrink-0" role="img" aria-label={inputAlertLabel}>
+                          <TriangleAlert className="h-4 w-4 text-amber-500" aria-hidden="true" />
+                        </span>
+                      )}
+                    </span>
+                  </SelectItem>
+                );
+              })}
             </SelectGroup>
           </SelectContent>
         </Select>
