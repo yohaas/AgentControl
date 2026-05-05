@@ -560,6 +560,10 @@ const CLAUDE_SLASH_COMMANDS: SlashCommandSuggestion[] = [
 const CODEX_SLASH_COMMANDS: SlashCommandSuggestion[] = [
   { value: "/intelligence", label: "/intelligence", description: "Use the most capable Codex model", source: "agenthero" },
   { value: "/speed", label: "/speed", description: "Use the fastest Codex model available", source: "agenthero" },
+  { value: "/plan ", label: "/plan", description: "Switch Codex to plan mode", argumentHint: "[prompt]", source: "agenthero" },
+  { value: "/permissions ", label: "/permissions", description: "Set Codex permissions", argumentHint: "[default|auto-review|full]", source: "agenthero" },
+  { value: "/review", label: "/review", description: "Ask Codex to review the working tree", source: "builtin" },
+  { value: "/diff", label: "/diff", description: "Ask Codex to inspect the Git diff", source: "builtin" },
   { value: "/effort low", label: "/effort low", description: "Use low Codex reasoning effort", source: "agenthero" },
   { value: "/effort medium", label: "/effort medium", description: "Use medium Codex reasoning effort", source: "agenthero" },
   { value: "/effort high", label: "/effort high", description: "Use high Codex reasoning effort", source: "agenthero" },
@@ -2490,6 +2494,33 @@ function handleNativeSlashCommand(agent: RunningAgent, text: string): NativeSlas
   }
   if (provider === "codex" && (command === "intelligence" || command === "smart")) {
     return nativeSlashResult(sendCommand({ type: "setModel", id: agent.id, model: preferredProviderModeModel(settings, "codex", "intelligence") }));
+  }
+  if (provider === "codex" && command === "plan") {
+    const planModeSet = sendCommand({ type: "setPlanMode", id: agent.id, planMode: true });
+    if (arg) sendCommand({ type: "userMessage", id: agent.id, text: arg, attachments: [] });
+    return nativeSlashResult(planModeSet);
+  }
+  if (provider === "codex" && command === "permissions") {
+    const normalized = arg.toLowerCase().replace(/[\s_-]+/g, "-");
+    const permissionMode =
+      normalized === "auto" || normalized === "auto-review" || normalized === "autoreview"
+        ? "autoReview"
+        : normalized === "full" || normalized === "full-access" || normalized === "bypass"
+          ? "bypassPermissions"
+          : normalized === "default" || normalized === "sandbox"
+            ? "default"
+            : undefined;
+    if (!permissionMode) {
+      useAppStore.getState().addToast("Use /permissions default, /permissions auto-review, or /permissions full.");
+      return "sent";
+    }
+    return nativeSlashResult(sendCommand({ type: "setPermissionMode", id: agent.id, permissionMode }));
+  }
+  if (provider === "codex" && command === "review") {
+    return nativeSlashResult(sendCommand({ type: "userMessage", id: agent.id, text: "Review the current working tree for bugs, regressions, missing tests, and risky changes.", attachments: [] }));
+  }
+  if (provider === "codex" && command === "diff") {
+    return nativeSlashResult(sendCommand({ type: "userMessage", id: agent.id, text: "Inspect the current Git diff and summarize the meaningful changes.", attachments: [] }));
   }
   if (provider === "openai" && (command === "chatgpt" || command === "standard")) {
     return nativeSlashResult(sendCommand({ type: "setModel", id: agent.id, model: preferredProviderModeModel(settings, "openai", "standard") }));
