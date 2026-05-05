@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-05-05
 
+- [80238bf](https://github.com/yohaas/AgentHero/commit/80238bf) Add a launch dialog mode selector alongside provider and model.
 - [1c02a1b](https://github.com/yohaas/AgentHero/commit/1c02a1b) Improve Codex sandbox compatibility on Windows by disabling private desktop isolation for sandboxed runs.
 - [5e03edf](https://github.com/yohaas/AgentHero/commit/5e03edf) Update Codex Auto-review and Full access permission icons.
 - [4ccc98a](https://github.com/yohaas/AgentHero/commit/4ccc98a) Align Codex permissions with the Default, Auto-review, and Full access approval presets.
