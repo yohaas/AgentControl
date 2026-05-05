@@ -6750,8 +6750,18 @@ function ProviderModelProfilesField({
   gettingCurrentModels?: boolean;
   updateNote?: string;
 }) {
+  const [draggedIndex, setDraggedIndex] = useState<number | undefined>();
+
   function updateProfile(index: number, patch: Partial<ModelProfile>) {
     onChange(value.map((profile, profileIndex) => (profileIndex === index ? { ...profile, ...patch } : profile)));
+  }
+
+  function moveProfile(fromIndex: number, toIndex: number) {
+    if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0 || fromIndex >= value.length || toIndex >= value.length) return;
+    const next = [...value];
+    const [moved] = next.splice(fromIndex, 1);
+    next.splice(toIndex, 0, moved);
+    onChange(next);
   }
 
   return (
@@ -6769,13 +6779,42 @@ function ProviderModelProfilesField({
         )}
       </div>
       <div className="grid gap-1.5">
-        <div className="grid grid-cols-[minmax(0,1fr)_8rem_2rem] gap-2 px-1 text-[11px] uppercase tracking-normal text-muted-foreground">
+        <div className="grid grid-cols-[2rem_minmax(0,1fr)_8rem_2rem] gap-2 px-1 text-[11px] uppercase tracking-normal text-muted-foreground">
+          <span />
           <span>Model name</span>
           <span>Context</span>
           <span />
         </div>
         {value.map((profile, index) => (
-          <div key={`${profile.provider}-${index}`} className="grid grid-cols-[minmax(0,1fr)_8rem_2rem] gap-2">
+          <div
+            key={`${profile.provider}-${profile.id || "new"}-${index}`}
+            className={cn(
+              "grid grid-cols-[2rem_minmax(0,1fr)_8rem_2rem] gap-2 rounded-md",
+              draggedIndex === index && "bg-accent/40"
+            )}
+            onDragOver={(event) => event.preventDefault()}
+            onDrop={(event) => {
+              event.preventDefault();
+              if (draggedIndex !== undefined) moveProfile(draggedIndex, index);
+              setDraggedIndex(undefined);
+            }}
+          >
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-9 w-8 cursor-grab text-muted-foreground active:cursor-grabbing"
+              draggable
+              title="Drag to reorder"
+              onDragStart={(event) => {
+                setDraggedIndex(index);
+                event.dataTransfer.effectAllowed = "move";
+                event.dataTransfer.setData("text/plain", String(index));
+              }}
+              onDragEnd={() => setDraggedIndex(undefined)}
+            >
+              <GripVertical className="h-4 w-4" />
+            </Button>
             <Input
               value={profile.id}
               onChange={(event) => updateProfile(index, { id: event.target.value })}
