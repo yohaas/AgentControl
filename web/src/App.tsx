@@ -10913,6 +10913,7 @@ function AgentTile({
   const [searchWholeWord, setSearchWholeWord] = useState(false);
   const [searchMatchCount, setSearchMatchCount] = useState(0);
   const [activeSearchMatchIndex, setActiveSearchMatchIndex] = useState(-1);
+  const [searchContentVersion, setSearchContentVersion] = useState(0);
   const composerDragDepthRef = useRef(0);
   const isBusy = isAgentBusy(agent);
   const visibleTranscriptViewMode = chatTranscriptDetail === "raw" ? "raw" : "chat";
@@ -10944,6 +10945,7 @@ function AgentTile({
     () => ({ matchCase: searchMatchCase, wholeWord: searchWholeWord }),
     [searchMatchCase, searchWholeWord]
   );
+  const noteSearchContentChanged = useCallback(() => setSearchContentVersion((version) => version + 1), []);
   useQueuedMessageSender(agent, queue, canType);
 
   useEffect(() => {
@@ -11045,7 +11047,7 @@ function AgentTile({
       });
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [displayedTranscriptItems, searchActive, searchOptions, searchQuery, visibleTranscriptViewMode]);
+  }, [displayedTranscriptItems, searchActive, searchContentVersion, searchOptions, searchQuery, visibleTranscriptViewMode]);
 
   useEffect(() => {
     const marks = Array.from(rootRef.current?.querySelectorAll<HTMLElement>("mark[data-chat-search-match]") || []);
@@ -11576,7 +11578,14 @@ function AgentTile({
                 ) : visibleTranscriptViewMode === "raw" ? (
                   <div className="grid gap-3">
                     <RequiredFeedbackPanel items={requiredFeedbackItems} agent={agent} compact />
-                    <RawStreamView agent={agent} transcript={transcript} compact />
+                    <RawStreamView
+                      agent={agent}
+                      transcript={transcript}
+                      compact
+                      query={searchActive ? searchQuery : ""}
+                      searchOptions={searchOptions}
+                      onSearchContentChange={noteSearchContentChanged}
+                    />
                   </div>
                 ) : transcript.length === 0 || displayedTranscriptItems.length === 0 ? (
                   showActivityIndicator ? (
@@ -12378,7 +12387,21 @@ function RequiredFeedbackPanel({
   );
 }
 
-function RawStreamView({ agent, transcript, compact = false }: { agent: RunningAgent; transcript: TranscriptEvent[]; compact?: boolean }) {
+function RawStreamView({
+  agent,
+  transcript,
+  compact = false,
+  query = "",
+  searchOptions = { matchCase: false, wholeWord: false },
+  onSearchContentChange
+}: {
+  agent: RunningAgent;
+  transcript: TranscriptEvent[];
+  compact?: boolean;
+  query?: string;
+  searchOptions?: ChatSearchOptions;
+  onSearchContentChange?: () => void;
+}) {
   const addError = useAppStore((state) => state.addError);
   const [raw, setRaw] = useState("");
   const [loading, setLoading] = useState(true);
@@ -12406,6 +12429,11 @@ function RawStreamView({ agent, transcript, compact = false }: { agent: RunningA
 
   const fallback = transcript.map((event) => JSON.stringify(event)).join("\n");
   const text = raw.trim() ? raw : fallback;
+  const displayText = text || "No raw stream yet.";
+
+  useEffect(() => {
+    if (query.trim()) onSearchContentChange?.();
+  }, [displayText, onSearchContentChange, query, searchOptions]);
 
   return (
     <div className="min-w-0 rounded-md border border-border bg-background/70" data-copy-block="true">
@@ -12414,7 +12442,7 @@ function RawStreamView({ agent, transcript, compact = false }: { agent: RunningA
         {loading && <span className="text-xs text-muted-foreground">Loading...</span>}
       </div>
       <pre className={cn("max-h-[60vh] overflow-auto whitespace-pre-wrap break-words p-3 font-mono text-muted-foreground [overflow-wrap:anywhere]", compact ? "text-[11px]" : "text-xs")}>
-        {text || "No raw stream yet."}
+        <HighlightedText text={displayText} query={query} options={searchOptions} />
       </pre>
     </div>
   );
@@ -12561,6 +12589,7 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
   const [searchWholeWord, setSearchWholeWord] = useState(false);
   const [searchMatchCount, setSearchMatchCount] = useState(0);
   const [activeSearchMatchIndex, setActiveSearchMatchIndex] = useState(-1);
+  const [searchContentVersion, setSearchContentVersion] = useState(0);
   const composerDragDepthRef = useRef(0);
   const isBusy = isAgentBusy(agent);
   const visibleTranscriptViewMode = chatTranscriptDetail === "raw" ? "raw" : "chat";
@@ -12591,6 +12620,7 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
     () => ({ matchCase: searchMatchCase, wholeWord: searchWholeWord }),
     [searchMatchCase, searchWholeWord]
   );
+  const noteSearchContentChanged = useCallback(() => setSearchContentVersion((version) => version + 1), []);
   useQueuedMessageSender(agent, queue, canType);
 
   useEffect(() => {
@@ -12659,7 +12689,7 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
       });
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [displayedTranscriptItems, searchOpen, searchOptions, searchQuery, visibleTranscriptViewMode]);
+  }, [displayedTranscriptItems, searchContentVersion, searchOpen, searchOptions, searchQuery, visibleTranscriptViewMode]);
 
   useEffect(() => {
     const marks = Array.from(rootRef.current?.querySelectorAll<HTMLElement>("mark[data-chat-search-match]") || []);
@@ -13001,7 +13031,13 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
               {visibleTranscriptViewMode === "raw" ? (
                 <>
                   <RequiredFeedbackPanel items={requiredFeedbackItems} agent={agent} />
-                  <RawStreamView agent={agent} transcript={transcript} />
+                  <RawStreamView
+                    agent={agent}
+                    transcript={transcript}
+                    query={searchOpen ? searchQuery : ""}
+                    searchOptions={searchOptions}
+                    onSearchContentChange={noteSearchContentChanged}
+                  />
                 </>
               ) : transcript.length === 0 || displayedTranscriptItems.length === 0 ? (
                 showActivityIndicator ? (
@@ -15431,6 +15467,7 @@ function MobileChatPane({ agent, addError }: { agent: RunningAgent; addError: (m
   const [searchWholeWord, setSearchWholeWord] = useState(false);
   const [searchMatchCount, setSearchMatchCount] = useState(0);
   const [activeSearchMatchIndex, setActiveSearchMatchIndex] = useState(-1);
+  const [searchContentVersion, setSearchContentVersion] = useState(0);
   const isBusy = isAgentBusy(agent);
   const visibleTranscriptViewMode = chatTranscriptDetail === "raw" ? "raw" : "chat";
   const canType = agentHasProcess(agent);
@@ -15458,6 +15495,7 @@ function MobileChatPane({ agent, addError }: { agent: RunningAgent; addError: (m
     () => ({ matchCase: searchMatchCase, wholeWord: searchWholeWord }),
     [searchMatchCase, searchWholeWord]
   );
+  const noteSearchContentChanged = useCallback(() => setSearchContentVersion((version) => version + 1), []);
   useQueuedMessageSender(agent, queue, canType);
 
   useEffect(() => {
@@ -15500,7 +15538,7 @@ function MobileChatPane({ agent, addError }: { agent: RunningAgent; addError: (m
       });
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [displayedTranscriptItems, searchOpen, searchOptions, searchQuery, visibleTranscriptViewMode]);
+  }, [displayedTranscriptItems, searchContentVersion, searchOpen, searchOptions, searchQuery, visibleTranscriptViewMode]);
 
   useEffect(() => {
     const marks = Array.from(rootRef.current?.querySelectorAll<HTMLElement>("mark[data-chat-search-match]") || []);
@@ -15856,7 +15894,14 @@ function MobileChatPane({ agent, addError }: { agent: RunningAgent; addError: (m
           {visibleTranscriptViewMode === "raw" ? (
             <div className="grid gap-3">
               <RequiredFeedbackPanel items={requiredFeedbackItems} agent={agent} compact />
-              <RawStreamView agent={agent} transcript={transcript} compact />
+              <RawStreamView
+                agent={agent}
+                transcript={transcript}
+                compact
+                query={searchOpen ? searchQuery : ""}
+                searchOptions={searchOptions}
+                onSearchContentChange={noteSearchContentChanged}
+              />
             </div>
           ) : displayedTranscriptItems.length === 0 ? (
             showActivityIndicator ? (
