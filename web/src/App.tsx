@@ -11297,6 +11297,7 @@ function TranscriptPreview({
         className={cn(
           "relative box-border min-w-0 max-w-[86%] overflow-hidden whitespace-pre-wrap break-words [overflow-wrap:anywhere] rounded-md border border-border px-3 py-2 text-sm leading-5",
           isUser ? "user-question bg-primary text-primary-foreground" : "bg-background/60",
+          isUser && "pb-2.5",
           showPopout && "w-full",
           showPopout && "pr-16"
         )}
@@ -12837,6 +12838,7 @@ function TranscriptItem({
         className={cn(
           "relative box-border min-w-0 max-w-[78%] overflow-hidden whitespace-pre-wrap break-words [overflow-wrap:anywhere] rounded-lg border border-border px-3 py-2 text-sm leading-6",
           isUser ? "user-question bg-primary text-primary-foreground" : "bg-card",
+          isUser && "pb-2.5",
           showPopout && "w-full",
           showPopout && "pr-16"
         )}
