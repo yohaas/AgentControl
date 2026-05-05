@@ -2,6 +2,8 @@
 
 Release summaries are listed newest-first. Use this page for human-facing release notes by version, and keep [CHANGELOG.md](CHANGELOG.md) for commit-level repository history.
 
+For each new release number added to the changelog, add a matching entry here with a summary of what shipped. The first release entry starts at 0.1.5 as the high-level first major release summary; later release entries should describe the release-specific changes in more detail.
+
 ## 0.1.8
 
 AgentHero 0.1.8 improved installed update handling by replacing automatic installed update execution with manual release download links. The app now surfaces update choices more clearly and ships as a full macOS release asset when platform-specific packaging is needed.
