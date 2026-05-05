@@ -2188,6 +2188,7 @@ async function handoffChat(agent: RunningAgent, transcripts: TranscriptEvent[], 
     addError("No chat transcript to hand off.");
     return;
   }
+  useAppStore.getState().addToast("Preparing handoff chat...");
   try {
     const { summary } = await api.handoffSummary(agent.id);
     await launchAgentRequest({
