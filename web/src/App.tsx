@@ -3216,17 +3216,19 @@ function MessageFooter({
   className,
   expanded,
   collapsible,
+  alignWithInlineActions,
   onToggle
 }: {
   timestamp?: string;
   className?: string;
   expanded?: boolean;
   collapsible?: boolean;
+  alignWithInlineActions?: boolean;
   onToggle?: () => void;
 }) {
   if (!timestampValue(timestamp)) return null;
   return (
-    <div className="mt-1 flex w-full items-center justify-end gap-1">
+    <div className={cn("mt-1 flex w-full items-center justify-end gap-1", alignWithInlineActions && "translate-x-12")}>
       {collapsible && (
         <button
           type="button"
@@ -11459,6 +11461,7 @@ function TranscriptPreview({
               className={isUser ? "text-primary-foreground" : "text-muted-foreground"}
               collapsible={collapsible}
               expanded={expanded}
+              alignWithInlineActions={showPopout}
               onToggle={toggleExpanded}
             />
           )}
@@ -13004,6 +13007,7 @@ function TranscriptItem({
               className={isUser ? "text-primary-foreground" : "text-muted-foreground"}
               collapsible={collapsible}
               expanded={expanded}
+              alignWithInlineActions={showPopout}
               onToggle={toggleExpanded}
             />
           )}
