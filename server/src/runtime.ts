@@ -146,6 +146,125 @@ function stringifyUnknown(value: unknown): string {
   }
 }
 
+function compactLine(value: string, maxLength = 220): string {
+  const normalized = value.replace(/\s+/g, " ").trim();
+  return normalized.length > maxLength ? `${normalized.slice(0, maxLength - 1).trimEnd()}...` : normalized;
+}
+
+function transcriptToPlainText(agent: RunningAgent, transcripts: TranscriptEvent[]): string {
+  return transcripts
+    .map((event) => {
+      if (event.kind === "assistant_text") return `Assistant (${event.model || agent.currentModel}):\n${event.text}`;
+      if (event.kind === "user") return `User:\n${event.text}`;
+      if (event.kind === "tool_use") return `Tool Use: ${event.name}\n${stringifyUnknown(event.input)}`;
+      if (event.kind === "tool_result") return `Tool Result:\n${stringifyUnknown(event.output)}`;
+      if (event.kind === "questions") {
+        return [
+          "Questions:",
+          ...event.questions.map((question, index) => {
+            const answer = event.answers?.find((item) => item.questionIndex === index);
+            return [
+              `${index + 1}. ${question.header || question.question}`,
+              question.question,
+              ...question.options.map((option) => `- ${option.label}${option.description ? `: ${option.description}` : ""}`),
+              answer?.labels.length ? `Selected: ${answer.labels.join(", ")}` : undefined,
+              answer?.otherText ? `Other: ${answer.otherText}` : undefined
+            ]
+              .filter(Boolean)
+              .join("\n");
+          })
+        ].join("\n\n");
+      }
+      if (event.kind === "plan") {
+        return ["Plan:", event.plan, event.decision ? `Decision: ${event.decision}` : undefined, event.response ? `Response: ${event.response}` : undefined]
+          .filter(Boolean)
+          .join("\n");
+      }
+      if (event.kind === "model_switch") return `System: switched to ${event.to}`;
+      return `System:\n${event.text}`;
+    })
+    .join("\n\n")
+    .trim();
+}
+
+function localHandoffSummary(agent: RunningAgent, transcripts: TranscriptEvent[]): string {
+  const userMessages = transcripts.filter((event): event is Extract<TranscriptEvent, { kind: "user" }> => event.kind === "user");
+  const assistantMessages = transcripts.filter((event): event is Extract<TranscriptEvent, { kind: "assistant_text" }> => event.kind === "assistant_text");
+  const toolUses = transcripts.filter((event): event is Extract<TranscriptEvent, { kind: "tool_use" }> => event.kind === "tool_use");
+  const recent = transcripts.slice(-8).map((event) => {
+    if (event.kind === "user") return `- User: ${compactLine(event.text)}`;
+    if (event.kind === "assistant_text") return `- Assistant: ${compactLine(event.text)}`;
+    if (event.kind === "tool_use") return `- Tool use: ${event.name}`;
+    if (event.kind === "tool_result") return `- Tool result: ${compactLine(stringifyUnknown(event.output), 140)}`;
+    if (event.kind === "plan") return `- Plan: ${compactLine(event.plan)}`;
+    if (event.kind === "questions") return `- Questions requested: ${event.questions.map((question) => question.header || question.question).join("; ")}`;
+    if (event.kind === "model_switch") return `- Model switched to ${event.to}`;
+    return `- System: ${compactLine(event.text)}`;
+  });
+
+  return [
+    `Handoff summary for ${agent.displayName} (${agent.currentModel}).`,
+    "",
+    `The conversation has ${transcripts.length} transcript event(s), including ${userMessages.length} user message(s), ${assistantMessages.length} assistant response(s), and ${toolUses.length} tool run(s).`,
+    "",
+    "User requests and goals:",
+    ...(userMessages.length ? userMessages.map((event) => `- ${compactLine(event.text)}`) : ["- No user message content was captured."]),
+    "",
+    "Recent conversation state:",
+    ...(recent.length ? recent : ["- No recent transcript content was available."]),
+    "",
+    "Tool activity:",
+    ...(toolUses.length ? Array.from(new Set(toolUses.map((event) => event.name))).map((name) => `- ${name}`) : ["- No tool activity was captured."])
+  ].join("\n");
+}
+
+function handoffPrompt(history: string): string {
+  return [
+    "Create a concise handoff summary of the chat history below for a new agent chat.",
+    "Capture the user goals, important decisions, current state, files/tools mentioned, unresolved issues, and next useful context.",
+    "The output must be the handoff summary itself, not commentary about writing one.",
+    "Include this instruction in the summary: No action should be taken yet; this is only for context.",
+    "",
+    "Chat history:",
+    history
+  ].join("\n");
+}
+
+function handoffSummaryWithInstruction(summary: string): string {
+  const instruction = "No action should be taken yet; this is only for context.";
+  const trimmed = summary.trim();
+  if (!trimmed) return instruction;
+  return trimmed.toLowerCase().includes("no action") && trimmed.toLowerCase().includes("context") ? trimmed : `${instruction}\n\n${trimmed}`;
+}
+
+function responseOutputText(payload: unknown): string {
+  const value = payload as Record<string, unknown>;
+  if (typeof value.output_text === "string") return value.output_text;
+  const output = Array.isArray(value.output) ? value.output : [];
+  return output
+    .flatMap((item) => {
+      const content = (item as Record<string, unknown>).content;
+      return Array.isArray(content) ? content : [];
+    })
+    .map((item) => {
+      const block = item as Record<string, unknown>;
+      return typeof block.text === "string" ? block.text : "";
+    })
+    .filter(Boolean)
+    .join("");
+}
+
+function anthropicOutputText(payload: unknown): string {
+  const content = Array.isArray((payload as Record<string, unknown>).content) ? ((payload as Record<string, unknown>).content as unknown[]) : [];
+  return content
+    .map((item) => {
+      const block = item as Record<string, unknown>;
+      return typeof block.text === "string" ? block.text : "";
+    })
+    .filter(Boolean)
+    .join("");
+}
+
 function spawnErrorCode(error: Error): string | undefined {
   return typeof (error as NodeJS.ErrnoException).code === "string" ? (error as NodeJS.ErrnoException).code : undefined;
 }
@@ -1246,6 +1365,47 @@ export class AgentRuntimeManager {
     return true;
   }
 
+  private async requestAnthropicSummary(model: string, prompt: string): Promise<string> {
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) throw new Error("ANTHROPIC_API_KEY is not set.");
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model,
+        system: "You write concise, faithful handoff summaries for software agent chats.",
+        messages: [{ role: "user", content: [{ type: "text", text: prompt }] }],
+        max_tokens: 2048
+      })
+    });
+    if (!response.ok) throw new Error(await response.text());
+    return anthropicOutputText(await response.json()).trim();
+  }
+
+  private async requestOpenAiSummary(model: string, prompt: string): Promise<string> {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) throw new Error("OPENAI_API_KEY is not set.");
+    const response = await fetch("https://api.openai.com/v1/responses", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model,
+        instructions: "You write concise, faithful handoff summaries for software agent chats.",
+        input: prompt,
+        reasoning: { effort: "low" }
+      })
+    });
+    if (!response.ok) throw new Error(await response.text());
+    return responseOutputText(await response.json()).trim();
+  }
+
   private async runAnthropicTurn(state: AgentProcessState, prompt: string, images: MessageAttachment[]): Promise<void> {
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) throw new Error("ANTHROPIC_API_KEY is not set.");
@@ -1595,6 +1755,29 @@ export class AgentRuntimeManager {
     this.savedChats = next;
     this.broadcast({ type: "agent.snapshot", snapshot: this.snapshot() });
     this.persist();
+  }
+
+  async handoffSummary(id: string): Promise<string> {
+    const state = this.requiredState(id);
+    if (state.transcript.length === 0) throw new Error("No chat transcript to hand off.");
+    const history = transcriptToPlainText(state.agent, state.transcript);
+    const prompt = handoffPrompt(history);
+    const anthropicAvailable = Boolean(process.env.ANTHROPIC_API_KEY);
+    const openAiAvailable = Boolean(process.env.OPENAI_API_KEY);
+    let summary = "";
+
+    if (this.isClaudeApi(state) && anthropicAvailable) {
+      summary = await this.requestAnthropicSummary(state.agent.currentModel, prompt).catch(() => "");
+    }
+    if (!summary && openAiAvailable) {
+      const model = state.agent.provider === "openai" ? state.agent.currentModel : "gpt-5.4-mini";
+      summary = await this.requestOpenAiSummary(model, prompt).catch(() => "");
+    }
+    if (!summary && state.agent.provider === "claude" && anthropicAvailable) {
+      summary = await this.requestAnthropicSummary(state.agent.currentModel, prompt).catch(() => "");
+    }
+
+    return handoffSummaryWithInstruction(summary || localHandoffSummary(state.agent, state.transcript));
   }
 
   forkChat(id: string): void {

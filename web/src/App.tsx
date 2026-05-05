@@ -2181,32 +2181,21 @@ function duplicateAgentRequest(agent: RunningAgent, settings: SettingsState): La
   };
 }
 
-function handoffChatPrompt(agent: RunningAgent, transcripts: TranscriptEvent[]) {
-  const history = transcriptToPlainText(agent, transcripts);
-  return [
-    `You are receiving a handoff from ${agent.displayName} (${agent.currentModel}).`,
-    "",
-    "Summarize the entire chat history below into a concise handoff summary for continuity.",
-    "Do not take any action, do not modify files, and do not continue the work. This is only for context.",
-    "",
-    "Chat history:",
-    history || "No transcript content was available."
-  ].join("\n");
-}
-
-function handoffChat(agent: RunningAgent, transcripts: TranscriptEvent[], settings: SettingsState, addError: (message: string) => void) {
+async function handoffChat(agent: RunningAgent, transcripts: TranscriptEvent[], settings: SettingsState, addError: (message: string) => void) {
   if (transcripts.length === 0) {
     addError("No chat transcript to hand off.");
     return;
   }
-  launchAgent(
-    {
+  try {
+    const { summary } = await api.handoffSummary(agent.id);
+    await launchAgentRequest({
       ...duplicateAgentRequest(agent, settings),
       displayName: `${agent.displayName} Handoff`,
-      initialPrompt: handoffChatPrompt(agent, transcripts)
-    },
-    addError
-  );
+      initialPrompt: summary
+    });
+  } catch (error) {
+    addError(error instanceof Error ? error.message : String(error));
+  }
 }
 
 async function launchAgentRequest(request: LaunchRequest): Promise<RunningAgent> {
@@ -2286,6 +2275,7 @@ function AgentActionsMenu({
   const setChatFocusedAgent = useAppStore((state) => state.setChatFocusedAgent);
   const setSearchOpen = useAppStore((state) => state.setSearchOpen);
   const isBusy = isAgentBusy(agent);
+  const [handoffPending, setHandoffPending] = useState(false);
 
   function duplicateAgent() {
     launchAgent(duplicateAgentRequest(agent, settings), addError);
@@ -2298,6 +2288,16 @@ function AgentActionsMenu({
     }
     setChatFocusedAgent(agent.id);
     setSearchOpen(true);
+  }
+
+  async function prepareHandoff() {
+    if (handoffPending) return;
+    setHandoffPending(true);
+    try {
+      await handoffChat(agent, transcripts, settings, addError);
+    } finally {
+      setHandoffPending(false);
+    }
   }
 
   return (
@@ -2334,9 +2334,9 @@ function AgentActionsMenu({
           <Copy className="mr-2 h-4 w-4" />
           Duplicate
         </DropdownMenuItem>
-        <DropdownMenuItem disabled={transcripts.length === 0} onClick={() => handoffChat(agent, transcripts, settings, addError)}>
+        <DropdownMenuItem disabled={handoffPending || transcripts.length === 0} onClick={() => void prepareHandoff()}>
           <Hand className="mr-2 h-4 w-4" />
-          Handoff Chat
+          {handoffPending ? "Preparing Handoff..." : "Handoff Chat"}
         </DropdownMenuItem>
         <DropdownMenuItem disabled={transcripts.length === 0} onClick={() => sendCommand({ type: "forkChat", id: agent.id })}>
           <GitFork className="mr-2 h-4 w-4" />
@@ -2377,9 +2377,20 @@ function MobileAgentActionsMenu({ agent }: { agent: RunningAgent }) {
   const transcripts = useAppStore((state) => state.transcripts[agent.id] || EMPTY_TRANSCRIPT);
   const hasSavedCopy = useAppStore((state) => state.savedChats.some((chat) => chat.id === agent.id));
   const setSearchOpen = useAppStore((state) => state.setSearchOpen);
+  const [handoffPending, setHandoffPending] = useState(false);
 
   function duplicateAgent() {
     launchAgent(duplicateAgentRequest(agent, settings), addError);
+  }
+
+  async function prepareHandoff() {
+    if (handoffPending) return;
+    setHandoffPending(true);
+    try {
+      await handoffChat(agent, transcripts, settings, addError);
+    } finally {
+      setHandoffPending(false);
+    }
   }
 
   return (
@@ -2403,9 +2414,9 @@ function MobileAgentActionsMenu({ agent }: { agent: RunningAgent }) {
           <Copy className="mr-2 h-4 w-4" />
           Duplicate
         </DropdownMenuItem>
-        <DropdownMenuItem disabled={transcripts.length === 0} onClick={() => handoffChat(agent, transcripts, settings, addError)}>
+        <DropdownMenuItem disabled={handoffPending || transcripts.length === 0} onClick={() => void prepareHandoff()}>
           <Hand className="mr-2 h-4 w-4" />
-          Handoff Chat
+          {handoffPending ? "Preparing Handoff..." : "Handoff Chat"}
         </DropdownMenuItem>
         <DropdownMenuItem disabled={transcripts.length === 0} onClick={() => sendCommand({ type: "forkChat", id: agent.id })}>
           <GitFork className="mr-2 h-4 w-4" />

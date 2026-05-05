@@ -2543,6 +2543,14 @@ app.post("/api/agents/:id/interrupt", (request, response) => {
   response.json({ ok: true });
 });
 
+app.post("/api/agents/:id/handoff-summary", async (request, response) => {
+  try {
+    response.json({ summary: await runtime.handoffSummary(request.params.id) });
+  } catch (error) {
+    response.status(500).json({ error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
 app.get("/api/agents/:id/raw-stream", (request, response) => {
   response.type("text/plain").send(runtime.rawLines(request.params.id).join("\n"));
 });
