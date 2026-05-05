@@ -6566,13 +6566,6 @@ const CODEX_PERMISSION_MODE_OPTIONS = [
     icon: Code2
   },
   {
-    mode: "plan",
-    label: "Plan mode",
-    compactLabel: "Plan",
-    description: "Codex will explore the code and present a plan before editing.",
-    icon: ClipboardList
-  },
-  {
     mode: "bypassPermissions",
     label: "Bypass permissions",
     compactLabel: "Bypass",

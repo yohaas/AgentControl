@@ -501,7 +501,7 @@ function normalizeSettings(settings: SettingsState): SettingsState {
   const defaultAgentMode = ["default", "acceptEdits", "plan", "bypassPermissions"].includes(settings.defaultAgentMode)
     ? settings.defaultAgentMode
     : defaultSettings.defaultAgentMode;
-  const codexDefaultAgentMode = ["default", "acceptEdits", "plan", "bypassPermissions"].includes(settings.codexDefaultAgentMode)
+  const codexDefaultAgentMode = ["default", "acceptEdits", "bypassPermissions"].includes(settings.codexDefaultAgentMode)
     ? settings.codexDefaultAgentMode
     : defaultSettings.codexDefaultAgentMode;
   const themeMode = ["auto", "light", "dark"].includes(settings.themeMode) ? settings.themeMode : defaultSettings.themeMode;

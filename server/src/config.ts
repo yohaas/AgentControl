@@ -283,7 +283,6 @@ export function resolveDefaultAgentMode(config: DashboardConfig): AgentPermissio
 export function resolveCodexDefaultAgentMode(config: DashboardConfig): AgentPermissionMode {
   return config.codexDefaultAgentMode === "default" ||
     config.codexDefaultAgentMode === "acceptEdits" ||
-    config.codexDefaultAgentMode === "plan" ||
     config.codexDefaultAgentMode === "bypassPermissions"
     ? config.codexDefaultAgentMode
     : "default";
