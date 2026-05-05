@@ -884,8 +884,13 @@ function contextUsageForChat(transcript: TranscriptEvent[], model?: string, sett
   const usedTokens = currentContextEvents.reduce((total, event) => total + estimateTokens(transcriptEventTokenText(event)), 0);
   const profile = settings && model ? modelProfilesForSettings(settings).find((candidate) => candidate.id === model) : undefined;
   const contextWindow = normalizeModelContextWindow(profile?.contextWindow);
-  const percentage = contextWindow ? Math.min(999, Math.round((usedTokens / contextWindow) * 100)) : undefined;
+  const percentage = contextWindow ? Math.min(999, (usedTokens / contextWindow) * 100) : undefined;
   return { usedTokens, contextWindow, percentage };
+}
+
+function formatContextPercentage(value?: number) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return "--%";
+  return `${value.toFixed(1)}%`;
 }
 
 function ThinkingText({ agent, prefix, startedAt, usage }: { agent: RunningAgent; prefix?: string; startedAt?: string; usage?: TokenUsage }) {
@@ -2266,7 +2271,7 @@ function ContextUsageButton({
   const addError = useAppStore((state) => state.addError);
   const [handoffPending, setHandoffPending] = useState(false);
   const usage = useMemo(() => contextUsageForChat(transcript, agent.currentModel, settings), [agent.currentModel, settings, transcript]);
-  const percentageLabel = usage.percentage === undefined ? "--%" : `${usage.percentage}%`;
+  const percentageLabel = formatContextPercentage(usage.percentage);
   const compactDisabled = isAgentBusy(agent) || agent.provider === "openai" || (agent.provider === "claude" && settings.claudeRuntime === "api");
 
   async function prepareHandoff() {
