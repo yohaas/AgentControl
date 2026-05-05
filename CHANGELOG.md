@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-05-05
 
+- [40e8464](https://github.com/yohaas/AgentHero/commit/40e8464) Add chat context usage tracking with per-model context windows and compact/handoff controls.
 - [79ce8ec](https://github.com/yohaas/AgentHero/commit/79ce8ec) Align long message footer controls with top text block actions.
 - [086dd0f](https://github.com/yohaas/AgentHero/commit/086dd0f) Focus the chat textbox after launching a chat.
 - [12ed6ae](https://github.com/yohaas/AgentHero/commit/12ed6ae) Add native Codex slash shortcuts for plan, permissions, review, and diff.
