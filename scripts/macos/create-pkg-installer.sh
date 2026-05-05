@@ -35,7 +35,39 @@ build_dir="$artifacts_dir/macos-pkg-build"
 scripts_dir="$build_dir/scripts"
 target_path="${output_path:-$artifacts_dir/AgentHeroSetup.pkg}"
 
-rm -rf "$build_dir" "$target_path"
+archive_existing_target() {
+  local path="$1"
+  if [[ ! -e "$path" ]]; then
+    return
+  fi
+
+  local target_dir
+  target_dir="$(cd "$(dirname "$path")" && pwd)"
+  local archive_dir="$target_dir/archive"
+  local base_name
+  base_name="$(basename "$path")"
+  local stem="${base_name%.*}"
+  local extension=""
+  if [[ "$base_name" == *.* ]]; then
+    extension=".${base_name##*.}"
+  fi
+  local timestamp
+  timestamp="$(date -u '+%Y%m%dT%H%M%SZ')"
+  local archive_path="$archive_dir/$stem-$timestamp$extension"
+  local suffix=1
+
+  mkdir -p "$archive_dir"
+  while [[ -e "$archive_path" ]]; do
+    archive_path="$archive_dir/$stem-$timestamp-$suffix$extension"
+    suffix=$((suffix + 1))
+  done
+
+  mv "$path" "$archive_path"
+  echo "Archived existing $path to $archive_path"
+}
+
+rm -rf "$build_dir"
+archive_existing_target "$target_path"
 mkdir -p "$scripts_dir" "$(dirname "$target_path")"
 cp "$repo_root/scripts/macos/install-agent-hero.sh" "$scripts_dir/install-agent-hero.sh"
 chmod +x "$scripts_dir/install-agent-hero.sh"

@@ -38,8 +38,40 @@ work_dir="$artifacts_dir/agent-hero-$app_version-$platform-$arch"
 zip_path="$artifacts_dir/agent-hero-$app_version-$platform-$arch.zip"
 manifest_path="$artifacts_dir/manifest.json"
 
+archive_existing_target() {
+  local path="$1"
+  if [[ ! -e "$path" ]]; then
+    return
+  fi
+
+  local target_dir
+  target_dir="$(cd "$(dirname "$path")" && pwd)"
+  local archive_dir="$target_dir/archive"
+  local base_name
+  base_name="$(basename "$path")"
+  local stem="${base_name%.*}"
+  local extension=""
+  if [[ "$base_name" == *.* ]]; then
+    extension=".${base_name##*.}"
+  fi
+  local timestamp
+  timestamp="$(date -u '+%Y%m%dT%H%M%SZ')"
+  local archive_path="$archive_dir/$stem-$timestamp$extension"
+  local suffix=1
+
+  mkdir -p "$archive_dir"
+  while [[ -e "$archive_path" ]]; do
+    archive_path="$archive_dir/$stem-$timestamp-$suffix$extension"
+    suffix=$((suffix + 1))
+  done
+
+  mv "$path" "$archive_path"
+  echo "Archived existing $path to $archive_path"
+}
+
 mkdir -p "$artifacts_dir"
-rm -rf "$work_dir" "$zip_path"
+rm -rf "$work_dir"
+archive_existing_target "$zip_path"
 mkdir -p "$work_dir"
 
 (

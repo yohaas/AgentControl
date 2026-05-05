@@ -36,9 +36,32 @@ function Get-Sha256FileHash {
   }
 }
 
+function Move-ExistingTargetToArchive {
+  param([string]$Path)
+
+  if (-not (Test-Path -LiteralPath $Path)) { return }
+
+  $targetDir = Split-Path -Parent $Path
+  $archiveDir = Join-Path $targetDir "archive"
+  $fileName = [System.IO.Path]::GetFileNameWithoutExtension($Path)
+  $extension = [System.IO.Path]::GetExtension($Path)
+  $timestamp = (Get-Date).ToUniversalTime().ToString("yyyyMMddTHHmmssZ")
+  $archivePath = Join-Path $archiveDir "$fileName-$timestamp$extension"
+  $suffix = 1
+
+  New-Item -ItemType Directory -Path $archiveDir -Force | Out-Null
+  while (Test-Path -LiteralPath $archivePath) {
+    $archivePath = Join-Path $archiveDir "$fileName-$timestamp-$suffix$extension"
+    $suffix += 1
+  }
+
+  Move-Item -LiteralPath $Path -Destination $archivePath
+  Write-Host "Archived existing $Path to $archivePath"
+}
+
 New-Item -ItemType Directory -Path $artifactsDir -Force | Out-Null
 if (Test-Path $workDir) { Remove-Item -LiteralPath $workDir -Recurse -Force }
-if (Test-Path $zipPath) { Remove-Item -LiteralPath $zipPath -Force }
+Move-ExistingTargetToArchive $zipPath
 New-Item -ItemType Directory -Path $workDir -Force | Out-Null
 
 Push-Location $repoRoot

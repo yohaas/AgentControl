@@ -42,6 +42,29 @@ function PascalString {
   return $Value -replace "'", "''"
 }
 
+function Move-ExistingTargetToArchive {
+  param([string]$Path)
+
+  if (-not (Test-Path -LiteralPath $Path)) { return }
+
+  $targetDir = Split-Path -Parent $Path
+  $archiveDir = Join-Path $targetDir "archive"
+  $fileName = [System.IO.Path]::GetFileNameWithoutExtension($Path)
+  $extension = [System.IO.Path]::GetExtension($Path)
+  $timestamp = (Get-Date).ToUniversalTime().ToString("yyyyMMddTHHmmssZ")
+  $archivePath = Join-Path $archiveDir "$fileName-$timestamp$extension"
+  $suffix = 1
+
+  New-Item -ItemType Directory -Path $archiveDir -Force | Out-Null
+  while (Test-Path -LiteralPath $archivePath) {
+    $archivePath = Join-Path $archiveDir "$fileName-$timestamp-$suffix$extension"
+    $suffix += 1
+  }
+
+  Move-Item -LiteralPath $Path -Destination $archivePath
+  Write-Host "Archived existing $Path to $archivePath"
+}
+
 if (-not $ManifestUrl.Trim()) { throw "ManifestUrl is required." }
 if (-not (Test-Path $installerScript)) { throw "Installer script was not found at $installerScript" }
 if (-not (Test-Path $iconPath)) { throw "Installer icon was not found at $iconPath" }
@@ -50,7 +73,7 @@ $iscc = Resolve-InnoCompiler
 $targetDir = Split-Path -Parent $targetPath
 $targetBaseName = [System.IO.Path]::GetFileNameWithoutExtension($targetPath)
 if (Test-Path $buildDir) { Remove-Item -LiteralPath $buildDir -Recurse -Force }
-if (Test-Path $targetPath) { Remove-Item -LiteralPath $targetPath -Force }
+Move-ExistingTargetToArchive $targetPath
 New-Item -ItemType Directory -Path $buildDir, $targetDir -Force | Out-Null
 
 $embeddedInstaller = Join-Path $buildDir "install-agent-hero.ps1"

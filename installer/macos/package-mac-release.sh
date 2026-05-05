@@ -14,6 +14,37 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "$script_dir/../.." && pwd)"
 cd "$repo_root"
 
+archive_existing_target() {
+  local path="$1"
+  if [[ ! -e "$path" ]]; then
+    return
+  fi
+
+  local target_dir
+  target_dir="$(cd "$(dirname "$path")" && pwd)"
+  local archive_dir="$target_dir/archive"
+  local base_name
+  base_name="$(basename "$path")"
+  local stem="${base_name%.*}"
+  local extension=""
+  if [[ "$base_name" == *.* ]]; then
+    extension=".${base_name##*.}"
+  fi
+  local timestamp
+  timestamp="$(date -u '+%Y%m%dT%H%M%SZ')"
+  local archive_path="$archive_dir/$stem-$timestamp$extension"
+  local suffix=1
+
+  mkdir -p "$archive_dir"
+  while [[ -e "$archive_path" ]]; do
+    archive_path="$archive_dir/$stem-$timestamp-$suffix$extension"
+    suffix=$((suffix + 1))
+  done
+
+  mv "$path" "$archive_path"
+  echo "Archived existing $path to $archive_path"
+}
+
 if [[ -n "$(git status --porcelain)" ]]; then
   echo "Working tree must be clean before packaging." >&2
   git status --short >&2
@@ -40,7 +71,9 @@ if [[ -z "$mac_zip" ]]; then
   echo "macOS release bundle was not created." >&2
   exit 1
 fi
-cp "$mac_zip" "$repo_root/$release_dir/$(basename "$mac_zip")"
+release_zip="$repo_root/$release_dir/$(basename "$mac_zip")"
+archive_existing_target "$release_zip"
+cp "$mac_zip" "$release_zip"
 
 node <<'NODE'
 const fs = require("fs");
