@@ -2181,6 +2181,34 @@ function duplicateAgentRequest(agent: RunningAgent, settings: SettingsState): La
   };
 }
 
+function handoffChatPrompt(agent: RunningAgent, transcripts: TranscriptEvent[]) {
+  const history = transcriptToPlainText(agent, transcripts);
+  return [
+    `You are receiving a handoff from ${agent.displayName} (${agent.currentModel}).`,
+    "",
+    "Summarize the entire chat history below into a concise handoff summary for continuity.",
+    "Do not take any action, do not modify files, and do not continue the work. This is only for context.",
+    "",
+    "Chat history:",
+    history || "No transcript content was available."
+  ].join("\n");
+}
+
+function handoffChat(agent: RunningAgent, transcripts: TranscriptEvent[], settings: SettingsState, addError: (message: string) => void) {
+  if (transcripts.length === 0) {
+    addError("No chat transcript to hand off.");
+    return;
+  }
+  launchAgent(
+    {
+      ...duplicateAgentRequest(agent, settings),
+      displayName: `${agent.displayName} Handoff`,
+      initialPrompt: handoffChatPrompt(agent, transcripts)
+    },
+    addError
+  );
+}
+
 async function launchAgentRequest(request: LaunchRequest): Promise<RunningAgent> {
   const result = await api.launchAgent(request);
   useAppStore.getState().hydrateSnapshot(result.snapshot);
@@ -2306,6 +2334,10 @@ function AgentActionsMenu({
           <Copy className="mr-2 h-4 w-4" />
           Duplicate
         </DropdownMenuItem>
+        <DropdownMenuItem disabled={transcripts.length === 0} onClick={() => handoffChat(agent, transcripts, settings, addError)}>
+          <Hand className="mr-2 h-4 w-4" />
+          Handoff Chat
+        </DropdownMenuItem>
         <DropdownMenuItem disabled={transcripts.length === 0} onClick={() => sendCommand({ type: "forkChat", id: agent.id })}>
           <GitFork className="mr-2 h-4 w-4" />
           Fork Chat
@@ -2342,6 +2374,7 @@ function AgentActionsMenu({
 function MobileAgentActionsMenu({ agent }: { agent: RunningAgent }) {
   const addError = useAppStore((state) => state.addError);
   const settings = useAppStore((state) => state.settings);
+  const transcripts = useAppStore((state) => state.transcripts[agent.id] || EMPTY_TRANSCRIPT);
   const hasSavedCopy = useAppStore((state) => state.savedChats.some((chat) => chat.id === agent.id));
   const setSearchOpen = useAppStore((state) => state.setSearchOpen);
 
@@ -2370,7 +2403,11 @@ function MobileAgentActionsMenu({ agent }: { agent: RunningAgent }) {
           <Copy className="mr-2 h-4 w-4" />
           Duplicate
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => sendCommand({ type: "forkChat", id: agent.id })}>
+        <DropdownMenuItem disabled={transcripts.length === 0} onClick={() => handoffChat(agent, transcripts, settings, addError)}>
+          <Hand className="mr-2 h-4 w-4" />
+          Handoff Chat
+        </DropdownMenuItem>
+        <DropdownMenuItem disabled={transcripts.length === 0} onClick={() => sendCommand({ type: "forkChat", id: agent.id })}>
           <GitFork className="mr-2 h-4 w-4" />
           Fork Chat
         </DropdownMenuItem>
