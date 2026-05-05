@@ -1130,11 +1130,13 @@ export class AgentRuntimeManager {
     if (permissionMode === "default") {
       args.push("-c", `sandbox_mode=${tomlBasicString("workspace-write")}`);
       args.push("-c", `approval_policy=${tomlBasicString("on-request")}`);
+      this.addWindowsCodexSandboxCompatibility(args);
     }
     if (permissionMode === "autoReview") {
       args.push("-c", `sandbox_mode=${tomlBasicString("workspace-write")}`);
       args.push("-c", `approval_policy=${tomlBasicString("on-request")}`);
       args.push("-c", `approvals_reviewer=${tomlBasicString("auto_review")}`);
+      this.addWindowsCodexSandboxCompatibility(args);
     }
     if (permissionMode === "acceptEdits" || permissionMode === "bypassPermissions") {
       args.push("-c", `sandbox_mode=${tomlBasicString("danger-full-access")}`);
@@ -1204,6 +1206,11 @@ export class AgentRuntimeManager {
       });
       child.stdin.end(this.codexPromptWithSystemInstructions(state, prompt));
     });
+  }
+
+  private addWindowsCodexSandboxCompatibility(args: string[]): void {
+    if (process.platform !== "win32") return;
+    args.push("-c", "windows.sandbox_private_desktop=false");
   }
 
   private sendPendingInjectedMessage(state: AgentProcessState): void {
