@@ -1421,7 +1421,7 @@ export class AgentRuntimeManager {
     if (!output) return output;
     if (!this.isCodexSandboxRunnerDiagnostic(output)) return output;
     this.noteCodexSandboxRunnerFailure(state);
-    return this.codexSandboxRunnerFailureMessage();
+    return undefined;
   }
 
   private handleCodexSandboxRunnerDiagnostic(state: AgentProcessState, text: string): boolean {
