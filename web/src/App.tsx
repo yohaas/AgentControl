@@ -8179,8 +8179,8 @@ function SettingsDialog() {
         <DialogHeader>
           <DialogTitle>Settings</DialogTitle>
         </DialogHeader>
-        <div className="grid h-[72vh] min-h-0 grid-cols-[180px_minmax(0,1fr)] gap-4">
-          <nav className="flex min-h-0 flex-col gap-1 rounded-md border border-border bg-muted/30 p-2 text-sm">
+        <div className="grid h-[72vh] min-h-0 grid-cols-[156px_minmax(0,1fr)] gap-3">
+          <nav className="flex min-h-0 min-w-0 flex-col gap-1 rounded-md border border-border bg-muted/30 p-2 text-sm">
             {settingsTabs.map((item, index) =>
               item.type === "divider" ? (
                 <div key={`divider-${index}`} className="my-1 border-t border-border" />
@@ -8189,7 +8189,7 @@ function SettingsDialog() {
                   key={item.value}
                   type="button"
                   className={cn(
-                    "rounded px-3 py-2 text-left text-muted-foreground hover:bg-accent hover:text-foreground",
+                    "truncate rounded px-2.5 py-2 text-left text-muted-foreground hover:bg-accent hover:text-foreground",
                     settingsTab === item.value && "bg-background text-foreground shadow-sm"
                   )}
                   onClick={() => setSettingsTab(item.value)}
@@ -8199,7 +8199,7 @@ function SettingsDialog() {
               )
             )}
           </nav>
-          <div className="flex min-h-0 flex-col">
+          <div className="flex min-h-0 min-w-0 flex-col">
             <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pr-1">
           {settingsTab === "general" && (
             <SettingsGeneralTab
