@@ -1,12 +1,21 @@
 {
-  "version": "0.1.8",
-  "releaseTag": "v0.1.8",
-  "commitSha": "5b363a25447c4538a36388cfb3d9ed5d36ba5340",
+  "version": "0.1.9",
+  "releaseTag": "v0.1.9",
+  "commitSha": "674b1083104433626b7d88176ba9dd94c0c3914a",
   "platform": "any",
   "arch": "any",
-  "builtAt": "2026-05-04T20:11:12.1073818Z",
+  "builtAt": "2026-05-05T23:59:40.8914153Z",
   "releaseNotesUrl": "",
   "assets": [
+    {
+      "type": "full",
+      "platform": "windows",
+      "arch": "x64",
+      "version": "0.1.9",
+      "url": "https://raw.githubusercontent.com/yohaas/AgentHero/main/installer/releases/v0.1.9/agent-hero-0.1.9-windows-x64.zip",
+      "sha256": "55052cc623e8d48291e41f0654f0123bbb141de5cf4444b29a2eee5974469cc7",
+      "size": 18658410
+    },
     {
       "type": "full",
       "platform": "macos",

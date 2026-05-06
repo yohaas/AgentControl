@@ -4,6 +4,16 @@ Release summaries are listed newest-first. Use this page for human-facing releas
 
 For each new release number added to the changelog, add a matching entry here with a summary of what shipped. The first release entry starts at 0.1.5 as the high-level first major release summary; later release entries should describe the release-specific changes in more detail.
 
+## 0.1.9
+
+AgentHero 0.1.9 shipped a new Windows full installer and release bundle with the recent Codex workflow improvements:
+
+- Codex launches now separate mode selection from permission presets, including native slash shortcuts for plan, permissions, review, and diff.
+- Chat views gained context usage tracking, compact/handoff controls, and raw transcript search navigation.
+- Mobile and tile chat surfaces show clearer attention alerts and less clipped status indicators.
+- Windows Codex sandbox runner diagnostics are filtered out of normal chat output, with clearer guidance when Full access is needed.
+- Provider model settings can be reordered by dragging rows.
+
 ## 0.1.8
 
 AgentHero 0.1.8 improved installed update handling by replacing automatic installed update execution with manual release download links. The app now surfaces update choices more clearly and ships as a full macOS release asset when platform-specific packaging is needed.

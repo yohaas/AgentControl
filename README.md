@@ -155,11 +155,12 @@ The setup wizard is built with Inno Setup and runs the AgentHero install steps b
 
 ```powershell
 winget install --id JRSoftware.InnoSetup -e
+$version = node -p "require('./package.json').version"
 npm run bundle:windows
 npm run installer:windows -- -ManifestUrl .\artifacts\manifest.json -OutputPath .\artifacts\AgentHeroSetup.exe
 Copy-Item .\artifacts\AgentHeroSetup.exe .\installer\AgentHeroSetup.exe -Force
-New-Item -ItemType Directory -Path .\installer\releases\v0.1.0 -Force
-Copy-Item .\artifacts\agent-hero-0.1.0-windows-x64.zip .\installer\releases\v0.1.0\agent-hero-0.1.0-windows-x64.zip -Force
+New-Item -ItemType Directory -Path ".\installer\releases\v$version" -Force
+Copy-Item ".\artifacts\agent-hero-$version-windows-x64.zip" ".\installer\releases\v$version\agent-hero-$version-windows-x64.zip" -Force
 ```
 
 The generated build output also remains in the ignored artifacts folder:
@@ -199,6 +200,13 @@ brew install node@20
 export PATH="/opt/homebrew/opt/node@20/bin:/usr/local/opt/node@20/bin:$PATH"
 npm run bundle:mac
 npm run installer:mac -- --manifest-url ./artifacts/manifest.json --output-path ./artifacts/AgentHeroSetup.pkg
+```
+
+For release packaging after a version bump has landed on `main`, use the helper from a clean macOS checkout. It builds the macOS full ZIP, updates the manifest with the macOS asset, rebuilds `installer/AgentHeroSetup.pkg`, commits the release files, and pushes:
+
+```bash
+git pull --ff-only
+bash ./installer/macos/package-mac-release.sh
 ```
 
 The installer package creates a per-user LaunchAgent:
