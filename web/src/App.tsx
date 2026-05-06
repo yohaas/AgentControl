@@ -1896,6 +1896,7 @@ function QueuedMessageList({
   const reorderQueuedMessages = useAppStore((state) => state.reorderQueuedMessages);
   const [expanded, setExpanded] = useState(true);
   const [editingId, setEditingId] = useState<string | undefined>();
+  const [editingDraft, setEditingDraft] = useState("");
   const [draggingId, setDraggingId] = useState<string | undefined>();
 
   if (queue.length === 0) return null;
@@ -1910,6 +1911,22 @@ function QueuedMessageList({
     const [moved] = next.splice(from, 1);
     next.splice(to, 0, moved);
     reorderQueuedMessages(agentId, next);
+  }
+
+  function startEditing(message: QueuedMessage) {
+    setEditingId(message.id);
+    setEditingDraft(message.text);
+  }
+
+  function saveEditing(message: QueuedMessage) {
+    updateQueuedMessage(agentId, message.id, { text: editingDraft });
+    setEditingId(undefined);
+    setEditingDraft("");
+  }
+
+  function cancelEditing() {
+    setEditingId(undefined);
+    setEditingDraft("");
   }
 
   return (
@@ -1991,11 +2008,25 @@ function QueuedMessageList({
                     variant="ghost"
                     size="icon"
                     className={cn("shrink-0", compact ? "h-6 w-6" : "h-7 w-7")}
-                    title={editing ? "Done editing" : "Edit queued message"}
-                    onClick={() => setEditingId((current) => (current === message.id ? undefined : message.id))}
+                    aria-label={editing ? "Save queued message edit" : "Edit queued message"}
+                    title={editing ? "Save queued message edit" : "Edit queued message"}
+                    onClick={() => (editing ? saveEditing(message) : startEditing(message))}
                   >
-                    <Pencil className="h-3.5 w-3.5" />
+                    {editing ? <Save className="h-3.5 w-3.5" /> : <Pencil className="h-3.5 w-3.5" />}
                   </Button>
+                  {editing && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className={cn("shrink-0 text-muted-foreground hover:text-foreground", compact ? "h-6 w-6" : "h-7 w-7")}
+                      aria-label="Cancel queued message edit"
+                      title="Cancel queued message edit"
+                      onClick={cancelEditing}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
                   <Button
                     type="button"
                     variant="ghost"
@@ -2010,8 +2041,17 @@ function QueuedMessageList({
                 {editing && (
                   <Textarea
                     className={cn("min-h-20 min-w-0 resize-y text-xs", compact && "min-h-16")}
-                    value={message.text}
-                    onChange={(event) => updateQueuedMessage(agentId, message.id, { text: event.target.value })}
+                    value={editingDraft}
+                    onChange={(event) => setEditingDraft(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Escape") {
+                        event.preventDefault();
+                        cancelEditing();
+                      } else if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+                        event.preventDefault();
+                        saveEditing(message);
+                      }
+                    }}
                     placeholder={message.attachments.length > 0 ? "Optional message for attachments" : "Queued message"}
                   />
                 )}
