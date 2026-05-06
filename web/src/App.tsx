@@ -11808,8 +11808,9 @@ function PinnedUserMessage({
   compact?: boolean;
   onJump?: () => void;
 }) {
-  const minimizedMaxHeight = compact ? 16 : 20;
   const settings = useAppStore((state) => state.settings);
+  const chatFontSize = normalizeChatFontSize((settings as ChatDisplaySettings).chatFontSize);
+  const minimizedLineHeight = Math.round(chatFontSize * (compact ? 1.43 : 1.7));
 
   return (
     <div className="group sticky top-0 z-20 mb-3 flex justify-end">
@@ -11836,7 +11837,7 @@ function PinnedUserMessage({
         <div className="flex min-w-0 items-start gap-2">
           <div
             className="min-w-0 flex-1 whitespace-pre-wrap break-words [overflow-wrap:anywhere]"
-            style={{ maxHeight: minimizedMaxHeight, overflow: "hidden" }}
+            style={{ maxHeight: minimizedLineHeight + 2, overflow: "hidden" }}
           >
             {event.text || "Attachment"}
           </div>
