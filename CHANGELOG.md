@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-05-05
 
+- [e26c63c](https://github.com/yohaas/AgentHero/commit/e26c63c) Add the 0.1.9 Windows full release, setup installer, release notes, and macOS packaging instructions.
 - [428280a](https://github.com/yohaas/AgentHero/commit/428280a) Tell users to switch Codex chats to Full access when the Windows sandbox runner fails.
 - [50f594a](https://github.com/yohaas/AgentHero/commit/50f594a) Keep Codex Windows sandbox notices out of command stdout.
 - [2397483](https://github.com/yohaas/AgentHero/commit/2397483) Filter Codex Windows sandbox runner diagnostics from normal chat output.
