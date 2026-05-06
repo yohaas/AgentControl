@@ -14,6 +14,8 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "$script_dir/../.." && pwd)"
 cd "$repo_root"
 
+archived_targets=()
+
 archive_existing_target() {
   local path="$1"
   if [[ ! -e "$path" ]]; then
@@ -42,6 +44,7 @@ archive_existing_target() {
   done
 
   mv "$path" "$archive_path"
+  archived_targets+=("$archive_path")
   echo "Archived existing $path to $archive_path"
 }
 
@@ -53,9 +56,9 @@ fi
 
 git pull --ff-only
 
-node_major="$(node -p "process.versions.node.split('.')[0]")"
+node_major="$(node -p 'process.versions.node.split(".")[0]')"
 if [[ "$node_major" != "20" ]]; then
-  echo "macOS release bundles must be built with Node.js 20 LTS. Current Node: $(node -p "process.version")" >&2
+  echo "macOS release bundles must be built with Node.js 20 LTS. Current Node: $(node -p 'process.version')" >&2
   exit 1
 fi
 
@@ -115,14 +118,21 @@ if (manifest.version !== generated.version) {
 fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
 NODE
 
+pkg_path="$repo_root/installer/AgentHeroSetup.pkg"
+archive_existing_target "$pkg_path"
+
 "$repo_root/scripts/macos/create-pkg-installer.sh" \
   --manifest-url "$manifest_url" \
-  --output-path "$repo_root/installer/AgentHeroSetup.pkg"
+  --output-path "$pkg_path"
 
 git add \
   installer/manifest.json \
   installer/AgentHeroSetup.pkg \
   "$release_dir/$(basename "$mac_zip")"
+
+if (( ${#archived_targets[@]} > 0 )); then
+  git add "${archived_targets[@]}"
+fi
 
 if git diff --cached --quiet; then
   echo "No macOS release changes to commit."
