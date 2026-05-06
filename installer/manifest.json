@@ -22,8 +22,8 @@
       "arch": "arm64",
       "version": "0.1.8",
       "url": "https://raw.githubusercontent.com/yohaas/AgentHero/main/installer/releases/v0.1.8/agent-hero-0.1.8-macos-arm64.zip",
-      "sha256": "588daca2fc52d54e1f8086c90527c9575bd2056b647f5ae024f59c02227f2c88",
-      "size": 18147007
+      "sha256": "ec34cef951bb20e4c4244d832a6f49c40628622b5b7cb1c3b9ba89e4d3284bce",
+      "size": 18158348
     },
     {
       "type": "full",
