@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-05-05
 
+- [b03a554](https://github.com/yohaas/AgentHero/commit/b03a554) Document full-installer-only release packaging and remove top-level patch packaging scripts.
 - [2e4febd](https://github.com/yohaas/AgentHero/commit/2e4febd) Resolve partial agent-file default model names to the highest matching configured provider model.
 - [a5efb98](https://github.com/yohaas/AgentHero/commit/a5efb98) Add release dates to release summaries and stage archived macOS release artifacts before the packaging helper commits.
 - [e26c63c](https://github.com/yohaas/AgentHero/commit/e26c63c) Add the 0.1.9 Windows full release, setup installer, release notes, and macOS packaging instructions.
