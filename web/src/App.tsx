@@ -3454,10 +3454,25 @@ function modelProfilesForSettings(settings: { models: string[]; modelProfiles?: 
   return settings.models.map((model, index) => ({ id: model, provider: "claude", default: index === 0 }));
 }
 
+function modelIdStartsWith(modelId: string, requestedModel: string): boolean {
+  const requested = requestedModel.trim().toLowerCase();
+  if (!requested) return false;
+  const normalized = modelId.trim().toLowerCase();
+  return normalized.startsWith(requested) || normalized.replace(/^(claude|anthropic|openai)-/, "").startsWith(requested);
+}
+
+function resolveAgentDefaultModelId(profiles: ModelProfile[], provider: AgentProvider, requestedModel: string | undefined): string | undefined {
+  const requested = requestedModel?.trim();
+  if (!requested) return undefined;
+  const providerModels = profiles.filter((profile) => profile.provider === provider).map((profile) => profile.id);
+  return providerModels.find((model) => model.toLowerCase() === requested.toLowerCase()) || providerModels.find((model) => modelIdStartsWith(model, requested));
+}
+
 function defaultModelForAgentDef(settings: { models: string[]; modelProfiles?: ModelProfile[] }, def: AgentDef): string {
   const provider = def.provider || "claude";
   const profiles = modelProfilesForSettings(settings);
-  if (def.defaultModel && profiles.some((profile) => profile.provider === provider && profile.id === def.defaultModel)) return def.defaultModel;
+  const agentDefault = resolveAgentDefaultModelId(profiles, provider, def.defaultModel);
+  if (agentDefault) return agentDefault;
   return (
     profiles.find((profile) => profile.provider === provider && profile.default)?.id ||
     profiles.find((profile) => profile.provider === provider)?.id ||
@@ -6198,7 +6213,7 @@ function Sidebar({ topSlot }: { topSlot?: ReactNode }) {
         defName: agent.name,
         agentSource: agentTab,
         provider: agent.provider,
-        model: agent.defaultModel || settings.models[0] || DEFAULT_MODEL,
+        model: defaultModelForAgentDef(settings, agent),
         permissionMode: defaultPermissionModeForProvider(settings, agent.provider),
         autoApprove: settings.autoApprove
       }, addError);
@@ -7469,16 +7484,9 @@ function LaunchDialog({ onLaunchRequested }: { onLaunchRequested?: (request: Lau
   }, [agentOptionGroups.builtInAgents, agentOptionGroups.projectAgents]);
   const selectedAgentOptionKey = defName ? agentOptionKey(agentSource, defName) : "";
   const modelProfiles = useMemo(() => modelProfilesForSettings(settings), [settings]);
-  function modelBelongsToProvider(modelId: string | undefined, targetProvider: AgentProvider) {
-    if (!modelId) return false;
-    return modelProfiles.some((item) => item.provider === targetProvider && item.id === modelId);
-  }
 
   function agentDefaultModelForProvider(agentDef: AgentDef | undefined, targetProvider: AgentProvider) {
-    if (!agentDef?.defaultModel) return undefined;
-    const agentProvider = agentDef.provider || "claude";
-    if (agentProvider === targetProvider || modelBelongsToProvider(agentDef.defaultModel, targetProvider)) return agentDef.defaultModel;
-    return undefined;
+    return resolveAgentDefaultModelId(modelProfiles, targetProvider, agentDef?.defaultModel);
   }
 
   function defaultModelForProvider(targetProvider: AgentProvider, agentDef: AgentDef | undefined = def) {

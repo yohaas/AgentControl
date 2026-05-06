@@ -1875,7 +1875,8 @@ const runtime = new AgentRuntimeManager(
   broadcast,
   () => capabilities,
   () => resolveClaudeRuntime(config),
-  () => (Array.isArray(config.permissionAllowRules) ? config.permissionAllowRules : [])
+  () => (Array.isArray(config.permissionAllowRules) ? config.permissionAllowRules : []),
+  () => resolveModelProfiles(config)
 );
 await runtime.loadPersistedState();
 const terminals = new TerminalManager(() => projects, broadcast);

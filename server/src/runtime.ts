@@ -19,6 +19,7 @@ import type {
   Capabilities,
   LaunchRequest,
   MessageAttachment,
+  ModelProfile,
   Project,
   PermissionAllowRule,
   RemoteControlState,
@@ -41,6 +42,7 @@ import { isWslProject, windowsPathToWslPath, wslCommandArgs, wslProjectPath } fr
 type Broadcast = (event: WsServerEvent) => void;
 type ProjectProvider = () => Project[];
 type PermissionAllowRuleProvider = () => PermissionAllowRule[];
+type ModelProfileProvider = () => ModelProfile[];
 type ClaudeRuntime = "cli" | "api";
 
 interface AgentProcessState {
@@ -308,6 +310,13 @@ function isSyntheticModel(model: string | undefined): boolean {
   return model?.trim().toLowerCase() === "<synthetic>";
 }
 
+function modelIdStartsWith(modelId: string, requestedModel: string): boolean {
+  const requested = requestedModel.trim().toLowerCase();
+  if (!requested) return false;
+  const normalized = modelId.trim().toLowerCase();
+  return normalized.startsWith(requested) || normalized.replace(/^(claude|anthropic|openai)-/, "").startsWith(requested);
+}
+
 function tomlBasicString(value: string): string {
   return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
 }
@@ -354,7 +363,8 @@ export class AgentRuntimeManager {
     private readonly broadcast: Broadcast,
     private readonly getCapabilities: () => Capabilities,
     private readonly getClaudeRuntime: () => ClaudeRuntime = () => "cli",
-    private readonly getPermissionAllowRules: PermissionAllowRuleProvider = () => []
+    private readonly getPermissionAllowRules: PermissionAllowRuleProvider = () => [],
+    private readonly getModelProfiles: ModelProfileProvider = () => DEFAULT_MODEL_PROFILES
   ) {
     this.cleanupStalePermissionMcpConfigs();
     this.persist = createStateWriter(() => this.persistedState());
@@ -3277,11 +3287,18 @@ export class AgentRuntimeManager {
 
   private defaultModelForDefinition(def: AgentDef | undefined, provider: AgentProvider): string {
     const agentDefault = def?.defaultModel?.trim();
-    if (agentDefault) return agentDefault;
+    const profiles = this.getModelProfiles();
+    if (agentDefault) {
+      const providerModels = profiles.filter((profile) => profile.provider === provider).map((profile) => profile.id);
+      const exactModel = providerModels.find((model) => model.toLowerCase() === agentDefault.toLowerCase());
+      if (exactModel) return exactModel;
+      const prefixModel = providerModels.find((model) => modelIdStartsWith(model, agentDefault));
+      if (prefixModel) return prefixModel;
+    }
     return (
-      DEFAULT_MODEL_PROFILES.find((profile) => profile.provider === provider && profile.default)?.id ||
-      DEFAULT_MODEL_PROFILES.find((profile) => profile.provider === provider)?.id ||
-      DEFAULT_MODEL_PROFILES.find((profile) => profile.provider === "claude" && profile.default)?.id ||
+      profiles.find((profile) => profile.provider === provider && profile.default)?.id ||
+      profiles.find((profile) => profile.provider === provider)?.id ||
+      profiles.find((profile) => profile.provider === "claude" && profile.default)?.id ||
       "claude-sonnet-4-6"
     );
   }
