@@ -11939,13 +11939,13 @@ function QuestionCard({ event, agent, compact = false }: { event: QuestionsEvent
 
   return (
     <div
-      className="rounded-md border border-cyan-500/40 bg-cyan-500/10 p-3 text-sm"
+      className="w-full min-w-0 max-w-full overflow-hidden rounded-md border border-cyan-500/40 bg-cyan-500/10 p-3 text-sm"
       data-copy-block="true"
       data-copy-event-id={event.id}
       style={{ borderLeftColor: agentAccentColor(agent.color), borderLeftWidth: 4 }}
     >
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <div>
+      <div className="mb-3 flex min-w-0 items-center justify-between gap-2">
+        <div className="min-w-0">
           <h3 className={cn("font-semibold", compact ? "text-sm" : "text-base")}>Claude has questions</h3>
           <p className="text-xs text-muted-foreground">
             {event.answered ? "Answered" : `Question ${activeQuestionIndex + 1} of ${event.questions.length}`}
@@ -11975,12 +11975,12 @@ function QuestionCard({ event, agent, compact = false }: { event: QuestionsEvent
         ))}
       </div>
       {activeQuestion && (
-        <section className="grid gap-2 rounded-md border border-cyan-400/25 bg-background/60 p-3">
-          <div>
+        <section className="grid min-w-0 max-w-full gap-2 overflow-hidden rounded-md border border-cyan-400/25 bg-background/60 p-3">
+          <div className="min-w-0 break-words [overflow-wrap:anywhere]">
             {activeQuestion.header && <div className="text-xs font-medium uppercase text-cyan-300">{activeQuestion.header}</div>}
             <div className="font-medium">{activeQuestion.question}</div>
           </div>
-          <div className="grid gap-2">
+          <div className="grid min-w-0 gap-2">
             {activeQuestion.options.map((option) => {
               const selected = selections[activeQuestionIndex]?.includes(option.label);
               return (
@@ -12003,7 +12003,7 @@ function QuestionCard({ event, agent, compact = false }: { event: QuestionsEvent
                       if (!activeQuestion.multiSelect) setOtherSelected((current) => current.map((selected, index) => (index === activeQuestionIndex ? false : selected)));
                     }}
                   />
-                  <span className="min-w-0">
+                  <span className="min-w-0 break-words [overflow-wrap:anywhere]">
                     <span className="block font-medium">{option.label}</span>
                     {option.description && <span className="mt-1 block text-xs leading-5 text-muted-foreground">{option.description}</span>}
                   </span>
@@ -12025,10 +12025,10 @@ function QuestionCard({ event, agent, compact = false }: { event: QuestionsEvent
                 disabled={event.answered}
                 onChange={() => toggleOther(activeQuestionIndex, activeQuestion.multiSelect)}
               />
-              <span className="min-w-0 flex-1">
+              <span className="min-w-0 flex-1 break-words [overflow-wrap:anywhere]">
                 <span className="block font-medium">Other</span>
                 <Input
-                  className="mt-2"
+                  className="mt-2 max-w-full"
                   value={otherTexts[activeQuestionIndex] || ""}
                   disabled={event.answered || !otherSelected[activeQuestionIndex]}
                   placeholder="Type your answer"
