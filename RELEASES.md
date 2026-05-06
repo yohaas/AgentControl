@@ -1,6 +1,6 @@
 # Releases
 
-Release summaries are listed newest-first. Use this page for human-facing release notes by version, and keep [CHANGELOG.md](CHANGELOG.md) for commit-level repository history.
+Release summaries are listed newest-first. [CHANGELOG.md](CHANGELOG.md) has the detailed releases.
 
 ## 0.1.9 - 2026-05-05
 
