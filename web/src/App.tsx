@@ -2984,6 +2984,10 @@ function planWasApproved(event: PlanEvent) {
   return event.answered && (event.decision === "approve" || /^approved\b/i.test(event.response || ""));
 }
 
+function planExecutionIsDone(event: PlanEvent, agent: RunningAgent) {
+  return planWasApproved(event) && agent.status === "idle";
+}
+
 function planNextStepPrompt(event: PlanEvent, step: PlanNextStep) {
   return [step.prompt, "", "Approved plan:", "", event.plan].join("\n");
 }
@@ -12361,7 +12365,7 @@ function PlanCard({ event, agent, compact = false }: { event: PlanEvent; agent: 
         </div>
       )}
       {activeDecision && event.answered && <div className="mt-2 text-xs text-muted-foreground">Decision: {activeDecision}</div>}
-      {planWasApproved(event) && <PlanNextSteps event={event} agent={agent} steps={nextSteps} />}
+      {planExecutionIsDone(event, agent) && <PlanNextSteps event={event} agent={agent} steps={nextSteps} />}
     </div>
   );
 }
