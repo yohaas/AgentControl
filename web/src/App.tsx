@@ -387,11 +387,26 @@ function highlightedHtml(text = "", pathValue = "", mimeType?: string): string {
   }
 }
 
-function HighlightedCodeBlock({ content = "", path, mimeType, targetLine }: { content?: string; path: string; mimeType?: string; targetLine?: number }) {
+function HighlightedCodeBlock({
+  content = "",
+  path,
+  mimeType,
+  targetLine,
+  query = "",
+  searchOptions = { matchCase: false, wholeWord: false }
+}: {
+  content?: string;
+  path: string;
+  mimeType?: string;
+  targetLine?: number;
+  query?: string;
+  searchOptions?: ChatSearchOptions;
+}) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const lines = content.split(/\r?\n/);
   const lineCount = Math.max(1, lines.length);
   const usePlainBlock = content.length > MAX_HIGHLIGHT_CHARS || lineCount > MAX_NUMBERED_PREVIEW_LINES;
+  const showSearchMatches = Boolean(query.trim());
   const highlightedLines = usePlainBlock ? [] : highlightedHtml(content, path, mimeType).split(/\r?\n/);
 
   useEffect(() => {
@@ -406,11 +421,14 @@ function HighlightedCodeBlock({ content = "", path, mimeType, targetLine }: { co
   return (
     <div ref={rootRef} className="max-h-full min-h-0 overflow-auto rounded-md bg-muted/40 font-mono text-xs leading-5">
       {usePlainBlock ? (
-        <pre className="whitespace-pre-wrap break-words p-3">{content || " "}</pre>
+        <pre className="whitespace-pre-wrap break-words p-3">
+          <HighlightedText text={content || " "} query={query} options={searchOptions} />
+        </pre>
       ) : (
         Array.from({ length: lineCount }, (_, index) => {
           const lineNumber = index + 1;
           const selected = targetLine === lineNumber;
+          const lineText = lines[index] || "";
           return (
             <div
               key={lineNumber}
@@ -420,7 +438,9 @@ function HighlightedCodeBlock({ content = "", path, mimeType, targetLine }: { co
               <pre className="select-none border-r border-border/70 px-3 text-right text-muted-foreground">{lineNumber}</pre>
               <pre
                 className="syntax-highlight min-w-0 whitespace-pre-wrap break-words px-3"
-                dangerouslySetInnerHTML={{ __html: highlightedLines[index] || "&nbsp;" }}
+                {...(showSearchMatches
+                  ? { children: <HighlightedText text={lineText || " "} query={query} options={searchOptions} /> }
+                  : { dangerouslySetInnerHTML: { __html: highlightedLines[index] || "&nbsp;" } })}
               />
             </div>
           );
@@ -9178,9 +9198,21 @@ function ProjectInspectorTile({
   const [loading, setLoading] = useState(false);
   const previewRequestSeq = useRef(0);
   const previewRootId = `project-inspector-preview-${project.id}`;
+  const inspectorRootRef = useRef<HTMLElement | null>(null);
+  const fileViewerSearchInputRef = useRef<HTMLInputElement | null>(null);
   const explorerSelection = useTextSelection(`#${previewRootId}`);
+  const [fileViewerSearchOpen, setFileViewerSearchOpen] = useState(false);
+  const [fileViewerSearchQuery, setFileViewerSearchQuery] = useState("");
+  const [fileViewerSearchMatchCase, setFileViewerSearchMatchCase] = useState(false);
+  const [fileViewerSearchWholeWord, setFileViewerSearchWholeWord] = useState(false);
+  const [fileViewerSearchMatchCount, setFileViewerSearchMatchCount] = useState(0);
+  const [activeFileViewerSearchMatchIndex, setActiveFileViewerSearchMatchIndex] = useState(-1);
   const normalizedFilter = filter.trim().toLowerCase();
   const currentProjectAgents = useMemo(() => agents.filter((agent) => agent.projectId === project.id), [agents, project.id]);
+  const fileViewerSearchOptions = useMemo<ChatSearchOptions>(
+    () => ({ matchCase: fileViewerSearchMatchCase, wholeWord: fileViewerSearchWholeWord }),
+    [fileViewerSearchMatchCase, fileViewerSearchWholeWord]
+  );
   const canFormatPreview = Boolean(
     preview &&
       !preview.binary &&
@@ -9226,6 +9258,10 @@ function ProjectInspectorTile({
     setPreview(undefined);
     setDiff(undefined);
     setStatus(undefined);
+    setFileViewerSearchOpen(false);
+    setFileViewerSearchQuery("");
+    setFileViewerSearchMatchCount(0);
+    setActiveFileViewerSearchMatchIndex(-1);
     void refresh();
   }, [project.id]);
 
@@ -9293,6 +9329,50 @@ function ProjectInspectorTile({
     setBrowserCollapsed(false);
     void openPreview(filePreviewRequest.path, true, filePreviewRequest.line);
   }, [filePreviewRequest?.id, project.id]);
+
+  useEffect(() => {
+    if (!fileViewerSearchOpen) return;
+    window.requestAnimationFrame(() => fileViewerSearchInputRef.current?.focus());
+  }, [fileViewerSearchOpen]);
+
+  useEffect(() => {
+    if (!fileViewerSearchOpen || !fileViewerSearchQuery.trim()) {
+      setFileViewerSearchMatchCount(0);
+      setActiveFileViewerSearchMatchIndex(-1);
+      return;
+    }
+    const frame = window.requestAnimationFrame(() => {
+      const count = document.getElementById(previewRootId)?.querySelectorAll("mark[data-chat-search-match]").length || 0;
+      setFileViewerSearchMatchCount(count);
+      setActiveFileViewerSearchMatchIndex((current) => {
+        if (count === 0) return -1;
+        if (current < 0) return 0;
+        return Math.min(current, count - 1);
+      });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [diff, diffRows, diffView, fileViewerSearchOpen, fileViewerSearchOptions, fileViewerSearchQuery, mode, preview, previewRootId, previewView]);
+
+  useEffect(() => {
+    const marks = Array.from(document.getElementById(previewRootId)?.querySelectorAll<HTMLElement>("mark[data-chat-search-match]") || []);
+    marks.forEach((mark, index) => {
+      mark.dataset.active = index === activeFileViewerSearchMatchIndex ? "true" : "false";
+    });
+    const activeMark = activeFileViewerSearchMatchIndex >= 0 ? marks[activeFileViewerSearchMatchIndex] : undefined;
+    activeMark?.scrollIntoView({ block: "center", inline: "nearest" });
+  }, [activeFileViewerSearchMatchIndex, fileViewerSearchMatchCount, fileViewerSearchOptions, fileViewerSearchQuery, previewRootId]);
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "f") return;
+      const root = inspectorRootRef.current;
+      if (!root || !document.activeElement || !root.contains(document.activeElement)) return;
+      event.preventDefault();
+      openFileViewerSearch();
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [selectedPath]);
 
   async function openDiff(pathValue: string) {
     setSelectedPath(pathValue);
@@ -9463,6 +9543,23 @@ function ProjectInspectorTile({
     copyToClipboard(text, addError);
   }
 
+  function openFileViewerSearch() {
+    if (!selectedPath) return;
+    setFileViewerSearchOpen(true);
+  }
+
+  function closeFileViewerSearch() {
+    setFileViewerSearchOpen(false);
+    setFileViewerSearchMatchCount(0);
+    setActiveFileViewerSearchMatchIndex(-1);
+    window.requestAnimationFrame(() => document.getElementById(previewRootId)?.focus());
+  }
+
+  function moveFileViewerSearchMatch(delta: number) {
+    if (fileViewerSearchMatchCount <= 0) return;
+    setActiveFileViewerSearchMatchIndex((current) => (current < 0 ? 0 : (current + delta + fileViewerSearchMatchCount) % fileViewerSearchMatchCount));
+  }
+
   async function sendFileToAgent(pathValue: string, agent: RunningAgent) {
     if (agent.remoteControl) return;
     try {
@@ -9606,9 +9703,11 @@ function ProjectInspectorTile({
   const selectedChanged = changedFiles.find((file) => file.path === selectedPath || file.path.endsWith(` -> ${selectedPath}`));
   const selectedHostOpenPath = preview?.hostOpenPath || diff?.hostOpenPath;
   const selectedExternalEditorUrl = externalEditorUrl(settings, selectedHostOpenPath, 1);
+  const fileViewerSearchQueryForRender = fileViewerSearchOpen ? fileViewerSearchQuery : "";
 
   return (
     <section
+      ref={inspectorRootRef}
       className="relative flex min-h-0 min-w-80 max-w-full flex-col overflow-hidden rounded-md border border-border bg-card/70"
       style={{ height: collapsed ? undefined : fill ? "100%" : height, flex: fill ? "1 1 auto" : `0 0 ${width ? `${width}px` : defaultWidth}` }}
       onDragOver={(event) => event.preventDefault()}
@@ -9781,6 +9880,11 @@ function ProjectInspectorTile({
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={openFileViewerSearch}>
+                    <Search className="mr-2 h-4 w-4" />
+                    <span>Search file</span>
+                    <span className="ml-auto pl-6 text-xs text-muted-foreground">Ctrl+F</span>
+                  </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => selectedPath && copyText(selectedPath)}>
                     <Clipboard className="mr-2 h-4 w-4" /> Copy relative path
                   </DropdownMenuItem>
@@ -9793,11 +9897,61 @@ function ProjectInspectorTile({
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
+            {fileViewerSearchOpen && (
+              <div className="flex flex-wrap items-center gap-2 border-b border-border bg-background/95 px-3 py-2">
+                <Search className="h-4 w-4 text-muted-foreground" />
+                <Input
+                  ref={fileViewerSearchInputRef}
+                  className="h-8 min-w-0 flex-1"
+                  value={fileViewerSearchQuery}
+                  onChange={(event) => {
+                    setFileViewerSearchQuery(event.target.value);
+                    setActiveFileViewerSearchMatchIndex(-1);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      moveFileViewerSearchMatch(event.shiftKey ? -1 : 1);
+                    } else if (event.key === "Escape") {
+                      event.preventDefault();
+                      closeFileViewerSearch();
+                    }
+                  }}
+                  placeholder="Search file"
+                />
+                <span className="w-14 text-center text-xs tabular-nums text-muted-foreground">
+                  {fileViewerSearchQuery.trim() ? (fileViewerSearchMatchCount > 0 ? `${activeFileViewerSearchMatchIndex + 1}/${fileViewerSearchMatchCount}` : "0/0") : "0/0"}
+                </span>
+                <Button type="button" variant="ghost" size="icon" className="h-8 w-8" title="Previous match" disabled={fileViewerSearchMatchCount === 0} onClick={() => moveFileViewerSearchMatch(-1)}>
+                  <ChevronUp className="h-4 w-4" />
+                </Button>
+                <Button type="button" variant="ghost" size="icon" className="h-8 w-8" title="Next match" disabled={fileViewerSearchMatchCount === 0} onClick={() => moveFileViewerSearchMatch(1)}>
+                  <ChevronDown className="h-4 w-4" />
+                </Button>
+                <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <input type="checkbox" checked={fileViewerSearchMatchCase} onChange={(event) => setFileViewerSearchMatchCase(event.target.checked)} />
+                  Match case
+                </label>
+                <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <input type="checkbox" checked={fileViewerSearchWholeWord} onChange={(event) => setFileViewerSearchWholeWord(event.target.checked)} />
+                  Whole word
+                </label>
+                <Button type="button" variant="ghost" size="icon" className="ml-auto h-8 w-8" title="Close search" onClick={closeFileViewerSearch}>
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
             <ContextMenu>
               <ContextMenuTrigger asChild>
                 <div
                   id={previewRootId}
+                  tabIndex={-1}
                   className="min-h-0 flex-1 overflow-auto p-3"
+                  onMouseDownCapture={(event) => {
+                    if (event.target instanceof HTMLElement && !event.target.closest("button,input,textarea,select,a")) {
+                      event.currentTarget.focus({ preventScroll: true });
+                    }
+                  }}
                   onMouseUp={() => explorerSelection.captureSelection()}
                   onKeyUp={() => explorerSelection.captureSelection()}
                   onContextMenuCapture={() => explorerSelection.captureSelection()}
@@ -9818,10 +9972,17 @@ function ProjectInspectorTile({
                     </div>
                     {canFormatPreview && previewView === "formatted" ? (
                       <div className="prose prose-sm max-w-none rounded-md bg-muted/40 p-3 text-foreground dark:prose-invert">
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{preview.content || ""}</ReactMarkdown>
+                        <ChatMarkdown text={preview.content || ""} query={fileViewerSearchQueryForRender} searchOptions={fileViewerSearchOptions} />
                       </div>
                     ) : (
-                      <HighlightedCodeBlock content={preview.content || ""} path={preview.relativePath} mimeType={preview.mimeType} targetLine={targetLine} />
+                      <HighlightedCodeBlock
+                        content={preview.content || ""}
+                        path={preview.relativePath}
+                        mimeType={preview.mimeType}
+                        targetLine={targetLine}
+                        query={fileViewerSearchQueryForRender}
+                        searchOptions={fileViewerSearchOptions}
+                      />
                     )}
                     {preview.truncated && (
                       <Button variant="outline" size="sm" onClick={() => void api.projectFile(project.id, preview.relativePath, true).then(setPreview).catch((error) => addError(error instanceof Error ? error.message : String(error)))}>
@@ -9865,18 +10026,28 @@ function ProjectInspectorTile({
                               )}
                             >
                               <div className="select-none px-2 py-0.5 text-right text-muted-foreground">{row.oldLine || ""}</div>
-                              <pre className={cn("min-w-0 whitespace-pre-wrap break-words border-l border-border px-2 py-0.5", (row.kind === "remove" || row.kind === "change") && "text-red-700 dark:text-red-300")}>{row.oldText ?? ""}</pre>
+                              <pre className={cn("min-w-0 whitespace-pre-wrap break-words border-l border-border px-2 py-0.5", (row.kind === "remove" || row.kind === "change") && "text-red-700 dark:text-red-300")}>
+                                <HighlightedText text={row.oldText ?? ""} query={fileViewerSearchQueryForRender} options={fileViewerSearchOptions} />
+                              </pre>
                               <div className="select-none border-l border-border px-2 py-0.5 text-right text-muted-foreground">{row.newLine || ""}</div>
-                              <pre className={cn("min-w-0 whitespace-pre-wrap break-words border-l border-border px-2 py-0.5", (row.kind === "add" || row.kind === "change") && "text-emerald-700 dark:text-emerald-300")}>{row.newText ?? ""}</pre>
+                              <pre className={cn("min-w-0 whitespace-pre-wrap break-words border-l border-border px-2 py-0.5", (row.kind === "add" || row.kind === "change") && "text-emerald-700 dark:text-emerald-300")}>
+                                <HighlightedText text={row.newText ?? ""} query={fileViewerSearchQueryForRender} options={fileViewerSearchOptions} />
+                              </pre>
                             </div>
                           )
                         )}
                       </div>
                     ) : (
-                      <pre
-                        className="syntax-highlight overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted/40 p-3 font-mono text-xs leading-5"
-                        dangerouslySetInnerHTML={{ __html: highlightedHtml(diff.diff || diff.content || "No unstaged diff for this file.", diff.relativePath.endsWith(".diff") ? diff.relativePath : `${diff.relativePath}.diff`, "text/x-diff") }}
-                      />
+                      fileViewerSearchQueryForRender.trim() ? (
+                        <pre className="syntax-highlight overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted/40 p-3 font-mono text-xs leading-5">
+                          <HighlightedText text={diff.diff || diff.content || "No unstaged diff for this file."} query={fileViewerSearchQueryForRender} options={fileViewerSearchOptions} />
+                        </pre>
+                      ) : (
+                        <pre
+                          className="syntax-highlight overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted/40 p-3 font-mono text-xs leading-5"
+                          dangerouslySetInnerHTML={{ __html: highlightedHtml(diff.diff || diff.content || "No unstaged diff for this file.", diff.relativePath.endsWith(".diff") ? diff.relativePath : `${diff.relativePath}.diff`, "text/x-diff") }}
+                        />
+                      )
                     )}
                   </div>
                 ) : (
@@ -9884,9 +10055,9 @@ function ProjectInspectorTile({
                 )
               ) : (
                 <div className="grid gap-2 text-sm">
-                  <div><span className="text-muted-foreground">Display path:</span> {preview?.displayPath || diff?.displayPath || selectedPath}</div>
-                  <div><span className="text-muted-foreground">Runtime path:</span> {preview?.runtimePath || diff?.runtimePath}</div>
-                  <div><span className="text-muted-foreground">Host open path:</span> {preview?.hostOpenPath || diff?.hostOpenPath}</div>
+                  <div><span className="text-muted-foreground">Display path:</span> <HighlightedText text={preview?.displayPath || diff?.displayPath || selectedPath} query={fileViewerSearchQueryForRender} options={fileViewerSearchOptions} /></div>
+                  <div><span className="text-muted-foreground">Runtime path:</span> <HighlightedText text={preview?.runtimePath || diff?.runtimePath || ""} query={fileViewerSearchQueryForRender} options={fileViewerSearchOptions} /></div>
+                  <div><span className="text-muted-foreground">Host open path:</span> <HighlightedText text={preview?.hostOpenPath || diff?.hostOpenPath || ""} query={fileViewerSearchQueryForRender} options={fileViewerSearchOptions} /></div>
                   {preview && <div><span className="text-muted-foreground">Size:</span> {formatBytes(preview.size)}</div>}
                   {preview && <div><span className="text-muted-foreground">Modified:</span> {formatDateTime(preview.modifiedAt)}</div>}
                 </div>
