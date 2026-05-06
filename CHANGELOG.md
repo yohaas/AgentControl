@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-05-05
 
+- [a5efb98](https://github.com/yohaas/AgentHero/commit/a5efb98) Add release dates to release summaries and stage archived macOS release artifacts before the packaging helper commits.
 - [e26c63c](https://github.com/yohaas/AgentHero/commit/e26c63c) Add the 0.1.9 Windows full release, setup installer, release notes, and macOS packaging instructions.
 - [428280a](https://github.com/yohaas/AgentHero/commit/428280a) Tell users to switch Codex chats to Full access when the Windows sandbox runner fails.
 - [50f594a](https://github.com/yohaas/AgentHero/commit/50f594a) Keep Codex Windows sandbox notices out of command stdout.
