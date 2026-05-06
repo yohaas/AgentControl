@@ -2,6 +2,7 @@
 
 - Commit completed code changes unless explicitly told not to.
 - Update the README and CHANGELOG only when the change is worth calling out.
+- Word README, CHANGELOG, and RELEASES.md content for people using the software; keep those files human-facing rather than internal/process-focused.
 - Never add pending items to the CHANGELOG.
 - Maintain RELEASES.md alongside the changelog: every new release number gets an entry and a summary of what was released. The first entry can be 0.1.5 as a high-level first major release summary; subsequent release entries should include more detail.
 - After every update, say whether a browser refresh is enough or whether the server must restart.
