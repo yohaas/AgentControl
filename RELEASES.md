@@ -2,8 +2,6 @@
 
 Release summaries are listed newest-first. Use this page for human-facing release notes by version, and keep [CHANGELOG.md](CHANGELOG.md) for commit-level repository history.
 
-For each new release number added to the changelog, add a matching entry here with a summary of what shipped. The first release entry starts at 0.1.5 as the high-level first major release summary; later release entries should describe the release-specific changes in more detail.
-
 ## 0.1.9 - 2026-05-05
 
 AgentHero 0.1.9 shipped a new Windows full installer and release bundle with the recent Codex workflow improvements:
