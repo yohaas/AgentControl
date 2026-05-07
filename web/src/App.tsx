@@ -4474,6 +4474,7 @@ function GitStatusMenu({
   hideWhenNoPendingPushes?: boolean;
 }) {
   const addError = useAppStore((state) => state.addError);
+  const openFilePreview = useAppStore((state) => state.openFilePreview);
   const showMenuText = useAppStore((state) => state.settings.menuDisplay === "iconText");
   const showButtonText = showMenuText && !compact;
   const [open, setOpen] = useState(false);
@@ -4723,12 +4724,19 @@ function GitStatusMenu({
                   ) : (
                     <div className="max-h-56 overflow-y-auto rounded-md border border-border">
                       {status.files.map((file) => (
-                        <div key={`${file.status}-${file.path}`} className="flex items-center gap-2 border-b border-border px-2 py-1.5 last:border-b-0">
+                        <button
+                          key={`${file.status}-${file.path}`}
+                          className="flex w-full items-center gap-2 border-b border-border px-2 py-1.5 text-left last:border-b-0 hover:bg-accent"
+                          onClick={() => {
+                            if (projectId) openFilePreview(projectId, file.path, undefined, "diff");
+                            setOpen(false);
+                          }}
+                        >
                           <Badge className="shrink-0 px-1.5 py-0 text-[10px]">{file.status}</Badge>
                           <span className="min-w-0 truncate font-mono text-xs" title={file.path}>
                             {file.path}
                           </span>
-                        </div>
+                        </button>
                       ))}
                     </div>
                   )}
@@ -9382,7 +9390,12 @@ function ProjectInspectorTile({
     if (!filePreviewRequest || filePreviewRequest.projectId !== project.id) return;
     setCollapsed(false);
     setBrowserCollapsed(false);
-    void openPreview(filePreviewRequest.path, true, filePreviewRequest.line);
+    if (filePreviewRequest.mode === "diff") {
+      setMode("diff");
+      void openPreview(filePreviewRequest.path, false, filePreviewRequest.line);
+    } else {
+      void openPreview(filePreviewRequest.path, true, filePreviewRequest.line);
+    }
   }, [filePreviewRequest?.id, project.id]);
 
   useEffect(() => {

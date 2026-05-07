@@ -97,6 +97,7 @@ interface FilePreviewRequest {
   projectId: string;
   path: string;
   line?: number;
+  mode?: "preview" | "diff";
 }
 
 export interface ToastMessage {
@@ -378,7 +379,7 @@ interface AppState {
   setTerminalOpen: (open: boolean) => void;
   setFileExplorerOpen: (open: boolean) => void;
   setFileExplorerMaximized: (maximized: boolean) => void;
-  openFilePreview: (projectId: string, path: string, line?: number) => void;
+  openFilePreview: (projectId: string, path: string, line?: number, mode?: "preview" | "diff") => void;
   receiveFilePreview: (projectId: string, path: string, line?: number, id?: number) => void;
   setFileExplorerDock: (dock: FileExplorerDockPosition) => void;
   setTerminalInFileExplorer: (docked: boolean) => void;
@@ -1276,7 +1277,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         : state.fileExplorerProjectUi;
       return { fileExplorerProjectUi, fileExplorerMaximized: maximized, fileExplorerOpen };
     }),
-  openFilePreview: (projectId, path, line) => {
+  openFilePreview: (projectId, path, line, mode) => {
     const requestId = Date.now();
     if (typeof window !== "undefined") {
       const popoutOpen = window.localStorage.getItem(FILE_EXPLORER_POPOUT_STORAGE_KEY) === "true";
@@ -1309,7 +1310,8 @@ export const useAppStore = create<AppState>((set, get) => ({
           id: requestId,
           projectId,
           path,
-          line
+          line,
+          mode
         }
       };
     });
