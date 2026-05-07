@@ -2,6 +2,10 @@
 
 All notable repository changes are listed newest-first and grouped by commit date.
 
+## 2026-05-07
+
+- [4a47d39](https://github.com/yohaas/AgentHero/commit/4a47d39) Persist queued chat messages across server restarts and protect local queues from empty reconnect snapshots.
+
 ## 2026-05-06
 
 - [f0f4cf1](https://github.com/yohaas/AgentHero/commit/f0f4cf1) Fix approval prompts so Codex approvals resolve on the first click and repeated clicks are ignored.
