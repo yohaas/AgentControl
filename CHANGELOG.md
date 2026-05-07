@@ -2,6 +2,10 @@
 
 All notable repository changes are listed newest-first and grouped by commit date.
 
+## 2026-05-06
+
+- [f0f4cf1](https://github.com/yohaas/AgentHero/commit/f0f4cf1) Fix approval prompts so Codex approvals resolve on the first click and repeated clicks are ignored.
+
 ## 2026-05-05
 
 - [0d2ef5d](https://github.com/yohaas/AgentHero/commit/0d2ef5d) Fix pinned user message text clipping when chat font settings increase line height.
