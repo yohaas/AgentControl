@@ -2,6 +2,14 @@
 
 Release summaries are listed newest-first. [CHANGELOG.md](CHANGELOG.md) has the detailed releases.
 
+## 0.1.10 - 2026-05-07
+
+AgentHero 0.1.10 ships a new Windows full installer with reliability fixes for approvals, queued messages, and notifications:
+
+- Approval prompts resolve more reliably on the first click, including Codex approval requests.
+- Queued chat messages are persisted across server restarts and protected from empty reconnect snapshots.
+- Browser notifications work more consistently on macOS by routing through the service worker when needed.
+
 ## 0.1.9 - 2026-05-05
 
 AgentHero 0.1.9 shipped a new Windows full installer and release bundle with the recent Codex workflow improvements:
