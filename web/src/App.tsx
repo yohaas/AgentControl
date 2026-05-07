@@ -987,6 +987,23 @@ function claimInputNotificationKey(key: string) {
   return true;
 }
 
+async function showNotification(
+  title: string,
+  body: string,
+  data?: Record<string, string>
+): Promise<Notification | null> {
+  if ("serviceWorker" in navigator) {
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      await registration.showNotification(title, { body, data });
+      return null;
+    } catch {
+      // fall through to direct constructor
+    }
+  }
+  return new Notification(title, { body });
+}
+
 function hasStreamingAssistantText(transcript: TranscriptEvent[]) {
   return transcript.some((event) => event.kind === "assistant_text" && event.streaming);
 }
@@ -8544,9 +8561,7 @@ function SettingsDialog() {
     }
     setInputNotificationsEnabled(true);
     try {
-      new Notification("AgentHero test notification", {
-        body: "Browser notifications are working."
-      });
+      await showNotification("AgentHero test notification", "Browser notifications are working.");
     } catch (error) {
       addError(error instanceof Error ? error.message : String(error));
     }
@@ -16364,27 +16379,43 @@ export function App() {
       if (!claimInputNotificationKey(globalNotificationKey)) continue;
       const projectName = projects.find((project) => project.id === agent.projectId)?.name || agent.projectName || "Project";
       const need = agent.status === "awaiting-permission" ? "needs approval" : "needs an answer";
-      let notification: Notification;
-      try {
-        notification = new Notification(projectName, {
-          body: `${agent.displayName} ${need}`
+      const agentId = agent.id;
+      const projectId = agent.projectId;
+      showNotification(projectName, `${agent.displayName} ${need}`, { agentId, projectId })
+        .then((notification) => {
+          if (!notification) return;
+          notification.onclick = () => {
+            const store = useAppStore.getState();
+            window.focus();
+            store.setSelectedAgent(undefined);
+            store.setSelectedProject(projectId);
+            store.setTileMinimized(agentId, false);
+            window.setTimeout(() => notifyAgentTileFocus(agentId), 0);
+            notification.close();
+          };
+        })
+        .catch((error: unknown) => {
+          addError(error instanceof Error ? error.message : String(error));
         });
-      } catch (error) {
-        addError(error instanceof Error ? error.message : String(error));
-        continue;
-      }
-      notification.onclick = () => {
-        const store = useAppStore.getState();
-        window.focus();
-        store.setSelectedAgent(undefined);
-        store.setSelectedProject(agent.projectId);
-        store.setTileMinimized(agent.id, false);
-        window.setTimeout(() => notifyAgentTileFocus(agent.id), 0);
-        notification.close();
-      };
     }
     inputNotificationStatusRef.current = nextStatuses;
   }, [addError, agentsById, inputNotificationsEnabled, projects]);
+
+  useEffect(() => {
+    if (!("serviceWorker" in navigator)) return;
+    function onSwMessage(event: MessageEvent) {
+      if (event.data?.type !== "agent-hero:notification-click") return;
+      const { agentId, projectId } = event.data as { agentId: string; projectId: string };
+      window.focus();
+      const store = useAppStore.getState();
+      store.setSelectedAgent(undefined);
+      store.setSelectedProject(projectId);
+      store.setTileMinimized(agentId, false);
+      window.setTimeout(() => notifyAgentTileFocus(agentId), 0);
+    }
+    navigator.serviceWorker.addEventListener("message", onSwMessage);
+    return () => navigator.serviceWorker.removeEventListener("message", onSwMessage);
+  }, []);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
