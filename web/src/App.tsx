@@ -14235,6 +14235,7 @@ function ToolCard({
   const pathText = isUse ? toolPath(event.input) : "";
   const commandText = isUse ? fieldText(event.input, ["command"]) : "";
   const awaitingPermission = isUse && event.awaitingPermission;
+  const [permissionDecisionPending, setPermissionDecisionPending] = useState(false);
   const resultIsError = Boolean(result?.isError || (!isUse && event.isError));
   const activity = isUse ? toolActivityText(event, result) : toolSummary(event) || "Tool finished";
   const statusText = awaitingPermission ? "permission required" : resultIsError ? "error" : "";
@@ -14250,6 +14251,10 @@ function ToolCard({
     if (awaitingPermission) setOpen(true);
   }, [awaitingPermission]);
 
+  useEffect(() => {
+    if (!awaitingPermission) setPermissionDecisionPending(false);
+  }, [awaitingPermission]);
+
   function copyText(text: string) {
     if (!text) return;
     copyToClipboard(text, addError);
@@ -14257,14 +14262,25 @@ function ToolCard({
 
   async function alwaysAllowAndApprove() {
     if (!permissionRule) return;
+    setPermissionDecisionPending(true);
     try {
       const currentRules = settings.permissionAllowRules || [];
       const nextRules = permissionRuleExists ? currentRules : [...currentRules, permissionRule];
       const next = await api.saveSettings({ ...settings, permissionAllowRules: nextRules });
       setSettings(next);
-      sendCommand({ type: "permission", id: agent.id, toolUseId: event.toolUseId, decision: "approve" });
+      if (!sendCommand({ type: "permission", id: agent.id, toolUseId: event.toolUseId, decision: "approve" })) {
+        setPermissionDecisionPending(false);
+      }
     } catch (error) {
+      setPermissionDecisionPending(false);
       addError(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  function decidePermission(decision: "approve" | "deny") {
+    setPermissionDecisionPending(true);
+    if (!sendCommand({ type: "permission", id: agent.id, toolUseId: event.toolUseId, decision })) {
+      setPermissionDecisionPending(false);
     }
   }
 
@@ -14315,15 +14331,15 @@ function ToolCard({
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button size="sm" disabled={!agentHasProcess(agent)} onClick={() => sendCommand({ type: "permission", id: agent.id, toolUseId: event.toolUseId, decision: "approve" })}>
+            <Button size="sm" disabled={!agentHasProcess(agent) || permissionDecisionPending} onClick={() => decidePermission("approve")}>
               Approve
             </Button>
             {permissionRule && (
-              <Button size="sm" variant="outline" disabled={!agentHasProcess(agent)} onClick={() => void alwaysAllowAndApprove()}>
+              <Button size="sm" variant="outline" disabled={!agentHasProcess(agent) || permissionDecisionPending} onClick={() => void alwaysAllowAndApprove()}>
                 {permissionRuleExists ? "Approve with saved rule" : `Always allow ${permissionRuleLabel}`}
               </Button>
             )}
-            <Button size="sm" variant="outline" disabled={!agentHasProcess(agent)} onClick={() => sendCommand({ type: "permission", id: agent.id, toolUseId: event.toolUseId, decision: "deny" })}>
+            <Button size="sm" variant="outline" disabled={!agentHasProcess(agent) || permissionDecisionPending} onClick={() => decidePermission("deny")}>
               Deny
             </Button>
           </div>

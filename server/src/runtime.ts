@@ -1039,15 +1039,24 @@ export class AgentRuntimeManager {
 
   permission(id: string, toolUseId: string, decision: "approve" | "deny"): void {
     const state = this.requiredState(id);
-    const child = this.ensureStandardProcess(state, "Reconnecting Claude before applying permission...");
     const pending = state.pendingPermissions?.get(toolUseId);
     if (pending) {
       clearTimeout(pending.timeout);
       state.pendingPermissions?.delete(toolUseId);
       pending.resolve(decision);
-    } else {
-      child.stdin.write(`${JSON.stringify({ type: "control", subtype: "tool_permission", tool_use_id: toolUseId, decision })}\n`);
+      this.resolveToolPermission(state, toolUseId);
+      state.activeTurn = true;
+      this.setStatus(state, "running");
+      return;
     }
+
+    const awaitingPermission = state.transcript.some(
+      (event) => event.kind === "tool_use" && event.toolUseId === toolUseId && event.awaitingPermission
+    );
+    if (!awaitingPermission) return;
+
+    const child = this.ensureStandardProcess(state, "Reconnecting Claude before applying permission...");
+    child.stdin.write(`${JSON.stringify({ type: "control", subtype: "tool_permission", tool_use_id: toolUseId, decision })}\n`);
     this.resolveToolPermission(state, toolUseId);
     state.activeTurn = true;
     this.setStatus(state, "running");
