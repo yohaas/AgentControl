@@ -215,6 +215,14 @@ function writeStoredMessageQueues(queues: Record<string, QueuedMessage[]>): Reco
   return normalized;
 }
 
+function filterMessageQueuesForAgents(queues: Record<string, QueuedMessage[]>, agentIds: Set<string>): Record<string, QueuedMessage[]> {
+  return Object.fromEntries(Object.entries(queues).filter(([agentId]) => agentIds.has(agentId)));
+}
+
+function hasMessageQueues(queues: Record<string, QueuedMessage[]>): boolean {
+  return Object.values(queues).some((queue) => queue.length > 0);
+}
+
 function rememberRemovedQueuedMessage(id: string) {
   const now = Date.now();
   removedQueueMessageIds.set(id, now);
@@ -232,11 +240,22 @@ function wasRecentlyRemovedQueuedMessage(id: string): boolean {
 }
 
 function pruneMessageQueues(queues: Record<string, QueuedMessage[]>, agentIds: Set<string>): Record<string, QueuedMessage[]> {
-  return writeStoredMessageQueues(Object.fromEntries(Object.entries(queues).filter(([agentId]) => agentIds.has(agentId))));
+  return writeStoredMessageQueues(filterMessageQueuesForAgents(queues, agentIds));
 }
 
 function authoritativeMessageQueues(queues: Record<string, QueuedMessage[]> | undefined, agentIds: Set<string>): Record<string, QueuedMessage[]> {
   return pruneMessageQueues(normalizeMessageQueues(queues || {}), agentIds);
+}
+
+function snapshotMessageQueues(
+  serverQueues: Record<string, QueuedMessage[]> | undefined,
+  localQueues: Record<string, QueuedMessage[]>,
+  agentIds: Set<string>
+): Record<string, QueuedMessage[]> {
+  const normalizedServerQueues = filterMessageQueuesForAgents(normalizeMessageQueues(serverQueues || {}), agentIds);
+  if (hasMessageQueues(normalizedServerQueues)) return writeStoredMessageQueues(normalizedServerQueues);
+  const normalizedLocalQueues = filterMessageQueuesForAgents(normalizeMessageQueues(localQueues), agentIds);
+  return writeStoredMessageQueues(hasMessageQueues(normalizedLocalQueues) ? normalizedLocalQueues : normalizedServerQueues);
 }
 
 function normalizeTileLayout(value: unknown): StoredTileLayout {
@@ -816,7 +835,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         transcripts: snapshot.transcripts,
         savedChats: snapshot.savedChats || [],
         capabilities: snapshot.capabilities || state.capabilities,
-        messageQueues: authoritativeMessageQueues(snapshot.messageQueues, agentIds),
+        messageQueues: snapshotMessageQueues(snapshot.messageQueues, state.messageQueues, agentIds),
         chatTranscriptDetails: Object.fromEntries(Object.entries(state.chatTranscriptDetails).filter(([id]) => agentIds.has(id))),
         selectedAgentId: state.selectedAgentId && agentIds.has(state.selectedAgentId) ? state.selectedAgentId : undefined,
         focusedAgentId: state.focusedAgentId && agentIds.has(state.focusedAgentId) ? state.focusedAgentId : undefined,

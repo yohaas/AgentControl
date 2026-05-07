@@ -22,6 +22,7 @@ import type {
   ModelProfile,
   Project,
   PermissionAllowRule,
+  QueuedMessage,
   RemoteControlState,
   RunningAgent,
   SavedChat,
@@ -43,6 +44,7 @@ type Broadcast = (event: WsServerEvent) => void;
 type ProjectProvider = () => Project[];
 type PermissionAllowRuleProvider = () => PermissionAllowRule[];
 type ModelProfileProvider = () => ModelProfile[];
+type MessageQueueProvider = () => Record<string, QueuedMessage[]>;
 type ClaudeRuntime = "cli" | "api";
 
 interface AgentProcessState {
@@ -364,7 +366,8 @@ export class AgentRuntimeManager {
     private readonly getCapabilities: () => Capabilities,
     private readonly getClaudeRuntime: () => ClaudeRuntime = () => "cli",
     private readonly getPermissionAllowRules: PermissionAllowRuleProvider = () => [],
-    private readonly getModelProfiles: ModelProfileProvider = () => DEFAULT_MODEL_PROFILES
+    private readonly getModelProfiles: ModelProfileProvider = () => DEFAULT_MODEL_PROFILES,
+    private readonly getMessageQueues: MessageQueueProvider = () => ({})
   ) {
     this.cleanupStalePermissionMcpConfigs();
     this.persist = createStateWriter(() => this.persistedState());
@@ -413,7 +416,7 @@ export class AgentRuntimeManager {
     };
   }
 
-  async loadPersistedState(): Promise<void> {
+  async loadPersistedState(): Promise<PersistedState> {
     const persisted = await readPersistedState();
     this.savedChats = persisted.savedChats || [];
     for (const agent of persisted.agents) {
@@ -442,6 +445,11 @@ export class AgentRuntimeManager {
         reportedModelWarnings: new Set()
       });
     }
+    return persisted;
+  }
+
+  persistState(): void {
+    this.persist();
   }
 
   listAgents(): RunningAgent[] {
@@ -1988,7 +1996,7 @@ export class AgentRuntimeManager {
     for (const [id, state] of this.states.entries()) {
       transcripts[id] = state.transcript.slice(-TRANSCRIPT_PERSIST_LIMIT);
     }
-    return { agents, transcripts, savedChats: this.savedChats };
+    return { agents, transcripts, savedChats: this.savedChats, messageQueues: this.getMessageQueues() };
   }
 
   private savedChatFromState(state: AgentProcessState, savedAt?: string): SavedChat {

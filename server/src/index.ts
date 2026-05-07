@@ -1876,9 +1876,11 @@ const runtime = new AgentRuntimeManager(
   () => capabilities,
   () => resolveClaudeRuntime(config),
   () => (Array.isArray(config.permissionAllowRules) ? config.permissionAllowRules : []),
-  () => resolveModelProfiles(config)
+  () => resolveModelProfiles(config),
+  () => messageQueues
 );
-await runtime.loadPersistedState();
+const persistedState = await runtime.loadPersistedState();
+messageQueues = pruneMessageQueuesForAgents(normalizeMessageQueues(persistedState.messageQueues), runtime.listAgents());
 const terminals = new TerminalManager(() => projects, broadcast);
 
 function agentSnapshot(): AgentSnapshot {
@@ -2954,6 +2956,7 @@ wss.on("connection", (ws) => {
           break;
         case "messageQueues":
           messageQueues = pruneMessageQueuesForAgents(normalizeMessageQueues(command.messageQueues), runtime.listAgents());
+          runtime.persistState();
           broadcast({ type: "agent.message_queues", messageQueues });
           break;
         case "kill":
