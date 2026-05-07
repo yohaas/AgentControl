@@ -4,6 +4,8 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-05-07
 
+- [c927d99](https://github.com/yohaas/AgentHero/commit/c927d99) Add the 0.1.10 Windows full release with approval, queue, and notification fixes.
+- [ae489c9](https://github.com/yohaas/AgentHero/commit/ae489c9) Fix browser notifications on macOS by routing through a service worker when needed.
 - [4a47d39](https://github.com/yohaas/AgentHero/commit/4a47d39) Persist queued chat messages across server restarts and protect local queues from empty reconnect snapshots.
 
 ## 2026-05-06
