@@ -7548,6 +7548,7 @@ function LaunchDialog({ onLaunchRequested }: { onLaunchRequested?: (request: Lau
   const [permissionMode, setPermissionMode] = useState<AgentPermissionMode>("acceptEdits");
   const [providerMode, setProviderMode] = useState("intelligence");
   const [initialPrompt, setInitialPrompt] = useState("");
+  const [initialAttachments, setInitialAttachments] = useState<MessageAttachment[]>([]);
   const [pluginIds, setPluginIds] = useState<string[]>([]);
   const [pluginCatalog, setPluginCatalog] = useState<ClaudePluginCatalog>({ installed: [], available: [], marketplaces: [] });
   const [pluginsLoading, setPluginsLoading] = useState(false);
@@ -7641,6 +7642,7 @@ function LaunchDialog({ onLaunchRequested }: { onLaunchRequested?: (request: Lau
     setPermissionMode(launchPermissionModeForProvider(nextProvider, nextPermissionMode));
     setProviderMode(defaultProviderModeForProvider(nextProvider, nextModel));
     setInitialPrompt(modal.initialPrompt || "");
+    setInitialAttachments([]);
     setPluginIds(nextDef?.plugins || []);
     setPluginQuery("");
     setPluginCatalog({ installed: [], available: [], marketplaces: [] });
@@ -7750,6 +7752,7 @@ function LaunchDialog({ onLaunchRequested }: { onLaunchRequested?: (request: Lau
         provider,
         model,
         initialPrompt,
+        initialAttachments: initialAttachments.length > 0 ? initialAttachments : undefined,
         remoteControl: false,
         permissionMode: launchPermissionModeForProvider(provider, permissionMode),
         planMode: provider === "codex" && providerMode === "plan",
@@ -8157,6 +8160,21 @@ function LaunchDialog({ onLaunchRequested }: { onLaunchRequested?: (request: Lau
               value={initialPrompt}
               onChange={(event) => setInitialPrompt(event.target.value)}
               placeholder="Optional"
+              onPaste={async (event) => {
+                const files = pastedImageFiles(event);
+                if (files.length === 0) return;
+                event.preventDefault();
+                try {
+                  const uploaded = await uploadFiles(files);
+                  setInitialAttachments((current) => [...current, ...uploaded]);
+                } catch (error) {
+                  addError(error instanceof Error ? error.message : String(error));
+                }
+              }}
+            />
+            <AttachmentChips
+              attachments={initialAttachments}
+              onRemove={(id) => setInitialAttachments((current) => current.filter((a) => a.id !== id))}
             />
           </label>
           <Button onClick={launch} disabled={!projectId || !defName || !model || launching}>

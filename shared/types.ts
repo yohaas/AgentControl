@@ -401,6 +401,7 @@ export interface LaunchRequest {
   displayName?: string;
   model: string;
   initialPrompt?: string;
+  initialAttachments?: MessageAttachment[];
   remoteControl?: boolean;
   permissionMode?: AgentPermissionMode;
   effort?: AgentEffort;

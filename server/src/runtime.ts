@@ -57,6 +57,7 @@ interface AgentProcessState {
   stdoutBuffer: string;
   stderrBuffer: string;
   pendingInitialPrompt?: string;
+  pendingInitialAttachments?: MessageAttachment[];
   autoApprove?: AutoApproveMode;
   restartModel?: string;
   restartConfig?: boolean;
@@ -523,6 +524,7 @@ export class AgentRuntimeManager {
       pendingPlans: new Map(),
       reportedModelWarnings: new Set(),
       pendingInitialPrompt: request.initialPrompt?.trim() || undefined,
+      pendingInitialAttachments: request.initialAttachments?.length ? request.initialAttachments : undefined,
       autoApprove: request.autoApprove
     };
     this.states.set(agent.id, state);
@@ -2170,10 +2172,12 @@ export class AgentRuntimeManager {
   }
 
   private sendPendingInitialPrompt(state: AgentProcessState): void {
-    if (!state.pendingInitialPrompt) return;
-    const initial = state.pendingInitialPrompt;
+    if (!state.pendingInitialPrompt && !state.pendingInitialAttachments?.length) return;
+    const initial = state.pendingInitialPrompt ?? "";
+    const attachments = state.pendingInitialAttachments ?? [];
     state.pendingInitialPrompt = undefined;
-    this.userMessage(state.agent.id, initial);
+    state.pendingInitialAttachments = undefined;
+    this.userMessage(state.agent.id, initial, undefined, attachments);
   }
 
   private async spawnRemoteControl(state: AgentProcessState): Promise<void> {
