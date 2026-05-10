@@ -915,6 +915,15 @@ function formatContextPercentage(value?: number) {
   return `${value.toFixed(1)}%`;
 }
 
+const autoCompactedContextKeys = new Set<string>();
+
+function contextUsageClassName(percentage?: number) {
+  if (typeof percentage !== "number" || !Number.isFinite(percentage)) return "text-muted-foreground hover:text-foreground";
+  if (percentage > 90) return "text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300";
+  if (percentage > 80) return "text-orange-600 hover:text-orange-700 dark:text-orange-400 dark:hover:text-orange-300";
+  return "text-muted-foreground hover:text-foreground";
+}
+
 function ThinkingText({ agent, prefix, startedAt, usage }: { agent: RunningAgent; prefix?: string; startedAt?: string; usage?: TokenUsage }) {
   const phrase = useThinkingPhrase(agent);
   const elapsed = useElapsedSeconds(startedAt);
@@ -2352,6 +2361,7 @@ function ContextUsageButton({
   const usage = useMemo(() => contextUsageForChat(transcript, agent.currentModel, settings), [agent.currentModel, settings, transcript]);
   const percentageLabel = formatContextPercentage(usage.percentage);
   const compactDisabled = isAgentBusy(agent) || agent.provider === "openai" || (agent.provider === "claude" && settings.claudeRuntime === "api");
+  const usageClassName = contextUsageClassName(usage.percentage);
 
   async function prepareHandoff() {
     if (handoffPending) return;
@@ -2368,6 +2378,14 @@ function ContextUsageButton({
     void api.compactAgent(agent.id).catch((error: unknown) => addError(error instanceof Error ? error.message : String(error)));
   }
 
+  useEffect(() => {
+    if (compactDisabled || typeof usage.percentage !== "number" || usage.percentage < 100) return;
+    const compactKey = `${agent.id}:${transcript.length}:${usage.usedTokens}`;
+    if (autoCompactedContextKeys.has(compactKey)) return;
+    autoCompactedContextKeys.add(compactKey);
+    compactChat();
+  }, [agent.id, compactDisabled, transcript.length, usage.percentage, usage.usedTokens]);
+
   return (
     <Popover>
       <PopoverTrigger asChild>
@@ -2375,7 +2393,8 @@ function ContextUsageButton({
           type="button"
           variant="ghost"
           className={cn(
-            "shrink-0 gap-1 px-2 font-mono tabular-nums text-muted-foreground hover:text-foreground",
+            "shrink-0 gap-1 px-2 font-mono tabular-nums",
+            usageClassName,
             compact ? "h-7 text-[11px]" : "h-8 text-xs"
           )}
           title="Context usage"
@@ -2405,7 +2424,7 @@ function ContextUsageButton({
             </div>
             <div className="flex justify-between gap-3">
               <span className="text-muted-foreground">Usage</span>
-              <span>{percentageLabel}</span>
+              <span className={usageClassName}>{percentageLabel}</span>
             </div>
           </div>
           <div className="flex justify-end gap-2">
