@@ -65,6 +65,7 @@ export interface SettingsState {
   accessTokenSaved?: boolean;
   accessToken?: string;
   gitFetchIntervalMinutes: number;
+  chatHistory: { autoSave: boolean; retentionDays: number };
 }
 
 export type TerminalDockPosition = "float" | "left" | "bottom" | "right";
@@ -444,7 +445,8 @@ const defaultSettings: SettingsState = {
   codexAgentDir: ".codex/agents",
   openaiAgentDir: ".agent-hero/openai-agents",
   builtInAgentDir: ".agent-hero/built-in-agents",
-  gitFetchIntervalMinutes: 15
+  gitFetchIntervalMinutes: 15,
+  chatHistory: { autoSave: false, retentionDays: 30 }
 };
 
 function initialFileExplorerOpen(): boolean {
@@ -558,6 +560,10 @@ function normalizeSettings(settings: SettingsState): SettingsState {
     accessTokenEnabled: settings.accessTokenEnabled === true,
     accessTokenSaved: settings.accessTokenSaved === true,
     gitFetchIntervalMinutes: clampNumber(settings.gitFetchIntervalMinutes, defaultSettings.gitFetchIntervalMinutes, 0, 1440),
+    chatHistory: {
+      autoSave: settings.chatHistory?.autoSave === true,
+      retentionDays: clampNumber(settings.chatHistory?.retentionDays, defaultSettings.chatHistory.retentionDays, 0, 3650)
+    },
     agentControlProjectPath: typeof settings.agentControlProjectPath === "string" ? settings.agentControlProjectPath : "",
     installMode: settings.installMode === "installed" ? "installed" : "checkout",
     updateManifestUrl: typeof settings.updateManifestUrl === "string" ? settings.updateManifestUrl : "",

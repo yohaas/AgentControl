@@ -22,6 +22,10 @@ interface SettingsGeneralTabProps {
   setAccessTokenEnabled: (value: boolean) => void;
   accessToken: string;
   setAccessToken: (value: string) => void;
+  chatHistoryAutoSave: boolean;
+  setChatHistoryAutoSave: (value: boolean) => void;
+  chatHistoryRetentionDays: number;
+  setChatHistoryRetentionDays: (value: number) => void;
   importInputRef: RefObject<HTMLInputElement | null>;
   onAddProjectFolder: () => void;
   onExportConfig: () => void;
@@ -40,6 +44,10 @@ export function SettingsGeneralTab({
   setAccessTokenEnabled,
   accessToken,
   setAccessToken,
+  chatHistoryAutoSave,
+  setChatHistoryAutoSave,
+  chatHistoryRetentionDays,
+  setChatHistoryRetentionDays,
   importInputRef,
   onAddProjectFolder,
   onExportConfig,
@@ -143,6 +151,40 @@ export function SettingsGeneralTab({
             Generate Token
           </Button>
         </div>
+      </section>
+      <section className="grid gap-3 rounded-md border border-border p-3">
+        <div>
+          <h3 className="text-sm font-medium">Chat history</h3>
+          <p className="text-xs text-muted-foreground">Keep an automatic record of closed chats. Saved chats from the history list are kept until you delete them.</p>
+        </div>
+        <label className="flex items-start gap-2 rounded-md border border-border bg-background/50 p-3 text-sm">
+          <input
+            type="checkbox"
+            className="mt-1"
+            checked={chatHistoryAutoSave}
+            onChange={(event) => setChatHistoryAutoSave(event.target.checked)}
+          />
+          <span>
+            <span className="block font-medium">Automatically save chat history</span>
+            <span className="block text-xs text-muted-foreground">Closed chats are kept in a History list you can open from the Saved Chats panel.</span>
+          </span>
+        </label>
+        {chatHistoryAutoSave && (
+          <label className="grid gap-1.5 text-sm">
+            Delete chats after (days of inactivity)
+            <div className="flex items-center gap-2">
+              <Input
+                type="number"
+                min={0}
+                max={3650}
+                className="w-24"
+                value={chatHistoryRetentionDays}
+                onChange={(event) => setChatHistoryRetentionDays(Number(event.target.value))}
+              />
+              <span className="text-xs text-muted-foreground">Set to 0 to never auto-delete.</span>
+            </div>
+          </label>
+        )}
       </section>
       <section className="grid gap-2 rounded-md border border-border p-3">
         <div>

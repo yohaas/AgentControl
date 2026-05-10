@@ -49,6 +49,7 @@ import {
   resolveAgentHeroProjectPath,
   resolveChatFontFamily,
   resolveChatFontSize,
+  resolveChatHistorySettings,
   resolveChatTranscriptDetail,
   resolveClaudeRuntime,
   resolveCodexDefaultAgentMode,
@@ -1877,10 +1878,13 @@ const runtime = new AgentRuntimeManager(
   () => resolveClaudeRuntime(config),
   () => (Array.isArray(config.permissionAllowRules) ? config.permissionAllowRules : []),
   () => resolveModelProfiles(config),
-  () => messageQueues
+  () => messageQueues,
+  () => resolveChatHistorySettings(config)
 );
 const persistedState = await runtime.loadPersistedState();
 messageQueues = pruneMessageQueuesForAgents(normalizeMessageQueues(persistedState.messageQueues), runtime.listAgents());
+runtime.pruneAutoSavedChats();
+setInterval(() => runtime.pruneAutoSavedChats(), 60 * 60 * 1000).unref();
 const terminals = new TerminalManager(() => projects, broadcast);
 
 function agentSnapshot(): AgentSnapshot {
@@ -2701,6 +2705,7 @@ app.get("/api/settings", (_request, response) => {
     externalEditorUrlTemplate: config.externalEditorUrlTemplate || "",
     accessTokenEnabled: accessTokenEnabled(),
     accessTokenSaved: accessTokenConfigured(),
+    chatHistory: resolveChatHistorySettings(config),
     capabilities
   });
 });
@@ -2823,7 +2828,16 @@ app.put("/api/settings", async (request, response) => {
     externalEditor: resolveExternalEditor(body.externalEditor ? body : config),
     externalEditorUrlTemplate:
       typeof body.externalEditorUrlTemplate === "string" ? body.externalEditorUrlTemplate.trim() : config.externalEditorUrlTemplate,
-    accessTokenEnabled: typeof body.accessTokenEnabled === "boolean" ? body.accessTokenEnabled : config.accessTokenEnabled
+    accessTokenEnabled: typeof body.accessTokenEnabled === "boolean" ? body.accessTokenEnabled : config.accessTokenEnabled,
+    chatHistory: body.chatHistory && typeof body.chatHistory === "object"
+      ? {
+          autoSave: typeof body.chatHistory.autoSave === "boolean" ? body.chatHistory.autoSave : resolveChatHistorySettings(config).autoSave,
+          retentionDays:
+            typeof body.chatHistory.retentionDays === "number"
+              ? resolveChatHistorySettings({ chatHistory: body.chatHistory }).retentionDays
+              : resolveChatHistorySettings(config).retentionDays
+        }
+      : config.chatHistory
   });
   if (config.claudePath) process.env.AGENTHERO_CLAUDE_PATH = config.claudePath;
   else delete process.env.AGENTHERO_CLAUDE_PATH;
@@ -2842,6 +2856,7 @@ app.put("/api/settings", async (request, response) => {
   capabilities = await detectCapabilities();
   projectsRoot = resolveProjectsRoot(config);
   projects = config.projectPaths?.length ? await scanConfiguredProjects(config.projectPaths, agentDirs, projects) : [];
+  runtime.pruneAutoSavedChats();
   response.json({
     projectsRoot,
     projectPaths: config.projectPaths || [],
@@ -2886,6 +2901,7 @@ app.put("/api/settings", async (request, response) => {
     externalEditorUrlTemplate: config.externalEditorUrlTemplate || "",
     accessTokenEnabled: accessTokenEnabled(),
     accessTokenSaved: accessTokenConfigured(),
+    chatHistory: resolveChatHistorySettings(config),
     capabilities
   });
 });
@@ -3022,6 +3038,9 @@ wss.on("connection", (ws) => {
           break;
         case "deleteSavedChat":
           runtime.deleteSavedChat(command.savedChatId);
+          break;
+        case "promoteSavedChat":
+          runtime.promoteSavedChat(command.savedChatId);
           break;
         case "forkChat":
           runtime.forkChat(command.id);

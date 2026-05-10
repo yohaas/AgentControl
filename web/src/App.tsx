@@ -68,6 +68,7 @@ import {
   Gauge,
   HardDrive,
   Hand,
+  History,
   Home,
   Info,
   Image as ImageIcon,
@@ -163,6 +164,7 @@ import { Textarea } from "./components/ui/textarea";
 import { SettingsAppearanceTab } from "./components/settings/SettingsAppearanceTab";
 import { SettingsGeneralTab } from "./components/settings/SettingsGeneralTab";
 import { SettingsUpdatesTab } from "./components/settings/SettingsUpdatesTab";
+import { ChatHistoryDialog } from "./components/ChatHistoryDialog";
 import { getSelectionInRoot, useTextSelection } from "./hooks/use-text-selection";
 import { api, setAgentHeroToken } from "./lib/api";
 import { cn, downloadText, formatDuration, prettyJson } from "./lib/utils";
@@ -6214,6 +6216,7 @@ function Sidebar({ topSlot }: { topSlot?: ReactNode }) {
   const [agentTab, setAgentTab] = useState<"project" | "builtIn">("builtIn");
   const [savedOpen, setSavedOpen] = useState(true);
   const [availableOpen, setAvailableOpen] = useState(true);
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   const project = projects.find((candidate) => candidate.id === selectedProjectId);
   const projectAgentDefs = project?.agents || [];
@@ -6241,7 +6244,7 @@ function Sidebar({ topSlot }: { topSlot?: ReactNode }) {
   const projectSavedChats = useMemo(
     () =>
       savedChats
-        .filter((chat) => chat.projectId === selectedProjectId)
+        .filter((chat) => chat.projectId === selectedProjectId && chat.source !== "auto")
         .sort((left, right) =>
           savedSort === "type"
             ? left.agent.defName.localeCompare(right.agent.defName, undefined, { sensitivity: "base" }) ||
@@ -6250,6 +6253,13 @@ function Sidebar({ topSlot }: { topSlot?: ReactNode }) {
             : timestampValue(right.updatedAt) - timestampValue(left.updatedAt)
         ),
     [savedChats, savedSort, selectedProjectId]
+  );
+  const projectHistoryChats = useMemo(
+    () =>
+      savedChats
+        .filter((chat) => chat.projectId === selectedProjectId && chat.source === "auto")
+        .sort((left, right) => timestampValue(right.updatedAt) - timestampValue(left.updatedAt)),
+    [savedChats, selectedProjectId]
   );
   const sidebarWidth = settings.sidebarWidth || 280;
 
@@ -6490,25 +6500,47 @@ function Sidebar({ topSlot }: { topSlot?: ReactNode }) {
               {projectSavedChats.length > 0 && <Badge>{projectSavedChats.length}</Badge>}
             </button>
             {savedOpen && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-7 w-7" title="Sort saved chats">
-                    <ArrowDownAZ className="h-4 w-4" />
+              <div className="flex items-center gap-1">
+                {settings.chatHistory?.autoSave && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    title="Chat history"
+                    onClick={() => setHistoryOpen(true)}
+                  >
+                    <History className="h-4 w-4" />
+                    {projectHistoryChats.length > 0 && (
+                      <span className="sr-only">{projectHistoryChats.length} in history</span>
+                    )}
                   </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start">
-                  <DropdownMenuItem onClick={() => setSavedSort("date")}>
-                    Sort by date
-                    <Check className={cn("ml-auto h-4 w-4", savedSort === "date" ? "opacity-100" : "opacity-0")} />
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setSavedSort("type")}>
-                    Sort by type
-                    <Check className={cn("ml-auto h-4 w-4", savedSort === "type" ? "opacity-100" : "opacity-0")} />
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+                )}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-7 w-7" title="Sort saved chats">
+                      <ArrowDownAZ className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start">
+                    <DropdownMenuItem onClick={() => setSavedSort("date")}>
+                      Sort by date
+                      <Check className={cn("ml-auto h-4 w-4", savedSort === "date" ? "opacity-100" : "opacity-0")} />
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setSavedSort("type")}>
+                      Sort by type
+                      <Check className={cn("ml-auto h-4 w-4", savedSort === "type" ? "opacity-100" : "opacity-0")} />
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             )}
           </div>
+          <ChatHistoryDialog
+            open={historyOpen}
+            onOpenChange={setHistoryOpen}
+            chats={projectHistoryChats}
+            retentionDays={settings.chatHistory?.retentionDays ?? 30}
+          />
           {savedOpen && (
             <div className="max-h-44 space-y-1 overflow-y-auto overflow-x-hidden pr-1">
               {projectSavedChats.length === 0 ? (
@@ -8267,6 +8299,8 @@ function SettingsDialog() {
   const [inputNotificationsEnabled, setInputNotificationsEnabled] = useState(settings.inputNotificationsEnabled === true);
   const [accessTokenEnabled, setAccessTokenEnabled] = useState(settings.accessTokenEnabled === true);
   const [accessToken, setAccessToken] = useState("");
+  const [chatHistoryAutoSave, setChatHistoryAutoSave] = useState(settings.chatHistory?.autoSave === true);
+  const [chatHistoryRetentionDays, setChatHistoryRetentionDays] = useState(settings.chatHistory?.retentionDays ?? 30);
   const [notificationPermission, setNotificationPermission] = useState(
     typeof Notification === "undefined" ? "unsupported" : Notification.permission
   );
@@ -8321,6 +8355,8 @@ function SettingsDialog() {
     setInputNotificationsEnabled(settings.inputNotificationsEnabled === true);
     setAccessTokenEnabled(settings.accessTokenEnabled === true);
     setAccessToken("");
+    setChatHistoryAutoSave(settings.chatHistory?.autoSave === true);
+    setChatHistoryRetentionDays(settings.chatHistory?.retentionDays ?? 30);
     setNotificationPermission(typeof Notification === "undefined" ? "unsupported" : Notification.permission);
     setPermissionAllowRules(settings.permissionAllowRules || []);
     setAgentHeroProjectPath(settings.agentControlProjectPath || "");
@@ -8376,6 +8412,12 @@ function SettingsDialog() {
         inputNotificationsEnabled,
         accessTokenEnabled,
         accessToken: accessToken.trim() || undefined,
+        chatHistory: {
+          autoSave: chatHistoryAutoSave,
+          retentionDays: Number.isFinite(Number(chatHistoryRetentionDays))
+            ? Math.max(0, Math.round(Number(chatHistoryRetentionDays)))
+            : 30
+        },
         permissionAllowRules,
         agentControlProjectPath,
         installMode,
@@ -8539,6 +8581,8 @@ function SettingsDialog() {
       setInputNotificationsEnabled(next.inputNotificationsEnabled === true);
       setAccessTokenEnabled(next.accessTokenEnabled === true);
       setAccessToken("");
+      setChatHistoryAutoSave(next.chatHistory?.autoSave === true);
+      setChatHistoryRetentionDays(next.chatHistory?.retentionDays ?? 30);
       setNotificationPermission(typeof Notification === "undefined" ? "unsupported" : Notification.permission);
       setPermissionAllowRules(next.permissionAllowRules || []);
       setAgentHeroProjectPath(next.agentControlProjectPath || "");
@@ -8784,6 +8828,10 @@ function SettingsDialog() {
               setAccessTokenEnabled={setAccessTokenEnabled}
               accessToken={accessToken}
               setAccessToken={setAccessToken}
+              chatHistoryAutoSave={chatHistoryAutoSave}
+              setChatHistoryAutoSave={setChatHistoryAutoSave}
+              chatHistoryRetentionDays={chatHistoryRetentionDays}
+              setChatHistoryRetentionDays={setChatHistoryRetentionDays}
               importInputRef={importInputRef}
               onAddProjectFolder={() => {
                 if (isWindowsClient) {
@@ -15405,11 +15453,20 @@ function MobileSidebar({
   const openLaunchModal = useAppStore((state) => state.openLaunchModal);
   const doneAgentIds = useAppStore((state) => state.doneAgentIds);
   const savedChats = useAppStore((state) => state.savedChats);
+  const settings = useAppStore((state) => state.settings);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const selectedProjectId = selectedProject?.id;
   const projectSavedChats = useMemo(
     () =>
       savedChats
-        .filter((chat) => chat.projectId === selectedProjectId)
+        .filter((chat) => chat.projectId === selectedProjectId && chat.source !== "auto")
+        .sort((left, right) => timestampValue(right.updatedAt) - timestampValue(left.updatedAt)),
+    [savedChats, selectedProjectId]
+  );
+  const projectHistoryChats = useMemo(
+    () =>
+      savedChats
+        .filter((chat) => chat.projectId === selectedProjectId && chat.source === "auto")
         .sort((left, right) => timestampValue(right.updatedAt) - timestampValue(left.updatedAt)),
     [savedChats, selectedProjectId]
   );
@@ -15669,7 +15726,24 @@ function MobileSidebar({
           <MessageSquareLock className="h-4 w-4 text-muted-foreground" />
           <h2 className="truncate text-xs font-semibold uppercase tracking-wide text-muted-foreground">Saved Chats</h2>
           {projectSavedChats.length > 0 && <Badge>{projectSavedChats.length}</Badge>}
+          {settings.chatHistory?.autoSave && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="ml-auto h-7 w-7"
+              title="Chat history"
+              onClick={() => setHistoryOpen(true)}
+            >
+              <History className="h-4 w-4" />
+            </Button>
+          )}
         </div>
+        <ChatHistoryDialog
+          open={historyOpen}
+          onOpenChange={setHistoryOpen}
+          chats={projectHistoryChats}
+          retentionDays={settings.chatHistory?.retentionDays ?? 30}
+        />
         {projectSavedChats.length === 0 ? (
           <div className="rounded-md border border-dashed border-border px-3 py-4 text-center text-xs text-muted-foreground">
             No saved chats.

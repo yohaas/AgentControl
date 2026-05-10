@@ -2,6 +2,10 @@
 
 All notable repository changes are listed newest-first and grouped by commit date.
 
+## 2026-05-10
+
+- Add an opt-in chat history that automatically archives closed chats. Open it from the Saved Chats section to review the initial prompt, created date, and last activity for each chat, save one to keep it permanently, or delete it. Set how many days inactive history is kept (0 to never auto-delete) under Settings → General.
+
 ## 2026-05-07
 
 - [c927d99](https://github.com/yohaas/AgentHero/commit/c927d99) Add the 0.1.10 Windows full release with approval, queue, and notification fixes.

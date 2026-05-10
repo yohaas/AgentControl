@@ -73,6 +73,12 @@ export interface DashboardConfig {
   externalEditor?: ExternalEditor;
   externalEditorUrlTemplate?: string;
   accessTokenEnabled?: boolean;
+  chatHistory?: ChatHistorySettingsConfig;
+}
+
+export interface ChatHistorySettingsConfig {
+  autoSave?: boolean;
+  retentionDays?: number;
 }
 
 export type TerminalDockPosition = "float" | "left" | "bottom" | "right";
@@ -380,6 +386,13 @@ export function resolveUpdateChecksEnabled(config: DashboardConfig): boolean {
 
 export function resolveInputNotificationsEnabled(config: DashboardConfig): boolean {
   return config.inputNotificationsEnabled === true;
+}
+
+export function resolveChatHistorySettings(config: DashboardConfig): { autoSave: boolean; retentionDays: number } {
+  const settings = config.chatHistory;
+  const autoSave = settings?.autoSave === true;
+  const retentionDays = clampNumber(settings?.retentionDays, 30, 0, 3650);
+  return { autoSave, retentionDays };
 }
 
 export function resolveExternalEditor(config: DashboardConfig): ExternalEditor {

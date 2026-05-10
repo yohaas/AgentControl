@@ -130,6 +130,19 @@ function now(): string {
   return new Date().toISOString();
 }
 
+function extractInitialPrompt(transcript: TranscriptEvent[]): string | undefined {
+  for (const event of transcript) {
+    if (event.kind === "user") {
+      const text = (event as { text?: unknown }).text;
+      if (typeof text === "string") {
+        const trimmed = text.trim();
+        if (trimmed) return trimmed.slice(0, 200);
+      }
+    }
+  }
+  return undefined;
+}
+
 function transcriptId(): string {
   return nanoid(12);
 }
@@ -368,7 +381,8 @@ export class AgentRuntimeManager {
     private readonly getClaudeRuntime: () => ClaudeRuntime = () => "cli",
     private readonly getPermissionAllowRules: PermissionAllowRuleProvider = () => [],
     private readonly getModelProfiles: ModelProfileProvider = () => DEFAULT_MODEL_PROFILES,
-    private readonly getMessageQueues: MessageQueueProvider = () => ({})
+    private readonly getMessageQueues: MessageQueueProvider = () => ({}),
+    private readonly getChatHistorySettings: () => { autoSave: boolean; retentionDays: number } = () => ({ autoSave: false, retentionDays: 30 })
   ) {
     this.cleanupStalePermissionMcpConfigs();
     this.persist = createStateWriter(() => this.persistedState());
@@ -1894,6 +1908,44 @@ export class AgentRuntimeManager {
     this.persist();
   }
 
+  promoteSavedChat(savedChatId: string): void {
+    const index = this.savedChats.findIndex((chat) => chat.id === savedChatId);
+    if (index < 0) return;
+    const existing = this.savedChats[index];
+    if (existing.source === "manual") return;
+    this.savedChats[index] = { ...existing, source: "manual", savedAt: now() };
+    this.broadcast({ type: "agent.snapshot", snapshot: this.snapshot() });
+    this.persist();
+  }
+
+  pruneAutoSavedChats(): boolean {
+    const { retentionDays } = this.getChatHistorySettings();
+    if (retentionDays <= 0) return false;
+    const cutoff = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
+    const next = this.savedChats.filter((chat) => {
+      if (chat.source !== "auto") return true;
+      const ts = Date.parse(chat.updatedAt);
+      if (!Number.isFinite(ts)) return true;
+      return ts >= cutoff;
+    });
+    if (next.length === this.savedChats.length) return false;
+    this.savedChats = next;
+    this.broadcast({ type: "agent.snapshot", snapshot: this.snapshot() });
+    this.persist();
+    return true;
+  }
+
+  private archiveStateToHistory(state: AgentProcessState): void {
+    const { autoSave } = this.getChatHistorySettings();
+    if (!autoSave) return;
+    if (!state.transcript.length) return;
+    if (!state.transcript.some((event) => event.kind === "user")) return;
+    const existing = this.savedChats.find((chat) => chat.id === state.agent.id);
+    if (existing && existing.source !== "auto") return;
+    const archived = this.savedChatFromState(state, existing?.savedAt, "auto");
+    this.savedChats = [archived, ...this.savedChats.filter((chat) => chat.id !== state.agent.id)];
+  }
+
   async handoffSummary(id: string): Promise<string> {
     const state = this.requiredState(id);
     if (state.transcript.length === 0) throw new Error("No chat transcript to hand off.");
@@ -1986,6 +2038,7 @@ export class AgentRuntimeManager {
       if (projectId && state.agent.projectId !== projectId) continue;
       state.exiting = true;
       this.stopProcessTree(state);
+      this.archiveStateToHistory(state);
       this.states.delete(state.agent.id);
     }
     this.broadcast({ type: "agent.snapshot", snapshot: this.snapshot() });
@@ -2001,17 +2054,24 @@ export class AgentRuntimeManager {
     return { agents, transcripts, savedChats: this.savedChats, messageQueues: this.getMessageQueues() };
   }
 
-  private savedChatFromState(state: AgentProcessState, savedAt?: string): SavedChat {
+  private savedChatFromState(
+    state: AgentProcessState,
+    savedAt?: string,
+    source: "manual" | "auto" = "manual"
+  ): SavedChat {
     const timestamp = now();
+    const transcript = state.transcript.slice(-TRANSCRIPT_PERSIST_LIMIT);
     return {
       id: state.agent.id,
       projectId: state.agent.projectId,
       projectName: state.agent.projectName,
       projectPath: state.agent.projectPath,
       agent: { ...state.agent, pid: undefined, statusMessage: undefined, updatedAt: timestamp },
-      transcript: state.transcript.slice(-TRANSCRIPT_PERSIST_LIMIT),
+      transcript,
       savedAt: savedAt || timestamp,
-      updatedAt: timestamp
+      updatedAt: timestamp,
+      source,
+      initialPrompt: extractInitialPrompt(transcript)
     };
   }
 
@@ -3395,6 +3455,7 @@ export class AgentRuntimeManager {
 
   private removeExitedAgent(state: AgentProcessState): void {
     this.cleanupPermissionMcpConfig(state);
+    this.archiveStateToHistory(state);
     this.states.delete(state.agent.id);
     this.broadcast({ type: "agent.snapshot", snapshot: this.snapshot() });
     this.persist();

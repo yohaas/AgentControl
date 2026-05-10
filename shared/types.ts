@@ -515,6 +515,13 @@ export interface SavedChat {
   transcript: TranscriptEvent[];
   savedAt: string;
   updatedAt: string;
+  source?: "manual" | "auto";
+  initialPrompt?: string;
+}
+
+export interface ChatHistorySettings {
+  autoSave: boolean;
+  retentionDays: number;
 }
 
 export interface QueuedMessage {
@@ -804,6 +811,10 @@ export type WsClientCommand =
     }
   | {
       type: "deleteSavedChat";
+      savedChatId: string;
+    }
+  | {
+      type: "promoteSavedChat";
       savedChatId: string;
     }
   | {
