@@ -2,6 +2,15 @@
 
 Release summaries are listed newest-first. [CHANGELOG.md](CHANGELOG.md) has the detailed releases.
 
+## 0.1.11 - 2026-05-10
+
+AgentHero 0.1.11 adds an optional automatic chat history alongside the existing manual Saved Chats:
+
+- Closed chats are archived automatically when the new "Automatically save chat history" setting is on (Settings → General).
+- Open the History dialog from the Saved Chats panel — or from the new History button in the header next to Settings — to review the initial prompt, created date, and last activity for each archived chat.
+- Save an archived chat to keep it permanently in Saved Chats, or delete it.
+- Configure how many days of inactivity are retained, or set 0 to never auto-delete.
+
 ## 0.1.10 - 2026-05-07
 
 AgentHero 0.1.10 ships a new Windows full installer with reliability fixes for approvals, queued messages, and notifications:
