@@ -8709,7 +8709,9 @@ function SettingsDialog() {
       installMode !== (settings.installMode || "checkout") ||
       updateChecksEnabled !== (settings.updateChecksEnabled !== false) ||
       updateManifestUrl !== (settings.updateManifestUrl || "") ||
-      updateCommandsText !== (settings.updateCommands || []).join("\n"),
+      updateCommandsText !== (settings.updateCommands || []).join("\n") ||
+      chatHistoryAutoSave !== (settings.chatHistory?.autoSave === true) ||
+      chatHistoryRetentionDays !== (settings.chatHistory?.retentionDays ?? 30),
     [
       anthropicApiKey,
       agentControlProjectPath,
@@ -8751,7 +8753,9 @@ function SettingsDialog() {
       tileHeight,
       updateChecksEnabled,
       updateManifestUrl,
-      updateCommandsText
+      updateCommandsText,
+      chatHistoryAutoSave,
+      chatHistoryRetentionDays
     ]
   );
   const settingsTabs = [
