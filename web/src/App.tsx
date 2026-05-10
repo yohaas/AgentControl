@@ -3743,6 +3743,15 @@ function Header({
   const [connectionMenuOpen, setConnectionMenuOpen] = useState(false);
   const [supervised, setSupervised] = useState<boolean | undefined>();
   const [layoutMenuOpen, setLayoutMenuOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const savedChats = useAppStore((state) => state.savedChats);
+  const projectHistoryChats = useMemo(
+    () =>
+      savedChats
+        .filter((chat) => chat.projectId === selectedProjectId && chat.source === "auto")
+        .sort((left, right) => timestampValue(right.updatedAt) - timestampValue(left.updatedAt)),
+    [savedChats, selectedProjectId]
+  );
   const [layoutHeightDraft, setLayoutHeightDraft] = useState(String(settings.tileHeight));
   const [layoutColumnsDraft, setLayoutColumnsDraft] = useState(String(settings.tileColumns));
   const [layoutChatFontDraft, setLayoutChatFontDraft] = useState(normalizeChatFontFamily((settings as ChatDisplaySettings).chatFontFamily));
@@ -4361,6 +4370,24 @@ function Header({
           <SquareTerminal className="h-4 w-4" />
           {showMenuText && <span>Terminal</span>}
         </Button>
+        {settings.chatHistory?.autoSave && (
+          <Button
+            variant="outline"
+            size={showMenuText ? undefined : "icon"}
+            className={showMenuText ? "gap-2 px-3" : undefined}
+            onClick={() => setHistoryOpen(true)}
+            title="Chat history"
+          >
+            <History className="h-4 w-4" />
+            {showMenuText && <span>History</span>}
+          </Button>
+        )}
+        <ChatHistoryDialog
+          open={historyOpen}
+          onOpenChange={setHistoryOpen}
+          chats={projectHistoryChats}
+          retentionDays={settings.chatHistory?.retentionDays ?? 30}
+        />
         <SettingsDialog />
       </div>
     </header>
