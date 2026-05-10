@@ -3723,6 +3723,7 @@ function Header({
   const setTileOrder = useAppStore((state) => state.setTileOrder);
   const setSelectedAgent = useAppStore((state) => state.setSelectedAgent);
   const setFocusedAgent = useAppStore((state) => state.setFocusedAgent);
+  const setTileMinimized = useAppStore((state) => state.setTileMinimized);
   const terminalOpen = useAppStore((state) => state.terminalOpen);
   const fileExplorerOpen = useAppStore((state) => state.fileExplorerOpen);
   const terminalInFileExplorer = useAppStore((state) => state.terminalInFileExplorer);
@@ -4387,6 +4388,14 @@ function Header({
           onOpenChange={setHistoryOpen}
           chats={projectHistoryChats}
           retentionDays={settings.chatHistory?.retentionDays ?? 30}
+          onOpenChat={(chat) => {
+            if (sendCommand({ type: "restoreSavedChat", savedChatId: chat.id })) {
+              setSelectedAgent(undefined);
+              setFocusedAgent(chat.agent.id);
+              setTileMinimized(chat.agent.id, false);
+              setHistoryOpen(false);
+            }
+          }}
         />
         <SettingsDialog />
       </div>
@@ -6567,6 +6576,14 @@ function Sidebar({ topSlot }: { topSlot?: ReactNode }) {
             onOpenChange={setHistoryOpen}
             chats={projectHistoryChats}
             retentionDays={settings.chatHistory?.retentionDays ?? 30}
+            onOpenChat={(chat) => {
+              if (sendCommand({ type: "restoreSavedChat", savedChatId: chat.id })) {
+                setSelectedAgent(undefined);
+                setFocusedAgent(chat.agent.id);
+                setTileMinimized(chat.agent.id, false);
+                setHistoryOpen(false);
+              }
+            }}
           />
           {savedOpen && (
             <div className="max-h-44 space-y-1 overflow-y-auto overflow-x-hidden pr-1">
@@ -15774,6 +15791,10 @@ function MobileSidebar({
           onOpenChange={setHistoryOpen}
           chats={projectHistoryChats}
           retentionDays={settings.chatHistory?.retentionDays ?? 30}
+          onOpenChat={(chat) => {
+            restoreSavedChat(chat.id, chat.agent.id);
+            setHistoryOpen(false);
+          }}
         />
         {projectSavedChats.length === 0 ? (
           <div className="rounded-md border border-dashed border-border px-3 py-4 text-center text-xs text-muted-foreground">

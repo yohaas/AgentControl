@@ -10,6 +10,7 @@ interface ChatHistoryDialogProps {
   onOpenChange: (open: boolean) => void;
   chats: SavedChat[];
   retentionDays: number;
+  onOpenChat: (chat: SavedChat) => void;
 }
 
 function formatDate(value: string): string {
@@ -18,7 +19,7 @@ function formatDate(value: string): string {
   return new Date(ts).toLocaleString();
 }
 
-export function ChatHistoryDialog({ open, onOpenChange, chats, retentionDays }: ChatHistoryDialogProps) {
+export function ChatHistoryDialog({ open, onOpenChange, chats, retentionDays, onOpenChat }: ChatHistoryDialogProps) {
   const description = useMemo(() => {
     if (retentionDays <= 0) return "Closed chats are kept here indefinitely. Save a chat to move it to Saved Chats.";
     return `Closed chats are kept here for ${retentionDays} day${retentionDays === 1 ? "" : "s"} after their last activity. Save a chat to move it to Saved Chats and keep it permanently.`;
@@ -42,9 +43,14 @@ export function ChatHistoryDialog({ open, onOpenChange, chats, retentionDays }: 
               return (
                 <div
                   key={chat.id}
-                  className="flex flex-col gap-2 rounded-md border border-border bg-background/50 p-3 sm:flex-row sm:items-start sm:justify-between"
+                  className="flex flex-col gap-2 rounded-md border border-border bg-background/50 p-3 transition-colors hover:bg-accent/40 sm:flex-row sm:items-start sm:justify-between"
                 >
-                  <div className="min-w-0 flex-1">
+                  <button
+                    type="button"
+                    className="min-w-0 flex-1 text-left"
+                    title="Open chat"
+                    onClick={() => onOpenChat(chat)}
+                  >
                     <p className="line-clamp-2 break-words text-sm font-medium" title={prompt}>
                       {prompt}
                     </p>
@@ -54,7 +60,7 @@ export function ChatHistoryDialog({ open, onOpenChange, chats, retentionDays }: 
                     <p className="mt-1 text-xs text-muted-foreground">
                       Created {formatDate(chat.savedAt)} · Last activity {formatDate(chat.updatedAt)}
                     </p>
-                  </div>
+                  </button>
                   <div className="flex shrink-0 items-center gap-1 self-end sm:self-start">
                     <Button
                       type="button"
