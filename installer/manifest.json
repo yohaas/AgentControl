@@ -9,6 +9,15 @@
   "assets": [
     {
       "type": "full",
+      "platform": "macos",
+      "arch": "arm64",
+      "version": "0.1.11",
+      "url": "https://raw.githubusercontent.com/yohaas/AgentHero/main/installer/releases/v0.1.11/agent-hero-0.1.11-macos-arm64.zip",
+      "sha256": "b60a0a3dd47ba7de12b3cc9fd72079bf75c08dfa021921fbf98250e840ab5052",
+      "size": 18164805
+    },
+    {
+      "type": "full",
       "platform": "windows",
       "arch": "x64",
       "version": "0.1.11",
