@@ -2,6 +2,10 @@
 
 All notable repository changes are listed newest-first and grouped by commit date.
 
+## 2026-05-11
+
+- Keep selected dropdown values on one line so launch mode choices like "Bypass permissions" no longer wrap in narrow controls.
+
 ## 2026-05-10
 
 - Let chat code blocks select partial text across multiple lines instead of selecting the whole block.
