@@ -176,15 +176,15 @@
   }
 
   .markdown-code-block {
-    @apply relative my-2 max-w-full;
+    @apply relative my-2 max-w-full select-text;
   }
 
   .markdown-content .markdown-code-block pre {
-    @apply my-0 pb-9;
+    @apply my-0 select-text pb-9;
   }
 
   .markdown-content pre code {
-    @apply whitespace-pre-wrap break-words bg-transparent p-0 font-mono text-inherit [overflow-wrap:anywhere];
+    @apply select-text whitespace-pre-wrap break-words bg-transparent p-0 font-mono text-inherit [overflow-wrap:anywhere];
   }
 
   .markdown-inline-code {

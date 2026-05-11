@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-05-10
 
+- Let chat code blocks select partial text across multiple lines instead of selecting the whole block.
 - Highlight chat context usage in orange above 80% and red above 90%, and automatically compact supported chats when estimated context reaches 100%.
 - Add an opt-in chat history that automatically archives closed chats. Open it from the Saved Chats section to review the initial prompt, created date, and last activity for each chat, save one to keep it permanently, or delete it. Set how many days inactive history is kept (0 to never auto-delete) under Settings → General.
 

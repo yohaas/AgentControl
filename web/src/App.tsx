@@ -13983,7 +13983,7 @@ function MarkdownCodeBlock({ children, className, ...props }: ComponentProps<"pr
       </pre>
       <button
         type="button"
-        className="absolute bottom-2 right-2 grid h-7 w-7 place-items-center rounded-md border border-border bg-background/90 text-foreground opacity-80 shadow-sm hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="absolute bottom-2 right-2 grid h-7 w-7 select-none place-items-center rounded-md border border-border bg-background/90 text-foreground opacity-80 shadow-sm hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         title="Copy code"
         aria-label="Copy code"
         onClick={copyCode}
