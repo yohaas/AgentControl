@@ -22,6 +22,7 @@ const BUILTIN_COMMANDS: SlashCommandInfo[] = [
   { command: "/doctor", description: "Check Claude Code installation health", source: "builtin", interactive: true },
   { command: "/exit", description: "Close this agent", source: "agenthero" },
   { command: "/export", description: "Export the current conversation", source: "builtin", interactive: true },
+  { command: "/goal", description: "Set a session-scoped completion condition", argumentHint: "[condition]", source: "builtin" },
   { command: "/help", description: "Show Claude Code help", source: "builtin", interactive: true },
   { command: "/hooks", description: "Manage hooks", source: "builtin", interactive: true },
   { command: "/ide", description: "Manage IDE integration", source: "builtin", interactive: true },
