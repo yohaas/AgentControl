@@ -16262,8 +16262,11 @@ function MobileChatPane({ agent, addError }: { agent: RunningAgent; addError: (m
         <AgentDot color={agent.color} />
         <div className="min-w-0 flex-1">
           <div className="truncate text-sm font-semibold">{agent.displayName}</div>
-          <div className="truncate text-xs text-muted-foreground" title={fullLastActivity(agent.updatedAt)}>
-            {providerLabel(agent.provider)} · {formatLastActivity(agent.updatedAt)}
+          <div
+            className="truncate text-xs text-muted-foreground"
+            title={`${providerLabel(agent.provider)} · ${agent.currentModel} · ${fullLastActivity(agent.updatedAt)}`}
+          >
+            {providerLabel(agent.provider)} · {agent.currentModel} · {formatLastActivity(agent.updatedAt)}
           </div>
         </div>
         <StatusPill status={agent.status} />
