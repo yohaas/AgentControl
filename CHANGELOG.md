@@ -2,6 +2,10 @@
 
 All notable repository changes are listed newest-first and grouped by commit date.
 
+## 2026-05-17
+
+- Improve chat UI responsiveness by batching streaming transcript updates, memoizing transcript message rendering, and virtualizing long transcript views.
+
 ## 2026-05-15
 
 - Show the current model in the mobile chat header alongside the provider and last activity.

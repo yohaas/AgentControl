@@ -1,5 +1,7 @@
 import {
   useEffect,
+  useLayoutEffect,
+  memo,
   useMemo,
   useRef,
   useState,
@@ -13,6 +15,7 @@ import {
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
   type CSSProperties,
+  type RefObject,
   type ReactNode,
   type UIEvent as ReactUIEvent
 } from "react";
@@ -29,6 +32,7 @@ import typescript from "highlight.js/lib/languages/typescript";
 import xml from "highlight.js/lib/languages/xml";
 import yaml from "highlight.js/lib/languages/yaml";
 import { Terminal as XTerm } from "@xterm/xterm";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
@@ -1547,6 +1551,10 @@ function requiredFeedbackTranscriptItems(items: ToolTranscriptItem[]): ToolTrans
 
 function shouldExpandTranscriptItemByDefault(item: ToolTranscriptItem, index: number, items: ToolTranscriptItem[]) {
   return index === items.length - 1 && item.kind === "single" && item.event.kind === "assistant_text" && !item.event.streaming;
+}
+
+function transcriptItemKey(item: ToolTranscriptItem) {
+  return item.kind === "tool_pair" ? item.event.id : item.event.id;
 }
 
 function questionToolUseIdSet(transcript: TranscriptEvent[]) {
@@ -11980,21 +11988,17 @@ function AgentTile({
                     </p>
                   )
                 ) : (
-                  <div className="grid gap-2">
-                    {displayedTranscriptItems.map((item, index) => (
-                      <TranscriptPreview
-                        key={item.kind === "tool_pair" ? item.event.id : item.event.id}
-                        item={item}
-                        agent={agent}
-                        phaseLabel={phaseLabel}
-                        query={searchActive ? searchQuery : ""}
-                        searchOptions={searchOptions}
-                        latestUserMessageId={pinnedMessage?.id}
-                        defaultExpanded={shouldExpandTranscriptItemByDefault(item, index, displayedTranscriptItems)}
-                      />
-                    ))}
-                    {showActivityIndicator && <AgentActivityIndicator agent={agent} compact phaseLabel={phaseLabel} />}
-                  </div>
+                  <VirtualizedTranscriptList
+                    items={displayedTranscriptItems}
+                    scrollRef={rootRef}
+                    agent={agent}
+                    phaseLabel={phaseLabel}
+                    query={searchActive ? searchQuery : ""}
+                    searchOptions={searchOptions}
+                    latestUserMessageId={pinnedMessage?.id}
+                    compact
+                    showActivityIndicator={showActivityIndicator}
+                  />
                 )}
                 {visibleTranscriptViewMode === "chat" && showJumpToBottom && (
                   <div className="pointer-events-none sticky bottom-2 z-30 flex flex-col items-end gap-2">
@@ -13433,21 +13437,16 @@ function StandardAgentPanel({ agent }: { agent: RunningAgent }) {
                   </p>
                 )
               ) : (
-                <>
-                  {displayedTranscriptItems.map((item, index) => (
-                    <TranscriptItem
-                      key={item.kind === "tool_pair" ? item.event.id : item.event.id}
-                      item={item}
-                      agent={agent}
-                      phaseLabel={phaseLabel}
-                      query={searchOpen ? searchQuery : ""}
-                      searchOptions={searchOptions}
-                      latestUserMessageId={pinnedMessage?.id}
-                      defaultExpanded={shouldExpandTranscriptItemByDefault(item, index, displayedTranscriptItems)}
-                    />
-                  ))}
-                  {showActivityIndicator && <AgentActivityIndicator agent={agent} phaseLabel={phaseLabel} />}
-                </>
+                <VirtualizedTranscriptList
+                  items={displayedTranscriptItems}
+                  scrollRef={rootRef}
+                  agent={agent}
+                  phaseLabel={phaseLabel}
+                  query={searchOpen ? searchQuery : ""}
+                  searchOptions={searchOptions}
+                  latestUserMessageId={pinnedMessage?.id}
+                  showActivityIndicator={showActivityIndicator}
+                />
               )}
             </div>
             {visibleTranscriptViewMode === "chat" && showJumpToBottom && (
@@ -13751,6 +13750,169 @@ function TranscriptItem({
   );
 }
 
+function sameTranscriptRenderProps(
+  previous: {
+    item: ToolTranscriptItem;
+    agent: RunningAgent;
+    phaseLabel?: string;
+    query?: string;
+    searchOptions?: ChatSearchOptions;
+    latestUserMessageId?: string;
+    defaultExpanded?: boolean;
+  },
+  next: {
+    item: ToolTranscriptItem;
+    agent: RunningAgent;
+    phaseLabel?: string;
+    query?: string;
+    searchOptions?: ChatSearchOptions;
+    latestUserMessageId?: string;
+    defaultExpanded?: boolean;
+  }
+) {
+  return (
+    previous.item === next.item &&
+    previous.phaseLabel === next.phaseLabel &&
+    previous.query === next.query &&
+    previous.searchOptions === next.searchOptions &&
+    previous.latestUserMessageId === next.latestUserMessageId &&
+    previous.defaultExpanded === next.defaultExpanded &&
+    previous.agent.id === next.agent.id &&
+    previous.agent.projectId === next.agent.projectId &&
+    previous.agent.displayName === next.agent.displayName &&
+    previous.agent.color === next.agent.color &&
+    previous.agent.provider === next.agent.provider &&
+    previous.agent.currentModel === next.agent.currentModel &&
+    previous.agent.remoteControl === next.agent.remoteControl &&
+    previous.agent.turnStartedAt === next.agent.turnStartedAt &&
+    previous.agent.lastTokenUsage === next.agent.lastTokenUsage
+  );
+}
+
+const MemoizedTranscriptPreview = memo(TranscriptPreview, sameTranscriptRenderProps);
+const MemoizedTranscriptItem = memo(TranscriptItem, sameTranscriptRenderProps);
+
+function VirtualizedTranscriptList({
+  items,
+  scrollRef,
+  agent,
+  phaseLabel,
+  query = "",
+  searchOptions,
+  latestUserMessageId,
+  compact = false,
+  showActivityIndicator = false
+}: {
+  items: ToolTranscriptItem[];
+  scrollRef: RefObject<HTMLDivElement | null>;
+  agent: RunningAgent;
+  phaseLabel?: string;
+  query?: string;
+  searchOptions?: ChatSearchOptions;
+  latestUserMessageId?: string;
+  compact?: boolean;
+  showActivityIndicator?: boolean;
+}) {
+  const listRef = useRef<HTMLDivElement | null>(null);
+  const [scrollMargin, setScrollMargin] = useState(0);
+  const count = items.length + (showActivityIndicator ? 1 : 0);
+  const searchActive = Boolean(query.trim());
+  const rowVirtualizer = useVirtualizer({
+    count,
+    getScrollElement: () => scrollRef.current,
+    getItemKey: (index) => (index < items.length ? transcriptItemKey(items[index]) : "activity-indicator"),
+    estimateSize: () => (compact ? 132 : 172),
+    overscan: 8,
+    scrollMargin
+  });
+
+  useLayoutEffect(() => {
+    const root = scrollRef.current;
+    const list = listRef.current;
+    if (!root || !list) return;
+    const rootRect = root.getBoundingClientRect();
+    const listRect = list.getBoundingClientRect();
+    const nextScrollMargin = listRect.top - rootRect.top + root.scrollTop;
+    setScrollMargin((current) => (Math.abs(current - nextScrollMargin) < 1 ? current : nextScrollMargin));
+  });
+
+  if (searchActive) {
+    return (
+      <div className={cn("grid w-full min-w-0 max-w-full", compact ? "gap-2" : "gap-3")}>
+        {items.map((item, index) =>
+          compact ? (
+            <MemoizedTranscriptPreview
+              key={transcriptItemKey(item)}
+              item={item}
+              agent={agent}
+              phaseLabel={phaseLabel}
+              query={query}
+              searchOptions={searchOptions}
+              latestUserMessageId={latestUserMessageId}
+              defaultExpanded={shouldExpandTranscriptItemByDefault(item, index, items)}
+            />
+          ) : (
+            <MemoizedTranscriptItem
+              key={transcriptItemKey(item)}
+              item={item}
+              agent={agent}
+              phaseLabel={phaseLabel}
+              query={query}
+              searchOptions={searchOptions}
+              latestUserMessageId={latestUserMessageId}
+              defaultExpanded={shouldExpandTranscriptItemByDefault(item, index, items)}
+            />
+          )
+        )}
+        {showActivityIndicator && <AgentActivityIndicator agent={agent} compact={compact} phaseLabel={phaseLabel} />}
+      </div>
+    );
+  }
+
+  return (
+    <div ref={listRef} className="relative w-full min-w-0 max-w-full" style={{ height: rowVirtualizer.getTotalSize() }}>
+      {rowVirtualizer.getVirtualItems().map((virtualItem) => {
+        const item = virtualItem.index < items.length ? items[virtualItem.index] : undefined;
+        return (
+          <div
+            key={virtualItem.key}
+            ref={rowVirtualizer.measureElement}
+            data-index={virtualItem.index}
+            className={cn("absolute left-0 top-0 w-full", compact ? "pb-2" : "pb-3")}
+            style={{ transform: `translateY(${virtualItem.start - rowVirtualizer.options.scrollMargin}px)` }}
+          >
+            {item ? (
+              compact ? (
+                <MemoizedTranscriptPreview
+                  item={item}
+                  agent={agent}
+                  phaseLabel={phaseLabel}
+                  query={query}
+                  searchOptions={searchOptions}
+                  latestUserMessageId={latestUserMessageId}
+                  defaultExpanded={shouldExpandTranscriptItemByDefault(item, virtualItem.index, items)}
+                />
+              ) : (
+                <MemoizedTranscriptItem
+                  item={item}
+                  agent={agent}
+                  phaseLabel={phaseLabel}
+                  query={query}
+                  searchOptions={searchOptions}
+                  latestUserMessageId={latestUserMessageId}
+                  defaultExpanded={shouldExpandTranscriptItemByDefault(item, virtualItem.index, items)}
+                />
+              )
+            ) : (
+              <AgentActivityIndicator agent={agent} compact={compact} phaseLabel={phaseLabel} />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function CollapsibleText({
   text,
   agent,
@@ -13999,7 +14161,7 @@ function MarkdownCodeBlock({ children, className, ...props }: ComponentProps<"pr
   );
 }
 
-function ChatMarkdown({
+const ChatMarkdown = memo(function ChatMarkdown({
   text,
   query,
   searchOptions = { matchCase: false, wholeWord: false },
@@ -14077,7 +14239,7 @@ function ChatMarkdown({
       </ReactMarkdown>
     </div>
   );
-}
+});
 
 function searchMatchRegex(query: string, options: ChatSearchOptions): RegExp | undefined {
   const trimmed = query.trim();
@@ -16346,21 +16508,17 @@ function MobileChatPane({ agent, addError }: { agent: RunningAgent; addError: (m
               </div>
             )
           ) : (
-            <div className="grid w-full min-w-0 max-w-full gap-3 overflow-hidden">
-              {displayedTranscriptItems.map((item, index) => (
-                <TranscriptPreview
-                  key={item.kind === "tool_pair" ? item.event.id : item.event.id}
-                  item={item}
-                  agent={agent}
-                  phaseLabel={phaseLabel}
-                  query={searchOpen ? searchQuery : ""}
-                  searchOptions={searchOptions}
-                  latestUserMessageId={latestUser?.id}
-                  defaultExpanded={shouldExpandTranscriptItemByDefault(item, index, displayedTranscriptItems)}
-                />
-              ))}
-              {showActivityIndicator && <AgentActivityIndicator agent={agent} compact phaseLabel={phaseLabel} />}
-            </div>
+            <VirtualizedTranscriptList
+              items={displayedTranscriptItems}
+              scrollRef={rootRef}
+              agent={agent}
+              phaseLabel={phaseLabel}
+              query={searchOpen ? searchQuery : ""}
+              searchOptions={searchOptions}
+              latestUserMessageId={latestUser?.id}
+              compact
+              showActivityIndicator={showActivityIndicator}
+            />
           )}
         </div>
         {visibleTranscriptViewMode === "chat" && showJumpToBottom && (

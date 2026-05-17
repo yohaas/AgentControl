@@ -86,6 +86,7 @@ const RC_URL_PATTERN = /https:\/\/claude\.ai\/code(?:[/?#][^\s\u0007\u001b)]*)?/
 const PERMISSION_MCP_SERVER_NAME = "agenthero_permissions";
 const PERMISSION_MCP_TOOL_NAME = `mcp__${PERMISSION_MCP_SERVER_NAME}__approval_prompt`;
 const PERMISSION_REQUEST_TIMEOUT_MS = 10 * 60 * 1000;
+const STREAMING_TRANSCRIPT_UPDATE_INTERVAL_MS = 120;
 const TURN_TIMER_STATUSES = new Set<AgentStatus>(["starting", "running", "switching-model", "awaiting-permission", "awaiting-input"]);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_BOUNDARY_SYSTEM_PROMPT = [
@@ -372,6 +373,8 @@ function readAttachmentContext(attachment: MessageAttachment): string {
 export class AgentRuntimeManager {
   private readonly states = new Map<string, AgentProcessState>();
   private readonly persist: () => void;
+  private readonly transcriptUpdateTimers = new Map<string, NodeJS.Timeout>();
+  private readonly pendingTranscriptUpdates = new Map<string, { id: string; event: TranscriptEvent }>();
   private savedChats: SavedChat[] = [];
 
   constructor(
@@ -3128,10 +3131,44 @@ export class AgentRuntimeManager {
     });
   }
 
+  private transcriptUpdateKey(agentId: string, eventId: string): string {
+    return `${agentId}:${eventId}`;
+  }
+
+  private flushPendingTranscriptUpdate(key: string): void {
+    const pending = this.pendingTranscriptUpdates.get(key);
+    if (!pending) return;
+    this.clearPendingTranscriptUpdate(key);
+    this.broadcast({ type: "agent.transcript_updated", id: pending.id, event: pending.event });
+  }
+
+  private clearPendingTranscriptUpdate(key: string): void {
+    this.pendingTranscriptUpdates.delete(key);
+    const timer = this.transcriptUpdateTimers.get(key);
+    if (!timer) return;
+    clearTimeout(timer);
+    this.transcriptUpdateTimers.delete(key);
+  }
+
+  private queueTranscriptUpdate(state: AgentProcessState, event: TranscriptEvent): void {
+    const key = this.transcriptUpdateKey(state.agent.id, event.id);
+    this.pendingTranscriptUpdates.set(key, { id: state.agent.id, event });
+    if (this.transcriptUpdateTimers.has(key)) return;
+    const timer = setTimeout(() => this.flushPendingTranscriptUpdate(key), STREAMING_TRANSCRIPT_UPDATE_INTERVAL_MS);
+    timer.unref?.();
+    this.transcriptUpdateTimers.set(key, timer);
+  }
+
   private updateTranscript(state: AgentProcessState, event: TranscriptEvent): void {
     const index = state.transcript.findIndex((candidate) => candidate.id === event.id);
     if (index >= 0) state.transcript[index] = event;
     this.syncSavedChat(state);
+    if (event.kind === "assistant_text" && event.streaming) {
+      this.queueTranscriptUpdate(state, event);
+      this.persist();
+      return;
+    }
+    this.clearPendingTranscriptUpdate(this.transcriptUpdateKey(state.agent.id, event.id));
     this.broadcast({ type: "agent.transcript_updated", id: state.agent.id, event });
     this.persist();
   }
