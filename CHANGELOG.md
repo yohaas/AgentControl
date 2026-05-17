@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-05-17
 
+- Make project switching feel more responsive by optimizing project selector row building and deferring the heavier workspace render during switches.
 - Improve chat UI responsiveness by batching streaming transcript updates, memoizing transcript message rendering, and virtualizing long transcript views.
 
 ## 2026-05-15

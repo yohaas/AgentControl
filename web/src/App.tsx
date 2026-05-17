@@ -2,6 +2,7 @@ import {
   useEffect,
   useLayoutEffect,
   memo,
+  startTransition,
   useMemo,
   useRef,
   useState,
@@ -3127,12 +3128,6 @@ function pathIsDescendant(child: string, parent: string) {
   return normalizedChild !== normalizedParent && normalizedChild.startsWith(`${normalizedParent}/`);
 }
 
-function nearestParentProject(project: Project, projects: Project[]) {
-  return projects
-    .filter((candidate) => candidate.id !== project.id && pathIsDescendant(project.path, candidate.path))
-    .sort((left, right) => comparablePath(right.path, isLikelyWindowsPath(right.path)).length - comparablePath(left.path, isLikelyWindowsPath(left.path)).length)[0];
-}
-
 function projectRelativePath(project: Project, parent: Project) {
   const childPath = project.path.trim().replace(/\\/g, "/").replace(/\/+$/g, "");
   const parentPath = parent.path.trim().replace(/\\/g, "/").replace(/\/+$/g, "");
@@ -3145,8 +3140,28 @@ function projectRelativePath(project: Project, parent: Project) {
 function projectSelectorRows(projects: Project[]) {
   const parentById = new Map<string, Project>();
   const childrenByParentId = new Map<string, Project[]>();
+  const comparablePaths = new Map<string, string>();
+  const comparablePathForProject = (project: Project) => {
+    let comparable = comparablePaths.get(project.id);
+    if (!comparable) {
+      comparable = comparablePath(project.path, isLikelyWindowsPath(project.path));
+      comparablePaths.set(project.id, comparable);
+    }
+    return comparable;
+  };
+
   for (const project of projects) {
-    const parent = nearestParentProject(project, projects);
+    const projectPath = comparablePathForProject(project);
+    let parent: Project | undefined;
+    let parentPathLength = -1;
+    for (const candidate of projects) {
+      if (candidate.id === project.id) continue;
+      const candidatePath = comparablePathForProject(candidate);
+      if (projectPath === candidatePath || !projectPath.startsWith(`${candidatePath}/`)) continue;
+      if (candidatePath.length <= parentPathLength) continue;
+      parent = candidate;
+      parentPathLength = candidatePath.length;
+    }
     if (!parent) continue;
     parentById.set(project.id, parent);
     childrenByParentId.set(parent.id, [...(childrenByParentId.get(parent.id) || []), project]);
@@ -3825,6 +3840,10 @@ function Header({
     [activeProjectId, terminalSessions]
   );
 
+  function switchProject(projectId?: string) {
+    startTransition(() => setSelectedProject(projectId));
+  }
+
   useEffect(() => {
     if (!activeProjectId) {
       setDevCommand("npm run dev");
@@ -4247,7 +4266,7 @@ function Header({
               const alert = offProjectInputAlerts[0];
               if (!alert) return;
               setSelectedAgent(undefined);
-              setSelectedProject(alert.projectId);
+              switchProject(alert.projectId);
               setFocusedAgent(alert.agentId);
             }}
           >
@@ -4277,7 +4296,7 @@ function Header({
               return (
                 <DropdownMenuItem
                   key={project.id}
-                  onClick={() => setSelectedProject(project.id)}
+                  onClick={() => switchProject(project.id)}
                   className={cn(
                     "justify-between gap-2",
                     depth > 0 && "pl-7",
@@ -15554,6 +15573,12 @@ export function MobileApp() {
     },
     [setSelectedAgentId, setSelectedProject]
   );
+  const switchSelectedProject = useCallback(
+    (id?: string) => {
+      startTransition(() => setSelectedProject(id));
+    },
+    [setSelectedProject]
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -15638,7 +15663,7 @@ export function MobileApp() {
         wsConnected={wsConnected}
         inputNeededProjectAlertLabels={inputNeededProjectAlertLabels}
         attentionAlerts={attentionAlerts}
-        onSelectProject={setSelectedProject}
+        onSelectProject={switchSelectedProject}
         onSelectAgent={setSelectedAgentId}
       />
       <main className="flex min-w-0 max-w-full flex-1 overflow-hidden">
