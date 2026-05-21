@@ -3224,7 +3224,7 @@ function isShellPermissionTool(toolName: string) {
 function permissionCommandSignature(command?: string) {
   const normalized = command?.trim().replace(/\s+/g, " ");
   if (!normalized) return undefined;
-  const commandSegments = normalized.split(/\s*(?:&&|\|\||;)\s*/).filter(Boolean);
+  const commandSegments = normalized.split(/\s*(?:&&|\|\||[|;])\s*/).filter(Boolean);
   const segment = commandSegments.find((item) => /\b(?:npm|pnpm|yarn|bun)(?:\.(?:cmd|exe))?\b/i.test(item)) || commandSegments[0];
   const tokens = segment
     .split(/\s+/)
@@ -3250,7 +3250,7 @@ function permissionCommandSignature(command?: string) {
 function normalizedPermissionCommand(command?: string) {
   const normalized = command?.trim().replace(/\s+/g, " ");
   if (!normalized) return undefined;
-  const commandSegments = normalized.split(/\s*(?:&&|\|\||;)\s*/).filter(Boolean);
+  const commandSegments = normalized.split(/\s*(?:&&|\|\||[|;])\s*/).filter(Boolean);
   return commandSegments[0]?.toLowerCase();
 }
 

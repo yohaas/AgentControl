@@ -4,6 +4,7 @@ All notable repository changes are listed newest-first and grouped by commit dat
 
 ## 2026-05-20
 
+- Keep remembered shell approval prefixes focused on the first pipeline command instead of saving trailing grep/head-style pipeline stages.
 - Match remembered shell approvals by saved command prefix so approved commands can accept appended arguments without saving overly broad rules.
 
 ## 2026-05-17

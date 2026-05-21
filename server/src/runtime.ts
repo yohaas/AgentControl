@@ -3077,7 +3077,7 @@ export class AgentRuntimeManager {
   private normalizedPermissionCommand(command?: string): string | undefined {
     const normalized = command?.trim().replace(/\s+/g, " ");
     if (!normalized) return undefined;
-    const commandSegments = normalized.split(/\s*(?:&&|\|\||;)\s*/).filter(Boolean);
+    const commandSegments = normalized.split(/\s*(?:&&|\|\||[|;])\s*/).filter(Boolean);
     return commandSegments[0]?.toLowerCase();
   }
 
@@ -3088,7 +3088,7 @@ export class AgentRuntimeManager {
   private permissionCommandSignature(command?: string): string | undefined {
     const normalized = command?.trim().replace(/\s+/g, " ");
     if (!normalized) return undefined;
-    const commandSegments = normalized.split(/\s*(?:&&|\|\||;)\s*/).filter(Boolean);
+    const commandSegments = normalized.split(/\s*(?:&&|\|\||[|;])\s*/).filter(Boolean);
     const segment = commandSegments.find((item) => /\b(?:npm|pnpm|yarn|bun)(?:\.(?:cmd|exe))?\b/i.test(item)) || commandSegments[0];
     const tokens = segment
       .split(/\s+/)
