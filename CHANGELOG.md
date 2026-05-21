@@ -2,6 +2,10 @@
 
 All notable repository changes are listed newest-first and grouped by commit date.
 
+## 2026-05-20
+
+- Match remembered shell approvals by saved command prefix so approved commands can accept appended arguments without saving overly broad rules.
+
 ## 2026-05-17
 
 - Make project switching feel more responsive by optimizing project selector row building and deferring the heavier workspace render during switches.

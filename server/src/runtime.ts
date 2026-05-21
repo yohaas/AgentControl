@@ -3051,7 +3051,7 @@ export class AgentRuntimeManager {
     const normalizedModel = state.agent.currentModel.trim().toLowerCase();
     const normalizedProvider = (state.agent.provider || "claude").toLowerCase();
     const shellTool = this.isShellPermissionTool(toolName);
-    const normalizedCommand = shellTool ? this.permissionCommandSignature(this.commandFromPermissionInput(input))?.toLowerCase() : undefined;
+    const normalizedCommand = shellTool ? this.normalizedPermissionCommand(this.commandFromPermissionInput(input)) : undefined;
     if (!normalizedToolName || !normalizedModel) return false;
     return this.getPermissionAllowRules().some((rule) => {
       const ruleToolName = rule.toolName?.trim().toLowerCase();
@@ -3059,7 +3059,7 @@ export class AgentRuntimeManager {
       const ruleProvider = rule.provider?.trim().toLowerCase();
       const ruleCommand = rule.command?.trim().toLowerCase();
       if (ruleToolName !== normalizedToolName || ruleModel !== normalizedModel || (ruleProvider && ruleProvider !== normalizedProvider)) return false;
-      if (shellTool) return Boolean(ruleCommand && normalizedCommand && ruleCommand === normalizedCommand);
+      if (shellTool) return Boolean(ruleCommand && normalizedCommand && this.permissionCommandMatchesPrefix(ruleCommand, normalizedCommand));
       return !ruleCommand || ruleCommand === normalizedCommand;
     });
   }
@@ -3072,6 +3072,17 @@ export class AgentRuntimeManager {
     if (!input || typeof input !== "object") return undefined;
     const command = (input as Record<string, unknown>).command;
     return typeof command === "string" ? command : undefined;
+  }
+
+  private normalizedPermissionCommand(command?: string): string | undefined {
+    const normalized = command?.trim().replace(/\s+/g, " ");
+    if (!normalized) return undefined;
+    const commandSegments = normalized.split(/\s*(?:&&|\|\||;)\s*/).filter(Boolean);
+    return commandSegments[0]?.toLowerCase();
+  }
+
+  private permissionCommandMatchesPrefix(ruleCommand: string, normalizedCommand: string): boolean {
+    return normalizedCommand === ruleCommand || normalizedCommand.startsWith(`${ruleCommand} `);
   }
 
   private permissionCommandSignature(command?: string): string | undefined {

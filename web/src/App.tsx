@@ -3247,8 +3247,41 @@ function permissionCommandSignature(command?: string) {
   return segment.toLowerCase();
 }
 
+function normalizedPermissionCommand(command?: string) {
+  const normalized = command?.trim().replace(/\s+/g, " ");
+  if (!normalized) return undefined;
+  const commandSegments = normalized.split(/\s*(?:&&|\|\||;)\s*/).filter(Boolean);
+  return commandSegments[0]?.toLowerCase();
+}
+
+function permissionCommandMatchesPrefix(ruleCommand?: string, command?: string) {
+  const normalizedRule = ruleCommand?.trim().toLowerCase();
+  const normalizedCommand = normalizedPermissionCommand(command);
+  return Boolean(
+    normalizedRule &&
+      normalizedCommand &&
+      (normalizedCommand === normalizedRule || normalizedCommand.startsWith(`${normalizedRule} `))
+  );
+}
+
 function permissionAllowRuleKey(rule: Pick<PermissionAllowRule, "provider" | "model" | "toolName" | "command">) {
   return `${rule.provider || ""}:${rule.model.trim().toLowerCase()}:${rule.toolName.trim().toLowerCase()}:${rule.command?.trim().toLowerCase() || ""}`;
+}
+
+function permissionAllowRuleMatches(
+  rule: Pick<PermissionAllowRule, "provider" | "model" | "toolName" | "command">,
+  candidate: Pick<PermissionAllowRule, "provider" | "model" | "toolName" | "command">,
+  commandText?: string
+) {
+  const ruleProvider = (rule.provider || "").trim().toLowerCase();
+  const candidateProvider = (candidate.provider || "").trim().toLowerCase();
+  const sameTool =
+    rule.model.trim().toLowerCase() === candidate.model.trim().toLowerCase() &&
+    rule.toolName.trim().toLowerCase() === candidate.toolName.trim().toLowerCase() &&
+    (!ruleProvider || ruleProvider === candidateProvider);
+  if (!sameTool) return false;
+  if (!rule.command && !candidate.command) return true;
+  return permissionCommandMatchesPrefix(rule.command, commandText || candidate.command);
 }
 
 function createPermissionAllowRule(agent: RunningAgent, toolName: string, input?: unknown): PermissionAllowRule | undefined {
@@ -9177,7 +9210,7 @@ function SettingsDialog() {
               <section className="grid gap-2 rounded-md border border-border p-3">
                 <div>
                   <h3 className="text-sm font-medium">Always-allowed tools</h3>
-                  <p className="text-xs text-muted-foreground">Rules are matched by provider, model, tool name, and command for shell tools.</p>
+                  <p className="text-xs text-muted-foreground">Shell rules match by provider, model, tool name, and saved command prefix.</p>
                 </div>
                 {permissionAllowRules.length === 0 ? (
                   <p className="rounded-md border border-dashed border-border px-3 py-4 text-center text-sm text-muted-foreground">
@@ -14585,7 +14618,8 @@ function ToolCard({
   const permissionRule =
     isUse && event.name ? createPermissionAllowRule(agent, event.name, event.input) : undefined;
   const permissionRuleExists = Boolean(
-    permissionRule && (settings.permissionAllowRules || []).some((rule) => permissionAllowRuleKey(rule) === permissionAllowRuleKey(permissionRule))
+    permissionRule &&
+      (settings.permissionAllowRules || []).some((rule) => permissionAllowRuleMatches(rule, permissionRule, commandText))
   );
   const permissionRuleLabel = permissionRule?.command || (isUse ? event.name : "tool");
 
